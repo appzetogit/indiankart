@@ -9,8 +9,7 @@ import {
     updateProductStock
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
-
-import upload from '../config/cloudinary.js';
+import upload from '../middleware/upload.js';
 
 const uploadMiddleware = (req, res, next) => {
     upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'variant_images', maxCount: 20 }, { name: 'description_images', maxCount: 10 }])(req, res, (err) => {

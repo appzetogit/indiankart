@@ -1,4 +1,5 @@
 import Reel from '../models/Reel.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Get all reels
 // @route   GET /api/reels
@@ -20,8 +21,11 @@ export const createReel = async (req, res) => {
         const { productLink, active } = req.body;
         let videoUrl = req.body.videoUrl;
 
-        if (req.file) {
-            videoUrl = req.file.path;
+        if (req.file && req.file.buffer) {
+            const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+                resource_type: 'video',
+            });
+            videoUrl = uploaded.secure_url;
         }
 
         const reel = new Reel({
@@ -46,8 +50,11 @@ export const updateReel = async (req, res) => {
         const reel = await Reel.findById(req.params.id);
         if (reel) {
             let videoUrl = req.body.videoUrl;
-            if (req.file) {
-                videoUrl = req.file.path;
+            if (req.file && req.file.buffer) {
+                const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+                    resource_type: 'video',
+                });
+                videoUrl = uploaded.secure_url;
             }
 
             reel.videoUrl = videoUrl || reel.videoUrl;

@@ -1,4 +1,5 @@
 import Setting from '../models/Setting.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Get settings
 // @route   GET /api/settings
@@ -36,16 +37,24 @@ const updateSettings = async (req, res) => {
 
         let settings = await Setting.findOne();
 
-        // Handle uploaded files from Cloudinary
+        // Handle uploaded files via Cloudinary
         let logoUrl = req.body.logoUrl;
         let signatureUrl = req.body.signatureUrl;
 
         if (req.files) {
-            if (req.files.logo && req.files.logo[0]) {
-                logoUrl = req.files.logo[0].path;
+            if (req.files.logo && req.files.logo[0]?.buffer) {
+                const uploadedLogo = await uploadBufferToCloudinary(
+                    req.files.logo[0].buffer,
+                    { folder: 'ecom_uploads/settings' }
+                );
+                logoUrl = uploadedLogo.secure_url;
             }
-            if (req.files.signature && req.files.signature[0]) {
-                signatureUrl = req.files.signature[0].path;
+            if (req.files.signature && req.files.signature[0]?.buffer) {
+                const uploadedSignature = await uploadBufferToCloudinary(
+                    req.files.signature[0].buffer,
+                    { folder: 'ecom_uploads/settings' }
+                );
+                signatureUrl = uploadedSignature.secure_url;
             }
         }
 

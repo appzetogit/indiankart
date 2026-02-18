@@ -1,4 +1,5 @@
 import Banner from '../models/Banner.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Get all banners
 // @route   GET /api/banners
@@ -49,13 +50,17 @@ export const createBanner = async (req, res) => {
         // Handle Slides Images
         if (req.files && req.files.slide_images) {
             const slideFiles = req.files.slide_images;
+            const uploadedSlideUrls = await Promise.all(
+                slideFiles.map(file =>
+                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
+                )
+            );
             if (Array.isArray(slides)) {
                 slides = slides.map(slide => {
                     if (slide.imageUrl && slide.imageUrl.startsWith('SLIDE_IMG_INDEX::')) {
                         const idx = parseInt(slide.imageUrl.split('::')[1]);
-                        const file = slideFiles.find(f => f.fieldname === 'slide_images' && f.originalname === slide.originalName); 
-                        if (slideFiles[idx]) {
-                             return { ...slide, imageUrl: slideFiles[idx].path };
+                        if (uploadedSlideUrls[idx]) {
+                             return { ...slide, imageUrl: uploadedSlideUrls[idx].secure_url };
                         }
                     }
                     return slide;
@@ -64,13 +69,21 @@ export const createBanner = async (req, res) => {
         }
 
         // Handle Hero Image
-        if (req.files && req.files.hero_image) {
-            content.imageUrl = req.files.hero_image[0].path;
+        if (req.files && req.files.hero_image && req.files.hero_image[0]?.buffer) {
+            const uploadedHero = await uploadBufferToCloudinary(
+                req.files.hero_image[0].buffer,
+                { folder: 'ecom_uploads/banners' }
+            );
+            content.imageUrl = uploadedHero.secure_url;
         }
 
         // Handle Background Image
-        if (req.files && req.files.background_image) {
-            content.backgroundImageUrl = req.files.background_image[0].path;
+        if (req.files && req.files.background_image && req.files.background_image[0]?.buffer) {
+            const uploadedBg = await uploadBufferToCloudinary(
+                req.files.background_image[0].buffer,
+                { folder: 'ecom_uploads/banners' }
+            );
+            content.backgroundImageUrl = uploadedBg.secure_url;
         }
 
         const banner = new Banner({
@@ -110,14 +123,19 @@ export const updateBanner = async (req, res) => {
                      slides = slides.map(s => ({...s, linkedOffer: s.linkedOffer || null}));
                  }
 
-                 if (req.files && req.files.slide_images) {
+                if (req.files && req.files.slide_images) {
                     const slideFiles = req.files.slide_images;
+                    const uploadedSlideUrls = await Promise.all(
+                        slideFiles.map(file =>
+                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
+                        )
+                    );
                     if (Array.isArray(slides)) {
                         slides = slides.map(slide => {
                             if (slide.imageUrl && slide.imageUrl.startsWith('SLIDE_IMG_INDEX::')) {
                                 const idx = parseInt(slide.imageUrl.split('::')[1]);
-                                if (slideFiles[idx]) {
-                                    return { ...slide, imageUrl: slideFiles[idx].path };
+                                if (uploadedSlideUrls[idx]) {
+                                    return { ...slide, imageUrl: uploadedSlideUrls[idx].secure_url };
                                 }
                             }
                             return slide;
@@ -135,15 +153,23 @@ export const updateBanner = async (req, res) => {
                 // Sanitize linkedOffer
                 if (content.linkedOffer === "") content.linkedOffer = null;
 
-                if (req.files && req.files.hero_image) {
-                    content.imageUrl = req.files.hero_image[0].path;
+                if (req.files && req.files.hero_image && req.files.hero_image[0]?.buffer) {
+                    const uploadedHero = await uploadBufferToCloudinary(
+                        req.files.hero_image[0].buffer,
+                        { folder: 'ecom_uploads/banners' }
+                    );
+                    content.imageUrl = uploadedHero.secure_url;
                 } else if (req.body.hero_image_url) {
                     // Start of fallback if image url is passed directly
                      content.imageUrl = req.body.hero_image_url;
                 }
 
-                if (req.files && req.files.background_image) {
-                    content.backgroundImageUrl = req.files.background_image[0].path;
+                if (req.files && req.files.background_image && req.files.background_image[0]?.buffer) {
+                    const uploadedBg = await uploadBufferToCloudinary(
+                        req.files.background_image[0].buffer,
+                        { folder: 'ecom_uploads/banners' }
+                    );
+                    content.backgroundImageUrl = uploadedBg.secure_url;
                 } else if (req.body.background_image_url) {
                     content.backgroundImageUrl = req.body.background_image_url;
                 }

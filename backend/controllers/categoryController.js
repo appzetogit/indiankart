@@ -1,4 +1,5 @@
 import Category from '../models/Category.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Fetch all categories
 // @route   GET /api/categories
@@ -39,8 +40,20 @@ export const createCategory = async (req, res) => {
         let bannerImage = req.body.bannerImage;
 
         if (req.files) {
-            if (req.files.icon) icon = req.files.icon[0].path;
-            if (req.files.bannerImage) bannerImage = req.files.bannerImage[0].path;
+            if (req.files.icon && req.files.icon[0]?.buffer) {
+                const uploadedIcon = await uploadBufferToCloudinary(
+                    req.files.icon[0].buffer,
+                    { folder: 'ecom_uploads/categories' }
+                );
+                icon = uploadedIcon.secure_url;
+            }
+            if (req.files.bannerImage && req.files.bannerImage[0]?.buffer) {
+                const uploadedBanner = await uploadBufferToCloudinary(
+                    req.files.bannerImage[0].buffer,
+                    { folder: 'ecom_uploads/categories' }
+                );
+                bannerImage = uploadedBanner.secure_url;
+            }
         }
         
         const category = new Category({
@@ -71,8 +84,20 @@ export const updateCategory = async (req, res) => {
             let bannerImage = req.body.bannerImage;
 
             if (req.files) {
-                if (req.files.icon) icon = req.files.icon[0].path;
-                if (req.files.bannerImage) bannerImage = req.files.bannerImage[0].path;
+                if (req.files.icon && req.files.icon[0]?.buffer) {
+                    const uploadedIcon = await uploadBufferToCloudinary(
+                        req.files.icon[0].buffer,
+                        { folder: 'ecom_uploads/categories' }
+                    );
+                    icon = uploadedIcon.secure_url;
+                }
+                if (req.files.bannerImage && req.files.bannerImage[0]?.buffer) {
+                    const uploadedBanner = await uploadBufferToCloudinary(
+                        req.files.bannerImage[0].buffer,
+                        { folder: 'ecom_uploads/categories' }
+                    );
+                    bannerImage = uploadedBanner.secure_url;
+                }
             }
 
             category.name = req.body.name || category.name;

@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -112,8 +113,12 @@ export const getProductById = async (req, res) => {
 export const createProduct = async (req, res) => {
     try {
         let image = req.body.image;
-        if (req.files && req.files.image) {
-            image = req.files.image[0].path;
+        if (req.files && req.files.image && req.files.image[0]?.buffer) {
+            const uploadedMain = await uploadBufferToCloudinary(
+                req.files.image[0].buffer,
+                { folder: 'ecom_uploads/products' }
+            );
+            image = uploadedMain.secure_url;
         }
 
         let images = req.body.images || [];
@@ -122,7 +127,12 @@ export const createProduct = async (req, res) => {
         }
         
         if (req.files && req.files.images) {
-            const uploadedImages = req.files.images.map(file => file.path);
+            const uploadedImagesResults = await Promise.all(
+                req.files.images.map(file =>
+                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products' })
+                )
+            );
+            const uploadedImages = uploadedImagesResults.map(r => r.secure_url);
             images = [...images, ...uploadedImages];
         }
         images = images.filter(img => img);
@@ -145,8 +155,14 @@ export const createProduct = async (req, res) => {
         let variantHeadings = parseJSON(body.variantHeadings);
 
         if (req.files && req.files.variant_images) {
-             const variantFiles = req.files.variant_images;
-             if (Array.isArray(variantHeadings)) {
+            const variantFiles = req.files.variant_images;
+            const uploadedVariantResults = await Promise.all(
+                variantFiles.map(file =>
+                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/variants' })
+                )
+            );
+            const variantUrls = uploadedVariantResults.map(r => r.secure_url);
+            if (Array.isArray(variantHeadings)) {
                 variantHeadings = variantHeadings.map(vh => ({
                     ...vh,
                     options: vh.options.map(opt => {
@@ -154,8 +170,8 @@ export const createProduct = async (req, res) => {
                         // Handle single primary background image
                         if (opt.image && typeof opt.image === 'string' && opt.image.startsWith('VARIANT_INDEX::')) {
                             const idx = parseInt(opt.image.split('::')[1]);
-                            if (variantFiles[idx]) {
-                                newOpt.image = variantFiles[idx].path;
+                            if (variantUrls[idx]) {
+                                newOpt.image = variantUrls[idx];
                             }
                         }
                         // Handle multiple images array
@@ -163,7 +179,7 @@ export const createProduct = async (req, res) => {
                             newOpt.images = opt.images.map(img => {
                                 if (typeof img === 'string' && img.startsWith('VARIANT_INDEX::')) {
                                     const idx = parseInt(img.split('::')[1]);
-                                    return variantFiles[idx] ? variantFiles[idx].path : img;
+                                    return variantUrls[idx] ? variantUrls[idx] : img;
                                 }
                                 return img;
                             });
@@ -171,18 +187,24 @@ export const createProduct = async (req, res) => {
                         return newOpt;
                     })
                 }));
-             }
+            }
         }
 
         let description = parseJSON(body.description);
         if (req.files && req.files.description_images) {
             const descFiles = req.files.description_images;
+            const uploadedDescResults = await Promise.all(
+                descFiles.map(file =>
+                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/descriptions' })
+                )
+            );
+            const descUrls = uploadedDescResults.map(r => r.secure_url);
             if (Array.isArray(description)) {
                 description = description.map(desc => {
                     if (desc.image && typeof desc.image === 'string' && desc.image.startsWith('DESCRIPTION_INDEX::')) {
                         const idx = parseInt(desc.image.split('::')[1]);
-                        if (descFiles[idx]) {
-                             return { ...desc, image: descFiles[idx].path };
+                        if (descUrls[idx]) {
+                             return { ...desc, image: descUrls[idx] };
                         }
                     }
                     return desc;
@@ -234,8 +256,12 @@ export const updateProduct = async (req, res) => {
 
         if (product) {
             let image = req.body.image;
-            if (req.files && req.files.image) {
-                image = req.files.image[0].path;
+            if (req.files && req.files.image && req.files.image[0]?.buffer) {
+                const uploadedMain = await uploadBufferToCloudinary(
+                    req.files.image[0].buffer,
+                    { folder: 'ecom_uploads/products' }
+                );
+                image = uploadedMain.secure_url;
             }
 
             let images = req.body.images || [];
@@ -244,7 +270,12 @@ export const updateProduct = async (req, res) => {
             }
 
             if (req.files && req.files.images) {
-                const uploadedImages = req.files.images.map(file => file.path);
+                const uploadedImagesResults = await Promise.all(
+                    req.files.images.map(file =>
+                        uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products' })
+                    )
+                );
+                const uploadedImages = uploadedImagesResults.map(r => r.secure_url);
                 images = [...images, ...uploadedImages];
             }
              
@@ -285,33 +316,39 @@ export const updateProduct = async (req, res) => {
             if (updateData.variantHeadings) {
                 let variantHeadings = parseJSON(updateData.variantHeadings);
                 if (req.files && req.files.variant_images) {
-                     const variantFiles = req.files.variant_images;
-                     if (Array.isArray(variantHeadings)) {
-                         variantHeadings = variantHeadings.map(vh => ({
-                             ...vh,
-                             options: vh.options.map(opt => {
-                                 const newOpt = { ...opt };
-                                 // Handle single primary background image
-                                 if (opt.image && typeof opt.image === 'string' && opt.image.startsWith('VARIANT_INDEX::')) {
-                                     const idx = parseInt(opt.image.split('::')[1]);
-                                     if (variantFiles[idx]) {
-                                         newOpt.image = variantFiles[idx].path;
-                                     }
-                                 }
-                                 // Handle multiple images array
-                                 if (Array.isArray(opt.images)) {
-                                     newOpt.images = opt.images.map(img => {
-                                         if (typeof img === 'string' && img.startsWith('VARIANT_INDEX::')) {
-                                             const idx = parseInt(img.split('::')[1]);
-                                             return variantFiles[idx] ? variantFiles[idx].path : img;
-                                         }
-                                         return img;
-                                     });
-                                 }
-                                 return newOpt;
-                             })
-                         }));
-                     }
+                    const variantFiles = req.files.variant_images;
+                    const uploadedVariantResults = await Promise.all(
+                        variantFiles.map(file =>
+                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/variants' })
+                        )
+                    );
+                    const variantUrls = uploadedVariantResults.map(r => r.secure_url);
+                    if (Array.isArray(variantHeadings)) {
+                        variantHeadings = variantHeadings.map(vh => ({
+                            ...vh,
+                            options: vh.options.map(opt => {
+                                const newOpt = { ...opt };
+                                // Handle single primary background image
+                                if (opt.image && typeof opt.image === 'string' && opt.image.startsWith('VARIANT_INDEX::')) {
+                                    const idx = parseInt(opt.image.split('::')[1]);
+                                    if (variantUrls[idx]) {
+                                        newOpt.image = variantUrls[idx];
+                                    }
+                                }
+                                // Handle multiple images array
+                                if (Array.isArray(opt.images)) {
+                                    newOpt.images = opt.images.map(img => {
+                                        if (typeof img === 'string' && img.startsWith('VARIANT_INDEX::')) {
+                                            const idx = parseInt(img.split('::')[1]);
+                                            return variantUrls[idx] ? variantUrls[idx] : img;
+                                        }
+                                        return img;
+                                    });
+                                }
+                                return newOpt;
+                            })
+                        }));
+                    }
                 }
                 updateData.variantHeadings = variantHeadings;
             }
@@ -320,12 +357,18 @@ export const updateProduct = async (req, res) => {
                 let description = parseJSON(updateData.description);
                 if (req.files && req.files.description_images) {
                     const descFiles = req.files.description_images;
+                    const uploadedDescResults = await Promise.all(
+                        descFiles.map(file =>
+                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/descriptions' })
+                        )
+                    );
+                    const descUrls = uploadedDescResults.map(r => r.secure_url);
                     if (Array.isArray(description)) {
                         description = description.map(desc => {
                             if (desc.image && typeof desc.image === 'string' && desc.image.startsWith('DESCRIPTION_INDEX::')) {
                                 const idx = parseInt(desc.image.split('::')[1]);
-                                if (descFiles[idx]) {
-                                    return { ...desc, image: descFiles[idx].path };
+                                if (descUrls[idx]) {
+                                    return { ...desc, image: descUrls[idx] };
                                 }
                             }
                             return desc;

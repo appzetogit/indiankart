@@ -7,8 +7,7 @@ import {
     deleteCategory 
 } from '../controllers/categoryController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
-
-import upload from '../config/cloudinary.js';
+import upload from '../middleware/upload.js';
 
 router.route('/')
     .get(getCategories)
