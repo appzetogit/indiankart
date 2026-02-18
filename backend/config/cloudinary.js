@@ -1,13 +1,13 @@
 import { v2 as cloudinary } from 'cloudinary';
 import multer from 'multer';
 import dotenv from 'dotenv';
-import multerStorageCloudinary from 'multer-storage-cloudinary';
+import { createRequire } from 'module';
 
 dotenv.config();
 
-// For CommonJS-based packages like `multer-storage-cloudinary`,
-// we need to pull named exports off the default import in ESM.
-const { CloudinaryStorage } = multerStorageCloudinary;
+// Use CommonJS require interop for `multer-storage-cloudinary`
+const require = createRequire(import.meta.url);
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
