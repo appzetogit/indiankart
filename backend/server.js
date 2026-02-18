@@ -44,14 +44,24 @@ const app = express();
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-    : ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://flipkart-6t6p.vercel.app'];
+    : [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+        'https://flipkart-6t6p.vercel.app',
+        'https://indiankart.in',
+        'https://www.indiankart.in'
+    ];
 
 app.use(cors({
     origin: function (origin, callback) {
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
 
-        const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
+        const isAllowed =
+            allowedOrigins.includes(origin) ||
+            origin.endsWith('.vercel.app') ||
+            origin === 'https://indiankart.in' ||
+            origin === 'https://www.indiankart.in';
 
         if (isAllowed) {
             callback(null, true);
