@@ -1,0 +1,87 @@
+/* ProseMirror base styling extracted from ProductDetails.jsx */
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+    color: #111827;
+    font-weight: 700;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    line-height: 1.3;
+}
+
+.prose ul,
+.prose ol {
+    padding-left: 1.25rem;
+    margin: 1rem 0;
+    list-style-type: disc;
+}
+
+.prose li {
+    margin: 0.5rem 0;
+    padding-left: 0.25rem;
+}
+
+.prose li p {
+    margin: 0;
+}
+
+.prose a {
+    color: #2563eb;
+    text-decoration: underline;
+    font-weight: 500;
+}
+
+.prose blockquote {
+    border-left: 4px solid #e5e7eb;
+    padding-left: 1rem;
+    font-style: italic;
+    color: #4b5563;
+    margin: 1.5rem 0;
+}
+
+.prose code {
+    background-color: #f3f4f6;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+    font-family: monospace;
+}
+
+.prose pre {
+    background-color: #1f2937;
+    color: #f9fafb;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 13px;
+}
+
+.prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 12px;
+}
+
+.prose th,
+.prose td {
+    border: 1px solid #e5e7eb;
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.prose th {
+    background-color: #f3f4f6;
+    font-weight: 600;
+}
+
+.prose strong {
+    font-weight: 700;
+    color: #111827;
+}
+
+.prose p {
+    margin: 0.5rem 0;
+}
