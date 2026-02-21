@@ -39,7 +39,7 @@ const Layout = () => {
                     <Header />
                 </div>
             )}
-            <main className={`flex flex-col pb-[80px] md:pb-0 w-full transition-all duration-300 bg-white
+            <main className={`flex flex-col pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-8 w-full transition-all duration-300 bg-white
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[80px] md:pt-[160px]' :
