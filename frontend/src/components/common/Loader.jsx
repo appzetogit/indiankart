@@ -1,6 +1,11 @@
 import React from 'react';
 
-const Loader = ({ fullPage = false, message = "Loading...", isSuccess = false }) => {
+const Loader = ({
+  fullPage = false,
+  message = "Loading...",
+  isSuccess = false,
+  variant = "spinner",
+}) => {
   const loaderContent = (
     <div className="flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-500">
       {isSuccess ? (
@@ -24,10 +29,18 @@ const Loader = ({ fullPage = false, message = "Loading...", isSuccess = false })
           `}</style>
         </div>
       ) : (
-        <div className="relative">
-          <div className="w-12 h-12 border-4 border-blue-100 rounded-full"></div>
-          <div className="absolute top-0 left-0 w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
+        variant === "shimmer" ? (
+          <div className="w-[260px] space-y-3">
+            <div className="h-4 rounded shimmer"></div>
+            <div className="h-4 rounded shimmer"></div>
+            <div className="h-4 w-2/3 rounded shimmer"></div>
+          </div>
+        ) : (
+          <div className="relative">
+            <div className="w-12 h-12 border-4 border-blue-100 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )
       )}
       {message && (
         <p className={`mt-4 text-sm font-bold ${isSuccess ? 'text-green-600' : 'text-gray-600 animate-pulse'} uppercase tracking-widest`}>

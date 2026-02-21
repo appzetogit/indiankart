@@ -291,14 +291,32 @@ export const toggleUserStatus = async (req, res) => {
 export const updateFcmToken = async (req, res) => {
     console.log('Update FCM Token request received:', req.body);
     try {
-        const { fcmToken } = req.body;
-        if (!fcmToken) return res.status(400).json({ message: 'FCM Token is required' });
+        const tokenFromBody = req.body.fcmToken || req.body.fcmTokenWeb || req.body.fcmTokenMobile;
+        const { platform } = req.body;
+        const platformMap = {
+            web: 'web',
+            mobile: 'mobile',
+            app: 'mobile',
+            android: 'mobile',
+            ios: 'mobile'
+        };
+        const normalizedPlatform = platformMap[(platform || 'web').toLowerCase()];
+
+        if (!tokenFromBody) return res.status(400).json({ message: 'FCM Token is required' });
+        if (!normalizedPlatform) {
+            return res.status(400).json({ message: 'Platform must be one of: web, mobile, app, android, ios' });
+        }
 
         const user = await User.findById(req.user._id);
         if (user) {
-            user.fcmToken = fcmToken;
+            if (normalizedPlatform === 'web') {
+                user.fcmTokenWeb = tokenFromBody;
+            } else {
+                user.fcmTokenMobile = tokenFromBody;
+            }
+            user.fcmToken = tokenFromBody;
             await user.save();
-            res.json({ message: 'FCM Token updated successfully' });
+            res.json({ message: 'FCM Token updated successfully', platform: normalizedPlatform });
         } else {
             res.status(404).json({ message: 'User not found' });
         }

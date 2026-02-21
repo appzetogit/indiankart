@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
+import { prefetchProductById } from '../../../../hooks/useData';
 
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
@@ -15,15 +16,12 @@ const ProductCard = ({ product, footerText }) => {
     const adText = useGoogleTranslation('AD');
     const withBankOfferText = useGoogleTranslation('with Bank offer');
 
-    const [isNavigating, setIsNavigating] = React.useState(false);
-
     const handleNavigate = () => {
-        setIsNavigating(true);
-        // Add a small delay for visual feedback before navigating
-        setTimeout(() => {
-            navigate(`/product/${product.id}`);
-            setIsNavigating(false);
-        }, 300);
+        navigate(`/product/${product.id}`);
+    };
+
+    const prefetchDetails = () => {
+        prefetchProductById(product.id);
     };
 
     // Calculate dynamic discount if not provided
@@ -35,15 +33,12 @@ const ProductCard = ({ product, footerText }) => {
 
     return (
         <div
-            className={`flex flex-col h-full cursor-pointer group/card transition-opacity duration-300 ${isNavigating ? 'opacity-70' : ''}`}
+            className="flex flex-col h-full cursor-pointer group/card transition-opacity duration-300"
             onClick={handleNavigate}
+            onMouseEnter={prefetchDetails}
+            onTouchStart={prefetchDetails}
         >
             <div className="relative aspect-square mb-2 bg-[#f8f8f8] rounded-xl overflow-hidden flex items-center justify-center border border-gray-50 shadow-sm">
-                {isNavigating && (
-                    <div className="absolute inset-0 z-20 bg-white/40 flex items-center justify-center backdrop-blur-[1px]">
-                        <div className="w-8 h-8 border-[3px] border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                )}
                 <img
                     alt={product.name}
                     loading="lazy"

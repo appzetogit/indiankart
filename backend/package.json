@@ -6,7 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node scripts/seeder.js"
+    "seed": "node scripts/seeder.js",
+    "migrate:fcm-tokens": "node scripts/migrate_fcm_tokens.js"
   },
   "keywords": [],
   "author": "",

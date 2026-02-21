@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useProducts, useHomeSections, useBanners, useHomeLayout } from '../../../hooks/useData';
+import { useHomeSections, useBanners, useHomeLayout } from '../../../hooks/useData';
 import LazySection from '../components/common/LazySection';
 
 // Lazy load components
@@ -10,15 +10,15 @@ const HomeBanner = lazy(() => import('../components/home/HomeBanner'));
 
 // Skeletons
 const BannerSkeleton = () => (
-    <div className="w-full h-[200px] md:h-[400px] bg-gray-100 animate-pulse md:rounded-2xl mx-auto mb-6"></div>
+    <div className="w-full h-[200px] md:h-[400px] shimmer md:rounded-2xl mx-auto mb-6"></div>
 );
 
 const SectionSkeleton = () => (
-    <div className="w-full h-[300px] bg-white animate-pulse md:rounded-2xl mx-auto mb-6 p-4">
-        <div className="h-6 bg-gray-100 rounded w-1/4 mb-6"></div>
+    <div className="w-full h-[300px] bg-white md:rounded-2xl mx-auto mb-6 p-4">
+        <div className="h-6 shimmer rounded w-1/4 mb-6"></div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map(i => (
-                <div key={i} className="aspect-square bg-gray-50 rounded-xl"></div>
+                <div key={i} className="aspect-square shimmer rounded-xl"></div>
             ))}
         </div>
     </div>
@@ -26,7 +26,6 @@ const SectionSkeleton = () => (
 
 const Home = () => {
     const navigate = useNavigate();
-    const { products, loading: productsLoading } = useProducts();
     const { sections, loading: sectionsLoading } = useHomeSections();
     const { banners, loading: bannersLoading } = useBanners();
     const { layout, loading: layoutLoading } = useHomeLayout();

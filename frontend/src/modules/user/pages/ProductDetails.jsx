@@ -133,9 +133,6 @@ const ProductDetails = () => {
     // Fetch all products for "Similar" and "High Rated" logic (could be optimized on backend)
     const { products, loading: productsLoading } = useProducts();
 
-    const [similarProducts, setSimilarProducts] = useState([]);
-    const [similarStyles, setSimilarStyles] = useState([]);
-    const [highRatedProducts, setHighRatedProducts] = useState([]);
     const [showToast, setShowToast] = useState(false);
 
     // PIN Code State
@@ -421,30 +418,29 @@ const ProductDetails = () => {
         }));
     };
 
-    useEffect(() => {
-        window.scrollTo(0, 0);
-        if (product && products.length > 0) {
-            // Find similar products by Category
-            const similar = products.filter(p => p.category === product.category && p.id !== product.id);
-            setSimilarProducts(similar);
+    const similarProducts = React.useMemo(() => {
+        if (!product || products.length === 0) return [];
+        return products.filter((p) => p.category === product.category && p.id !== product.id);
+    }, [product, products]);
 
-            // Find similar products by Sub-Category (Styles)
-            if (product.subCategories && product.subCategories.length > 0) {
-                const subIds = product.subCategories.map(s => s._id || s.id);
-                const styles = products.filter(p => {
-                    if (p.id === product.id) return false;
-                    if (!p.subCategories || p.subCategories.length === 0) return false;
-                    return p.subCategories.some(s => subIds.includes(s._id || s.id));
-                });
-                setSimilarStyles(styles);
-            } else {
-                setSimilarStyles([]);
-            }
-
-            // Find high rated products in same category
-            const highRated = products.filter(p => p.category === product.category && p.rating >= 4.0 && p.id !== product.id).slice(0, 6);
-            setHighRatedProducts(highRated);
+    const similarStyles = React.useMemo(() => {
+        if (!product || products.length === 0 || !product.subCategories || product.subCategories.length === 0) {
+            return [];
         }
+
+        const subIds = product.subCategories.map((s) => s._id || s.id);
+        return products.filter((p) => {
+            if (p.id === product.id) return false;
+            if (!p.subCategories || p.subCategories.length === 0) return false;
+            return p.subCategories.some((s) => subIds.includes(s._id || s.id));
+        });
+    }, [product, products]);
+
+    const highRatedProducts = React.useMemo(() => {
+        if (!product || products.length === 0) return [];
+        return products
+            .filter((p) => p.category === product.category && p.rating >= 4.0 && p.id !== product.id)
+            .slice(0, 6);
     }, [product, products]);
 
     if (loading || !product) return <ProductSkeleton />;

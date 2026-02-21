@@ -12,6 +12,23 @@
 }
 
 @layer base {
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
+
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+
+  .lenis.lenis-stopped {
+    overflow: clip;
+  }
+
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+
   body {
     @apply bg-background-light dark:bg-background-dark text-gray-900 dark:text-gray-100 font-sans;
   }
@@ -58,6 +75,28 @@
 
 @utility animate-bounce-subtle {
   animation: bounce-subtle 2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(110deg, #eef1f4 8%, #f6f8fa 18%, #eef1f4 33%);
+  background-size: 200% 100%;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: shimmer 1.2s infinite;
 }
 
 /* Swiper Custom Styling for Modern Look */

@@ -44,52 +44,68 @@ export const markAllAsRead = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
 // @desc    Send push notification
 // @route   POST /api/notifications/send
 // @access  Private/Admin
 export const sendPushNotification = async (req, res) => {
     const { title, message, type, targetAudience } = req.body;
 
-    console.log('📢 Push notification request:', { title, message, type, targetAudience });
+    console.log('Push notification request:', { title, message, type, targetAudience });
 
     try {
         // 1. Get target tokens from both Users and Admins
         let targetTokens = [];
 
         if (targetAudience === 'All Users') {
-            // Get all user tokens
-            const users = await User.find({ fcmToken: { $ne: null, $exists: true } }).select('fcmToken');
-            const userTokens = users.map(u => u.fcmToken).filter(Boolean);
+            // Get all user tokens from new and legacy fields
+            const users = await User.find({
+                $or: [
+                    { fcmTokenWeb: { $ne: null, $exists: true } },
+                    { fcmTokenMobile: { $ne: null, $exists: true } },
+                    { fcmToken: { $ne: null, $exists: true } }
+                ]
+            }).select('fcmToken fcmTokenWeb fcmTokenMobile');
 
-            // Also get admin tokens (admins are users too!)
+            const userTokens = users
+                .flatMap((u) => [u.fcmTokenWeb, u.fcmTokenMobile, u.fcmToken])
+                .filter(Boolean);
+
+            // Also get admin tokens (admins are users too)
             const Admin = (await import('../models/Admin.js')).default;
             const admins = await Admin.find({ fcmToken: { $ne: null, $exists: true } }).select('fcmToken');
-            const adminTokens = admins.map(a => a.fcmToken).filter(Boolean);
+            const adminTokens = admins.map((a) => a.fcmToken).filter(Boolean);
 
-            targetTokens = [...userTokens, ...adminTokens];
-            console.log(`👥 Users: ${userTokens.length}, 👨‍💼 Admins: ${adminTokens.length}`);
-
+            targetTokens = Array.from(new Set([...userTokens, ...adminTokens]));
+            console.log(`Users: ${userTokens.length}, Admins: ${adminTokens.length}`);
         } else if (targetAudience === 'New Users') {
             const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
             const users = await User.find({
                 createdAt: { $gte: thirtyDaysAgo },
-                fcmToken: { $ne: null, $exists: true }
-            }).select('fcmToken');
-            targetTokens = users.map(u => u.fcmToken).filter(Boolean);
+                $or: [
+                    { fcmTokenWeb: { $ne: null, $exists: true } },
+                    { fcmTokenMobile: { $ne: null, $exists: true } },
+                    { fcmToken: { $ne: null, $exists: true } }
+                ]
+            }).select('fcmToken fcmTokenWeb fcmTokenMobile');
+
+            targetTokens = Array.from(
+                new Set(users.flatMap((u) => [u.fcmTokenWeb, u.fcmTokenMobile, u.fcmToken]).filter(Boolean))
+            );
         }
 
-        console.log(`🎯 Total target tokens found: ${targetTokens.length}`);
+        console.log(`Total target tokens found: ${targetTokens.length}`);
 
         // 2. Send via Firebase if tokens exist
         let firebaseSent = false;
         if (targetTokens.length > 0 && firebaseAdmin) {
-            console.log('🔥 Sending via Firebase...');
+            console.log('Sending via Firebase...');
 
-            // Use multicast for better reliability
-            const messages = targetTokens.map(token => ({
-                token: token,
+            // Use per-token payloads for better failure visibility
+            const messages = targetTokens.map((token) => ({
+                token,
                 notification: {
-                    title: title,
+                    title,
                     body: message,
                 },
                 data: {
@@ -106,24 +122,24 @@ export const sendPushNotification = async (req, res) => {
 
             try {
                 const batchResponse = await firebaseAdmin.messaging().sendEach(messages);
-                console.log(`✅ Firebase sent: ${batchResponse.successCount} success, ${batchResponse.failureCount} failures`);
+                console.log(`Firebase sent: ${batchResponse.successCount} success, ${batchResponse.failureCount} failures`);
 
                 if (batchResponse.failureCount > 0) {
                     batchResponse.responses.forEach((resp, idx) => {
                         if (!resp.success) {
-                            console.error(`❌ Failed to send to token ${idx}:`, resp.error);
+                            console.error(`Failed to send to token ${idx}:`, resp.error);
                         }
                     });
                 }
 
                 firebaseSent = batchResponse.successCount > 0;
             } catch (firebaseError) {
-                console.error('🔥 Firebase send error:', firebaseError);
+                console.error('Firebase send error:', firebaseError);
             }
         } else if (!firebaseAdmin) {
-            console.warn('⚠️ Firebase Admin not initialized');
+            console.warn('Firebase Admin not initialized');
         } else {
-            console.warn('⚠️ No FCM tokens available');
+            console.warn('No FCM tokens available');
         }
 
         // 3. Store in history
@@ -135,7 +151,7 @@ export const sendPushNotification = async (req, res) => {
             targetAudience
         });
 
-        console.log('💾 Notification saved to DB:', notification._id);
+        console.log('Notification saved to DB:', notification._id);
 
         res.status(201).json({
             ...notification._doc,
@@ -143,7 +159,7 @@ export const sendPushNotification = async (req, res) => {
             tokensTargeted: targetTokens.length
         });
     } catch (error) {
-        console.error('❌ Push notification error:', error);
+        console.error('Push notification error:', error);
         res.status(500).json({ message: error.message });
     }
 };

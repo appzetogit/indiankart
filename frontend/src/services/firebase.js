@@ -12,11 +12,25 @@ const firebaseConfig = {
     appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'messagingSenderId', 'appId'];
+const isFirebaseConfigured = requiredConfigKeys.every((key) => Boolean(firebaseConfig[key]));
+
+let app = null;
+let messaging = null;
+
+if (isFirebaseConfigured) {
+    app = initializeApp(firebaseConfig);
+    messaging = getMessaging(app);
+} else {
+    console.warn('Firebase messaging disabled: missing one or more VITE_FIREBASE_* env values.');
+}
 
 export const requestForToken = async () => {
     try {
+        if (!messaging) {
+            return null;
+        }
+
         if ('serviceWorker' in navigator) {
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
             console.log('Service Worker registered with scope:', registration.scope);
@@ -29,7 +43,7 @@ export const requestForToken = async () => {
             if (currentToken) {
                 console.log('current token for client: ', currentToken);
                 // Save token to database
-                API.post('/auth/fcm-token', { fcmToken: currentToken })
+                API.post('/auth/fcm-token', { fcmToken: currentToken, platform: 'web' })
                     .then(() => console.log('FCM Token saved to database'))
                     .catch(err => console.error('Error saving FCM Token:', err));
                 return currentToken;
@@ -44,6 +58,11 @@ export const requestForToken = async () => {
 
 export const onMessageListener = () =>
     new Promise((resolve) => {
+        if (!messaging) {
+            resolve(null);
+            return;
+        }
+
         onMessage(messaging, (payload) => {
             console.log("payload", payload);
             resolve(payload);
