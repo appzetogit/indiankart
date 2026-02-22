@@ -272,6 +272,20 @@ const ProductDetails = () => {
         return Array.from(new Set([...baseImages, ...variantImages])).filter(Boolean);
     }, [product, displayVariantHeadings, selectedVariants]);
 
+    const selectedVariantSummary = React.useMemo(() => {
+        if (displayVariantHeadings.length === 0) return null;
+        return (
+            <>
+                {displayVariantHeadings.map((vh, i) => (
+                    <React.Fragment key={vh.id}>
+                        <TranslatedText text={selectedVariants[vh.name]} />
+                        {i < displayVariantHeadings.length - 1 ? ', ' : ''}
+                    </React.Fragment>
+                ))}
+            </>
+        );
+    }, [displayVariantHeadings, selectedVariants]);
+
     const handleVariantSelect = (vhName, optName, optImage, optImages) => {
         setSelectedVariants(prev => ({ ...prev, [vhName]: optName }));
 
@@ -560,15 +574,8 @@ const ProductDetails = () => {
                             <p className="text-gray-400 font-bold text-xs uppercase tracking-widest mb-1 hover:text-blue-600 cursor-pointer w-fit">{product.brand || "Brand Name"}</p>
                             <h1 className="text-2xl font-medium text-gray-900 leading-snug hover:text-blue-600 cursor-pointer transition-colors inline-block">
                                 {translatedName}
-                                {displayVariantHeadings.length > 0 && (
-                                    <span className="text-gray-500 ml-1">
-                                        ({displayVariantHeadings.map((vh, i) => (
-                                            <React.Fragment key={vh.id}>
-                                                <TranslatedText text={selectedVariants[vh.name]} />
-                                                {i < displayVariantHeadings.length - 1 ? ', ' : ''}
-                                            </React.Fragment>
-                                        ))})
-                                    </span>
+                                {selectedVariantSummary && (
+                                    <span className="text-gray-500 ml-1">({selectedVariantSummary})</span>
                                 )}
                             </h1>
                         </div>
@@ -992,6 +999,9 @@ const ProductDetails = () => {
                     {/* Product Name */}
                     <h1 className="text-gray-900 text-lg font-bold leading-snug mb-3">
                         {translatedName}
+                        {selectedVariantSummary && (
+                            <span className="text-gray-500 ml-1 font-semibold">({selectedVariantSummary})</span>
+                        )}
                     </h1>
 
                     {/* Rating */}
@@ -1373,21 +1383,6 @@ const ProductDetails = () => {
             {/* Close Mobile Wrapper */}
 
 
-            {/* Product Description Section - Above Similar Products */}
-
-
-            {/* Similar Products Section - Added as requested */}
-            {similarProducts.length > 0 && (
-                <div className="md:max-w-[1600px] md:mx-auto md:px-6">
-                    <ProductSection
-                        title="Similar Products"
-                        products={similarProducts}
-                        loading={productsLoading}
-                        containerClass="mt-4 pb-4 px-4 md:px-0"
-                    />
-                </div>
-            )}
-
             <div className="md:max-w-[1600px] md:mx-auto md:px-6">
                 {/* All Details Section - Tabbed Interface with Main Dropdown */}
 
@@ -1429,16 +1424,17 @@ const ProductDetails = () => {
                     />
                 </div>
 
-                {/* You may also like Section - Tighter padding */}
-                <div className="border-t border-gray-100">
-                    <ProductSection
-                        title="You may also like"
-                        titleBadge="AD"
-                        products={products.slice(6, 12)}
-                        loading={productsLoading}
-                        containerClass="mt-2 pb-4 px-4 md:px-0"
-                    />
-                </div>
+                {/* Similar Products Section - Same category as current product */}
+                {similarProducts.length > 0 && (
+                    <div className="border-t border-gray-100">
+                        <ProductSection
+                            title="Similar Products"
+                            products={similarProducts.slice(0, 12)}
+                            loading={productsLoading}
+                            containerClass="mt-2 pb-4 px-4 md:px-0"
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Bottom Actions - Fixed Footer */}

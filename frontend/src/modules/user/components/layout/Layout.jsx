@@ -70,9 +70,7 @@ const Layout = () => {
                 !location.pathname.includes('/play') && <BottomNav />
             }
             {!isCategory && (
-                <div className="hidden md:block">
-                    <Footer />
-                </div>
+                <Footer />
             )}
         </div >
     );
