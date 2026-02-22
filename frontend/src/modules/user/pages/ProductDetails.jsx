@@ -130,8 +130,9 @@ const ProductDetails = () => {
     // Note: Complex descriptions might need more granular translation, 
     // but for now we'll translate the main name which is key.
 
-    // Fetch all products for "Similar" and "High Rated" logic (could be optimized on backend)
-    const { products, loading: productsLoading } = useProducts();
+    // Fetch related product lists only after the main product is ready.
+    const shouldLoadRelatedProducts = Boolean(product);
+    const { products, loading: productsLoading } = useProducts({ enabled: shouldLoadRelatedProducts });
 
     const [showToast, setShowToast] = useState(false);
 
@@ -365,19 +366,27 @@ const ProductDetails = () => {
         { id: 1, q: 'Is this skin friendly?', a: 'Yes, it is anti-allergic and safe for all skin types.', user: 'Sonal M.' }
     ]);
 
-    // Fetch Reviews from backend
+    // Fetch reviews after primary product content is visible.
     useEffect(() => {
+        if (!product) return;
+
+        let active = true;
         const fetchReviews = async () => {
             if (!id) return;
             try {
                 const { data } = await API.get(`/reviews/product/${id}`);
-                setReviews(data);
+                if (active) setReviews(data);
             } catch (err) {
                 console.error("Error fetching reviews:", err);
             }
         };
-        fetchReviews();
-    }, [id]);
+        const timer = setTimeout(fetchReviews, 150);
+
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
+    }, [id, product]);
 
     // Derived State for Ratings
     const totalRatings = reviews.length;
@@ -403,18 +412,24 @@ const ProductDetails = () => {
     const [bankOffers, setBankOffers] = useState([]);
 
     useEffect(() => {
-        if (id) {
-            const fetchBankOffers = async () => {
-                try {
-                    const { data } = await API.get(`/bank-offers/product/${id}`);
-                    setBankOffers(data);
-                } catch (error) {
-                    console.error('Error fetching bank offers', error);
-                }
-            };
-            fetchBankOffers();
-        }
-    }, [id]);
+        if (!id || !product) return;
+
+        let active = true;
+        const fetchBankOffers = async () => {
+            try {
+                const { data } = await API.get(`/bank-offers/product/${id}`);
+                if (active) setBankOffers(data);
+            } catch (error) {
+                console.error('Error fetching bank offers', error);
+            }
+        };
+
+        const timer = setTimeout(fetchBankOffers, 200);
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
+    }, [id, product]);
 
     const offers = [
         ...bankOffers.map(offer => ({

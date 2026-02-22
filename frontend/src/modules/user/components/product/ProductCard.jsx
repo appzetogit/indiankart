@@ -36,6 +36,7 @@ const ProductCard = ({ product, footerText }) => {
             className="flex flex-col h-full cursor-pointer group/card transition-opacity duration-300"
             onClick={handleNavigate}
             onMouseEnter={prefetchDetails}
+            onMouseDown={prefetchDetails}
             onTouchStart={prefetchDetails}
         >
             <div className="relative aspect-square mb-2 bg-[#f8f8f8] rounded-xl overflow-hidden flex items-center justify-center border border-gray-50 shadow-sm">

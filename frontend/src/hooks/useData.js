@@ -2,18 +2,50 @@ import { useState, useEffect } from 'react';
 import API from '../services/api';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const PERSISTED_CACHE_PREFIX = 'ik-cache-v1:';
 const cacheStore = new Map();
 const inflightStore = new Map();
 
 const isCacheFresh = (entry) => entry && (Date.now() - entry.timestamp) < CACHE_TTL_MS;
 
+const readPersistedCache = (key) => {
+    try {
+        const raw = localStorage.getItem(`${PERSISTED_CACHE_PREFIX}${key}`);
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw);
+        if (!isCacheFresh(parsed)) {
+            localStorage.removeItem(`${PERSISTED_CACHE_PREFIX}${key}`);
+            return null;
+        }
+
+        return parsed.data ?? null;
+    } catch {
+        return null;
+    }
+};
+
 const readCache = (key) => {
     const entry = cacheStore.get(key);
-    return isCacheFresh(entry) ? entry.data : null;
+    if (isCacheFresh(entry)) return entry.data;
+
+    const persisted = readPersistedCache(key);
+    if (persisted !== null) {
+        cacheStore.set(key, { data: persisted, timestamp: Date.now() });
+        return persisted;
+    }
+
+    return null;
 };
 
 const writeCache = (key, data) => {
-    cacheStore.set(key, { data, timestamp: Date.now() });
+    const payload = { data, timestamp: Date.now() };
+    cacheStore.set(key, payload);
+    try {
+        localStorage.setItem(`${PERSISTED_CACHE_PREFIX}${key}`, JSON.stringify(payload));
+    } catch {
+        // Ignore quota issues; in-memory cache is still available.
+    }
     return data;
 };
 
@@ -68,13 +100,19 @@ export const prefetchProductById = async (id) => {
     }
 };
 
-export const useProducts = () => {
+export const useProducts = (options = {}) => {
+    const { enabled = true } = options;
     const initialProducts = readCache('products') || [];
     const [products, setProducts] = useState(initialProducts);
-    const [loading, setLoading] = useState(initialProducts.length === 0);
+    const [loading, setLoading] = useState(enabled && initialProducts.length === 0);
     const [error, setError] = useState(null);
 
     useEffect(() => {
+        if (!enabled) {
+            setLoading(false);
+            return;
+        }
+
         let active = true;
 
         const fetchProducts = async () => {
@@ -102,7 +140,7 @@ export const useProducts = () => {
         return () => {
             active = false;
         };
-    }, []);
+    }, [enabled]);
 
     return { products, loading, error };
 };
@@ -204,6 +242,11 @@ export const useHomeSections = () => {
                     const { data } = await API.get('/home-sections');
                     return data;
                 });
+
+                const sectionProducts = data.flatMap((section) =>
+                    Array.isArray(section.products) ? section.products : []
+                );
+                rememberProductList(sectionProducts);
 
                 if (!active) return;
                 setSections(data);
