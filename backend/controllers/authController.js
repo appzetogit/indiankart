@@ -40,7 +40,9 @@ export const sendLoginOtp = async (req, res) => {
 
 export const verifyLoginOtp = async (req, res) => {
     const { mobile, otp, userType, name, email } = req.body;
-    if (!mobile || !otp) return res.status(400).json({ message: 'Mobile and OTP are required' });
+    const hasMobile = mobile !== undefined && mobile !== null && String(mobile).trim() !== '';
+    const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
+    if (!hasMobile || !hasOtp) return res.status(400).json({ message: 'Mobile and OTP are required' });
     try {
         const normalizedMobile = normalizeForHardcodedLogin(mobile);
         const normalizedOtp = normalizeHardcodedOtp(otp);
