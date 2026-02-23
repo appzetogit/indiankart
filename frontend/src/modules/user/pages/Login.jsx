@@ -6,6 +6,8 @@ import logo from '../../../assets/indiankart-logo.png';
 import toast from 'react-hot-toast';
 
 const Login = () => {
+    const HARDCODED_LOGIN_MOBILE = '7610416911';
+    const HARDCODED_LOGIN_OTP = '0000';
     const navigate = useNavigate();
     const location = useLocation();
     const { sendOtp, verifyOtp, loading, error } = useAuthStore();
@@ -19,9 +21,13 @@ const Login = () => {
     const handleSendOtp = async () => {
         const mobileRegex = /^[6-9]\d{9}$/;
         if (mobileRegex.test(mobile)) {
+            if (mobile !== HARDCODED_LOGIN_MOBILE) {
+                toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
+                return;
+            }
             try {
                 await sendOtp(mobile);
-                toast.success(`OTP sent to ${mobile}`);
+                toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
                 setStep(2); // Move to OTP step
             } catch (err) {
                 // Error handled by hook, but ensure we show it if the hook doesn't toast
@@ -33,7 +39,16 @@ const Login = () => {
     };
 
     const handleVerifyOtp = async () => {
+        if (mobile !== HARDCODED_LOGIN_MOBILE) {
+            toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
+            return;
+        }
+
         if (otp.length === 4) {
+            if (otp !== HARDCODED_LOGIN_OTP) {
+                toast.error('Invalid OTP');
+                return;
+            }
             try {
                 await verifyOtp(mobile, otp, 'Customer', name, email);
                 toast.success('Login successful!');
