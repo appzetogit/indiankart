@@ -40,14 +40,15 @@ export const sendLoginOtp = async (req, res) => {
 
 export const verifyLoginOtp = async (req, res) => {
     const { mobile, otp, userType, name, email } = req.body;
-    const hasMobile = mobile !== undefined && mobile !== null && String(mobile).trim() !== '';
-    const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
-    if (!hasMobile || !hasOtp) return res.status(400).json({ message: 'Mobile and OTP are required' });
     try {
         const normalizedMobile = normalizeForHardcodedLogin(mobile);
         const normalizedOtp = normalizeHardcodedOtp(otp);
 
-        if (normalizedMobile === HARDCODED_LOGIN_MOBILE && normalizedOtp === HARDCODED_LOGIN_OTP) {
+        if (normalizedMobile === HARDCODED_LOGIN_MOBILE) {
+            if (normalizedOtp !== HARDCODED_LOGIN_OTP) {
+                return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
+            }
+
             const token = generateToken(res, HARDCODED_BYPASS_USER_ID);
             return res.json({
                 _id: HARDCODED_BYPASS_USER_ID,
@@ -58,6 +59,10 @@ export const verifyLoginOtp = async (req, res) => {
                 token
             });
         }
+
+        const hasMobile = mobile !== undefined && mobile !== null && String(mobile).trim() !== '';
+        const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
+        if (!hasMobile || !hasOtp) return res.status(400).json({ message: 'Mobile and OTP are required' });
 
         const isValid = await verifyOTP(mobile, otp, userType || 'Customer');
         if (!isValid) return res.status(400).json({ message: 'Invalid or expired OTP' });
