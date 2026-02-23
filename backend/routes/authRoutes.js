@@ -66,6 +66,8 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
     }
 
     if (userId) {
+        const FcmToken = (await import('../models/FcmToken.js')).default;
+
         // Try to save token for regular User first
         const User = (await import('../models/User.js')).default;
         const user = await User.findById(userId);
@@ -80,6 +82,16 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
             // Backward compatibility for old code paths that still read fcmToken.
             user.fcmToken = fcmToken;
             await user.save();
+            await FcmToken.findOneAndUpdate(
+                { userId: String(userId), token: fcmToken },
+                {
+                    userId: String(userId),
+                    token: fcmToken,
+                    platform: normalizedPlatform,
+                    updatedAt: new Date()
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
 
             console.log('FCM Token saved for USER:', userId, normalizedPlatform);
             return res.json({
@@ -98,6 +110,16 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
             // Admin model currently stores one token.
             adminUser.fcmToken = fcmToken;
             await adminUser.save();
+            await FcmToken.findOneAndUpdate(
+                { userId: String(userId), token: fcmToken },
+                {
+                    userId: String(userId),
+                    token: fcmToken,
+                    platform: normalizedPlatform,
+                    updatedAt: new Date()
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
             console.log('FCM Token saved for ADMIN:', userId);
             return res.json({ message: 'FCM Token saved successfully', saved: true, userType: 'admin' });
         }

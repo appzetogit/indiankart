@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
 import { useCartStore } from './cartStore';
+import { requestForToken } from '../../../services/firebase';
 
 export const useAuthStore = create(
     persist(
@@ -11,12 +12,21 @@ export const useAuthStore = create(
             loading: true,
             error: null,
 
+            registerFcmToken: async () => {
+                try {
+                    await requestForToken();
+                } catch (error) {
+                    console.error('FCM token registration failed:', error);
+                }
+            },
+
             // Check if user is logged in (on app mount)
             checkAuth: async () => {
                 try {
                     const { data } = await API.get('/auth/profile');
                     // Ensure token is preserved if it exists in data or state
                     set({ user: data, isAuthenticated: true, loading: false });
+                    get().registerFcmToken();
                 } catch (error) {
                     set({ user: null, isAuthenticated: false, loading: false });
                 }
@@ -44,6 +54,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/verify-otp', { mobile, otp, userType, name, email });
             set({ user: data, isAuthenticated: true, loading: false });
+            get().registerFcmToken();
             return data;
         } catch (error) {
             set({ 
@@ -60,6 +71,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/login', { email, password });
             set({ user: data, isAuthenticated: true, loading: false });
+            get().registerFcmToken();
         } catch (error) {
             set({ 
                 loading: false, 
@@ -75,6 +87,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/register', userData);
             set({ user: data, isAuthenticated: true, loading: false });
+            get().registerFcmToken();
         } catch (error) {
             set({ 
                 loading: false, 

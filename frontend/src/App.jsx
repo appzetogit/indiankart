@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './modules/user/store/authStore';
-import { requestForToken, onMessageListener } from './services/firebase';
+import { onMessageListener } from './services/firebase';
 import './App.css';
 
 import { Toaster } from 'react-hot-toast';
@@ -19,8 +19,7 @@ function App() {
   useEffect(() => {
     checkAuth();
 
-    // Firebase Push Notifications
-    requestForToken();
+    // Firebase foreground notifications
     onMessageListener().then(payload => {
       if (!payload?.notification) return;
 

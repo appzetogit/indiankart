@@ -6,25 +6,29 @@ const API = axios.create({
 
 API.interceptors.request.use((config) => {
     try {
-        const storageData = localStorage.getItem('admin-auth-storage');
-        if (storageData) {
-            const parsed = JSON.parse(storageData);
-            const token = parsed?.state?.adminUser?.token;
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-        }
-        
-        // Check for User Token (Fallback for cookie issues)
-        // Check for User Token (Fallback for cookie issues)
+        const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
+        const isAdminApiCall =
+            requestUrl.includes('/admin') || requestUrl.includes('/notifications');
+
+        const adminStorageData = localStorage.getItem('admin-auth-storage');
         const userStorageData = localStorage.getItem('user-auth-storage');
-        if (userStorageData) {
-            const parsed = JSON.parse(userStorageData);
-            // Check for token in 'user' object (as partialized in authStore) or root 'token' (fallback)
-            const token = parsed?.state?.user?.token || parsed?.state?.token;
-            if (token && !config.headers.Authorization) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
+
+        const adminToken = adminStorageData
+            ? JSON.parse(adminStorageData)?.state?.adminUser?.token
+            : null;
+
+        // Token is stored inside user object in zustand persist.
+        const userToken = userStorageData
+            ? (JSON.parse(userStorageData)?.state?.user?.token || JSON.parse(userStorageData)?.state?.token)
+            : null;
+
+        if (isAdminApiCall && adminToken) {
+            config.headers.Authorization = `Bearer ${adminToken}`;
+        } else if (userToken) {
+            config.headers.Authorization = `Bearer ${userToken}`;
+        } else if (adminToken) {
+            // Fallback so admin-only sessions still work on shared endpoints.
+            config.headers.Authorization = `Bearer ${adminToken}`;
         }
     } catch (error) {
         console.error('Error retrieving auth token:', error);

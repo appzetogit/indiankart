@@ -34,6 +34,7 @@ import settingRoutes from './routes/settingRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
 
 import notificationRoutes from './routes/notificationRoutes.js';
+import fcmRoutes from './routes/fcmRoutes.js';
 import sellerRequestRoutes from './routes/sellerRequestRoutes.js';
 import footerRoutes from './routes/footerRoutes.js';
 import headerRoutes from './routes/headerRoutes.js';
@@ -102,6 +103,7 @@ app.use('/api/bank-offers', bankOfferRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/fcm', fcmRoutes);
 app.use('/api/seller-requests', sellerRequestRoutes);
 app.use('/api/footer', footerRoutes);
 app.use('/api/header', headerRoutes);

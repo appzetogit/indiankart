@@ -69,13 +69,19 @@ const NotificationManager = () => {
             if (result.firebaseSent) {
                 toast.success(`✅ Notification sent to ${result.tokensTargeted} users!`);
             } else {
+                const firstFailure = result?.failureReasons?.[0];
+                const reasonText = firstFailure?.code
+                    ? `${firstFailure.code}${firstFailure.message ? `: ${firstFailure.message}` : ''}`
+                    : 'No detailed reason from backend';
                 toast(`⚠️ Notification created but not sent (${result.tokensTargeted} tokens targeted)`, {
                     icon: '⚠️',
                     style: {
                         background: '#FEF3C7',
                         color: '#92400E',
-                    }
+                    },
+                    duration: 7000
                 });
+                toast.error(`Send failed reason: ${reasonText}`, { duration: 9000 });
             }
             setFormData({
                 title: '',

@@ -93,7 +93,10 @@ const Sidebar = () => {
                 </div>
 
                 {/* Menu Items */}
-                <nav className="mt-4 px-2 flex-1 overflow-y-auto custom-scrollbar pb-10">
+                <nav
+                    data-lenis-prevent
+                    className="mt-4 px-2 flex-1 overflow-y-auto custom-scrollbar pb-10"
+                >
                     {menuItems.map((item) => {
                         const Icon = item.icon;
                         return (

@@ -31,21 +31,34 @@ export const requestForToken = async () => {
             return null;
         }
 
+        if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                console.warn('Notification permission not granted.');
+                return null;
+            }
+        }
+
         if ('serviceWorker' in navigator) {
             const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
             console.log('Service Worker registered with scope:', registration.scope);
 
+            const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+            if (!vapidKey) {
+                console.warn('Missing VITE_FIREBASE_VAPID_KEY. Unable to fetch FCM token.');
+                return null;
+            }
+
             const currentToken = await getToken(messaging, {
-                vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+                vapidKey,
                 serviceWorkerRegistration: registration
             });
 
             if (currentToken) {
                 console.log('current token for client: ', currentToken);
                 // Save token to database
-                API.post('/auth/fcm-token', { fcmToken: currentToken, platform: 'web' })
-                    .then(() => console.log('FCM Token saved to database'))
-                    .catch(err => console.error('Error saving FCM Token:', err));
+                await API.post('/auth/fcm-token', { fcmToken: currentToken, platform: 'web' });
+                console.log('FCM Token saved to database');
                 return currentToken;
             } else {
                 console.log('No registration token available. Request permission to generate one.');

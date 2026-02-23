@@ -8,6 +8,7 @@ import SubCategoryList from '../components/category/SubCategoryList';
 import CategoryDeals from '../components/category/CategoryDeals';
 import CategoryScrollDeals from '../components/category/CategoryScrollDeals';
 import ProductCard from '../components/product/ProductCard';
+import BottomNav from '../components/layout/BottomNav';
 
 const CategoryPage = () => {
     const navigate = useNavigate();
@@ -170,9 +171,9 @@ const CategoryPage = () => {
     }
 
     return (
-        <div className="bg-[#f1f3f6] min-h-screen pb-20 md:pb-10">
+        <div className="bg-[#f1f3f6] min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
-            <div className="bg-white shadow-sm border-b border-gray-200 sticky top-[80px] md:sticky md:top-[144px] z-40">
+            <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[144px] z-40">
                 <div className="max-w-[1440px] mx-auto px-4 py-2.5 md:py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3 md:gap-6">
                         <button
@@ -473,7 +474,7 @@ const CategoryPage = () => {
             </div>
 
             {/* Sticky Mobile Sort/Filter Bar */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 h-14 flex z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+            <div className="lg:hidden fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 bg-white border-t border-gray-200 h-14 flex z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
                 <button
                     onClick={() => setShowSortModal(true)}
                     className="flex-1 flex items-center justify-center gap-2.5 border-r border-gray-100 group active:bg-gray-50 transition-colors"
@@ -489,6 +490,8 @@ const CategoryPage = () => {
                     <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Filters</span>
                 </button>
             </div>
+
+            <BottomNav />
 
             {/* Mobile Modals (Sort & Filter) - Consistent with the new aesthetic */}
             {showSortModal && (

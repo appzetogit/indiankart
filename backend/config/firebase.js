@@ -5,21 +5,46 @@ dotenv.config();
 let firebaseAdmin;
 
 try {
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-        : undefined;
+    const normalizePrivateKey = (rawKey) => {
+        if (!rawKey) return undefined;
 
-    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && privateKey) {
+        let key = String(rawKey).trim();
+
+        // Strip optional surrounding quotes from .env values.
+        if (
+            (key.startsWith('"') && key.endsWith('"')) ||
+            (key.startsWith("'") && key.endsWith("'"))
+        ) {
+            key = key.slice(1, -1);
+        }
+
+        // Support escaped newlines and remove CR characters.
+        key = key.replace(/\\n/g, '\n').replace(/\r/g, '');
+        return key;
+    };
+
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+        : null;
+
+    const privateKey = normalizePrivateKey(
+        serviceAccountJson?.private_key || process.env.FIREBASE_PRIVATE_KEY
+    );
+
+    const projectId = serviceAccountJson?.project_id || process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = serviceAccountJson?.client_email || process.env.FIREBASE_CLIENT_EMAIL;
+
+    if (projectId && clientEmail && privateKey) {
         firebaseAdmin = admin.initializeApp({
             credential: admin.credential.cert({
-                projectId: process.env.FIREBASE_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                privateKey: privateKey,
+                projectId,
+                clientEmail,
+                privateKey,
             }),
         });
         console.log('Firebase Admin SDK initialized successfully');
     } else {
-        console.warn('Firebase credentials missing. Push notifications will be disabled.');
+        console.warn('Firebase credentials missing/invalid. Push notifications will be disabled.');
     }
 } catch (error) {
     console.error('Firebase initialization error:', error.message);
