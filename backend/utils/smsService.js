@@ -13,6 +13,12 @@ function normalizeForHardcodedLogin(mobile) {
     return digits.length > 10 ? digits.slice(-10) : digits;
 }
 
+function normalizeHardcodedOtp(otp) {
+    const digits = String(otp ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.length < 4 ? digits.padStart(4, '0') : digits;
+}
+
 /**
  * Generate numeric OTP
  */
@@ -326,7 +332,7 @@ export async function sendOTP(mobile, userType) {
 export async function verifyOTP(mobile, otpInput, userType) {
     if (isDeveloperBypass(otpInput)) return true;
 
-    const normalizedOtp = String(otpInput).trim().replace(/\s/g, '');
+    const normalizedOtp = normalizeHardcodedOtp(otpInput);
     const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
     if (normalizedMobile === HARDCODED_LOGIN_MOBILE && normalizedOtp === HARDCODED_LOGIN_OTP) {

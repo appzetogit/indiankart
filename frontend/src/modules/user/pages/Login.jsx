@@ -14,7 +14,7 @@ const Login = () => {
     };
     const navigate = useNavigate();
     const location = useLocation();
-    const { sendOtp, verifyOtp, loading, error } = useAuthStore();
+    const { verifyOtp, loading, error } = useAuthStore();
     const [mobile, setMobile] = useState(location.state?.mobile || '');
     const [name, setName] = useState(location.state?.name || '');
     const [email, setEmail] = useState(location.state?.email || '');
@@ -29,14 +29,8 @@ const Login = () => {
                 toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
                 return;
             }
-            try {
-                await sendOtp(normalizeForHardcodedLogin(mobile));
-                toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
-                setStep(2); // Move to OTP step
-            } catch (err) {
-                // Error handled by hook, but ensure we show it if the hook doesn't toast
-                toast.error(error || 'Failed to send OTP');
-            }
+            toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
+            setStep(2); // Move to OTP step
         } else {
             toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
         }

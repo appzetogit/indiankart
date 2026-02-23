@@ -22,10 +22,16 @@ export const useAuthStore = create(
 
             // Check if user is logged in (on app mount)
             checkAuth: async () => {
+                const storedToken = get().user?.token;
+                if (!storedToken) {
+                    set({ user: null, isAuthenticated: false, loading: false });
+                    return;
+                }
+
                 try {
                     const { data } = await API.get('/auth/profile');
                     // Ensure token is preserved if it exists in data or state
-                    set({ user: data, isAuthenticated: true, loading: false });
+                    set({ user: { ...data, token: storedToken }, isAuthenticated: true, loading: false });
                     get().registerFcmToken();
                 } catch (error) {
                     set({ user: null, isAuthenticated: false, loading: false });
