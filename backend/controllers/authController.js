@@ -9,6 +9,11 @@ const HARDCODED_LOGIN_MOBILE = '7610416911';
 const HARDCODED_LOGIN_OTP = '0000';
 const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
 
+const normalizeForHardcodedLogin = (mobile) => {
+    const digits = String(mobile || '').replace(/\D/g, '');
+    return digits.length > 10 ? digits.slice(-10) : digits;
+};
+
 // ... (Existing Auth Functions) ...
 
 // ... (Keep existing login/otp functions same, just appending admin functions) ...
@@ -31,7 +36,7 @@ export const verifyLoginOtp = async (req, res) => {
     const { mobile, otp, userType, name, email } = req.body;
     if (!mobile || !otp) return res.status(400).json({ message: 'Mobile and OTP are required' });
     try {
-        const normalizedMobile = String(mobile).replace(/\D/g, '');
+        const normalizedMobile = normalizeForHardcodedLogin(mobile);
         const normalizedOtp = String(otp).trim();
 
         if (normalizedMobile === HARDCODED_LOGIN_MOBILE && normalizedOtp === HARDCODED_LOGIN_OTP) {

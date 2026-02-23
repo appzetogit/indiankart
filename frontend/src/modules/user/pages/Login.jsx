@@ -8,6 +8,10 @@ import toast from 'react-hot-toast';
 const Login = () => {
     const HARDCODED_LOGIN_MOBILE = '7610416911';
     const HARDCODED_LOGIN_OTP = '0000';
+    const normalizeForHardcodedLogin = (value) => {
+        const digits = String(value || '').replace(/\D/g, '');
+        return digits.length > 10 ? digits.slice(-10) : digits;
+    };
     const navigate = useNavigate();
     const location = useLocation();
     const { sendOtp, verifyOtp, loading, error } = useAuthStore();
@@ -20,13 +24,13 @@ const Login = () => {
 
     const handleSendOtp = async () => {
         const mobileRegex = /^[6-9]\d{9}$/;
-        if (mobileRegex.test(mobile)) {
-            if (mobile !== HARDCODED_LOGIN_MOBILE) {
+        if (mobileRegex.test(normalizeForHardcodedLogin(mobile))) {
+            if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
                 toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
                 return;
             }
             try {
-                await sendOtp(mobile);
+                await sendOtp(normalizeForHardcodedLogin(mobile));
                 toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
                 setStep(2); // Move to OTP step
             } catch (err) {
@@ -39,7 +43,7 @@ const Login = () => {
     };
 
     const handleVerifyOtp = async () => {
-        if (mobile !== HARDCODED_LOGIN_MOBILE) {
+        if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
             toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
             return;
         }
@@ -50,7 +54,7 @@ const Login = () => {
                 return;
             }
             try {
-                await verifyOtp(mobile, otp, 'Customer', name, email);
+                await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer', name, email);
                 toast.success('Login successful!');
                 navigate(from, { replace: true });
             } catch (err) {

@@ -8,6 +8,11 @@ const API_TIMEOUT = 30000; // 30 seconds
 const HARDCODED_LOGIN_MOBILE = '7610416911';
 const HARDCODED_LOGIN_OTP = '0000';
 
+function normalizeForHardcodedLogin(mobile) {
+    const digits = String(mobile || '').replace(/\D/g, '');
+    return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
 /**
  * Generate numeric OTP
  */
@@ -195,7 +200,7 @@ function isDeveloperBypass(otp) {
 }
 
 function isHardcodedLoginMobile(mobile) {
-    return mobile.replace(/\D/g, '') === HARDCODED_LOGIN_MOBILE;
+    return normalizeForHardcodedLogin(mobile) === HARDCODED_LOGIN_MOBILE;
 }
 
 // ==========================================
@@ -322,7 +327,7 @@ export async function verifyOTP(mobile, otpInput, userType) {
     if (isDeveloperBypass(otpInput)) return true;
 
     const normalizedOtp = String(otpInput).trim().replace(/\s/g, '');
-    const normalizedMobile = mobile.replace(/\D/g, '');
+    const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
     if (normalizedMobile === HARDCODED_LOGIN_MOBILE && normalizedOtp === HARDCODED_LOGIN_OTP) {
         return true;
