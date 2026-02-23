@@ -15,6 +15,8 @@ import {
 } from '../controllers/authController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
+const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
+
 const normalizePlatform = (platform = 'web') => {
     const platformMap = {
         web: 'web',
@@ -66,6 +68,15 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
     }
 
     if (userId) {
+        if (String(userId) === HARDCODED_BYPASS_USER_ID) {
+            return res.json({
+                message: 'FCM Token received for bypass test user',
+                saved: false,
+                userType: 'user',
+                platform: normalizedPlatform
+            });
+        }
+
         const FcmToken = (await import('../models/FcmToken.js')).default;
 
         // Try to save token for regular User first
