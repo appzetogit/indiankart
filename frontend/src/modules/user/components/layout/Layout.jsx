@@ -46,13 +46,13 @@ const Layout = () => {
                             isHome ? 'pt-[260px] md:pt-[240px]' :
                                 isAccountPage ? 'pt-0 md:pt-[160px]' :
                                     'pt-[110px] md:pt-[160px]'}`}>
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                         key={location.pathname}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.2 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.15 }}
                         className="flex-1 flex flex-col"
                     >
                         <Outlet />
