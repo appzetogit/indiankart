@@ -51,7 +51,7 @@ const ProductForm = () => {
         deliveryDays: 5,
         // Dynamic Variant System
         variantHeadings: [], // { name: 'Color', hasImage: true, options: [{ name: 'Red', image: '' }] }
-        skus: [], // { combination: { Color: 'Red', Size: 'M' }, stock: 10 }
+        skus: [], // { combination: { Color: 'Red', Size: 'M' }, price: 999, originalPrice: 1299, stock: 10 }
         subCategories: [], // Selected subcategory ObjectIds
         // Product Highlights (Structured sections with heading and points)
         highlights: [{ heading: '', points: [''] }],
@@ -390,6 +390,8 @@ const ProductForm = () => {
             );
             return {
                 combination: comb,
+                price: existing ? (existing.price ?? '') : '',
+                originalPrice: existing ? (existing.originalPrice ?? '') : '',
                 stock: existing ? existing.stock : 0
             };
         });
@@ -398,10 +400,19 @@ const ProductForm = () => {
         setVariantPage(1);
     };
 
-    const updateSkuStock = (index, value) => {
+    const updateSkuField = (index, field, value) => {
         const newSkus = [...formData.skus];
-        newSkus[index].stock = value;
+        newSkus[index][field] = value;
         setFormData(prev => ({ ...prev, skus: newSkus }));
+    };
+
+    const getNormalizedSkus = () => {
+        return (formData.skus || []).map(sku => ({
+            ...sku,
+            stock: Math.max(0, Number(sku.stock) || 0),
+            price: Number(sku.price),
+            originalPrice: Number(sku.originalPrice)
+        }));
     };
 
     // Specifications handlers
@@ -446,22 +457,79 @@ const ProductForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        // Validation: Thumbnail is required
-        if (!formData.thumbnail) {
-            toast.error("Please add a product thumbnail!");
+        const hasBasicRequiredFields =
+            !!formData.thumbnail &&
+            !!formData.name?.trim() &&
+            !!formData.brand?.trim() &&
+            !!formData.categoryPath?.[0] &&
+            (formData.subCategories?.length || 0) > 0 &&
+            Number(formData.deliveryDays) > 0 &&
+            Number(formData.returnPolicy?.days) > 0 &&
+            !!formData.returnPolicy?.description?.trim();
+
+        const hasValidVariantDefinitions =
+            Array.isArray(formData.variantHeadings) &&
+            formData.variantHeadings.length > 0 &&
+            formData.variantHeadings.every(vh =>
+                !!vh?.name?.trim() &&
+                Array.isArray(vh.options) &&
+                vh.options.some(opt => !!opt?.name?.trim())
+            );
+
+        const normalizedSkus = getNormalizedSkus();
+        const hasAllSkuFieldsFilled = (formData.skus || []).every(sku =>
+            sku?.price !== '' &&
+            sku?.price !== null &&
+            sku?.price !== undefined &&
+            sku?.originalPrice !== '' &&
+            sku?.originalPrice !== null &&
+            sku?.originalPrice !== undefined &&
+            sku?.stock !== null &&
+            sku?.stock !== undefined
+        );
+        const hasValidSkus =
+            hasAllSkuFieldsFilled &&
+            normalizedSkus.length > 0 &&
+            normalizedSkus.every(sku =>
+                Number.isFinite(sku.price) &&
+                Number.isFinite(sku.originalPrice) &&
+                Number.isFinite(sku.stock) &&
+                sku.price >= 0 &&
+                sku.originalPrice >= 0 &&
+                sku.stock >= 0 &&
+                sku.originalPrice >= sku.price
+            );
+
+        if (!hasBasicRequiredFields || !hasValidVariantDefinitions || !hasValidSkus) {
+            toast.error('All fields are required');
             return;
         }
+
+        if (normalizedSkus.some(sku => sku.stock < 0)) {
+            toast.error('Stock cannot be negative');
+            return;
+        }
+
+        const skuForDisplay = normalizedSkus.reduce((best, current) => {
+            if (!best) return current;
+            return current.price < best.price ? current : best;
+        }, null);
+
+        const finalPrice = skuForDisplay ? skuForDisplay.price : Number(formData.price || 0);
+        const finalOriginalPrice = skuForDisplay
+            ? Math.max(skuForDisplay.originalPrice, skuForDisplay.price)
+            : Number(formData.originalPrice || 0);
 
         const data = new FormData();
         data.append('name', formData.name);
         data.append('brand', formData.brand);
-        data.append('price', String(formData.price));
-        data.append('originalPrice', String(formData.originalPrice));
+        data.append('price', String(finalPrice));
+        data.append('originalPrice', String(finalOriginalPrice));
 
 
         // Calculated fields
-        const stock = formData.skus.length > 0
-            ? formData.skus.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0)
+        const stock = normalizedSkus.length > 0
+            ? normalizedSkus.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0)
             : Number(formData.stock);
         data.append('stock', String(stock));
 
@@ -484,8 +552,8 @@ const ProductForm = () => {
             data.append('subCategory', '');
         }
 
-        const discount = formData.originalPrice > formData.price
-            ? `${Math.round(((formData.originalPrice - formData.price) / formData.originalPrice) * 100)}% off`
+        const discount = finalOriginalPrice > finalPrice
+            ? `${Math.round(((finalOriginalPrice - finalPrice) / finalOriginalPrice) * 100)}% off`
             : '';
         if (discount) data.append('discount', discount);
 
@@ -516,7 +584,7 @@ const ProductForm = () => {
         descriptionImages.forEach(file => {
             data.append('description_images', file);
         });
-        data.append('skus', JSON.stringify(formData.skus));
+        data.append('skus', JSON.stringify(normalizedSkus));
         data.append('highlights', JSON.stringify(formData.highlights));
         data.append('specifications', JSON.stringify(formData.specifications));
         data.append('warranty', JSON.stringify(formData.warranty));
@@ -629,9 +697,8 @@ const ProductForm = () => {
                         </button>
                         <div>
                             <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight">
-                                {isEdit ? 'Update Product' : 'Create New Listing'}
+                                Create New Listing
                             </h1>
-                            <p className="text-sm text-gray-500 font-medium italic">Status: {isEdit ? 'Editing Draft' : 'New Draft'}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 md:gap-3">
@@ -653,7 +720,7 @@ const ProductForm = () => {
                                     Saving...
                                 </>
                             ) : (
-                                isEdit ? 'Save Changes' : 'Publish to Store'
+                                'Publish to Store'
                             )}
                         </button>
                     </div>
@@ -1085,65 +1152,6 @@ const ProductForm = () => {
                             </div>
                         </section>
 
-                        {/* Pricing & Inventory Card */}
-                        <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-3 md:space-y-6">
-                            <div className="flex items-center gap-2 md:gap-3 border-b border-gray-50 pb-2 md:pb-4">
-                                <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center font-bold text-sm md:text-base">3</span>
-                                <h2 className="text-base md:text-lg font-bold text-gray-800">Pricing & Inventory</h2>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-green-600 uppercase tracking-wider">Selling Price (₹)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm md:text-base">₹</span>
-                                        <input
-                                            type="number"
-                                            name="price"
-                                            value={formData.price}
-                                            onChange={handleChange}
-                                            className="w-full pl-8 pr-4 py-2 md:py-3 rounded-xl bg-green-50/30 border border-green-200 focus:border-green-500 focus:bg-white outline-none transition-all font-black text-green-900 caret-black text-lg md:text-xl placeholder:text-gray-500"
-                                            placeholder="0"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">List Price/MRP (₹)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400 text-sm md:text-base">₹</span>
-                                        <input
-                                            type="number"
-                                            name="originalPrice"
-                                            value={formData.originalPrice}
-                                            onChange={handleChange}
-                                            className="w-full pl-8 pr-4 py-2 md:py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 caret-black line-through placeholder:text-gray-500 text-sm md:text-base"
-                                            placeholder="0"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Available Stock</label>
-                                    <input
-                                        type="number"
-                                        name="stock"
-                                        value={formData.skus.length > 0
-                                            ? formData.skus.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0)
-                                            : formData.stock || 0}
-                                        onChange={handleChange}
-                                        disabled={formData.skus.length > 0 || formData.variantHeadings.length > 0}
-                                        className="w-full px-3 py-2 md:px-4 md:py-3 rounded-xl bg-gray-50 border border-gray-200 font-black text-gray-900 caret-black text-base md:text-lg disabled:opacity-60"
-                                        placeholder="0"
-                                    />
-                                    {(formData.skus.length > 0 || formData.variantHeadings.length > 0) && (
-                                        <p className="text-[10px] text-blue-500 font-bold flex items-center gap-1 mt-1 uppercase tracking-tighter">
-                                            <span className="material-icons text-[12px]">auto_fix_high</span>
-                                            Synced from Variants
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </section>
-
                         {/* Dynamic Variants Card */}
                         <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-4 md:space-y-8">
                             <div className="flex items-center justify-between border-b border-gray-50 pb-2 md:pb-4">
@@ -1293,7 +1301,7 @@ const ProductForm = () => {
                                                 </div>
                                                 <div>
                                                     <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest leading-tight">Combinations Matrix</h4>
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Manage stock for unique pairs</p>
+                                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Manage variant pricing and stock</p>
                                                 </div>
                                             </div>
                                             <button
@@ -1315,7 +1323,9 @@ const ProductForm = () => {
                                                                 {formData.variantHeadings.map(vh => (
                                                                     <th key={vh.id} className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">{vh.name || 'Variant'}</th>
                                                                 ))}
-                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Stock Count</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Selling Price</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Marked Price</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Stock</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">
@@ -1329,6 +1339,24 @@ const ProductForm = () => {
                                                                             </td>
                                                                         ))}
                                                                         <td className="px-3 py-2 md:px-6 md:py-4 text-right">
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                value={sku.price ?? ''}
+                                                                                onChange={(e) => updateSkuField(originalIdx, 'price', Math.max(0, Number(e.target.value) || 0))}
+                                                                                className="w-24 text-right px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 outline-none text-sm font-black text-gray-900 transition-all shadow-inner caret-black"
+                                                                            />
+                                                                        </td>
+                                                                        <td className="px-3 py-2 md:px-6 md:py-4 text-right">
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                value={sku.originalPrice ?? ''}
+                                                                                onChange={(e) => updateSkuField(originalIdx, 'originalPrice', Math.max(0, Number(e.target.value) || 0))}
+                                                                                className="w-24 text-right px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 outline-none text-sm font-black text-gray-900 transition-all shadow-inner caret-black"
+                                                                            />
+                                                                        </td>
+                                                                        <td className="px-3 py-2 md:px-6 md:py-4 text-right">
                                                                             <div className="flex items-center justify-end gap-3 group/input">
                                                                                 {sku.stock <= 5 && sku.stock > 0 && (
                                                                                     <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest animate-pulse">Low Stock</span>
@@ -1337,7 +1365,7 @@ const ProductForm = () => {
                                                                                     type="number"
                                                                                     min="0"
                                                                                     value={sku.stock}
-                                                                                    onChange={(e) => updateSkuStock(originalIdx, Math.max(0, parseInt(e.target.value) || 0))}
+                                                                                    onChange={(e) => updateSkuField(originalIdx, 'stock', Math.max(0, parseInt(e.target.value, 10) || 0))}
                                                                                     className="w-20 text-right px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 outline-none text-sm font-black text-gray-900 transition-all shadow-inner caret-black"
                                                                                 />
                                                                             </div>
@@ -1580,40 +1608,6 @@ const ProductForm = () => {
                                 </div>
                             )}
 
-                            {/* Return Policy - Always shown */}
-                            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all">
-                                <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleSection('returnPolicy')}>
-                                    <div className="flex items-center gap-3">
-                                        <span className="material-icons text-orange-500">sync_alt</span>
-                                        <h3 className="font-bold text-gray-800 text-sm">Return Policy</h3>
-                                    </div>
-                                    {sections.returnPolicy ? <MdExpandLess /> : <MdExpandMore />}
-                                </div>
-                                {sections.returnPolicy && (
-                                    <div className="p-4 bg-gray-50/50 border-t border-gray-100 space-y-3 animate-in fade-in slide-in-from-top-2">
-                                        <div>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Return Window (Days)</label>
-                                            <input
-                                                type="number"
-                                                value={formData.returnPolicy.days}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, returnPolicy: { ...prev.returnPolicy, days: parseInt(e.target.value) || 0 } }))}
-                                                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold text-gray-900 focus:border-blue-500 outline-none caret-black placeholder:text-gray-500"
-                                                placeholder="7"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Policy Description</label>
-                                            <textarea
-                                                value={formData.returnPolicy.description}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, returnPolicy: { ...prev.returnPolicy, description: e.target.value } }))}
-                                                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs h-24 font-bold text-gray-900 focus:border-blue-500 outline-none caret-black placeholder:text-gray-500"
-                                                placeholder="Easy returns within 7 days. Product must be unused with original tags..."
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
                             {/* Specifications - Optional */}
                             <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all">
                                 <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleSection('specifications')}>
@@ -1743,3 +1737,4 @@ const ProductForm = () => {
 };
 
 export default ProductForm;
+

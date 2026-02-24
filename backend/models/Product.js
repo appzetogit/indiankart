@@ -66,6 +66,8 @@ const productSchema = mongoose.Schema({
     }],
     skus: [{
         combination: { type: Map, of: String }, // e.g. { Color: "Red", Size: "M" }
+        price: { type: Number, default: 0, min: 0 },
+        originalPrice: { type: Number, default: 0, min: 0 },
         stock: { type: Number, default: 0, min: 0 }
     }],
     
