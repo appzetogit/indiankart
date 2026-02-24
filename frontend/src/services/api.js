@@ -7,6 +7,9 @@ const API = axios.create({
 API.interceptors.request.use((config) => {
     try {
         const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
+        const currentPath =
+            typeof window !== 'undefined' ? window.location.pathname : '';
+        const isAdminContext = currentPath.startsWith('/admin');
         const isAdminApiCall =
             requestUrl.includes('/admin') || requestUrl.includes('/notifications');
 
@@ -22,7 +25,10 @@ API.interceptors.request.use((config) => {
             ? (JSON.parse(userStorageData)?.state?.user?.token || JSON.parse(userStorageData)?.state?.token)
             : null;
 
-        if (isAdminApiCall && adminToken) {
+        // In admin UI, always prefer admin token for all requests.
+        if (isAdminContext && adminToken) {
+            config.headers.Authorization = `Bearer ${adminToken}`;
+        } else if (isAdminApiCall && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
         } else if (userToken) {
             config.headers.Authorization = `Bearer ${userToken}`;

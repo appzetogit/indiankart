@@ -9,7 +9,7 @@ const upsertAdmin = async () => {
     try {
         await connectDB();
 
-        const email = 'admin@flipkart.comm'.toLowerCase();
+        const email = 'admin@flipkart.com'.toLowerCase();
         const password = 'admin123';
         const name = 'Admin User';
 

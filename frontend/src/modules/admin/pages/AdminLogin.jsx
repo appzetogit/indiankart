@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState('admin@flipkart.comm');
+    const [email, setEmail] = useState('admin@flipkart.com');
     const [password, setPassword] = useState('admin123');
     const { login, loading } = useAdminAuthStore();
 
@@ -43,7 +43,7 @@ const AdminLogin = () => {
                             disabled={loading}
                             className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'
                                 }`}
-                            placeholder="admin@flipkart.comm"
+                            placeholder="admin@flipkart.com"
                             required
                         />
                     </div>
@@ -86,7 +86,7 @@ const AdminLogin = () => {
                 <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                     <p className="text-xs text-gray-600 text-center">
                         Demo Credentials:<br />
-                        <span className="font-mono font-semibold">admin@flipkart.comm / admin123</span>
+                        <span className="font-mono font-semibold">admin@flipkart.com / admin123</span>
                     </p>
                 </div>
             </div>
