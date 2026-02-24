@@ -5,6 +5,21 @@ import jwt from 'jsonwebtoken';
 import { sendOTP, verifyOTP } from '../utils/smsService.js';
 import generateToken from '../utils/generateToken.js';
 
+const HARDCODED_LOGIN_MOBILE = '7610416911';
+const HARDCODED_LOGIN_OTP = '0000';
+const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
+
+const normalizeForHardcodedLogin = (mobile) => {
+    const digits = String(mobile || '').replace(/\D/g, '');
+    return digits.length > 10 ? digits.slice(-10) : digits;
+};
+
+const normalizeHardcodedOtp = (otp) => {
+    const digits = String(otp ?? '').replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.length < 4 ? digits.padStart(4, '0') : digits;
+};
+
 // ... (Existing Auth Functions) ...
 
 // ... (Keep existing login/otp functions same, just appending admin functions) ...
@@ -25,8 +40,30 @@ export const sendLoginOtp = async (req, res) => {
 
 export const verifyLoginOtp = async (req, res) => {
     const { mobile, otp, userType, name, email } = req.body;
-    if (!mobile || !otp) return res.status(400).json({ message: 'Mobile and OTP are required' });
     try {
+        const normalizedMobile = normalizeForHardcodedLogin(mobile);
+        const normalizedOtp = normalizeHardcodedOtp(otp);
+
+        if (normalizedMobile === HARDCODED_LOGIN_MOBILE) {
+            if (normalizedOtp !== HARDCODED_LOGIN_OTP) {
+                return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
+            }
+
+            const token = generateToken(res, HARDCODED_BYPASS_USER_ID);
+            return res.json({
+                _id: HARDCODED_BYPASS_USER_ID,
+                name: name || 'Test User',
+                email: email || `${HARDCODED_LOGIN_MOBILE}@temp.local`,
+                phone: HARDCODED_LOGIN_MOBILE,
+                gender: 'male',
+                token
+            });
+        }
+
+        const hasMobile = mobile !== undefined && mobile !== null && String(mobile).trim() !== '';
+        const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
+        if (!hasMobile || !hasOtp) return res.status(400).json({ message: 'Mobile and OTP are required' });
+
         const isValid = await verifyOTP(mobile, otp, userType || 'Customer');
         if (!isValid) return res.status(400).json({ message: 'Invalid or expired OTP' });
         let user = await User.findOne({ $or: [{ email: mobile }, { phone: mobile }] });

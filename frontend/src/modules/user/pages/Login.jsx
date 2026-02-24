@@ -6,9 +6,15 @@ import logo from '../../../assets/indiankart-logo.png';
 import toast from 'react-hot-toast';
 
 const Login = () => {
+    const HARDCODED_LOGIN_MOBILE = '7610416911';
+    const HARDCODED_LOGIN_OTP = '0000';
+    const normalizeForHardcodedLogin = (value) => {
+        const digits = String(value || '').replace(/\D/g, '');
+        return digits.length > 10 ? digits.slice(-10) : digits;
+    };
     const navigate = useNavigate();
     const location = useLocation();
-    const { sendOtp, verifyOtp, loading, error } = useAuthStore();
+    const { verifyOtp, loading, error } = useAuthStore();
     const [mobile, setMobile] = useState(location.state?.mobile || '');
     const [name, setName] = useState(location.state?.name || '');
     const [email, setEmail] = useState(location.state?.email || '');
@@ -18,24 +24,31 @@ const Login = () => {
 
     const handleSendOtp = async () => {
         const mobileRegex = /^[6-9]\d{9}$/;
-        if (mobileRegex.test(mobile)) {
-            try {
-                await sendOtp(mobile);
-                toast.success(`OTP sent to ${mobile}`);
-                setStep(2); // Move to OTP step
-            } catch (err) {
-                // Error handled by hook, but ensure we show it if the hook doesn't toast
-                toast.error(error || 'Failed to send OTP');
+        if (mobileRegex.test(normalizeForHardcodedLogin(mobile))) {
+            if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
+                toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
+                return;
             }
+            toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
+            setStep(2); // Move to OTP step
         } else {
             toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
         }
     };
 
     const handleVerifyOtp = async () => {
+        if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
+            toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
+            return;
+        }
+
         if (otp.length === 4) {
+            if (otp !== HARDCODED_LOGIN_OTP) {
+                toast.error('Invalid OTP');
+                return;
+            }
             try {
-                await verifyOtp(mobile, otp, 'Customer', name, email);
+                await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer', name, email);
                 toast.success('Login successful!');
                 navigate(from, { replace: true });
             } catch (err) {
