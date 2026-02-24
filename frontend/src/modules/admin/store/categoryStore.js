@@ -92,15 +92,16 @@ const useCategoryStore = create((set, get) => ({
                 categories: state.categories.filter((c) => c.id !== id),
                 isLoading: false
             }));
-            toast.success('Category deleted successfully', { duration: 700 });
-            if (typeof window !== 'undefined') {
-                setTimeout(() => window.location.reload(), 250);
-            }
+            toast.dismiss();
+            const toastId = toast.success('Category deleted successfully', { duration: 700 });
+            setTimeout(() => toast.remove(toastId), 900);
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
                 isLoading: false
             });
+            toast.dismiss();
+            toast.error(error.response?.data?.message || 'Failed to delete category', { duration: 1400 });
             throw error;
         }
     },

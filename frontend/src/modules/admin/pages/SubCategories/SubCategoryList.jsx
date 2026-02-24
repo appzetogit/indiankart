@@ -14,7 +14,7 @@ const SubCategoryList = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingSubCategory, setEditingSubCategory] = useState(null);
     const [expandedCategoryIds, setExpandedCategoryIds] = useState(new Set());
-    const [expandedSubIds, setExpandedSubIds] = useState(new Set());
+    const [expandedSubByParent, setExpandedSubByParent] = useState({});
 
     useEffect(() => {
         fetchSubCategories();
@@ -96,6 +96,7 @@ const SubCategoryList = () => {
 
                         return {
                             id: childId,
+                            parentId,
                             depth,
                             sub: child,
                             parentPath: getParentPath(child),
@@ -121,9 +122,9 @@ const SubCategoryList = () => {
             return new Set();
         });
 
-        setExpandedSubIds((prev) => {
-            if (prev.size > 0) return prev;
-            return new Set();
+        setExpandedSubByParent((prev) => {
+            if (Object.keys(prev).length > 0) return prev;
+            return {};
         });
     }, [categoryGroups]);
 
@@ -133,13 +134,24 @@ const SubCategoryList = () => {
             return new Set([categoryId]);
         });
         // Reset nested state when switching category accordion section
-        setExpandedSubIds(new Set());
+        setExpandedSubByParent({});
     };
 
-    const toggleSubNode = (subId) => {
-        setExpandedSubIds((prev) => {
-            if (prev.has(subId)) return new Set();
-            return new Set([subId]);
+    const toggleSubNode = (parentId, subId) => {
+        setExpandedSubByParent((prev) => {
+            const parentKey = String(parentId || 'root');
+            const openForLevel = prev[parentKey];
+
+            if (openForLevel === subId) {
+                const next = { ...prev };
+                delete next[parentKey];
+                return next;
+            }
+
+            return {
+                ...prev,
+                [parentKey]: subId
+            };
         });
     };
 
@@ -147,7 +159,8 @@ const SubCategoryList = () => {
         return nodes.flatMap((node) => {
             const sub = node.sub;
             const hasChildren = node.children.length > 0;
-            const isExpanded = expandedSubIds.has(node.id);
+            const parentKey = String(node.parentId || 'root');
+            const isExpanded = expandedSubByParent[parentKey] === node.id;
 
             const currentRow = (
                 <tr key={`${groupCategoryId}-${node.id}`} className="hover:bg-gray-50 transition">
@@ -156,7 +169,7 @@ const SubCategoryList = () => {
                             {hasChildren ? (
                                 <button
                                     type="button"
-                                    onClick={() => toggleSubNode(node.id)}
+                                    onClick={() => toggleSubNode(node.parentId, node.id)}
                                     className="text-gray-500 hover:text-gray-700"
                                 >
                                     {isExpanded ? <MdExpandMore size={18} /> : <MdChevronRight size={18} />}

@@ -39,9 +39,10 @@ function App() {
           position="top-right"
           reverseOrder={false}
           toastOptions={{
-            duration: 2500,
-            success: { duration: 2200 },
-            error: { duration: 2800 }
+            duration: 1600,
+            removeDelay: 0,
+            success: { duration: 1400, removeDelay: 0 },
+            error: { duration: 1800, removeDelay: 0 }
           }}
         />
         <Suspense fallback={<Loader fullPage message="Loading page..." variant="shimmer" />}>

@@ -25,7 +25,9 @@ const useSubCategoryStore = create((set, get) => ({
                 error: error.response?.data?.message || error.message,
                 isLoading: false
             });
-            toast.error('Failed to fetch subcategories');
+            toast.dismiss();
+            const toastId = toast.error('Failed to fetch subcategories', { duration: 1400 });
+            setTimeout(() => toast.remove(toastId), 1700);
         }
     },
 
@@ -37,14 +39,18 @@ const useSubCategoryStore = create((set, get) => ({
                 subCategories: get().sortByNewestFirst([data, ...state.subCategories]),
                 isLoading: false
             }));
-            toast.success('Subcategory added successfully');
+            toast.dismiss();
+            const toastId = toast.success('Subcategory added successfully', { duration: 1000 });
+            setTimeout(() => toast.remove(toastId), 1300);
             return true;
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
                 isLoading: false
             });
-            toast.error(error.response?.data?.message || 'Failed to add subcategory');
+            toast.dismiss();
+            const toastId = toast.error(error.response?.data?.message || 'Failed to add subcategory', { duration: 1400 });
+            setTimeout(() => toast.remove(toastId), 1700);
             return false;
         }
     },
@@ -59,14 +65,18 @@ const useSubCategoryStore = create((set, get) => ({
                 ),
                 isLoading: false
             }));
-            toast.success('Subcategory updated successfully');
+            toast.dismiss();
+            const toastId = toast.success('Subcategory updated successfully', { duration: 1000 });
+            setTimeout(() => toast.remove(toastId), 1300);
             return true;
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
                 isLoading: false
             });
-            toast.error('Failed to update subcategory');
+            toast.dismiss();
+            const toastId = toast.error('Failed to update subcategory', { duration: 1400 });
+            setTimeout(() => toast.remove(toastId), 1700);
             return false;
         }
     },
@@ -79,16 +89,17 @@ const useSubCategoryStore = create((set, get) => ({
                 subCategories: state.subCategories.filter((sub) => sub._id !== id),
                 isLoading: false
             }));
-            toast.success('Subcategory deleted successfully');
-            if (typeof window !== 'undefined') {
-                setTimeout(() => window.location.reload(), 250);
-            }
+            toast.dismiss();
+            const toastId = toast.success('Subcategory deleted successfully', { duration: 900 });
+            setTimeout(() => toast.remove(toastId), 1200);
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
                 isLoading: false
             });
-            toast.error('Failed to delete subcategory');
+            toast.dismiss();
+            const toastId = toast.error('Failed to delete subcategory', { duration: 1400 });
+            setTimeout(() => toast.remove(toastId), 1700);
         }
     }
 }));
