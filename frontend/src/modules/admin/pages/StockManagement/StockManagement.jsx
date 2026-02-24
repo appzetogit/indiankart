@@ -40,6 +40,8 @@ const StockManagement = () => {
         setEditingStock(prev => ({ ...prev, [id]: value }));
     };
 
+    const normalizeSearchValue = (value = '') => String(value).toLowerCase().replace(/\s+/g, '');
+
     const updateStock = async (product, isSku = false, skuIndex = null) => {
         try {
             const editKey = isSku ? `${product.id}-${skuIndex}` : product.id;
@@ -82,9 +84,10 @@ const StockManagement = () => {
         }
     };
 
-    const filteredProducts = products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+    const normalizedSearchTerm = normalizeSearchValue(searchTerm);
+    const filteredProducts = products.filter((p) =>
+        normalizeSearchValue(p.name).includes(normalizedSearchTerm) ||
+        normalizeSearchValue(p.brand).includes(normalizedSearchTerm)
     );
 
     if (loading && products.length === 0) return <Loader fullPage message="Fetching inventory..." />;

@@ -308,7 +308,7 @@ const products = [
         price: 277,
         originalPrice: 351,
         discount: "21% off",
-        rating: 2.5,
+    rating: 2.5,
         image: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=300&auto=format&fit=crop",
         category: "Health"
     },
