@@ -7,11 +7,19 @@ const useSubCategoryStore = create((set, get) => ({
     isLoading: false,
     error: null,
 
+    sortByNewestFirst: (items = []) => {
+        return [...items].sort((a, b) => {
+            const aTime = new Date(a.createdAt || 0).getTime();
+            const bTime = new Date(b.createdAt || 0).getTime();
+            return bTime - aTime;
+        });
+    },
+
     fetchSubCategories: async () => {
         set({ isLoading: true });
         try {
             const { data } = await API.get('/subcategories');
-            set({ subCategories: data, isLoading: false, error: null });
+            set({ subCategories: get().sortByNewestFirst(data), isLoading: false, error: null });
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
@@ -26,7 +34,7 @@ const useSubCategoryStore = create((set, get) => ({
         try {
             const { data } = await API.post('/subcategories', subCategoryData);
             set((state) => ({
-                subCategories: [...state.subCategories, data],
+                subCategories: get().sortByNewestFirst([data, ...state.subCategories]),
                 isLoading: false
             }));
             toast.success('Subcategory added successfully');
@@ -46,7 +54,9 @@ const useSubCategoryStore = create((set, get) => ({
         try {
             const { data } = await API.put(`/subcategories/${id}`, subCategoryData);
             set((state) => ({
-                subCategories: state.subCategories.map((sub) => (sub._id === id ? data : sub)),
+                subCategories: get().sortByNewestFirst(
+                    state.subCategories.map((sub) => (sub._id === id ? data : sub))
+                ),
                 isLoading: false
             }));
             toast.success('Subcategory updated successfully');
@@ -70,6 +80,9 @@ const useSubCategoryStore = create((set, get) => ({
                 isLoading: false
             }));
             toast.success('Subcategory deleted successfully');
+            if (typeof window !== 'undefined') {
+                setTimeout(() => window.location.reload(), 250);
+            }
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
@@ -77,7 +90,7 @@ const useSubCategoryStore = create((set, get) => ({
             });
             toast.error('Failed to delete subcategory');
         }
-    },
+    }
 }));
 
 export default useSubCategoryStore;

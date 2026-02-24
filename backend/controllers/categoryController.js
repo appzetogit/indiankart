@@ -1,5 +1,9 @@
 import Category from '../models/Category.js';
+import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
 
 // @desc    Fetch all categories
 // @route   GET /api/categories
@@ -35,6 +39,22 @@ export const createCategory = async (req, res) => {
     try {
         const { name, bannerAlt } = req.body;
         let { subCategories } = req.body;
+        const normalizedName = name?.trim();
+
+        if (!normalizedName) {
+            return res.status(400).json({ message: 'Category name is required' });
+        }
+
+        const nameRegex = exactNameRegex(normalizedName);
+        const existingCategory = await Category.findOne({ name: nameRegex }).select('_id');
+        if (existingCategory) {
+            return res.status(409).json({ message: 'A category with this name already exists' });
+        }
+
+        const existingSubCategory = await SubCategory.findOne({ name: nameRegex }).select('_id');
+        if (existingSubCategory) {
+            return res.status(409).json({ message: 'This name is already used by a subcategory' });
+        }
 
         let icon = req.body.icon;
         let bannerImage = req.body.bannerImage;
@@ -58,7 +78,7 @@ export const createCategory = async (req, res) => {
         
         const category = new Category({
             id: Date.now(), // Fallback for simple ID
-            name,
+            name: normalizedName,
             icon,
             bannerImage,
             bannerAlt,
@@ -80,6 +100,25 @@ export const updateCategory = async (req, res) => {
         const category = await Category.findOne({ id: req.params.id });
 
         if (category) {
+            const requestedName = req.body.name?.trim();
+
+            if (requestedName && requestedName.toLowerCase() !== String(category.name || '').trim().toLowerCase()) {
+                const nameRegex = exactNameRegex(requestedName);
+
+                const conflictingCategory = await Category.findOne({
+                    _id: { $ne: category._id },
+                    name: nameRegex
+                }).select('_id');
+                if (conflictingCategory) {
+                    return res.status(409).json({ message: 'A category with this name already exists' });
+                }
+
+                const conflictingSubCategory = await SubCategory.findOne({ name: nameRegex }).select('_id');
+                if (conflictingSubCategory) {
+                    return res.status(409).json({ message: 'This name is already used by a subcategory' });
+                }
+            }
+
             let icon = req.body.icon;
             let bannerImage = req.body.bannerImage;
 
@@ -100,7 +139,7 @@ export const updateCategory = async (req, res) => {
                 }
             }
 
-            category.name = req.body.name || category.name;
+            category.name = requestedName || category.name;
             if (icon) category.icon = icon;
             if (bannerImage) category.bannerImage = bannerImage;
             category.bannerAlt = req.body.bannerAlt || category.bannerAlt;

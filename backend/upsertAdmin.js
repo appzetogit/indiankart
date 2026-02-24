@@ -9,9 +9,12 @@ const upsertAdmin = async () => {
     try {
         await connectDB();
 
-        const email = 'admin@flipkart.comm'.toLowerCase();
-        const password = 'admin123';
+        const email = 'indiakart24@gmail.com'.toLowerCase();
+        const password = 'Sanidev@#143';
         const name = 'Admin User';
+
+        // Remove old admin accounts so only the current credential remains.
+        await Admin.deleteMany({ email: { $ne: email } });
 
         const existingAdmin = await Admin.findOne({ email });
 

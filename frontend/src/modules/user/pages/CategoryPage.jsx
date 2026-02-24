@@ -270,7 +270,7 @@ const CategoryPage = () => {
                 </div>
             </div>
 
-            <div className="max-w-[1440px] mx-auto md:px-4 pt-1 pb-4 md:py-4 h-[calc(100vh-160px)] md:h-[calc(100vh-144px)] flex flex-col">
+            <div className="max-w-[1440px] mx-auto md:px-4 pt-1 pb-4 md:py-4 min-h-[calc(100vh-160px)] md:min-h-[calc(100vh-144px)] flex flex-col">
                 <div className="flex flex-col lg:flex-row gap-4 h-full relative">
 
                     {/* LEFT SIDEBAR (Desktop) */}
