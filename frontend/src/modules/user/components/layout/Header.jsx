@@ -196,7 +196,7 @@ const Header = () => {
                         className="hidden md:flex flex-col cursor-pointer"
                         onClick={() => navigate('/')}
                     >
-                        <img src="/indiankart-logo.png" alt="IndianKart" className="h-[80px] lg:h-[130px] object-contain" />
+                        <img src="/indiankart-logo.png" alt="IndianKart" className="h-[70px] lg:h-[100px] object-contain" />
                     </div>
 
                     {/* Mobile Header Actions (Seller + Language) - Only on Homepage */}
@@ -437,7 +437,7 @@ const Header = () => {
             {/* Category Navigation - Only on Homepage */}
             {location.pathname === '/' && !categoriesLoading && (
                 <div className="max-w-[1200px] mx-auto relative px-2">
-                    <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-4 py-2 md:py-1 mt-0 md:-mt-2 border-t border-gray-100 pb-2 md:pb-1 ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
+                    <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-8 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
                         {displayCategories.map((cat, index) => {
                             const active = isActiveCategory(cat.name);
                             const IconComponent = iconMap[cat.icon] || MdGridView;
