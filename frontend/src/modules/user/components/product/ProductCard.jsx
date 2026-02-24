@@ -14,7 +14,6 @@ const ProductCard = ({ product, footerText }) => {
     const translatedFooter = useGoogleTranslation(footerText);
     const offText = useGoogleTranslation('OFF');
     const adText = useGoogleTranslation('AD');
-    const withBankOfferText = useGoogleTranslation('with Bank offer');
 
     const handleNavigate = () => {
         navigate(`/product/${product.id}`);
@@ -27,8 +26,7 @@ const ProductCard = ({ product, footerText }) => {
     // Calculate dynamic discount if not provided
     const discountPercent = product.discount || (product.originalPrice ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) + `% ${offText}` : null);
 
-    // Default footer text if none provided
-    const displayFooterText = footerText ? translatedFooter : `₹${Math.round(product.price * 0.95).toLocaleString()} ${withBankOfferText}`;
+    const displayFooterText = footerText ? translatedFooter : '';
 
 
     return (
@@ -43,7 +41,7 @@ const ProductCard = ({ product, footerText }) => {
                 <img
                     alt={product.name}
                     loading="lazy"
-                    className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
+                    className="w-full h-full object-contain p-2 group-hover/card:scale-105 transition-transform duration-500"
                     src={product.image}
                     onError={(e) => {
                         e.target.onerror = null;
@@ -88,9 +86,11 @@ const ProductCard = ({ product, footerText }) => {
                 </div>
 
                 {/* Offer/Footer Text */}
-                <p className="text-[10px] md:text-xs font-bold text-blue-600 line-clamp-1">
-                    {displayFooterText}
-                </p>
+                {displayFooterText && (
+                    <p className="text-[10px] md:text-xs font-bold text-blue-600 line-clamp-1">
+                        {displayFooterText}
+                    </p>
+                )}
             </div>
         </div>
     );

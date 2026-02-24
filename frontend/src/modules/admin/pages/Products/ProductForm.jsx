@@ -457,53 +457,7 @@ const ProductForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const hasBasicRequiredFields =
-            !!formData.thumbnail &&
-            !!formData.name?.trim() &&
-            !!formData.brand?.trim() &&
-            !!formData.categoryPath?.[0] &&
-            (formData.subCategories?.length || 0) > 0 &&
-            Number(formData.deliveryDays) > 0 &&
-            Number(formData.returnPolicy?.days) > 0 &&
-            !!formData.returnPolicy?.description?.trim();
-
-        const hasValidVariantDefinitions =
-            Array.isArray(formData.variantHeadings) &&
-            formData.variantHeadings.length > 0 &&
-            formData.variantHeadings.every(vh =>
-                !!vh?.name?.trim() &&
-                Array.isArray(vh.options) &&
-                vh.options.some(opt => !!opt?.name?.trim())
-            );
-
         const normalizedSkus = getNormalizedSkus();
-        const hasAllSkuFieldsFilled = (formData.skus || []).every(sku =>
-            sku?.price !== '' &&
-            sku?.price !== null &&
-            sku?.price !== undefined &&
-            sku?.originalPrice !== '' &&
-            sku?.originalPrice !== null &&
-            sku?.originalPrice !== undefined &&
-            sku?.stock !== null &&
-            sku?.stock !== undefined
-        );
-        const hasValidSkus =
-            hasAllSkuFieldsFilled &&
-            normalizedSkus.length > 0 &&
-            normalizedSkus.every(sku =>
-                Number.isFinite(sku.price) &&
-                Number.isFinite(sku.originalPrice) &&
-                Number.isFinite(sku.stock) &&
-                sku.price >= 0 &&
-                sku.originalPrice >= 0 &&
-                sku.stock >= 0 &&
-                sku.originalPrice >= sku.price
-            );
-
-        if (!hasBasicRequiredFields || !hasValidVariantDefinitions || !hasValidSkus) {
-            toast.error('All fields are required');
-            return;
-        }
 
         if (normalizedSkus.some(sku => sku.stock < 0)) {
             toast.error('Stock cannot be negative');
@@ -521,7 +475,7 @@ const ProductForm = () => {
             : Number(formData.originalPrice || 0);
 
         const data = new FormData();
-        data.append('name', formData.name);
+        data.append('name', formData.name?.trim() || 'Untitled Product');
         data.append('brand', formData.brand);
         data.append('price', String(finalPrice));
         data.append('originalPrice', String(finalOriginalPrice));
@@ -557,7 +511,7 @@ const ProductForm = () => {
             : '';
         if (discount) data.append('discount', discount);
 
-        data.append('deliveryDays', String(formData.deliveryDays));
+        data.append('deliveryDays', String(Number(formData.deliveryDays) > 0 ? Number(formData.deliveryDays) : 5));
 
         // Complex objects
         data.append('categoryPath', JSON.stringify(formData.categoryPath));
@@ -588,7 +542,10 @@ const ProductForm = () => {
         data.append('highlights', JSON.stringify(formData.highlights));
         data.append('specifications', JSON.stringify(formData.specifications));
         data.append('warranty', JSON.stringify(formData.warranty));
-        data.append('returnPolicy', JSON.stringify(formData.returnPolicy));
+        data.append('returnPolicy', JSON.stringify({
+            days: Number(formData.returnPolicy?.days) > 0 ? Number(formData.returnPolicy.days) : 7,
+            description: formData.returnPolicy?.description || ''
+        }));
 
         // Process Variant Headings (handle nested images)
         const variantImages = [];
@@ -744,7 +701,6 @@ const ProductForm = () => {
                                     <label className="flex items-center gap-1 md:gap-2 text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">
                                         <MdImage className="text-blue-500" size={14} />
                                         Primary Thumbnail
-                                        <span className="text-red-500">*</span>
                                     </label>
 
                                     <div className="relative group w-full h-48 md:h-64 rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center overflow-hidden transition-all hover:border-blue-400 hover:bg-blue-50/30">

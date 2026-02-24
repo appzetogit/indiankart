@@ -238,10 +238,8 @@ export const useHomeSections = () => {
 
         const fetchSections = async () => {
             try {
-                const data = await getOrFetch('home-sections', async () => {
-                    const { data } = await API.get('/home-sections');
-                    return data;
-                });
+                const { data } = await API.get('/home-sections');
+                writeCache('home-sections', data);
 
                 const sectionProducts = data.flatMap((section) =>
                     Array.isArray(section.products) ? section.products : []
@@ -280,10 +278,8 @@ export const useBanners = () => {
 
         const fetchBanners = async () => {
             try {
-                const data = await getOrFetch('banners', async () => {
-                    const { data } = await API.get('/banners');
-                    return data;
-                });
+                const { data } = await API.get('/banners');
+                writeCache('banners', data);
 
                 if (!active) return;
                 setBanners(data);
@@ -317,10 +313,9 @@ export const useHomeLayout = () => {
 
         const fetchLayout = async () => {
             try {
-                const items = await getOrFetch('home-layout', async () => {
-                    const { data } = await API.get('/home-layout');
-                    return data.items || [];
-                });
+                const { data } = await API.get('/home-layout');
+                const items = data.items || [];
+                writeCache('home-layout', items);
 
                 if (!active) return;
                 setLayout(items);
