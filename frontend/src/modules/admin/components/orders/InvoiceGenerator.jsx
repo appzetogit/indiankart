@@ -71,6 +71,8 @@ export const InvoiceDisplay = React.forwardRef(
     const totalQty = list.reduce((sum, lineItem) => sum + lineItem.safeQty, 0);
     const subtotal = list.reduce((sum, lineItem) => sum + (lineItem.safePrice * lineItem.safeQty), 0);
     const handlingFee = 0.00;
+    const couponCode = order?.coupon?.code || "";
+    const couponDiscount = item ? 0 : toNumber(order?.coupon?.discount);
     const orderGrandTotal = toNumber(order?.totalPrice ?? order?.total ?? order?.itemsPrice ?? subtotal);
     const totalAmount = (item ? subtotal : orderGrandTotal) + handlingFee;
 
@@ -358,6 +360,12 @@ export const InvoiceDisplay = React.forwardRef(
                 <td className="text-right">0.00</td>
                 <td className="text-right">0.00</td>
               </tr>
+              {couponDiscount > 0 && (
+                <tr>
+                  <td colSpan="8" className="text-right"><b>Coupon Applied{couponCode ? ` (${couponCode})` : ""}</b></td>
+                  <td className="text-right" style={{ color: "#0f9d58" }}>-₹{format(couponDiscount)}</td>
+                </tr>
+              )}
               <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                 <td colSpan="2">TOTAL QTY: {totalQty}</td>
                 <td colSpan="6" className="text-right">TOTAL PRICE:</td>

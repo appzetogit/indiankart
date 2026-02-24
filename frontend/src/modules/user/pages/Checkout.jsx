@@ -9,6 +9,23 @@ import { toast } from 'react-hot-toast';
 import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
 
+const parseDateOnly = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const [, y, m, d] = match;
+    const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isCouponExpired = (coupon) => {
+    const expiry = parseDateOnly(coupon?.expiryDate);
+    if (!expiry) return false;
+    const today = new Date();
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return expiry < todayDateOnly;
+};
+
 const Checkout = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -81,6 +98,8 @@ const Checkout = () => {
 
     const [couponInput, setCouponInput] = useState('');
     const [couponError, setCouponError] = useState('');
+    const visibleCoupons = coupons.filter((c) => Boolean(c?.code));
+    const couponInputPlaceholder = appliedCoupon ? `Applied: ${appliedCoupon.code}` : 'Enter Coupon Code';
 
     const handleApplyCoupon = (codeOverride = null) => {
         setCouponError('');
@@ -99,6 +118,10 @@ const Checkout = () => {
         if (coupon) {
             if (!coupon.active) {
                 setCouponError('This coupon is inactive or expired');
+                return;
+            }
+            if (isCouponExpired(coupon)) {
+                setCouponError('This coupon has expired');
                 return;
             }
 
@@ -246,6 +269,13 @@ const Checkout = () => {
             taxPrice: 0,
             shippingPrice: delivery,
             totalPrice: finalAmount,
+            coupon: appliedCoupon
+                ? {
+                    code: appliedCoupon.code,
+                    discount: appliedCoupon.discount,
+                    type: appliedCoupon.type
+                }
+                : null,
         };
 
         if (paymentMethodOverride === 'COD') {
@@ -631,7 +661,7 @@ const Checkout = () => {
                                 <div className="mt-4 flex gap-3">
                                     <input
                                         type="text"
-                                        placeholder="🎟️ Enter Coupon Code"
+                                        placeholder={couponInputPlaceholder}
                                         value={couponInput}
                                         onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                                         className="flex-1 border-2 border-purple-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 font-black uppercase placeholder-purple-300 disabled:bg-gray-50 text-gray-900 shadow-sm bg-white"
@@ -669,27 +699,39 @@ const Checkout = () => {
                                 )}
 
                                 {/* Inline Available Coupons for Mobile */}
-                                {!appliedCoupon && coupons.filter(c => c.active).length > 0 && (
+                                {!appliedCoupon && visibleCoupons.length > 0 && (
                                     <div className="mt-6 space-y-3 pt-6 border-t border-gray-50">
-                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Available Coupons</h4>
+                                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Coupons</h4>
                                         <div className="space-y-3">
-                                            {coupons.filter(c => c.active).map((coupon) => (
-                                                <div key={coupon._id} className="bg-white rounded-xl p-3 border border-dashed border-blue-200 hover:border-blue-400 transition-colors flex items-center justify-between group">
+                                            {visibleCoupons.map((coupon) => {
+                                                const isExpired = isCouponExpired(coupon);
+                                                const canApply = coupon.active !== false && !isExpired;
+                                                return (
+                                                <div key={coupon._id} className={`bg-white rounded-xl p-3 border border-dashed transition-colors flex items-center justify-between group ${canApply ? 'border-blue-200 hover:border-blue-400' : 'border-gray-200'}`}>
                                                     <div>
                                                         <div className="flex items-center gap-2">
-                                                            <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[11px]">{coupon.code}</span>
+                                                            <span className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] ${canApply ? 'text-blue-600 bg-blue-50' : 'text-gray-500 bg-gray-100'}`}>{coupon.code}</span>
                                                             <span className="text-[11px] font-bold text-gray-700">{coupon.title}</span>
+                                                            {!canApply && (
+                                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${isExpired ? 'text-red-600 bg-red-50' : 'text-gray-500 bg-gray-100'}`}>
+                                                                    {isExpired ? 'Expired' : 'Inactive'}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <p className="text-[10px] text-gray-400 mt-1">{coupon.description}</p>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleApplyCoupon(coupon.code)}
-                                                        className="text-[11px] font-black text-blue-600 uppercase hover:text-blue-700 active:scale-95 transition-all"
-                                                    >
-                                                        Apply
-                                                    </button>
+                                                    {canApply ? (
+                                                        <button
+                                                            onClick={() => handleApplyCoupon(coupon.code)}
+                                                            className="text-[11px] font-black text-blue-600 uppercase hover:text-blue-700 active:scale-95 transition-all"
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold uppercase text-gray-400">Not usable</span>
+                                                    )}
                                                 </div>
-                                            ))}
+                                            )})}
                                         </div>
                                     </div>
                                 )}
@@ -864,7 +906,7 @@ const Checkout = () => {
                             <div className="flex gap-3 mb-3">
                                 <input
                                     type="text"
-                                    placeholder="🎟️ Enter Coupon Code"
+                                    placeholder={couponInputPlaceholder}
                                     value={couponInput}
                                     onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                                     className="flex-1 border-2 border-purple-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 font-black uppercase placeholder-purple-300 disabled:bg-gray-50 text-gray-900 shadow-sm bg-white"
@@ -891,25 +933,37 @@ const Checkout = () => {
                             )}
 
                             {/* Inline Available Coupons for Desktop */}
-                            {!appliedCoupon && coupons.filter(c => c.active).length > 0 && (
+                            {!appliedCoupon && visibleCoupons.length > 0 && (
                                 <div className="mt-6 space-y-3 pt-4 border-t border-gray-50">
-                                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Available Coupons</h4>
+                                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Coupons</h4>
                                     <div className="space-y-3">
-                                        {coupons.filter(c => c.active).map((coupon) => (
-                                            <div key={coupon._id} className="p-3 rounded-xl border border-dashed border-blue-100 bg-blue-50/10 hover:border-blue-300 hover:bg-blue-50/30 transition-all group">
+                                        {visibleCoupons.map((coupon) => {
+                                            const isExpired = isCouponExpired(coupon);
+                                            const canApply = coupon.active !== false && !isExpired;
+                                            return (
+                                            <div key={coupon._id} className={`p-3 rounded-xl border border-dashed transition-all group ${canApply ? 'border-blue-100 bg-blue-50/10 hover:border-blue-300 hover:bg-blue-50/30' : 'border-gray-200 bg-gray-50/40'}`}>
                                                 <div className="flex items-center justify-between mb-1">
-                                                    <span className="font-mono font-bold text-blue-600 text-[11px] uppercase tracking-wider">{coupon.code}</span>
-                                                    <button
-                                                        onClick={() => handleApplyCoupon(coupon.code)}
-                                                        className="text-[10px] font-black text-blue-500 uppercase hover:text-blue-700 transition-colors"
-                                                    >
-                                                        Apply
-                                                    </button>
+                                                    <span className={`font-mono font-bold text-[11px] uppercase tracking-wider ${canApply ? 'text-blue-600' : 'text-gray-500'}`}>{coupon.code}</span>
+                                                    {canApply ? (
+                                                        <button
+                                                            onClick={() => handleApplyCoupon(coupon.code)}
+                                                            className="text-[10px] font-black text-blue-500 uppercase hover:text-blue-700 transition-colors"
+                                                        >
+                                                            Apply
+                                                        </button>
+                                                    ) : (
+                                                        <span className={`text-[10px] font-bold uppercase ${isExpired ? 'text-red-500' : 'text-gray-500'}`}>
+                                                            {isExpired ? 'Expired' : 'Inactive'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <p className="text-[11px] font-bold text-gray-700 line-clamp-1">{coupon.title}</p>
                                                 <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">{coupon.description}</p>
+                                                {coupon.expiryDate && (
+                                                    <p className={`text-[10px] mt-1 ${isExpired ? 'text-red-500' : 'text-gray-400'}`}>Exp: {coupon.expiryDate}</p>
+                                                )}
                                             </div>
-                                        ))}
+                                        )})}
                                     </div>
                                 </div>
                             )}
@@ -930,3 +984,4 @@ const Checkout = () => {
 };
 
 export default Checkout;
+

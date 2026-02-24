@@ -19,7 +19,6 @@ const Layout = () => {
         '/deals',
         '/notification-settings',
         '/select-language',
-        '/coupons',
         '/help-center',
         '/addresses',
         '/login',

@@ -6,6 +6,7 @@ import logo from '../../../assets/indiankart-logo.png';
 import toast from 'react-hot-toast';
 
 const Login = () => {
+    const RESEND_COOLDOWN_SECONDS = 60;
     const HARDCODED_LOGIN_MOBILE = '7610416911';
     const HARDCODED_LOGIN_OTP = '0000';
     const normalizeForHardcodedLogin = (value) => {
@@ -14,7 +15,7 @@ const Login = () => {
     };
     const navigate = useNavigate();
     const location = useLocation();
-    const { verifyOtp, loading, error } = useAuthStore();
+    const { sendOtp, verifyOtp, loading, error } = useAuthStore();
     const [mobile, setMobile] = useState(location.state?.mobile || '');
     const [name, setName] = useState(location.state?.name || '');
     const [email, setEmail] = useState(location.state?.email || '');
@@ -33,36 +34,36 @@ const Login = () => {
 
     const handleSendOtp = async () => {
         const mobileRegex = /^[6-9]\d{9}$/;
-        if (mobileRegex.test(normalizeForHardcodedLogin(mobile))) {
-            if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
-                toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
-                return;
-            }
-            toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
-            setStep(2); // Move to OTP step
-            setResendCooldown(30);
-        } else {
+        const normalizedMobile = normalizeForHardcodedLogin(mobile);
+
+        if (!mobileRegex.test(normalizedMobile)) {
             toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
+            return;
+        }
+
+        try {
+            await sendOtp(normalizedMobile, 'Customer');
+            setStep(2);
+            setResendCooldown(RESEND_COOLDOWN_SECONDS);
+
+            if (normalizedMobile === HARDCODED_LOGIN_MOBILE) {
+                toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
+            } else {
+                toast.success('OTP sent successfully');
+            }
+        } catch (err) {
+            toast.error(err?.response?.data?.message || error || 'Failed to send OTP');
         }
     };
 
     const handleVerifyOtp = async () => {
-        if (normalizeForHardcodedLogin(mobile) !== HARDCODED_LOGIN_MOBILE) {
-            toast.error(`Use ${HARDCODED_LOGIN_MOBILE} for login right now`);
-            return;
-        }
-
         if (otp.length === 4) {
-            if (otp !== HARDCODED_LOGIN_OTP) {
-                toast.error('Invalid OTP');
-                return;
-            }
             try {
                 await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer', name, email);
                 toast.success('Login successful!');
                 navigate(from, { replace: true });
             } catch (err) {
-                toast.error(error || 'Invalid OTP');
+                toast.error(err?.response?.data?.message || error || 'Invalid OTP');
             }
         } else {
             toast.error('Please enter a valid 4-digit OTP');
@@ -170,7 +171,9 @@ const Login = () => {
                                         disabled={resendCooldown > 0}
                                         className="text-blue-600 text-sm font-bold disabled:text-gray-400 disabled:cursor-not-allowed"
                                     >
-                                        {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                                        {resendCooldown > 0
+                                            ? `Resend OTP in ${Math.floor(resendCooldown / 60)}:${String(resendCooldown % 60).padStart(2, '0')}`
+                                            : 'Resend OTP'}
                                     </button>
                                 </div>
 

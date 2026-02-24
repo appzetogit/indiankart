@@ -17,7 +17,6 @@ import ReturnOrder from '../pages/ReturnOrder';
 import Addresses from '../pages/Addresses';
 import SelectLanguage from '../pages/SelectLanguage';
 import NotificationSettings from '../pages/NotificationSettings';
-import Coupons from '../pages/Coupons';
 import HelpCenter from '../pages/HelpCenter';
 import Login from '../pages/Login';
 import Signup from '../pages/Signup';
@@ -39,7 +38,6 @@ const UserRoutes = () => {
                 <Route path="addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
                 <Route path="select-language" element={<SelectLanguage />} />
                 <Route path="notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
-                <Route path="coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
                 <Route path="help-center" element={<HelpCenter />} />
                 <Route path="cart" element={<Cart />} />
                 <Route path="wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />

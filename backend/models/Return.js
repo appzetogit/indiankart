@@ -16,6 +16,15 @@ const returnSchema = mongoose.Schema({
     },
     reason: { type: String, required: true },
     comment: { type: String },
+    pickupAddress: {
+        name: { type: String },
+        phone: { type: String },
+        address: { type: String },
+        city: { type: String },
+        state: { type: String },
+        pincode: { type: String },
+        type: { type: String },
+    },
     images: [{ type: String }],
     status: { 
         type: String, 

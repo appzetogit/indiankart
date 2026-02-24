@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     MdPerson, MdInventory2, MdLocationOn,
-    MdFavoriteBorder, MdConfirmationNumber,
+    MdFavoriteBorder,
     MdHelpOutline, MdPolicy,
     MdPowerSettingsNew, MdChevronRight, MdArrowBack
 } from 'react-icons/md';
@@ -67,7 +67,6 @@ const Account = () => {
     const menuItems = [
         { icon: <MdInventory2 size={24} />, label: 'Orders', sublabel: 'Check your orders status and history here', path: '/my-orders', color: '#2874f0' },
         { icon: <MdInventory2 size={24} />, label: 'Returns', sublabel: 'Manage refunds and exchanges requests', path: '/my-orders?tab=returns', color: '#2874f0' },
-        { icon: <MdConfirmationNumber size={24} />, label: 'Coupons', sublabel: 'Explore great coupon deals to get extra discounts', path: '/coupons', color: '#2874f0' },
         { icon: <MdPerson size={24} />, label: 'Profile Settings', sublabel: 'Update your password, profile details and more', path: '/settings', color: '#2874f0' },
         { icon: <MdLocationOn size={24} />, label: 'Addresses', sublabel: 'Add, edit, or manage your address easily', path: '/addresses', color: '#2874f0' },
         { icon: <MdFavoriteBorder size={24} />, label: 'Wishlist', sublabel: 'Shop your specially saved items from here', path: '/wishlist', color: '#2874f0' },
@@ -92,12 +91,6 @@ const Account = () => {
             label: 'Returns',
             sublabel: 'Manage refunds and exchanges requests',
             path: '/my-orders' // Redirecting to orders as we don't have specific returns page yet
-        },
-        {
-            icon: <MdConfirmationNumber className="text-[#2874f0]" size={32} />,
-            label: 'Coupons',
-            sublabel: 'Explore great coupon deals to get extra discounts',
-            path: '/coupons'
         },
         {
             icon: <MdPerson className="text-[#2874f0]" size={32} />,

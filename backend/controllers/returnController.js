@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 // @access  Private
 export const createReturnRequest = async (req, res) => {
     try {
-        const { orderId, productId, reason, comment, type, images, selectedReplacementSize, selectedReplacementColor } = req.body;
+        const { orderId, productId, reason, comment, type, images, selectedReplacementSize, selectedReplacementColor, pickupAddress } = req.body;
 
         const order = await Order.findOne({ _id: orderId });
         if (!order) {
@@ -45,6 +45,15 @@ export const createReturnRequest = async (req, res) => {
                 type,
                 reason,
                 comment,
+                pickupAddress: pickupAddress || {
+                    name: order.shippingAddress?.name,
+                    phone: order.shippingAddress?.phone,
+                    address: order.shippingAddress?.street,
+                    city: order.shippingAddress?.city,
+                    state: order.shippingAddress?.state,
+                    pincode: order.shippingAddress?.postalCode,
+                    type: 'Home'
+                },
                 images,
                 status: 'Pending',
                 timeline: [{

@@ -21,6 +21,10 @@ const ReturnOrder = () => {
     const [comment, setComment] = useState('');
     const [loading, setLoading] = useState(false);
     const updateItemStatus = useCartStore(state => state.updateItemStatus);
+    const addresses = useCartStore((state) => state.addresses || []);
+    const [showAddressSelector, setShowAddressSelector] = useState(false);
+    const [selectedPickupAddressId, setSelectedPickupAddressId] = useState(null);
+    const [selectedPickupAddress, setSelectedPickupAddress] = useState(null);
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -49,6 +53,50 @@ const ReturnOrder = () => {
         };
         fetchOrder();
     }, [orderId]);
+
+    useEffect(() => {
+        if (!order) return;
+
+        if (addresses.length > 0) {
+            const primary = addresses[0];
+            setSelectedPickupAddressId(primary.id);
+            setSelectedPickupAddress({
+                name: primary.name || order.shippingAddress?.name || '',
+                phone: primary.mobile || primary.phone || order.shippingAddress?.phone || '',
+                address: primary.address || order.shippingAddress?.street || '',
+                city: primary.city || order.shippingAddress?.city || '',
+                state: primary.state || order.shippingAddress?.state || '',
+                pincode: primary.pincode || order.shippingAddress?.postalCode || '',
+                type: primary.type || 'Home'
+            });
+            return;
+        }
+
+        setSelectedPickupAddressId('order-shipping');
+        setSelectedPickupAddress({
+            name: order.shippingAddress?.name || '',
+            phone: order.shippingAddress?.phone || '',
+            address: order.shippingAddress?.street || '',
+            city: order.shippingAddress?.city || '',
+            state: order.shippingAddress?.state || '',
+            pincode: order.shippingAddress?.postalCode || '',
+            type: 'Home'
+        });
+    }, [order, addresses]);
+
+    const handleSelectPickupAddress = (address) => {
+        setSelectedPickupAddressId(address.id);
+        setSelectedPickupAddress({
+            name: address.name || '',
+            phone: address.mobile || address.phone || '',
+            address: address.address || '',
+            city: address.city || '',
+            state: address.state || '',
+            pincode: address.pincode || '',
+            type: address.type || 'Home'
+        });
+        setShowAddressSelector(false);
+    };
 
     const reasons = [
         {
@@ -129,6 +177,7 @@ const ReturnOrder = () => {
                     reason: reason,
                     comment: `${subReason}. ${comment}`, // Combine subReason and comment
                     images: [], // Images not handled in UI yet, sending empty
+                    pickupAddress: selectedPickupAddress,
                     selectedReplacementSize: returnMode === 'REPLACEMENT' ? selectedReplacementSize : undefined,
                     selectedReplacementColor: returnMode === 'REPLACEMENT' ? selectedReplacementColor : undefined
                 };
@@ -412,10 +461,50 @@ const ReturnOrder = () => {
                         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 md:rounded-lg md:border-gray-200">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Pickup Address</h3>
-                                <span className="text-blue-600 text-[10px] font-black uppercase cursor-pointer hover:underline">Change</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddressSelector((prev) => !prev)}
+                                    className="text-blue-600 text-[10px] font-black uppercase cursor-pointer hover:underline"
+                                >
+                                    Change
+                                </button>
                             </div>
-                            <p className="text-sm font-bold text-gray-800">{order.address?.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">{order.address?.address}, {order.address?.city} - {order.address?.pincode}</p>
+                            <p className="text-sm font-bold text-gray-800">{selectedPickupAddress?.name || order.shippingAddress?.name || 'N/A'}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                                {selectedPickupAddress?.address || order.shippingAddress?.street || 'N/A'}, {selectedPickupAddress?.city || order.shippingAddress?.city || 'N/A'} - {selectedPickupAddress?.pincode || order.shippingAddress?.postalCode || 'N/A'}
+                            </p>
+                            {!!selectedPickupAddress?.phone && (
+                                <p className="text-xs text-gray-500 mt-1">Phone: {selectedPickupAddress.phone}</p>
+                            )}
+
+                            {showAddressSelector && (
+                                <div className="mt-4 border-t border-gray-100 pt-4 space-y-2">
+                                    {addresses.length > 0 ? (
+                                        addresses.map((addr) => (
+                                            <button
+                                                type="button"
+                                                key={addr.id}
+                                                onClick={() => handleSelectPickupAddress(addr)}
+                                                className={`w-full text-left p-3 rounded-lg border transition-all ${
+                                                    selectedPickupAddressId === addr.id
+                                                        ? 'border-blue-600 bg-blue-50'
+                                                        : 'border-gray-200 hover:border-blue-300'
+                                                }`}
+                                            >
+                                                <p className="text-sm font-semibold text-gray-800">{addr.name} {addr.type ? `(${addr.type})` : ''}</p>
+                                                <p className="text-xs text-gray-500 mt-1">{addr.address}, {addr.city} - {addr.pincode}</p>
+                                                {!!(addr.mobile || addr.phone) && (
+                                                    <p className="text-xs text-gray-500 mt-1">Phone: {addr.mobile || addr.phone}</p>
+                                                )}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="text-xs text-gray-500">
+                                            No saved addresses found. Default shipping address will be used.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

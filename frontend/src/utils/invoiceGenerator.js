@@ -223,6 +223,14 @@ export const generateInvoice = (order, settings = {}) => {
         doc.text(`Rs.${order.taxPrice.toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
     }
 
+    if (order.coupon?.discount && Number(order.coupon.discount) > 0) {
+        yPos += 6;
+        doc.setTextColor(...lightColor);
+        doc.text(`Coupon${order.coupon.code ? ` (${order.coupon.code})` : ''}:`, summaryX, yPos);
+        doc.setTextColor(16, 185, 129);
+        doc.text(`-Rs.${Number(order.coupon.discount).toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
+    }
+
     yPos += 8;
     doc.setDrawColor(...primaryColor);
     doc.setLineWidth(0.5);

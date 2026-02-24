@@ -50,10 +50,22 @@ const Header = () => {
         fetchHeaderConfig();
     }, []);
 
-    // Use configured header categories if available, otherwise fallback to first 8 active categories
-    const displayCategories = headerCategories?.length > 0
-        ? headerCategories
-        : categories.filter(c => c.active).slice(0, 8);
+    // Always hide inactive categories on homepage, including admin-pinned header categories.
+    const activeCategoryIds = new Set(
+        categories
+            .filter((cat) => cat.active !== false)
+            .map((cat) => String(cat._id || cat.id))
+    );
+    const activeHeaderCategories = (headerCategories || []).filter((cat) =>
+        cat &&
+        cat.active !== false &&
+        activeCategoryIds.has(String(cat._id || cat.id))
+    );
+    const fallbackActiveCategories = categories.filter((cat) => cat.active !== false).slice(0, 8);
+    // Use configured categories only when they are active; otherwise fallback to active categories.
+    const displayCategories = activeHeaderCategories.length > 0
+        ? activeHeaderCategories
+        : fallbackActiveCategories;
     const shouldSpreadCategories = displayCategories.length >= 6;
 
 
