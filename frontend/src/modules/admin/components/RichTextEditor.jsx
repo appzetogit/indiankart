@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import './RichTextEditor.css';
 import StarterKit from '@tiptap/starter-kit';
@@ -46,6 +46,15 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Enter product highligh
             onChange(editor.getHTML());
         },
     });
+
+    useEffect(() => {
+        if (!editor) return;
+        const nextContent = value || '';
+        const currentContent = editor.getHTML();
+        if (currentContent !== nextContent) {
+            editor.commands.setContent(nextContent, false);
+        }
+    }, [editor, value]);
 
     if (!editor) {
         return null;

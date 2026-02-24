@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import logo from '../../../assets/indiankart-logo.png';
@@ -20,7 +20,16 @@ const Login = () => {
     const [email, setEmail] = useState(location.state?.email || '');
     const [otp, setOtp] = useState(''); // State for OTP
     const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP
+    const [resendCooldown, setResendCooldown] = useState(0);
     const from = location.state?.from?.pathname || '/';
+
+    useEffect(() => {
+        if (step !== 2 || resendCooldown <= 0) return undefined;
+        const timer = setInterval(() => {
+            setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [step, resendCooldown]);
 
     const handleSendOtp = async () => {
         const mobileRegex = /^[6-9]\d{9}$/;
@@ -31,6 +40,7 @@ const Login = () => {
             }
             toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
             setStep(2); // Move to OTP step
+            setResendCooldown(30);
         } else {
             toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
         }
@@ -103,7 +113,22 @@ const Login = () => {
                                 </div>
 
                                 <p className="text-[10px] text-gray-400 leading-tight">
-                                    By continuing, you agree to Flipkart's <span className="text-blue-600">Terms of Use</span> and <span className="text-blue-600">Privacy Policy</span>.
+                                    By continuing, you agree to Flipkart&apos;s{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/info?type=dynamic&key=terms-of-use')}
+                                        className="text-blue-600 hover:underline font-medium"
+                                    >
+                                        Terms of Use
+                                    </button>{' '}
+                                    and{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/info?type=dynamic&key=privacyPolicy')}
+                                        className="text-blue-600 hover:underline font-medium"
+                                    >
+                                        Privacy Policy
+                                    </button>.
                                 </p>
 
                                 <button
@@ -137,6 +162,17 @@ const Login = () => {
                                 >
                                     {loading ? 'Verifying...' : 'Verify'}
                                 </button>
+
+                                <div className="text-center space-y-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleSendOtp}
+                                        disabled={resendCooldown > 0}
+                                        className="text-blue-600 text-sm font-bold disabled:text-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                        {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                                    </button>
+                                </div>
 
                                 <div className="text-center">
                                     <button

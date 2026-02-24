@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import useUserStore from '../../store/userStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
+import toast from 'react-hot-toast';
 
 const UserList = () => {
     const navigate = useNavigate();
-    const { users, toggleUserStatus } = useUserStore();
+    const { toggleUserStatus } = useUserStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
@@ -19,41 +20,74 @@ const UserList = () => {
 
     const [localUsers, setLocalUsers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [updatingUserId, setUpdatingUserId] = useState(null);
+
+    const fetchPaginatedUsers = async () => {
+        setLoading(true);
+        try {
+            const params = {
+                pageNumber: currentPage,
+                limit: itemsPerPage
+            };
+            if (searchTerm) params.search = searchTerm;
+            if (statusFilter !== 'All') params.status = statusFilter;
+
+            const { data } = await API.get('/auth/users', { params });
+
+            if (data.users) {
+                setLocalUsers(data.users);
+                setTotalPages(data.pages);
+                setTotalUsers(data.total);
+            } else {
+                setLocalUsers(data);
+                setTotalPages(1);
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchPaginatedUsers = async () => {
-            setLoading(true);
-            try {
-                const params = {
-                    pageNumber: currentPage,
-                    limit: itemsPerPage
-                };
-                if (searchTerm) params.search = searchTerm;
-                if (statusFilter !== 'All') params.status = statusFilter;
-
-                const { data } = await API.get('/auth/users', { params });
-
-                if (data.users) {
-                    setLocalUsers(data.users);
-                    setTotalPages(data.pages);
-                    setTotalUsers(data.total);
-                } else {
-                    setLocalUsers(data);
-                    setTotalPages(1);
-                }
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         const timer = setTimeout(() => {
             fetchPaginatedUsers();
         }, 300);
 
         return () => clearTimeout(timer);
     }, [currentPage, searchTerm, statusFilter]);
+
+    const handleToggleStatus = async (user) => {
+        const userId = user._id || user.id;
+        if (!userId) return;
+        const action = (user.status || 'active') === 'active' ? 'disable' : 'enable';
+
+        if (!window.confirm(`Are you sure you want to ${action} account for ${user.name}?`)) {
+            return;
+        }
+
+        setUpdatingUserId(String(userId));
+        try {
+            const result = await toggleUserStatus(userId);
+            if (result?.status) {
+                setLocalUsers((prev) =>
+                    prev.map((u) =>
+                        String(u._id || u.id) === String(userId)
+                            ? { ...u, status: result.status }
+                            : u
+                    )
+                );
+            } else {
+                await fetchPaginatedUsers();
+            }
+            toast.success(`User ${action}d successfully`);
+        } catch (error) {
+            const message = error.response?.data?.message || 'Failed to update user status';
+            toast.error(message);
+        } finally {
+            setUpdatingUserId(null);
+        }
+    };
 
     const paginatedUsers = localUsers;
 
@@ -180,12 +214,8 @@ const UserList = () => {
                                                         <MdShoppingBag size={16} className="md:w-5 md:h-5" />
                                                     </button>
                                                     <button
-                                                        onClick={() => {
-                                                            const action = (user.status || 'active') === 'active' ? 'Disable' : 'Enable';
-                                                            if (window.confirm(`Are you sure you want to ${action.toLowerCase()} account for ${user.name}?`)) {
-                                                                toggleUserStatus(user._id || user.id);
-                                                            }
-                                                        }}
+                                                        onClick={() => handleToggleStatus(user)}
+                                                        disabled={updatingUserId === String(user._id || user.id)}
                                                         className={`p-1.5 md:p-2 rounded-lg transition-all ${(user.status || 'active') === 'active'
                                                             ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                                                             : 'text-gray-400 hover:text-green-600 hover:bg-green-50'

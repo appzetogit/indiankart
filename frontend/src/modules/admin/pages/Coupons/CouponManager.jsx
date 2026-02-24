@@ -29,8 +29,21 @@ const CouponManager = () => {
         type: 'Bank Offer', title: '', description: '', terms: ''
     });
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
     const handleCouponSubmit = (e) => {
         e.preventDefault();
+        if (!couponData.expiryDate) {
+            toast.error('Expiry date is required');
+            return;
+        }
+        // Expiry must be strictly greater than creation date (today for new coupon).
+        if (couponData.expiryDate <= todayStr) {
+            toast.error('Expiry date must be greater than creation date');
+            return;
+        }
+
         addCoupon({
             ...couponData,
             code: couponData.code.toUpperCase(),
@@ -362,6 +375,7 @@ const CouponManager = () => {
                                                 type="date"
                                                 value={couponData.expiryDate}
                                                 onChange={(e) => setCouponData({ ...couponData, expiryDate: e.target.value })}
+                                                min={tomorrowStr}
                                                 className="w-full px-2 py-1.5 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm font-normal text-gray-800"
                                                 required
                                             />

@@ -174,6 +174,7 @@ const Header = () => {
     const myAccountText = useGoogleTranslation('My Account');
     const cartText = useGoogleTranslation('Cart');
     const categoriesText = useGoogleTranslation('Categories');
+    const cleanNavLabel = (text) => String(text || '').replace(/:/g, '').trim();
 
     return (
         <header className={`${isPDP ? 'bg-gradient-to-b from-blue-100 to-blue-200' : 'bg-gradient-to-b from-blue-200 via-blue-100 to-blue-50'} px-3 fixed top-0 w-full left-0 right-0 z-50 shadow-[0_4px_25px_rgba(0,0,0,0.1)] border-b border-blue-200 transition-all duration-300 ${isPDP ? 'md:border-blue-100 py-1.5' : isCategory ? 'py-2 border-blue-200/50 md:border-gray-100' : 'py-0.5 md:py-0 border-blue-200/50 md:border-gray-100'}`}>
@@ -441,12 +442,19 @@ const Header = () => {
                         {displayCategories.map((cat, index) => {
                             const active = isActiveCategory(cat.name);
                             const IconComponent = iconMap[cat.icon] || MdGridView;
+                            const categoryImage = cat.icon || cat.image || '';
+                            const hasCategoryImage =
+                                typeof categoryImage === 'string' &&
+                                (categoryImage.startsWith('http') ||
+                                    categoryImage.startsWith('/') ||
+                                    categoryImage.startsWith('data:') ||
+                                    categoryImage.startsWith('blob:'));
                             const isHovered = hoveredCategory === cat.name;
                             const isRightSide = index > displayCategories.length / 2;
 
                             return (
                                 <div
-                                    key={cat.id}
+                                    key={cat.id || cat._id || cat.name}
                                     onClick={() => cat.name === "For You" ? navigate('/') : navigate(`/category/${cat.name}`)}
                                     onMouseEnter={() => {
                                         if (window.innerWidth >= 768) { // Desktop only
@@ -471,11 +479,26 @@ const Header = () => {
                                     }}
                                     className={`relative flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group ${cat.name === 'For You' ? 'md:hidden' : ''}`}
                                 >
-                                    <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all ${active ? 'bg-blue-600 text-white scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
-                                        <IconComponent className="text-[20px] md:text-2xl" />
+                                    <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
+                                        {hasCategoryImage ? (
+                                            <img
+                                                src={categoryImage}
+                                                alt={cat.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    e.currentTarget.style.display = 'none';
+                                                    const fallback = e.currentTarget.nextElementSibling;
+                                                    if (fallback) fallback.style.display = 'block';
+                                                }}
+                                            />
+                                        ) : null}
+                                        <IconComponent
+                                            className="text-[20px] md:text-2xl"
+                                            style={{ display: hasCategoryImage ? 'none' : 'block' }}
+                                        />
                                     </div>
                                     <span className={`text-[10px] md:text-sm font-bold transition-colors ${active ? 'text-blue-600' : 'text-gray-700 group-hover:text-blue-600'}`}>
-                                        <TranslatedText text={cat.name} />
+                                        <TranslatedText text={cleanNavLabel(cat.name)} />
                                     </span>
 
                                     {/* Mega Menu - Positioned under specific item */}
@@ -503,7 +526,8 @@ const Header = () => {
                                                                 : 'text-gray-700 hover:bg-gray-50'
                                                                 }`}
                                                         >
-                                                            <span><TranslatedText text={sub.name} /></span>
+                                                            <span><TranslatedText text={cleanNavLabel(sub.name)} /></span>
+
                                                             <MdKeyboardArrowRight className={`text-lg transition-transform ${hoveredSubcategory === sub.name ? 'translate-x-1' : ''}`} />
                                                         </div>
                                                     ))}
@@ -515,7 +539,7 @@ const Header = () => {
                                                         <div className="flex items-center gap-2">
                                                             <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
                                                             <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">
-                                                                <TranslatedText text={hoveredSubcategory || cat.name} />
+                                                                <TranslatedText text={cleanNavLabel(hoveredSubcategory || cat.name)} />
                                                             </h3>
                                                         </div>
                                                         <button

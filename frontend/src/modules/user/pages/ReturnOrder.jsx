@@ -36,7 +36,8 @@ const ReturnOrder = () => {
                     id: data._id, 
                     items: data.orderItems.map(item => ({
                         ...item,
-                        id: item.product || item._id // Ensure we have a consistent ID.
+                        id: item.product || item._id, // Ensure we have a consistent ID.
+                        quantity: item.qty ?? item.quantity ?? 1
                     }))
                 };
                 setOrder(normalizedOrder);
@@ -76,11 +77,38 @@ const ReturnOrder = () => {
     if (!order) return <div className="p-10 text-center">Order not found.</div>;
 
     // Filter items based on productId if it exists, and only include items that can be returned/replaced
+    const isEligibleForReturn = (itemStatus) => {
+        if (!itemStatus) return true;
+        const normalized = String(itemStatus).trim().toLowerCase();
+        if (normalized === 'delivered') return true;
+
+        const blocked = [
+            'return requested',
+            'replacement requested',
+            'approved',
+            'pickup scheduled',
+            'received at warehouse',
+            'refund initiated',
+            'replacement dispatched',
+            'returned',
+            'replaced',
+            'completed',
+            'cancelled',
+            'return rejected'
+        ];
+        return !blocked.includes(normalized);
+    };
+
     const targetItems = (productId
         ? order.items.filter(i => String(i.id) === String(productId))
-        : order.items).filter(item => !item.status || item.status === 'DELIVERED');
+        : order.items).filter(item => isEligibleForReturn(item.status));
 
     const handleReturnSubmit = async () => {
+        if (targetItems.length === 0) {
+            toast.error('No eligible items found for return/replacement in this order.');
+            return;
+        }
+
         setLoading(true);
         try {
             // We need to submit a request for each item, or one request for multiple?
@@ -112,7 +140,7 @@ const ReturnOrder = () => {
                 updateItemStatus(order.id, item.id, itemStatus);
             }
 
-            toast.success('Return Request Submitted Successfully!');
+            toast.success(`${returnMode === 'REFUND' ? 'Return' : 'Replacement'} request submitted successfully!`);
             navigate(`/my-orders/${order.id}`);
         } catch (error) {
             console.error(error);

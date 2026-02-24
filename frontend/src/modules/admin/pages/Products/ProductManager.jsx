@@ -9,7 +9,7 @@ import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
 const ProductManager = () => {
     const navigate = useNavigate();
-    const { products, deleteProduct, fetchProducts } = useProductStore();
+    const { deleteProduct } = useProductStore();
     const { categories, fetchCategories } = useCategoryStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('All');
@@ -21,53 +21,11 @@ const ProductManager = () => {
     const [totalProducts, setTotalProducts] = useState(0);
     const itemsPerPage = 12;
 
-    const loadProducts = async () => {
-        try {
-            const params = {
-                pageNumber: currentPage,
-                limit: itemsPerPage,
-                all: 'true' // Assuming backend requires this for admin list
-            };
-
-            // Add server-side filters if needed, currently filtering on client for category due to mixed logic
-            // Ideally backend should handle search/category filter combined with pagination
-            // For now, fetching paginated list and letting backend handle basic pagination
-
-            // If category/search is applied, we might need backend support or fetch all (simplified for now to standard pagination)
-            // But wait, if we paginate, we can't filter client side effectively unless we fetch all.
-            // Let's stick to server-side pagination for the main list. 
-            // If search/filter is active, we might fallback to client-side or update backend.
-            // Given the complexity, let's update backend to handle 'category' query param which it already does.
-
-            if (filterCategory !== 'All') params.category = filterCategory;
-
-            // Note: Search not yet implemented on backend for products in this flow.
-            // If search is active, we might need to fetch all or implement backend search.
-            // For this iteration, let's implement pagination for the default view.
-
-            // Adjusting params based on useProductStore fetchProducts signature might be tricky if it doesn't support params.
-            // Checking useProductStore... it likely just sets state. 
-            // We should use API directly here or update store.
-            // Let's use direct API for the manager page to have fine control, or update store.
-            // Updating store is better. But let's check store implementation first.
-            // Since we can't check store easily without more views, I'll assume direct API call or local state for now 
-            // to ensure pagination works, superseding the store for this specific page list.
-        } catch (error) {
-            console.error("Failed to load products", error);
-        }
-    };
-
-    // REPLACEMENT STRATEGY: 
-    // The current component uses `useProductStore` which likely fetches ALL products.
-    // Client-side pagination was already in place (lines 29-32).
-    // The goal is SERVER-SIDE pagination.
-    // I need to bypass the store's `fetchProducts` (or update it) and manage state locally or via store updates.
-
     const [localProducts, setLocalProducts] = useState([]);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        // Fetch products with pagination
+        let active = true;
         const fetchPaginatedProducts = async () => {
             setLoading(true);
             try {
@@ -80,17 +38,14 @@ const ProductManager = () => {
                 if (filterCategory !== 'All') {
                     params.category = filterCategory;
                 }
-
-                // If search is present, currently backend doesn't support it well, 
-                // so we might have to fetch all or add backend search.
-                // For now, disable pagination if searching client-side, OR implement backend search.
-                // Let's implement basic backend search support or just paginate the full list.
-
-                // If searching, we skip server pagination for now and use client side filtering on full list?
-                // No, goal is server pagination.
+                const searchText = searchTerm.trim();
+                if (searchText) {
+                    params.search = searchText;
+                }
 
                 const { data } = await API.get('/products', { params });
 
+                if (!active) return;
                 if (data.products) {
                     setLocalProducts(data.products);
                     setTotalPages(data.pages);
@@ -98,22 +53,22 @@ const ProductManager = () => {
                 } else {
                     // Fallback if backend returns array (backward compat)
                     setLocalProducts(data);
+                    setTotalPages(1);
+                    setTotalProducts(Array.isArray(data) ? data.length : 0);
                 }
             } catch (error) {
                 console.error(error);
-                toast.error('Failed to fetch products');
+                if (active) toast.error('Failed to fetch products');
             } finally {
-                setLoading(false);
+                if (active) setLoading(false);
             }
         };
 
-        if (searchTerm === '') {
-            fetchPaginatedProducts();
-        } else {
-            // Search mode: Client side for now (fetching all is heavy but existing behavior)
-            // Or ideally implementing search backend.
-            // For this task, let's keep it simple: Main list is paginated.
-        }
+        const timer = setTimeout(fetchPaginatedProducts, 250);
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
     }, [currentPage, filterCategory, searchTerm]);
 
     useEffect(() => {
@@ -130,10 +85,21 @@ const ProductManager = () => {
             onConfirm: async () => {
                 await deleteProduct(id); // Store action
                 // Refresh local list
+                const searchText = searchTerm.trim();
                 const { data } = await API.get('/products', {
-                    params: { pageNumber: currentPage, limit: itemsPerPage, all: 'true', category: filterCategory !== 'All' ? filterCategory : undefined }
+                    params: {
+                        pageNumber: currentPage,
+                        limit: itemsPerPage,
+                        all: 'true',
+                        category: filterCategory !== 'All' ? filterCategory : undefined,
+                        search: searchText || undefined
+                    }
                 });
-                if (data.products) setLocalProducts(data.products);
+                if (data.products) {
+                    setLocalProducts(data.products);
+                    setTotalPages(data.pages);
+                    setTotalProducts(data.total);
+                }
             }
         });
     };
@@ -187,6 +153,7 @@ const ProductManager = () => {
                             setCurrentPage(1);
                         }}
                     >
+                        <option value="All">All Categories</option>
                         {categories.map(cat => (
                             <option key={cat.id || cat._id || cat} value={cat.name || cat}>{cat.name || cat}</option>
                         ))}
