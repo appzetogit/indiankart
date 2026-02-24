@@ -4,33 +4,27 @@ import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 
 const CategoryForm = ({ category, onClose }) => {
-    const { addCategory, updateCategory, getAllCategoriesFlat } = useCategoryStore();
-    const allCategories = getAllCategoriesFlat();
+    const { addCategory, updateCategory, isLoading } = useCategoryStore();
 
     const [formData, setFormData] = useState({
         name: '',
-        image: '', // Will hold string URL or File object for preview/upload
-        parentId: null,
+        image: '',
         active: true,
-        file: null // Explicit file state
+        file: null
     });
 
     useEffect(() => {
         if (category?.id) {
-            // Edit Mode
             setFormData({
                 name: category.name,
-                image: category.icon || category.image || '', // Map icon to image for preview
-                parentId: category.parentId || null,
+                image: category.icon || category.image || '',
                 active: category.active,
                 file: null
             });
-        } else if (category?.parentId) {
-            // Add Subcategory Mode
+        } else {
             setFormData({
                 name: '',
                 image: '',
-                parentId: category.parentId,
                 active: true,
                 file: null
             });
@@ -42,7 +36,6 @@ const CategoryForm = ({ category, onClose }) => {
 
         const data = new FormData();
         data.append('name', formData.name);
-        if (formData.parentId) data.append('parentId', formData.parentId);
         data.append('active', formData.active);
 
         if (formData.file) {
@@ -53,13 +46,11 @@ const CategoryForm = ({ category, onClose }) => {
 
         try {
             if (category?.id) {
-                // Update existing category
                 await updateCategory(category.id, data);
-                toast.success('Category updated successfully');
+                toast.success('Category updated successfully', { duration: 1200 });
             } else {
-                // Add new category
                 await addCategory(data);
-                toast.success('Category created successfully');
+                toast.success('Category created successfully', { duration: 1200 });
             }
             onClose();
         } catch (error) {
@@ -70,7 +61,7 @@ const CategoryForm = ({ category, onClose }) => {
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
+        setFormData((prev) => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
@@ -80,29 +71,27 @@ const CategoryForm = ({ category, onClose }) => {
         const file = e.target.files[0];
         if (file) {
             const imageUrl = URL.createObjectURL(file);
-            setFormData(prev => ({ ...prev, image: imageUrl, file: file }));
+            setFormData((prev) => ({ ...prev, image: imageUrl, file }));
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
-                {/* Header */}
-                <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100">
-                    <h2 className="text-xl md:text-2xl font-bold text-gray-800">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-3 md:p-6 bg-black/10 backdrop-blur-[1px]">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200">
+                <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100">
+                    <h2 className="text-lg md:text-xl font-bold text-gray-800">
                         {category ? 'Edit Category' : 'Add New Category'}
                     </h2>
                     <button
                         onClick={onClose}
+                        disabled={isLoading}
                         className="p-2 hover:bg-gray-100 rounded-lg transition"
                     >
                         <MdClose size={20} className="md:w-6 md:h-6 text-gray-600" />
                     </button>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4 md:space-y-5">
-                    {/* Category Name */}
+                <form onSubmit={handleSubmit} className="p-3 md:p-4 space-y-3 md:space-y-4">
                     <div>
                         <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
                             Category Name *
@@ -112,42 +101,16 @@ const CategoryForm = ({ category, onClose }) => {
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
                             className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 placeholder:text-gray-500 text-sm md:text-base"
                             placeholder="Enter category name"
                             required
                         />
                     </div>
 
-                    {/* Parent Category */}
-                    <div>
-                        <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
-                            Parent Category
-                        </label>
-                        <select
-                            name="parentId"
-                            value={formData.parentId || ''}
-                            onChange={(e) => setFormData(prev => ({
-                                ...prev,
-                                parentId: e.target.value ? parseInt(e.target.value) : null
-                            }))}
-                            className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
-                        >
-                            <option value="">-- Root Category --</option>
-                            {allCategories
-                                .filter(cat => !category || cat.id !== category.id) // Don't allow selecting itself
-                                .map(cat => (
-                                    <option key={cat.id} value={cat.id}>
-                                        {'—'.repeat(cat.level * 2)} {cat.name}
-                                    </option>
-                                ))
-                            }
-                        </select>
-                        <p className="text-xs text-gray-500 mt-1">
-                            Leave empty to create a root category
-                        </p>
-                    </div>
-
-                    {/* Category Image */}
                     <div>
                         <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
                             Category Image
@@ -159,18 +122,17 @@ const CategoryForm = ({ category, onClose }) => {
                             className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
                         />
                         {formData.image && (
-                            <div className="mt-3 border border-gray-200 rounded-lg p-2 bg-gray-50">
+                            <div className="mt-2 border border-gray-200 rounded-lg p-2 bg-gray-50">
                                 <p className="text-xs text-gray-600 mb-2">Image Preview:</p>
                                 <img
                                     src={formData.image}
                                     alt="Category preview"
-                                    className="w-32 h-32 object-cover rounded-lg"
+                                    className="w-24 h-24 object-cover rounded-lg"
                                 />
                             </div>
                         )}
                     </div>
 
-                    {/* Active Status */}
                     <div className="flex items-center gap-2 md:gap-3">
                         <input
                             type="checkbox"
@@ -185,20 +147,28 @@ const CategoryForm = ({ category, onClose }) => {
                         </label>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-2 md:gap-3 pt-2 md:pt-4">
+                    <div className="flex gap-2 md:gap-3 pt-1 md:pt-2">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2.5 md:px-6 md:py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold text-sm md:text-base"
+                            disabled={isLoading}
+                            className={`flex-1 px-4 py-2.5 md:px-6 md:py-3 border border-gray-300 text-gray-700 rounded-lg transition font-semibold text-sm md:text-base ${isLoading ? 'bg-gray-100 cursor-not-allowed opacity-70' : 'hover:bg-gray-50'}`}
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-4 py-2.5 md:px-6 md:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm md:text-base"
+                            disabled={isLoading}
+                            className={`flex-1 px-4 py-2.5 md:px-6 md:py-3 text-white rounded-lg transition font-semibold text-sm md:text-base flex items-center justify-center gap-2 ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                         >
-                            {category ? 'Update' : 'Create'} Category
+                            {isLoading ? (
+                                <>
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>{category ? 'Updating...' : 'Creating...'}</span>
+                                </>
+                            ) : (
+                                `${category ? 'Update' : 'Create'} Category`
+                            )}
                         </button>
                     </div>
                 </form>

@@ -112,6 +112,29 @@ export const getProductById = async (req, res) => {
 // @access  Private/Admin
 export const createProduct = async (req, res) => {
     try {
+        const normalizeSkus = (rawSkus) => {
+            if (!Array.isArray(rawSkus)) return [];
+            return rawSkus.map(sku => ({
+                ...sku,
+                stock: Math.max(0, Number(sku?.stock) || 0),
+                price: Math.max(0, Number(sku?.price) || 0),
+                originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)
+            }));
+        };
+
+        const deriveFromSkus = (skus) => {
+            if (!Array.isArray(skus) || skus.length === 0) return null;
+            const bestSku = skus.reduce((best, current) => {
+                if (!best) return current;
+                return Number(current.price) < Number(best.price) ? current : best;
+            }, null);
+            return {
+                stock: skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0),
+                price: bestSku ? Number(bestSku.price) || 0 : 0,
+                originalPrice: bestSku ? Math.max(Number(bestSku.originalPrice) || 0, Number(bestSku.price) || 0) : 0
+            };
+        };
+
         let image = req.body.image;
         if (req.files && req.files.image && req.files.image[0]?.buffer) {
             const uploadedMain = await uploadBufferToCloudinary(
@@ -153,6 +176,8 @@ export const createProduct = async (req, res) => {
 
         const body = req.body;
         let variantHeadings = parseJSON(body.variantHeadings);
+        const parsedSkus = normalizeSkus(parseJSON(body.skus));
+        const derivedSkuValues = deriveFromSkus(parsedSkus);
 
         if (req.files && req.files.variant_images) {
             const variantFiles = req.files.variant_images;
@@ -216,8 +241,8 @@ export const createProduct = async (req, res) => {
             id: body.id || Date.now(),
             name: body.name,
             brand: body.brand,
-            price: Number(body.price),
-            originalPrice: Number(body.originalPrice),
+            price: derivedSkuValues ? derivedSkuValues.price : Number(body.price),
+            originalPrice: derivedSkuValues ? derivedSkuValues.originalPrice : Number(body.originalPrice),
             discount: body.discount,
             image,
             images,
@@ -227,9 +252,9 @@ export const createProduct = async (req, res) => {
             categoryPath: parseJSON(body.categoryPath),
             highlights: parseJSON(body.highlights),
             description,
-            stock: Number(body.stock),
+            stock: derivedSkuValues ? derivedSkuValues.stock : Number(body.stock),
             variantHeadings,
-            skus: parseJSON(body.skus),
+            skus: parsedSkus,
             deliveryDays: Number(body.deliveryDays),
             specifications: parseJSON(body.specifications) || [],
             warranty: parseJSON(body.warranty),
@@ -249,6 +274,29 @@ export const createProduct = async (req, res) => {
 // @access  Private/Admin
 export const updateProduct = async (req, res) => {
     try {
+        const normalizeSkus = (rawSkus) => {
+            if (!Array.isArray(rawSkus)) return [];
+            return rawSkus.map(sku => ({
+                ...sku,
+                stock: Math.max(0, Number(sku?.stock) || 0),
+                price: Math.max(0, Number(sku?.price) || 0),
+                originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)
+            }));
+        };
+
+        const deriveFromSkus = (skus) => {
+            if (!Array.isArray(skus) || skus.length === 0) return null;
+            const bestSku = skus.reduce((best, current) => {
+                if (!best) return current;
+                return Number(current.price) < Number(best.price) ? current : best;
+            }, null);
+            return {
+                stock: skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0),
+                price: bestSku ? Number(bestSku.price) || 0 : 0,
+                originalPrice: bestSku ? Math.max(Number(bestSku.originalPrice) || 0, Number(bestSku.price) || 0) : 0
+            };
+        };
+
         console.log('Update Product ID:', req.params.id);
         console.log('Update Body:', JSON.stringify(req.body, null, 2)); // improved logging
 
@@ -309,7 +357,15 @@ export const updateProduct = async (req, res) => {
                 }
                 updateData.highlights = highlights;
             }
-            if (updateData.skus) updateData.skus = parseJSON(updateData.skus);
+            if (updateData.skus) {
+                updateData.skus = normalizeSkus(parseJSON(updateData.skus));
+                const derivedSkuValues = deriveFromSkus(updateData.skus);
+                if (derivedSkuValues) {
+                    updateData.stock = derivedSkuValues.stock;
+                    updateData.price = derivedSkuValues.price;
+                    updateData.originalPrice = derivedSkuValues.originalPrice;
+                }
+            }
             if (updateData.warranty) updateData.warranty = parseJSON(updateData.warranty);
             if (updateData.returnPolicy) updateData.returnPolicy = parseJSON(updateData.returnPolicy);
             

@@ -35,7 +35,16 @@ function App() {
     <Router>
       <LenisProvider>
         <ScrollToTop />
-        <Toaster position="top-right" reverseOrder={false} />
+        <Toaster
+          position="top-right"
+          reverseOrder={false}
+          toastOptions={{
+            duration: 1600,
+            removeDelay: 0,
+            success: { duration: 1400, removeDelay: 0 },
+            error: { duration: 1800, removeDelay: 0 }
+          }}
+        />
         <Suspense fallback={<Loader fullPage message="Loading page..." variant="shimmer" />}>
           <Routes>
             <Route path="/admin/*" element={<AdminRoutes />} />

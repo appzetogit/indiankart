@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import useAdminAuthStore from '../store/adminAuthStore';
+import logo from '../../../assets/indiankart-logo.png';
 
 import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState('admin@flipkart.com');
-    const [password, setPassword] = useState('admin123');
+    const [email, setEmail] = useState('indiakart24@gmail.com');
+    const [password, setPassword] = useState('Sanidev@#143');
+    const [showPassword, setShowPassword] = useState(false);
     const { login, loading } = useAdminAuthStore();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        // setError('');
 
         const success = await login(email, password);
         if (success) {
@@ -27,6 +29,11 @@ const AdminLogin = () => {
         <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
                 <div className="text-center mb-8">
+                    <img
+                        src={logo}
+                        alt="Indiankart"
+                        className="h-12 w-auto mx-auto mb-4 scale-[2] origin-center"
+                    />
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">Admin Panel</h1>
                     <p className="text-gray-500">Sign in to manage your store</p>
                 </div>
@@ -41,9 +48,8 @@ const AdminLogin = () => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             disabled={loading}
-                            className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'
-                                }`}
-                            placeholder="admin@flipkart.com"
+                            className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'}`}
+                            placeholder="indiakart24@gmail.com"
                             required
                         />
                     </div>
@@ -52,25 +58,33 @@ const AdminLogin = () => {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Password
                         </label>
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            disabled={loading}
-                            className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'
-                                }`}
-                            placeholder="••••••••"
-                            required
-                        />
+                        <div className="relative">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                disabled={loading}
+                                className={`w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'}`}
+                                placeholder="Enter your password"
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                disabled={loading}
+                                className={`absolute inset-y-0 right-0 px-3 flex items-center ${loading ? 'cursor-not-allowed text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                title={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                                {showPassword ? <MdVisibilityOff size={20} /> : <MdVisibility size={20} />}
+                            </button>
+                        </div>
                     </div>
-
-
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className={`w-full py-3 rounded-lg font-semibold transition-all shadow-lg flex items-center justify-center gap-2 ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
-                            }`}
+                        className={`w-full py-3 rounded-lg font-semibold transition-all shadow-lg flex items-center justify-center gap-2 ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
                     >
                         {loading ? (
                             <>
@@ -82,13 +96,6 @@ const AdminLogin = () => {
                         )}
                     </button>
                 </form>
-
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 text-center">
-                        Demo Credentials:<br />
-                        <span className="font-mono font-semibold">admin@flipkart.com / admin123</span>
-                    </p>
-                </div>
             </div>
         </div>
     );

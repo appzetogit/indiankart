@@ -8,13 +8,15 @@ const subCategorySchema = mongoose.Schema({
     image: {
         type: String,
     },
-    description: {
-        type: String,
-    },
     category: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Category',
         required: true,
+    },
+    parentSubCategory: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SubCategory',
+        default: null
     },
     isActive: {
         type: Boolean,

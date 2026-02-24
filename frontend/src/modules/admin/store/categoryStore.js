@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import API from '../../../services/api';
+import toast from 'react-hot-toast';
 
 const useCategoryStore = create((set, get) => ({
     categories: [],
@@ -13,11 +14,6 @@ const useCategoryStore = create((set, get) => ({
             let result = [];
             for (const cat of cats) {
                 result.push({ ...cat, level });
-                // Check if subCategories exists and has items
-                // Note: The backend might populate subCategories, or it might be just IDs. 
-                // However, based on the frontend usage so far, we treat them as nested objects for display if available.
-                // If they are just IDs, this map won't work for display names. 
-                // Assuming the fetchCategories populates them or they are embedded.
                 if (cat.children && Array.isArray(cat.children) && cat.children.length > 0) {
                     result = result.concat(flatten(cat.children, level + 1));
                 }
@@ -27,16 +23,29 @@ const useCategoryStore = create((set, get) => ({
         return flatten(categories);
     },
 
+    sortByNewestFirst: (cats = []) => {
+        const sorted = [...cats].sort((a, b) => {
+            const aTime = new Date(a.createdAt || 0).getTime() || Number(a.id) || 0;
+            const bTime = new Date(b.createdAt || 0).getTime() || Number(b.id) || 0;
+            return bTime - aTime;
+        });
+
+        return sorted.map((cat) => ({
+            ...cat,
+            children: cat.children ? get().sortByNewestFirst(cat.children) : cat.children
+        }));
+    },
+
     // Actions
     fetchCategories: async () => {
         set({ isLoading: true });
         try {
             const { data } = await API.get('/categories?all=true');
-            set({ categories: data, isLoading: false });
+            set({ categories: get().sortByNewestFirst(data), isLoading: false });
         } catch (error) {
-            set({ 
-                error: error.response?.data?.message || error.message, 
-                isLoading: false 
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
             });
         }
     },
@@ -46,13 +55,13 @@ const useCategoryStore = create((set, get) => ({
         try {
             const { data } = await API.post('/categories', categoryData);
             set((state) => ({
-                categories: [...state.categories, data],
+                categories: get().sortByNewestFirst([data, ...state.categories]),
                 isLoading: false
             }));
         } catch (error) {
-            set({ 
-                error: error.response?.data?.message || error.message, 
-                isLoading: false 
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
             });
             throw error;
         }
@@ -63,13 +72,13 @@ const useCategoryStore = create((set, get) => ({
         try {
             const { data } = await API.put(`/categories/${id}`, updatedData);
             set((state) => ({
-                categories: state.categories.map(c => c.id === id ? data : c),
+                categories: get().sortByNewestFirst(state.categories.map((c) => (c.id === id ? data : c))),
                 isLoading: false
             }));
         } catch (error) {
-            set({ 
-                error: error.response?.data?.message || error.message, 
-                isLoading: false 
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
             });
             throw error;
         }
@@ -80,14 +89,19 @@ const useCategoryStore = create((set, get) => ({
         try {
             await API.delete(`/categories/${id}`);
             set((state) => ({
-                categories: state.categories.filter(c => c.id !== id),
+                categories: state.categories.filter((c) => c.id !== id),
                 isLoading: false
             }));
+            toast.dismiss();
+            const toastId = toast.success('Category deleted successfully', { duration: 700 });
+            setTimeout(() => toast.remove(toastId), 900);
         } catch (error) {
-            set({ 
-                error: error.response?.data?.message || error.message, 
-                isLoading: false 
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
             });
+            toast.dismiss();
+            toast.error(error.response?.data?.message || 'Failed to delete category', { duration: 1400 });
             throw error;
         }
     },
@@ -95,24 +109,7 @@ const useCategoryStore = create((set, get) => ({
     toggleCategoryStatus: async (id) => {
         set({ isLoading: true });
         try {
-            // Determine current status to toggle it.
-            // Note: Ideally the backend should handle the toggle logic or we pass the new boolean.
-            // For now, let's assume we find it in state or pass isActive flag to backend.
-            // But since we don't have the current state easily accessible without searching, 
-            // maybe we can just assume the backend has a specific toggle endpoint or we just send an update.
-            // For this implementation, I'll fetch the category or just send a generic update if backend supports it.
-            // Better yet, let's just find it in local state.
-            const category = get().categories.find(c => c.id === id);
-            // If deeply nested, this search might fail. 
-            // However, the standard `updateCategory` should be sufficient if we pass the toggled value.
-            
-            // NOTE: Since the backend might not have a specific toggle endpoint, 
-            // and `updateCategory` implementation already exists, 
-            // we should rely on the component to pass the *new* status or handle it here if possible.
-            // Given the component just calls `toggleCategoryStatus(id)`, it expects the store to handle the logic.
-            
-            // We need to implement a deep find if categories are nested.
-             const findCategory = (cats) => {
+            const findCategory = (cats) => {
                 if (!cats || !Array.isArray(cats)) return null;
                 for (const cat of cats) {
                     if (cat.id === id || cat._id === id) return cat;
@@ -125,28 +122,21 @@ const useCategoryStore = create((set, get) => ({
                 return null;
             };
 
-            // Determine current status and type
             const currentCat = findCategory(get().categories);
             const currentStatus = currentCat?.active ?? true;
-            
-            // Check if it's a subcategory (Mongo ObjectIDs are strings, root IDs are numbers in this project)
+
             const isSubCategory = typeof id === 'string';
             const endpoint = isSubCategory ? `/subcategories/${id}` : `/categories/${id}`;
             const payload = isSubCategory ? { isActive: !currentStatus } : { active: !currentStatus };
 
-            // Call update
             const { data } = await API.put(endpoint, payload);
-            
-            // Transform subcategory data if returned from subcategory endpoint to match our flattened structure
-            const transformedData = isSubCategory ? {
-                ...data,
-                id: data._id,
-                active: data.isActive
-            } : data;
 
-            // Update state recursively
-             const updateRecursive = (cats) => {
-                return cats.map(cat => {
+            const transformedData = isSubCategory
+                ? { ...data, id: data._id, active: data.isActive }
+                : data;
+
+            const updateRecursive = (cats) => {
+                return cats.map((cat) => {
                     if (cat.id === id || cat._id === id) return transformedData;
                     if (cat.children) return { ...cat, children: updateRecursive(cat.children) };
                     return cat;
@@ -154,14 +144,13 @@ const useCategoryStore = create((set, get) => ({
             };
 
             set((state) => ({
-                categories: updateRecursive(state.categories),
+                categories: get().sortByNewestFirst(updateRecursive(state.categories)),
                 isLoading: false
             }));
-
         } catch (error) {
-             set({ 
-                error: error.response?.data?.message || error.message, 
-                isLoading: false 
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
             });
         }
     }
