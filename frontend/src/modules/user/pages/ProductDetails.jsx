@@ -234,17 +234,34 @@ const ProductDetails = () => {
         if (!product) return 0;
 
         if (displayVariantHeadings.length > 0 && product.skus && product.skus.length > 0) {
-            const matchingSku = product.skus.find(sku => {
-                // Every selected variant must match the SKU combination
-                return displayVariantHeadings.every(vh =>
-                    sku.combination[vh.name] === selectedVariants[vh.name]
-                );
-            });
+            const matchingSku = product.skus.find(sku =>
+                displayVariantHeadings.every(vh =>
+                    sku.combination?.[vh.name] === selectedVariants[vh.name]
+                )
+            );
             return matchingSku ? matchingSku.stock : 0;
         }
 
         return product.stock || 0;
     }, [product, selectedVariants, displayVariantHeadings]);
+
+    const selectedSku = React.useMemo(() => {
+        if (!product || !product.skus || product.skus.length === 0 || displayVariantHeadings.length === 0) {
+            return null;
+        }
+
+        return product.skus.find(sku =>
+            displayVariantHeadings.every(vh =>
+                sku.combination?.[vh.name] === selectedVariants[vh.name]
+            )
+        ) || null;
+    }, [product, selectedVariants, displayVariantHeadings]);
+
+    const selectedPrice = selectedSku?.price ?? product?.price ?? 0;
+    const selectedOriginalPrice = selectedSku?.originalPrice ?? product?.originalPrice ?? selectedPrice;
+    const discountPercentage = selectedOriginalPrice > selectedPrice
+        ? Math.round(((selectedOriginalPrice - selectedPrice) / selectedOriginalPrice) * 100)
+        : 0;
 
     const productImages = React.useMemo(() => {
         if (!product) return [];
@@ -305,7 +322,12 @@ const ProductDetails = () => {
             navigate('/login', { state: { from: window.location.pathname } });
             return;
         }
-        addToCart(product, selectedVariants);
+        const productForCart = {
+            ...product,
+            price: selectedPrice,
+            originalPrice: selectedOriginalPrice
+        };
+        addToCart(productForCart, selectedVariants);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
     };
@@ -325,11 +347,16 @@ const ProductDetails = () => {
             });
             return;
         }
+        const productForCheckout = {
+            ...product,
+            price: selectedPrice,
+            originalPrice: selectedOriginalPrice
+        };
         // Instead of adding to cart, pass item directly to checkout via state
         navigate('/checkout', {
             state: {
                 buyNowItem: {
-                    ...product,
+                    ...productForCheckout,
                     variant: selectedVariants,
                     quantity: 1
                 }
@@ -474,8 +501,6 @@ const ProductDetails = () => {
 
     if (loading || !product) return <ProductSkeleton />;
 
-    const discountPercentage = Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100);
-
     return (
         <div className="bg-white min-h-screen pb-24 font-sans text-gray-900">
 
@@ -604,9 +629,13 @@ const ProductDetails = () => {
 
                         <p className="text-green-600 text-sm font-bold mb-1">{specialPriceText}</p>
                         <div className="flex items-baseline gap-3 mb-4">
-                            <span className="text-3xl font-medium text-gray-900">₹{product.price.toLocaleString()}</span>
-                            <span className="text-gray-500 line-through text-base">₹{product.originalPrice.toLocaleString()}</span>
-                            <span className="text-green-600 font-bold text-base">{discountPercentage}% {offText}</span>
+                            <span className="text-3xl font-medium text-gray-900">₹{selectedPrice.toLocaleString()}</span>
+                            {selectedOriginalPrice > selectedPrice && (
+                                <>
+                                    <span className="text-gray-500 line-through text-base">₹{selectedOriginalPrice.toLocaleString()}</span>
+                                    <span className="text-green-600 font-bold text-base">{discountPercentage}% {offText}</span>
+                                </>
+                            )}
                         </div>
 
                         {/* Dynamic Variants Desktop */}
@@ -1032,12 +1061,12 @@ const ProductDetails = () => {
 
                     {/* Price */}
                     <div className="flex items-center gap-2 mb-4 bg-gray-50 p-2 rounded-xl border border-gray-100 w-fit">
-                        <span className="text-xl font-black text-gray-900">₹{product.price.toLocaleString()}</span>
-                        {product.originalPrice > product.price && (
+                        <span className="text-xl font-black text-gray-900">₹{selectedPrice.toLocaleString()}</span>
+                        {selectedOriginalPrice > selectedPrice && (
                             <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400 line-through">₹{product.originalPrice.toLocaleString()}</span>
+                                <span className="text-xs text-gray-400 line-through">₹{selectedOriginalPrice.toLocaleString()}</span>
                                 <span className="text-xs text-green-600 font-black">
-                                    {Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% {offText}
+                                    {discountPercentage}% {offText}
                                 </span>
                             </div>
                         )}
