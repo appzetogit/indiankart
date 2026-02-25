@@ -7,10 +7,19 @@ import { prefetchProductById } from '../../../../hooks/useData';
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
 
+    const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const cleanedProductName = React.useMemo(() => {
+        const rawName = (product?.name || '').trim();
+        const categoryName = (product?.category || '').trim();
+        if (!rawName) return '';
+        if (!categoryName) return rawName;
+
+        const categoryPattern = new RegExp(`\\b${escapeRegex(categoryName)}\\b`, 'ig');
+        return rawName.replace(categoryPattern, '').replace(/\s{2,}/g, ' ').trim();
+    }, [product?.name, product?.category]);
+
     // Translated Values
-    const productName = useGoogleTranslation(product.name);
-    // Brand names should usually not be translated
-    const productBrand = product.brand || product.name.split(' ')[0];
+    const productName = useGoogleTranslation(cleanedProductName || product.name);
     const translatedFooter = useGoogleTranslation(footerText);
     const offText = useGoogleTranslation('OFF');
     const adText = useGoogleTranslation('AD');
@@ -67,7 +76,7 @@ const ProductCard = ({ product, footerText }) => {
             <div className="px-1 flex flex-col flex-1">
                 {/* Brand / Title */}
                 <h4 className="text-[11px] md:text-sm font-bold text-gray-900 line-clamp-1 mb-0.5">
-                    {productBrand} {productName}
+                    {productName}
                 </h4>
 
                 {/* Prices */}
