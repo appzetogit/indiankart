@@ -6,7 +6,7 @@ import { prefetchProductById } from '../../../../hooks/useData';
 
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
-    
+
     // Translated Values
     const productName = useGoogleTranslation(product.name);
     // Brand names should usually not be translated
@@ -50,7 +50,7 @@ const ProductCard = ({ product, footerText }) => {
                 />
 
                 {/* Rating Badge - Bottom Left */}
-                {product.rating && (
+                {Number(product.rating) > 0 && (
                     <div className="absolute bottom-2 left-2 bg-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm border border-black/5 leading-none">
                         {product.rating} <span className="material-icons text-green-700 md:text-[12px]" style={{ fontSize: '9px' }}>star</span>
                     </div>
@@ -70,19 +70,17 @@ const ProductCard = ({ product, footerText }) => {
                     {productBrand} {productName}
                 </h4>
 
-                {/* Discount Percentage */}
-                {discountPercent && (
-                    <p className="text-[10px] md:text-xs font-bold text-green-700 mb-0.5 uppercase">
-                        {discountPercent}
-                    </p>
-                )}
-
                 {/* Prices */}
                 <div className="flex items-center gap-1.5 mb-0.5">
                     {product.originalPrice && (
-                        <span className="text-[11px] md:text-sm text-gray-500 line-through">₹{product.originalPrice.toLocaleString()}</span>
+                        <span className="text-[11px] md:text-sm text-gray-500 line-through">&#8377;{product.originalPrice.toLocaleString()}</span>
                     )}
-                    <span className="text-[13px] md:text-lg font-bold text-gray-900">₹{product.price.toLocaleString()}</span>
+                    <span className="text-[13px] md:text-lg font-bold text-gray-900">&#8377;{product.price.toLocaleString()}</span>
+                    {discountPercent && (
+                        <span className="text-[10px] md:text-xs font-bold text-green-700 uppercase">
+                            {discountPercent}
+                        </span>
+                    )}
                 </div>
 
                 {/* Offer/Footer Text */}

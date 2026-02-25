@@ -173,8 +173,8 @@ const CategoryPage = () => {
     return (
         <div className="bg-[#f1f3f6] min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
-            <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[144px] z-40">
-                <div className="max-w-[1440px] mx-auto px-4 py-2.5 md:py-4 flex items-center justify-between">
+            <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[116px] z-40">
+                <div className="max-w-[1440px] mx-auto px-4 pt-3 pb-3 md:pt-3 md:pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-3 md:gap-6">
                         <button
                             onClick={handleBackNavigation}
@@ -191,7 +191,14 @@ const CategoryPage = () => {
                                         <span className="material-icons text-[14px]">chevron_right</span>
                                         <span
                                             className={`hover:text-blue-600 cursor-pointer ${i === breadcrumbs.length - 1 ? 'text-gray-900 font-bold' : ''}`}
-                                            onClick={() => navigate(`/category/${breadcrumbs.slice(0, i + 1).map(b => b.name).join('/')}`)}
+                                            onClick={() =>
+                                                navigate(
+                                                    `/category/${breadcrumbs
+                                                        .slice(0, i + 1)
+                                                        .map((b) => encodeURIComponent(b.name))
+                                                        .join('/')}`
+                                                )
+                                            }
                                         >
                                             {crumb.name}
                                         </span>
@@ -274,7 +281,7 @@ const CategoryPage = () => {
                 <div className="flex flex-col lg:flex-row gap-4 h-full relative">
 
                     {/* LEFT SIDEBAR (Desktop) */}
-                    <aside className="hidden lg:block w-[280px] shrink-0 h-full overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[144px]">
+                    <aside className="hidden lg:block w-[280px] shrink-0 h-full overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[116px]">
                         <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0 z-10">
                             <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Filters</h3>
                             <button

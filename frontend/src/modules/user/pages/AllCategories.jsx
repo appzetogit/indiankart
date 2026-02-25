@@ -113,7 +113,11 @@ const AllCategories = () => {
                                 {activeData.subCategories.map((sub, index) => (
                                     <div
                                         key={index}
-                                        onClick={() => navigate(`/category/${activeData.name}/${sub.name}`)}
+                                        onClick={() =>
+                                            navigate(
+                                                `/category/${encodeURIComponent(activeData.name)}/${encodeURIComponent(sub.name)}`
+                                            )
+                                        }
                                         className="flex flex-col items-center gap-2 cursor-pointer group"
                                     >
                                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 p-1 group-hover:border-blue-300 transition-all">
