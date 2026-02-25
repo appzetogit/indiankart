@@ -27,14 +27,25 @@ const Account = () => {
         gender: ''
     });
 
+    const mapProfileToFormData = (profile) => {
+        const rawPhone = profile?.phone || profile?.mobile || '';
+        const rawEmail = profile?.email || '';
+        const normalizedPhone = String(rawPhone).trim();
+        const normalizedEmail = String(rawEmail).trim();
+        const digitsFromEmail = normalizedEmail.replace(/\D/g, '');
+        const looksLikePhoneInEmail = normalizedEmail && !normalizedEmail.includes('@') && digitsFromEmail.length >= 10;
+
+        return {
+            name: profile?.name || '',
+            mobile: normalizedPhone || (looksLikePhoneInEmail ? digitsFromEmail : ''),
+            email: looksLikePhoneInEmail ? '' : normalizedEmail,
+            gender: profile?.gender || ''
+        };
+    };
+
     useEffect(() => {
         if (currentUser) {
-            setFormData({
-                name: currentUser.name || '',
-                mobile: currentUser.phone || '',
-                email: currentUser.email || '',
-                gender: currentUser.gender || ''
-            });
+            setFormData(mapProfileToFormData(currentUser));
         }
     }, [currentUser]);
 
@@ -55,12 +66,7 @@ const Account = () => {
     const handleCancel = () => {
         setIsEditing(false);
         if (currentUser) {
-            setFormData({
-                name: currentUser.name || '',
-                mobile: currentUser.phone || '',
-                email: currentUser.email || '',
-                gender: currentUser.gender || ''
-            });
+            setFormData(mapProfileToFormData(currentUser));
         }
     };
 

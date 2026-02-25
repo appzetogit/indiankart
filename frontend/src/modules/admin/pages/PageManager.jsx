@@ -139,17 +139,17 @@ const PageManager = () => {
         }
     };
 
-    const handleCreatePage = (e) => {
+    const handleCreatePage = async (e) => {
         e.preventDefault();
         if (!newPageKey || !newPageTitle) return;
         
         const finalKey = newPageKey.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        updateContent(finalKey, `<h1>${newPageTitle}</h1>\n<p>Start writing content for ${newPageTitle}...</p>`);
+        await updateContent(finalKey, `<h1>${newPageTitle}</h1>\n<p>Start writing content for ${newPageTitle}...</p>`);
+        await fetchPages();
         setSelectedPageKey(finalKey);
         setShowModal(false);
         setNewPageTitle('');
         setNewPageKey('');
-        setTimeout(fetchPages, 500); 
     };
 
     function getTitle(key) {
