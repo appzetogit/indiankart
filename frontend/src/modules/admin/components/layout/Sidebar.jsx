@@ -47,7 +47,7 @@ const Sidebar = () => {
         { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
         { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
         { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
-        { name: 'Coupons & Offers', icon: MdLocalOffer, path: '/admin/coupons' },
+        { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },
         { name: 'Offers', icon: MdLabel, path: '/admin/offers' },
         { name: 'Bank Offers', icon: MdLocalOffer, path: '/admin/bank-offers' },
         { name: 'Home Layout', icon: MdLayers, path: '/admin/content/layout' },

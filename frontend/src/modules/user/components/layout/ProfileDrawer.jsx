@@ -8,7 +8,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 // Import Page Components
 import MyOrders from '../../pages/MyOrders';
 import Wishlist from '../../pages/Wishlist';
-import Coupons from '../../pages/Coupons';
 import Addresses from '../../pages/Addresses';
 import NotificationSettings from '../../pages/NotificationSettings';
 import HelpCenter from '../../pages/HelpCenter';
@@ -84,8 +83,6 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
                 return <MyOrders onBack={handleBackToMenu} />;
             case 'WISHLIST':
                 return <Wishlist onBack={handleBackToMenu} />;
-            case 'COUPONS':
-                return <Coupons onBack={handleBackToMenu} />;
             case 'ADDRESSES':
                 return <Addresses onBack={handleBackToMenu} />;
             case 'NOTIFICATIONS':
@@ -180,13 +177,6 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
                         <span className="material-icons-outlined text-blue-600 group-hover:scale-110 transition-transform">favorite_border</span>
                         <div className="flex-1">
                             <p className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Wishlist</p>
-                        </div>
-                        <span className="material-icons-outlined text-gray-300">chevron_right</span>
-                    </div>
-                    <div onClick={() => setActiveView('COUPONS')} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 cursor-pointer transition-colors group">
-                        <span className="material-icons-outlined text-blue-600 group-hover:scale-110 transition-transform">confirmation_number</span>
-                        <div className="flex-1">
-                            <p className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Coupons</p>
                         </div>
                         <span className="material-icons-outlined text-gray-300">chevron_right</span>
                     </div>

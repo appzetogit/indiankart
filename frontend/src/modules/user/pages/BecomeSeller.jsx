@@ -23,6 +23,7 @@ const BecomeSeller = () => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
+    const fieldClass = "w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none text-gray-900 placeholder:text-gray-400 caret-blue-600";
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -153,7 +154,7 @@ const BecomeSeller = () => {
                                     value={formData.storeName}
                                     onChange={handleChange}
                                     placeholder="e.g. My Awesome Shop"
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none"
+                                    className={fieldClass}
                                 />
                             </div>
 
@@ -169,7 +170,7 @@ const BecomeSeller = () => {
                                     value={formData.businessEmail}
                                     onChange={handleChange}
                                     placeholder="e.g. contact@myshop.com"
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none"
+                                    className={fieldClass}
                                 />
                             </div>
 
@@ -185,7 +186,7 @@ const BecomeSeller = () => {
                                     value={formData.phoneNumber}
                                     onChange={handleChange}
                                     placeholder="e.g. +91 9876543210"
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none"
+                                    className={fieldClass}
                                 />
                             </div>
 
@@ -201,7 +202,7 @@ const BecomeSeller = () => {
                                     value={formData.taxId}
                                     onChange={handleChange}
                                     placeholder="Your Business Tax ID"
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none"
+                                    className={fieldClass}
                                 />
                             </div>
                         </div>
@@ -215,7 +216,7 @@ const BecomeSeller = () => {
                                 name="businessType"
                                 value={formData.businessType}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none appearance-none cursor-pointer"
+                                className={`${fieldClass} appearance-none cursor-pointer`}
                             >
                                 <option value="Individual">Individual</option>
                                 <option value="Partnership">Partnership</option>
@@ -237,7 +238,7 @@ const BecomeSeller = () => {
                                 onChange={handleChange}
                                 placeholder="Complete business address..."
                                 rows="3"
-                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none resize-none"
+                                className={`${fieldClass} resize-none`}
                             ></textarea>
                         </div>
 
@@ -253,7 +254,7 @@ const BecomeSeller = () => {
                                 onChange={handleChange}
                                 placeholder="Tell us about the products you plan to sell..."
                                 rows="4"
-                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none resize-none"
+                                className={`${fieldClass} resize-none`}
                             ></textarea>
                         </div>
 

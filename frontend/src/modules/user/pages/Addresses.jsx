@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -19,6 +19,8 @@ const Addresses = () => {
     const [showMenu, setShowMenu] = useState(null);
     const [pincodeStatus, setPincodeStatus] = useState({}); // { addressId: { isServiceable, message, deliveryTime, unit } }
     const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+    const formContainerRef = useRef(null);
+    const nameInputRef = useRef(null);
     
     const { 
         suggestions, 
@@ -87,6 +89,12 @@ const Addresses = () => {
         setEditingId(addr.id);
         setIsAdding(true);
         setShowMenu(null);
+
+        // Bring the edit form into view when editing a lower list item.
+        requestAnimationFrame(() => {
+            formContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            nameInputRef.current?.focus();
+        });
     };
 
     const handleDelete = (id) => {
@@ -197,7 +205,7 @@ const Addresses = () => {
 
                         {/* Add/Edit Address Form */}
                         {isAdding && (
-                            <div className="bg-white p-4 shadow-sm animate-in slide-in-from-top duration-300 md:rounded-sm md:border md:border-gray-200">
+                            <div ref={formContainerRef} className="bg-white p-4 shadow-sm animate-in slide-in-from-top duration-300 md:rounded-sm md:border md:border-gray-200">
                                 <div className="flex items-center justify-between mb-4 border-b pb-3">
                                     <h2 className="text-blue-600 font-bold uppercase text-[12px] tracking-wider">
                                         {editingId ? editAddressText : addNewAddressText}
@@ -314,6 +322,7 @@ const Addresses = () => {
                                             <input 
                                                 required 
                                                 type="text" 
+                                                ref={nameInputRef}
                                                 className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900" 
                                                 value={newAddr.name} 
                                                 onChange={e => setNewAddr({ ...newAddr, name: e.target.value })}

@@ -47,7 +47,7 @@ const Home = () => {
 
     return (
         <div className="bg-gradient-to-b from-white to-blue-100 pt-2 flex-1 flex flex-col">
-            <div className="w-full space-y-2 md:space-y-6 px-3 md:px-5 lg:px-6">
+            <div className="w-full space-y-2 md:space-y-6 px-3 md:px-5 lg:px-6 pb-8 md:pb-12">
 
                 {/* Dynamic Content Stream */}
                 {layout.map((item, index) => {
@@ -55,7 +55,16 @@ const Home = () => {
 
                     if (item.type === 'banner') {
                         const banner = banners.find(b => String(b._id) === String(item.referenceId) || String(b.id) === String(item.referenceId));
-                        if (!banner) return null;
+                        if (!banner) {
+                            if (isHomeLoading) {
+                                return (
+                                    <div key={`${item.type}-${index}`} className="max-w-[1440px] mx-auto w-full">
+                                        <BannerSkeleton />
+                                    </div>
+                                );
+                            }
+                            return null;
+                        }
 
                         const bannerComponent = (
                             <Suspense fallback={<BannerSkeleton />}>
@@ -76,7 +85,16 @@ const Home = () => {
 
                     if (item.type === 'section') {
                         const section = sections.find(s => String(s.id) === String(item.referenceId));
-                        if (!section) return null;
+                        if (!section) {
+                            if (isHomeLoading) {
+                                return (
+                                    <div key={`${item.type}-${index}`} className="max-w-[1440px] mx-auto w-full">
+                                        <SectionSkeleton />
+                                    </div>
+                                );
+                            }
+                            return null;
+                        }
 
                         const isDeal = section.title.toLowerCase().includes('deal') || section.title.toLowerCase().includes('find');
                         const productCount = section.products?.length || 0;

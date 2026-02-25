@@ -10,17 +10,14 @@ const useCouponStore = create((set) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.get('/coupons');
-            // Filter into coupons and offers based on isOffer flag or specific logic
-            // Assuming 'isOffer' field in model, or implicit by type 'Bank Offer' etc.
-            // Model has `type` which could be 'percentage'/'flat' (Coupons) or 'Bank Offer' etc (Offers)
-            // Or `isOffer` boolean if added.
-             
-            // Map backend data to store structure
-            const couponList = data.filter(c => !c.isOffer && (c.type === 'percentage' || c.type === 'flat'));
-            const offerList = data.filter(c => c.isOffer || (c.type !== 'percentage' && c.type !== 'flat'));
+            // Use explicit backend flag for classification.
+            // Strict type checks can hide valid admin-created coupons in user flows.
+            const couponList = data.filter((c) => c?.isOffer !== true);
+            const offerList = data.filter((c) => c?.isOffer === true);
 
             set({ coupons: couponList, offers: offerList, isLoading: false });
         } catch (error) {
+            console.error('Failed to fetch coupons:', error);
             set({ isLoading: false });
         }
     },

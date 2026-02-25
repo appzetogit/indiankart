@@ -36,6 +36,7 @@ const ProductForm = () => {
 
     const [variantPage, setVariantPage] = useState(1);
     const variantsPerPage = 20;
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const toggleSection = (key) => setSections(prev => ({ ...prev, [key]: !prev[key] }));
 
@@ -456,6 +457,7 @@ const ProductForm = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsSubmitting(true);
 
         const normalizedSkus = getNormalizedSkus();
 
@@ -607,20 +609,23 @@ const ProductForm = () => {
         // ... (inside ProductForm component)
 
         try {
+            let savedProduct;
             if (isEdit) {
-                await updateProduct(parseInt(id), data);
+                savedProduct = await updateProduct(parseInt(id), data);
                 toast.success('Product updated successfully!');
             } else {
-                await addProduct(data);
+                savedProduct = await addProduct(data);
                 toast.success('Product created successfully!');
             }
-            if (!isEdit) {
-                navigate('/admin/products');
+            if (!isEdit && savedProduct?.id) {
+                navigate(`/admin/products/edit/${savedProduct.id}`, { replace: true });
             }
         } catch (error) {
             console.error("Failed to save product:", error);
             const message = error.response?.data?.message || "Failed to save product. Please try again.";
             toast.error(message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -654,7 +659,7 @@ const ProductForm = () => {
                         </button>
                         <div>
                             <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight">
-                                Create New Listing
+                                Product Editor
                             </h1>
                         </div>
                     </div>
@@ -667,17 +672,17 @@ const ProductForm = () => {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={isLoading}
-                            className={`px-4 py-2 md:px-10 md:py-2.5 rounded-xl text-xs md:text-sm font-bold text-white transition-all shadow-lg shadow-blue-200 flex items-center gap-2 ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                            disabled={isLoading || isSubmitting}
+                            className={`px-4 py-2 md:px-10 md:py-2.5 rounded-xl text-xs md:text-sm font-bold text-white transition-all shadow-lg shadow-blue-200 flex items-center gap-2 ${(isLoading || isSubmitting) ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                                 }`}
                         >
-                            {isLoading ? (
+                            {(isLoading || isSubmitting) ? (
                                 <>
                                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    Saving...
+                                    {isEdit ? 'Updating...' : 'Saving...'}
                                 </>
                             ) : (
-                                'Publish to Store'
+                                isEdit ? 'Update Product' : 'Save Product'
                             )}
                         </button>
                     </div>

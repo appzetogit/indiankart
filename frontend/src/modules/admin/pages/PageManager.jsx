@@ -32,43 +32,48 @@ const PageManager = () => {
 
     // Grouping Logic
     const { footerMappedPages, otherPages, systemPages } = useMemo(() => {
-        if (!footerConfig) return { footerMappedPages: [], otherPages: [], systemPages: [] };
+        const systemKeys = ['privacyPolicy', 'aboutUs', 'seoContent', 'copyright', 'help-center'];
+        const footerLinks = [];
 
         // 1. Get all pageKeys defined in footer
-        const footerLinks = [];
-        footerConfig.sections.forEach(section => {
-            section.links.forEach(link => {
-                if (link.pageKey) {
-                    footerLinks.push({
-                        pageKey: link.pageKey,
-                        label: link.label,
-                        section: section.title
-                    });
-                }
+        if (footerConfig?.sections?.length) {
+            footerConfig.sections.forEach(section => {
+                (section.links || []).forEach(link => {
+                    if (link.pageKey) {
+                        footerLinks.push({
+                            pageKey: link.pageKey,
+                            label: link.label,
+                            section: section.title
+                        });
+                    }
+                });
             });
-        });
+        }
 
         // Add special bottom bar links
         footerLinks.push({ 
-            pageKey: footerConfig.advertisePageKey || 'advertise', 
+            pageKey: footerConfig?.advertisePageKey || 'advertise', 
             label: 'Advertise', 
             section: 'Bottom Bar' 
         });
         footerLinks.push({ 
-            pageKey: footerConfig.giftCardsPageKey || 'gift-cards', 
+            pageKey: footerConfig?.giftCardsPageKey || 'gift-cards', 
             label: 'Gift Cards', 
             section: 'Bottom Bar' 
         });
         footerLinks.push({ 
-            pageKey: footerConfig.helpCenterPageKey || 'help-center', 
+            pageKey: footerConfig?.helpCenterPageKey || 'help-center', 
             label: 'Help Center', 
             section: 'Bottom Bar' 
         });
 
-        const systemKeys = ['privacyPolicy', 'aboutUs', 'seoContent', 'copyright'];
-        
+        // Deduplicate footer links by pageKey
+        const uniqueFooterLinks = footerLinks.filter(
+            (link, index, arr) => index === arr.findIndex((l) => l.pageKey === link.pageKey)
+        );
+
         // 2. Map pages to footer links
-        const mapped = footerLinks.map(link => {
+        const mapped = uniqueFooterLinks.map(link => {
             const pageData = pages.find(p => p.pageKey === link.pageKey);
             return {
                 ...link,
@@ -78,7 +83,7 @@ const PageManager = () => {
         });
 
         // 3. Find other pages NOT in footer and NOT system
-        const footerKeys = footerLinks.map(l => l.pageKey);
+        const footerKeys = uniqueFooterLinks.map(l => l.pageKey);
         const others = pages.filter(p => !footerKeys.includes(p.pageKey) && !systemKeys.includes(p.pageKey));
 
         // 4. System Pages
@@ -119,6 +124,8 @@ const PageManager = () => {
             } else if (selectedPageKey === 'copyright') {
                 const copyrightFromStore = useContentStore.getState().pages.find(p => p.pageKey === 'copyright')?.content;
                 setEditorContent(copyrightFromStore || footerConfig?.copyrightText || '');
+            } else if (selectedPageKey === 'help-center') {
+                setEditorContent('<h1>Help Center</h1>\n<p>Add help center content here.</p>');
             }
         }
         setIsSaved(false);
@@ -132,17 +139,17 @@ const PageManager = () => {
         }
     };
 
-    const handleCreatePage = (e) => {
+    const handleCreatePage = async (e) => {
         e.preventDefault();
         if (!newPageKey || !newPageTitle) return;
         
         const finalKey = newPageKey.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        updateContent(finalKey, `<h1>${newPageTitle}</h1>\n<p>Start writing content for ${newPageTitle}...</p>`);
+        await updateContent(finalKey, `<h1>${newPageTitle}</h1>\n<p>Start writing content for ${newPageTitle}...</p>`);
+        await fetchPages();
         setSelectedPageKey(finalKey);
         setShowModal(false);
         setNewPageTitle('');
         setNewPageKey('');
-        setTimeout(fetchPages, 500); 
     };
 
     function getTitle(key) {
@@ -150,6 +157,7 @@ const PageManager = () => {
         if (key === 'aboutUs') return 'About Us';
         if (key === 'seoContent') return 'SEO Footer Text';
         if (key === 'copyright') return 'Copyright Text';
+        if (key === 'help-center') return 'Help Center';
         return key.replace(/-/g, ' ').replace(/(?:^|\s)\S/g, a => a.toUpperCase());
     }
 
@@ -280,6 +288,7 @@ const PageManager = () => {
                             
                             <div className="flex-1 p-0 relative group border-t border-gray-100">
                                 <RichTextEditor 
+                                    key={selectedPageKey}
                                     value={editorContent}
                                     onChange={(html) => {
                                         setEditorContent(html);

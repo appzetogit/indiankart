@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 const FooterManager = () => {
     const { footerConfig, fetchFooterConfig, updateFooterConfig, isLoading } = useFooterStore();
-    const { fetchPages } = useContentStore();
+    const { pages, fetchPages } = useContentStore();
     const [config, setConfig] = useState(null);
 
     useEffect(() => {
@@ -68,6 +68,10 @@ const FooterManager = () => {
         newConfig.sections[sectionIndex].links[linkIndex][field] = value;
         setConfig(newConfig);
     };
+
+    const availablePages = Array.from(
+        new Map((pages || []).map((p) => [p.pageKey, p])).values()
+    ).sort((a, b) => a.pageKey.localeCompare(b.pageKey));
 
     if (!config) return <div className="p-8 text-center text-gray-500 font-bold">Loading Footer Settings...</div>;
 
@@ -143,8 +147,8 @@ const FooterManager = () => {
                                                 >
                                                     <option value="" disabled>Select Page / Action</option>
                                                     <optgroup label="Dynamic Pages">
-                                                        {useContentStore.getState().pages.map(p => (
-                                                            <option key={p.pageKey} value={p.pageKey}>{p.pageKey} ({p.updatedAt ? 'Dynamic' : 'Static'})</option>
+                                                        {availablePages.map(p => (
+                                                            <option key={p.pageKey} value={p.pageKey}>{p.pageKey}</option>
                                                         ))}
                                                     </optgroup>
                                                     <optgroup label="Custom">
@@ -250,7 +254,7 @@ const FooterManager = () => {
                                             className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-100 outline-none text-gray-900 appearance-none cursor-pointer"
                                         >
                                             <option value="">Select Page</option>
-                                            {useContentStore.getState().pages.map(p => (
+                                            {availablePages.map(p => (
                                                 <option key={p.pageKey} value={p.pageKey}>{p.pageKey}</option>
                                             ))}
                                         </select>

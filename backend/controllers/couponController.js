@@ -1,5 +1,22 @@
 import Coupon from '../models/Coupon.js';
 
+const parseDateOnly = (dateStr) => {
+    if (!dateStr) return null;
+    const parsed = new Date(`${dateStr}T00:00:00.000Z`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const validateExpiryAfter = (expiryDate, baseDate) => {
+    const expiry = parseDateOnly(expiryDate);
+    if (!expiry) return { valid: false, message: 'Invalid expiry date format' };
+    const base = new Date(baseDate);
+    const baseDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+    if (expiry <= baseDay) {
+        return { valid: false, message: 'Expiry date must be greater than creation date' };
+    }
+    return { valid: true };
+};
+
 // @desc    Get all coupons & offers
 // @route   GET /api/coupons
 // @access  Private/Admin
@@ -33,6 +50,13 @@ export const createCoupon = async (req, res) => {
             usageCount,
             terms
         } = req.body;
+
+        if (!isOffer) {
+            const expiryCheck = validateExpiryAfter(expiryDate, new Date());
+            if (!expiryCheck.valid) {
+                return res.status(400).json({ message: expiryCheck.message });
+            }
+        }
 
         const coupon = new Coupon({
             type,
@@ -98,7 +122,13 @@ export const updateCoupon = async (req, res) => {
             coupon.value = value !== undefined ? value : coupon.value;
             coupon.minPurchase = minPurchase !== undefined ? minPurchase : coupon.minPurchase;
             coupon.maxDiscount = maxDiscount !== undefined ? maxDiscount : coupon.maxDiscount;
-            coupon.expiryDate = expiryDate || coupon.expiryDate;
+            if (expiryDate !== undefined) {
+                const expiryCheck = validateExpiryAfter(expiryDate, coupon.createdAt || new Date());
+                if (!expiryCheck.valid) {
+                    return res.status(400).json({ message: expiryCheck.message });
+                }
+                coupon.expiryDate = expiryDate;
+            }
             coupon.userSegment = userSegment || coupon.userSegment;
             coupon.applicableCategory = applicableCategory || coupon.applicableCategory;
             coupon.terms = terms || coupon.terms;

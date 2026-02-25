@@ -6,8 +6,9 @@ import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 // @access  Public
 export const getProducts = async (req, res) => {
     try {
-        const { category, subcategory, all, pageNumber, limit } = req.query;
+        const { category, subcategory, all, pageNumber, limit, search, keyword } = req.query;
         let filter = {};
+        const searchTerm = String(search || keyword || '').trim();
 
         if (all !== 'true') {
             // Always filter by active categories and subcategories for public requests
@@ -40,6 +41,20 @@ export const getProducts = async (req, res) => {
 
         if (category) {
             filter.category = category;
+        }
+
+        if (searchTerm) {
+            const regex = new RegExp(searchTerm, 'i');
+            const searchFilter = {
+                $or: [
+                    { name: regex },
+                    { brand: regex },
+                    { category: regex }
+                ]
+            };
+            filter = Object.keys(filter).length > 0
+                ? { $and: [filter, searchFilter] }
+                : searchFilter;
         }
 
         // Pagination Logic

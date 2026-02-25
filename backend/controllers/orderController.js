@@ -17,6 +17,7 @@ export const addOrderItems = async (req, res) => {
             taxPrice,
             shippingPrice,
             totalPrice,
+            coupon,
         } = req.body;
 
         if (!orderItems || orderItems.length === 0) {
@@ -104,6 +105,7 @@ export const addOrderItems = async (req, res) => {
             taxPrice,
             shippingPrice,
             totalPrice,
+            coupon,
             isPaid: req.body.isPaid || false,
             paidAt: req.body.paidAt,
             paymentResult: req.body.paymentResult

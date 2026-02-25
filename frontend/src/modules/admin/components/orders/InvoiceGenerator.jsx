@@ -20,17 +20,61 @@ export const InvoiceDisplay = React.forwardRef(
         fssai: apiSettings?.fssai || "N/A"
     };
 
-    const format = (n) => Number(n || 0).toFixed(2);
+    const toNumber = (value) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
 
-    // Robust list selection: items prop > item prop > order.items
-    const list = (items && items.length > 0) 
-      ? items 
-      : (item ? [item] : (order?.items || []));
+    const getQty = (lineItem) => {
+      const rawQty = toNumber(lineItem?.qty ?? lineItem?.quantity ?? 1);
+      return rawQty > 0 ? rawQty : 1;
+    };
 
-    const totalQty = list.reduce((a, b) => a + (b.qty || b.quantity || 1), 0);
-    const subtotal = list.reduce((a, b) => a + (b.price * (b.qty || b.quantity || 1)), 0);
+    const getPrice = (lineItem) => {
+      const price = toNumber(lineItem?.price);
+      return price >= 0 ? price : 0;
+    };
+
+    const isPathLike = (value) => {
+      if (typeof value !== "string") return false;
+      const v = value.trim();
+      if (!v) return false;
+      return (
+        /^https?:\/\//i.test(v) ||
+        /^([a-zA-Z]:)?[\\/]/.test(v) ||
+        /[\\/].+\.(jpg|jpeg|png|webp|gif|svg|avif)(\?.*)?$/i.test(v)
+      );
+    };
+
+    const getSafeName = (lineItem, index) => {
+      const candidates = [lineItem?.name, lineItem?.title, lineItem?.productName];
+      const validName = candidates.find(
+        (candidate) => typeof candidate === "string" && candidate.trim() && !isPathLike(candidate)
+      );
+      return validName?.trim() || `Product Item ${index + 1}`;
+    };
+
+    const format = (n) => toNumber(n).toFixed(2);
+
+    // Robust list selection: items prop > item prop > order.items/order.orderItems
+    const rawList = (items && items.length > 0)
+      ? items
+      : (item ? [item] : (order?.items || order?.orderItems || []));
+
+    const list = rawList.map((lineItem, index) => ({
+      ...lineItem,
+      safeName: getSafeName(lineItem, index),
+      safeQty: getQty(lineItem),
+      safePrice: getPrice(lineItem),
+    }));
+
+    const totalQty = list.reduce((sum, lineItem) => sum + lineItem.safeQty, 0);
+    const subtotal = list.reduce((sum, lineItem) => sum + (lineItem.safePrice * lineItem.safeQty), 0);
     const handlingFee = 0.00;
-    const totalAmount = subtotal + handlingFee;
+    const couponCode = order?.coupon?.code || "";
+    const couponDiscount = item ? 0 : toNumber(order?.coupon?.discount);
+    const orderGrandTotal = toNumber(order?.totalPrice ?? order?.total ?? order?.itemsPrice ?? subtotal);
+    const totalAmount = (item ? subtotal : orderGrandTotal) + handlingFee;
 
     return (
       <div ref={ref} className="invoice-root">
@@ -204,8 +248,8 @@ export const InvoiceDisplay = React.forwardRef(
               {list.map((i, idx) => (
                 <tr key={idx} style={{ height: "45px" }}>
                   <td className="text-center">{idx + 1}</td>
-                  <td><div className="font-bold">{i.name}</div></td>
-                  <td className="text-center font-bold">{i.qty || i.quantity}</td>
+                  <td><div className="font-bold">{i.safeName}</div></td>
+                  <td className="text-center font-bold">{i.safeQty}</td>
                   <td></td>
                 </tr>
               ))}
@@ -285,18 +329,18 @@ export const InvoiceDisplay = React.forwardRef(
             </thead>
             <tbody>
               {list.map((i, idx) => {
-                const gross = i.price * (i.qty || i.quantity || 1);
+                const gross = i.safePrice * i.safeQty;
                 const taxable = gross / 1.18;
                 const tax = gross - taxable;
 
                 return (
                   <tr key={idx}>
                     <td>
-                      <div><b>{i.name}</b></div>
+                      <div><b>{i.safeName}</b></div>
                       {i.serialNumber && <div style={{ fontSize: "7px", color: "#666" }}>IMEI/SN: {i.serialNumber}</div>}
                     </td>
                     <td>HSN: 90029000 | 18.00% | 0%</td>
-                    <td className="text-center">{i.qty || i.quantity}</td>
+                    <td className="text-center">{i.safeQty}</td>
                     <td className="text-right">{format(gross)}</td>
                     <td className="text-right">0.00</td>
                     <td className="text-right">{format(taxable)}</td>
@@ -316,6 +360,12 @@ export const InvoiceDisplay = React.forwardRef(
                 <td className="text-right">0.00</td>
                 <td className="text-right">0.00</td>
               </tr>
+              {couponDiscount > 0 && (
+                <tr>
+                  <td colSpan="8" className="text-right"><b>Coupon Applied{couponCode ? ` (${couponCode})` : ""}</b></td>
+                  <td className="text-right" style={{ color: "#0f9d58" }}>-₹{format(couponDiscount)}</td>
+                </tr>
+              )}
               <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                 <td colSpan="2">TOTAL QTY: {totalQty}</td>
                 <td colSpan="6" className="text-right">TOTAL PRICE:</td>
