@@ -8,8 +8,8 @@ import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState('indiakart24@gmail.com');
-    const [password, setPassword] = useState('Sanidev@#143');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const { login, loading } = useAdminAuthStore();
 
@@ -38,18 +38,20 @@ const AdminLogin = () => {
                     <p className="text-gray-500">Sign in to manage your store</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Email Address
                         </label>
                         <input
                             type="email"
+                            name="admin-email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             disabled={loading}
+                            autoComplete="off"
                             className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'}`}
-                            placeholder="indiakart24@gmail.com"
+                            placeholder="admin@example.com"
                             required
                         />
                     </div>
@@ -61,9 +63,11 @@ const AdminLogin = () => {
                         <div className="relative">
                             <input
                                 type={showPassword ? 'text' : 'password'}
+                                name="admin-password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={loading}
+                                autoComplete="new-password"
                                 className={`w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'}`}
                                 placeholder="Enter your password"
                                 required
