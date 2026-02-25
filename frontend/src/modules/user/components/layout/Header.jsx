@@ -61,11 +61,13 @@ const Header = () => {
         cat.active !== false &&
         activeCategoryIds.has(String(cat._id || cat.id))
     );
-    const fallbackActiveCategories = categories.filter((cat) => cat.active !== false).slice(0, 8);
-    // Use configured categories only when they are active; otherwise fallback to active categories.
-    const displayCategories = activeHeaderCategories.length > 0
-        ? activeHeaderCategories
-        : fallbackActiveCategories;
+    const fallbackActiveCategories = categories.filter((cat) => cat.active !== false);
+    const pinnedIds = new Set(activeHeaderCategories.map((cat) => String(cat._id || cat.id)));
+    const remainingCategories = fallbackActiveCategories.filter(
+        (cat) => !pinnedIds.has(String(cat._id || cat.id))
+    );
+    // Keep admin-pinned order first, then append remaining active categories so new categories don't disappear.
+    const displayCategories = [...activeHeaderCategories, ...remainingCategories];
     const shouldSpreadCategories = displayCategories.length >= 6;
 
 
@@ -164,7 +166,8 @@ const Header = () => {
     // Helper to check active state
     const isActiveCategory = (catName) => {
         if (catName === "For You" && location.pathname === "/") return true;
-        return location.pathname.includes(`/category/${catName}`);
+        const decodedPath = decodeURIComponent(location.pathname || '');
+        return decodedPath.includes(`/category/${catName}`);
     };
 
     const isPDP = location.pathname.includes('/product/');
@@ -187,6 +190,12 @@ const Header = () => {
     const cartText = useGoogleTranslation('Cart');
     const categoriesText = useGoogleTranslation('Categories');
     const cleanNavLabel = (text) => String(text || '').replace(/:/g, '').trim();
+    const buildCategoryRoute = (categoryName, subCategoryName) => {
+        const categorySegment = encodeURIComponent(String(categoryName || '').trim());
+        if (!subCategoryName) return `/category/${categorySegment}`;
+        const subCategorySegment = encodeURIComponent(String(subCategoryName).trim());
+        return `/category/${categorySegment}/${subCategorySegment}`;
+    };
 
     return (
         <header className={`${isPDP ? 'bg-gradient-to-b from-blue-100 to-blue-200' : 'bg-gradient-to-b from-blue-200 via-blue-100 to-blue-50'} px-3 fixed top-0 w-full left-0 right-0 z-50 shadow-[0_4px_25px_rgba(0,0,0,0.1)] border-b border-blue-200 transition-all duration-300 ${isPDP ? 'md:border-blue-100 py-1.5' : isCategory ? 'py-2 border-blue-200/50 md:border-gray-100' : 'py-0.5 md:py-0 border-blue-200/50 md:border-gray-100'}`}>
@@ -307,7 +316,7 @@ const Header = () => {
                                             <button
                                                 key={cat.id}
                                                 onClick={() => {
-                                                    navigate(`/category/${cat.name}`);
+                                                    navigate(buildCategoryRoute(cat.name));
                                                     setShowSearchDropdown(false);
                                                     setSearchQuery('');
                                                 }}
@@ -321,7 +330,7 @@ const Header = () => {
                                             <button
                                                 key={sub._id}
                                                 onClick={() => {
-                                                    navigate(`/category/${sub.category?.name}/${sub.name}`);
+                                                    navigate(buildCategoryRoute(sub.category?.name, sub.name));
                                                     setShowSearchDropdown(false);
                                                     setSearchQuery('');
                                                 }}
@@ -467,7 +476,7 @@ const Header = () => {
                             return (
                                 <div
                                     key={cat.id || cat._id || cat.name}
-                                    onClick={() => cat.name === "For You" ? navigate('/') : navigate(`/category/${cat.name}`)}
+                                    onClick={() => cat.name === "For You" ? navigate('/') : navigate(buildCategoryRoute(cat.name))}
                                     onMouseEnter={() => {
                                         if (window.innerWidth >= 768) { // Desktop only
                                             if (hoverTimeoutRef.current) {
@@ -530,7 +539,7 @@ const Header = () => {
                                                             key={sub.id || sub._id}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                navigate(`/category/${cat.name}/${sub.name}`);
+                                                                navigate(buildCategoryRoute(cat.name, sub.name));
                                                             }}
                                                             onMouseEnter={() => setHoveredSubcategory(sub.name)}
                                                             className={`px-4 py-2.5 text-sm font-medium transition-all cursor-pointer flex items-center justify-between group/sub ${hoveredSubcategory === sub.name
@@ -557,7 +566,7 @@ const Header = () => {
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                navigate(`/category/${cat.name}/${hoveredSubcategory || ''}`);
+                                                                navigate(buildCategoryRoute(cat.name, hoveredSubcategory));
                                                             }}
                                                             className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full transition-colors uppercase tracking-wide"
                                                         >

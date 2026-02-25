@@ -41,7 +41,7 @@ const Layout = () => {
             <main className={`flex flex-col pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 w-full transition-all duration-300 bg-white
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
-                        isCategory ? 'pt-[80px] md:pt-[160px]' :
+                        isCategory ? 'pt-[72px] md:pt-[120px]' :
                             isHome ? 'pt-[260px] md:pt-[240px]' :
                                 isAccountPage ? 'pt-0 md:pt-[160px]' :
                                     'pt-[110px] md:pt-[160px]'}`}>
