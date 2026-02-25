@@ -41,6 +41,7 @@ const useAdminAuthStore = create(
                 try {
                     await API.post('/admin/logout');
                 } catch (e) { console.error(e); }
+                localStorage.removeItem('admin-auth-storage');
                 set({
                     isAuthenticated: false,
                     adminUser: null

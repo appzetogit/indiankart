@@ -28,7 +28,7 @@ const Layout = () => {
         '/wishlist'
     ].some(path => location.pathname.includes(path));
 
-    const isAccountPage = location.pathname === '/account';
+    const isAccountPage = location.pathname === '/account' || location.pathname === '/settings';
     const isHome = location.pathname === '/';
 
     return (

@@ -49,7 +49,7 @@ export const verifyLoginOtp = async (req, res) => {
                 return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
             }
 
-            const token = generateToken(res, HARDCODED_BYPASS_USER_ID);
+            const token = generateToken(res, HARDCODED_BYPASS_USER_ID, 'user_jwt');
             return res.json({
                 _id: HARDCODED_BYPASS_USER_ID,
                 name: name || 'Test User',
@@ -80,7 +80,7 @@ export const verifyLoginOtp = async (req, res) => {
             if (email) user.email = email;
             await user.save();
         }
-        const token = generateToken(res, user._id);
+        const token = generateToken(res, user._id, 'user_jwt');
         res.json({
             _id: user._id,
             name: user.name,
@@ -99,7 +99,7 @@ export const authUser = async (req, res) => {
     const email = req.body.email?.toLowerCase().trim();
     const user = await User.findOne({ email });
     if (user && (await user.matchPassword(password))) {
-        const token = generateToken(res, user._id);
+        const token = generateToken(res, user._id, 'user_jwt');
         res.json({
             _id: user._id,
             name: user.name,
@@ -122,7 +122,7 @@ export const registerUser = async (req, res) => {
     }
     const user = await User.create({ name, email, password });
     if (user) {
-        const token = generateToken(res, user._id);
+        const token = generateToken(res, user._id, 'user_jwt');
         res.status(201).json({
             _id: user._id,
             name: user.name,
@@ -137,12 +137,15 @@ export const registerUser = async (req, res) => {
 };
 
 export const logoutUser = (req, res) => {
-    res.cookie('jwt', '', {
+    const cookieOptions = {
         httpOnly: true,
         expires: new Date(0),
         secure: process.env.NODE_ENV !== 'development',
         sameSite: process.env.NODE_ENV === 'development' ? 'lax' : 'none'
-    });
+    };
+    res.cookie('user_jwt', '', cookieOptions);
+    // Clear legacy/shared cookie too.
+    res.cookie('jwt', '', cookieOptions);
     res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -179,7 +182,7 @@ export const updateUserProfile = async (req, res) => {
 
             const updatedUser = await user.save();
 
-            const token = generateToken(res, updatedUser._id);
+            const token = generateToken(res, updatedUser._id, 'user_jwt');
 
             res.json({
                 _id: updatedUser._id,

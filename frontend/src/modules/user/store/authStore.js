@@ -31,6 +31,11 @@ export const useAuthStore = create(
 
                 try {
                     const { data } = await API.get('/auth/profile');
+                    if (data?.isAdmin || data?.role === 'admin' || data?.role === 'superadmin') {
+                        set({ user: null, isAuthenticated: false, loading: false });
+                        localStorage.removeItem('user-auth-storage');
+                        return;
+                    }
                     // Ensure token is preserved if it exists in data or state
                     set({ user: { ...data, token: storedToken }, isAuthenticated: true, loading: false });
                     get().registerFcmToken();
@@ -110,11 +115,13 @@ export const useAuthStore = create(
         try {
             await API.post('/auth/logout');
             set({ user: null, isAuthenticated: false });
+            localStorage.removeItem('user-auth-storage');
             useCartStore.getState().clearStore();
         } catch (error) {
             console.error('Logout failed', error);
             // Force client-side logout anyway
             set({ user: null, isAuthenticated: false });
+            localStorage.removeItem('user-auth-storage');
         }
     },
     

@@ -18,7 +18,7 @@ export const authAdmin = async (req, res) => {
     }
 
     if (adminQuery && (await adminQuery.matchPassword(password))) {
-        const token = generateToken(res, adminQuery._id);
+        const token = generateToken(res, adminQuery._id, 'admin_jwt');
         res.json({
             _id: adminQuery._id,
             name: adminQuery.name,
@@ -36,12 +36,15 @@ export const authAdmin = async (req, res) => {
 // @route   POST /api/admin/logout
 // @access  Public
 export const logoutAdmin = (req, res) => {
-    res.cookie('jwt', '', {
+    const cookieOptions = {
         httpOnly: true,
         expires: new Date(0),
         secure: process.env.NODE_ENV !== 'development',
         sameSite: process.env.NODE_ENV === 'development' ? 'lax' : 'none'
-    });
+    };
+    res.cookie('admin_jwt', '', cookieOptions);
+    // Clear legacy/shared cookie too.
+    res.cookie('jwt', '', cookieOptions);
     res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -76,7 +79,7 @@ export const updateAdminProfile = async (req, res) => {
 
             const updatedAdmin = await admin.save();
 
-            generateToken(res, updatedAdmin._id);
+            generateToken(res, updatedAdmin._id, 'admin_jwt');
 
             res.json({
                 _id: updatedAdmin._id,

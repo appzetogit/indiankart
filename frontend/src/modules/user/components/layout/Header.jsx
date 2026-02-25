@@ -61,11 +61,8 @@ const Header = () => {
         cat.active !== false &&
         activeCategoryIds.has(String(cat._id || cat.id))
     );
-    const fallbackActiveCategories = categories.filter((cat) => cat.active !== false).slice(0, 8);
-    // Use configured categories only when they are active; otherwise fallback to active categories.
-    const displayCategories = activeHeaderCategories.length > 0
-        ? activeHeaderCategories
-        : fallbackActiveCategories;
+    // Show only categories explicitly configured in Admin -> Header Settings.
+    const displayCategories = activeHeaderCategories;
     const shouldSpreadCategories = displayCategories.length >= 6;
 
 
@@ -448,7 +445,7 @@ const Header = () => {
             </div>
 
             {/* Category Navigation - Only on Homepage */}
-            {location.pathname === '/' && !categoriesLoading && (
+            {location.pathname === '/' && !categoriesLoading && !headerLoading && displayCategories.length > 0 && (
                 <div className="max-w-[1200px] mx-auto relative px-2">
                     <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-8 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
                         {displayCategories.map((cat, index) => {

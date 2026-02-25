@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../../services/api';
-import { useAuthStore } from '../store/authStore';
-import useAdminAuthStore from '../../admin/store/adminAuthStore';
 
 const MyOrders = () => {
     const navigate = useNavigate();
-    const { user } = useAuthStore();
-    const { adminUser } = useAdminAuthStore();
-    const currentUser = adminUser || user;
     
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);

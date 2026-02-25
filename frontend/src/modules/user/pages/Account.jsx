@@ -8,23 +8,24 @@ import {
 } from 'react-icons/md';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
-import useAdminAuthStore from '../../admin/store/adminAuthStore';
 import toast from 'react-hot-toast';
 
 const Account = () => {
     const navigate = useNavigate();
-    const { user, updateProfile, logout: userLogout } = useAuthStore();
-    const { adminUser, updateProfile: updateAdminProfile, logout: adminLogout } = useAdminAuthStore();
+    const { user, updateProfile, logout } = useAuthStore();
     const [isEditing, setIsEditing] = useState(false);
 
-    const currentUser = adminUser || user;
-    const isAdmin = !!adminUser;
+    const currentUser = user;
 
     const [formData, setFormData] = useState({
         name: '',
         mobile: '',
         email: '',
         gender: ''
+    });
+    const [passwordData, setPasswordData] = useState({
+        newPassword: '',
+        confirmPassword: ''
     });
 
     const mapProfileToFormData = (profile) => {
@@ -50,14 +51,30 @@ const Account = () => {
     }, [currentUser]);
 
     const handleSave = async () => {
+        if (passwordData.newPassword || passwordData.confirmPassword) {
+            if (passwordData.newPassword.length < 6) {
+                toast.error('New password must be at least 6 characters');
+                return;
+            }
+            if (passwordData.newPassword !== passwordData.confirmPassword) {
+                toast.error('Passwords do not match');
+                return;
+            }
+        }
+
         try {
-            const promise = isAdmin ? updateAdminProfile(formData) : updateProfile(formData);
+            const payload = {
+                ...formData,
+                ...(passwordData.newPassword ? { password: passwordData.newPassword } : {})
+            };
+            const promise = updateProfile(payload);
             await toast.promise(promise, {
                 loading: 'Updating profile...',
                 success: 'Profile updated successfully!',
                 error: (err) => `Update failed: ${err.message}`
             });
             setIsEditing(false);
+            setPasswordData({ newPassword: '', confirmPassword: '' });
         } catch (error) {
             console.error('Error saving profile:', error);
         }
@@ -65,6 +82,7 @@ const Account = () => {
 
     const handleCancel = () => {
         setIsEditing(false);
+        setPasswordData({ newPassword: '', confirmPassword: '' });
         if (currentUser) {
             setFormData(mapProfileToFormData(currentUser));
         }
@@ -102,10 +120,7 @@ const Account = () => {
             icon: <MdPerson className="text-[#2874f0]" size={32} />,
             label: 'Profile Settings',
             sublabel: 'Update your password, profile details and more',
-            // Since we are editing profile in sidebar, this could just prevent action or scroll to top? 
-            // Or maybe separate settings page. I'll make it trigger edit mode for now if no settings page.
-            path: '#',
-            action: () => setIsEditing(true)
+            path: '/settings'
         },
         {
             icon: <MdLocationOn className="text-[#2874f0]" size={32} />,
@@ -146,7 +161,7 @@ const Account = () => {
                             </div>
                             {!isEditing && (
                                 <button
-                                    onClick={() => setIsEditing(true)}
+                                    onClick={() => navigate('/settings')}
                                     className="text-[#2874f0] text-sm font-medium hover:underline"
                                 >
                                     Edit
@@ -203,6 +218,26 @@ const Account = () => {
                                         Cancel
                                     </button>
                                 </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1.5 font-medium">New Password</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:border-[#2874f0] focus:ring-1 focus:ring-[#2874f0] outline-none"
+                                        placeholder="Enter new password"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1.5 font-medium">Confirm New Password</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2.5 text-sm focus:border-[#2874f0] focus:ring-1 focus:ring-[#2874f0] outline-none"
+                                        placeholder="Confirm new password"
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}
@@ -212,7 +247,10 @@ const Account = () => {
                         {menuItems.map((item, index) => (
                             <div
                                 key={index}
-                                onClick={() => navigate(item.path)}
+                                onClick={() => {
+                                    if (item.action) item.action();
+                                    else if (item.path) navigate(item.path);
+                                }}
                                 className="flex items-center gap-4 px-4 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
                             >
                                 <div
@@ -234,7 +272,7 @@ const Account = () => {
                     <div className="p-4 border-t border-gray-100">
                         <button
                             onClick={() => {
-                                isAdmin ? adminLogout() : userLogout();
+                                logout();
                                 navigate('/');
                             }}
                             className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 font-medium text-sm hover:bg-red-100 rounded-md transition-colors"
@@ -269,7 +307,7 @@ const Account = () => {
                                 {currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}
                             </div>
                             <button
-                                onClick={() => setIsEditing(!isEditing)}
+                                onClick={() => navigate('/settings')}
                                 className="absolute -bottom-1 -right-1 bg-white text-black p-1 rounded-full shadow-md hover:bg-gray-200 transition"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
@@ -319,25 +357,47 @@ const Account = () => {
                         </div>
 
                         {isEditing && (
-                            <div className="flex gap-3 pt-2">
-                                <button
-                                    onClick={handleSave}
-                                    className="flex-1 bg-[#2874f0] text-white py-2.5 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors shadow-md"
-                                >
-                                    Save
-                                </button>
-                                <button
-                                    onClick={handleCancel}
-                                    className="flex-1 bg-transparent border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
-                                >
-                                    Cancel
-                                </button>
+                            <div className="space-y-3 pt-2">
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500 font-medium uppercase tracking-wider">New Password</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        className="w-full bg-white border border-[#2874f0] rounded-lg px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-[#2874f0] transition-colors shadow-sm"
+                                        placeholder="Enter new password"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs text-slate-500 font-medium uppercase tracking-wider">Confirm Password</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        className="w-full bg-white border border-[#2874f0] rounded-lg px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-[#2874f0] transition-colors shadow-sm"
+                                        placeholder="Confirm new password"
+                                    />
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={handleSave}
+                                        className="flex-1 bg-[#2874f0] text-white py-2.5 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors shadow-md"
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={handleCancel}
+                                        className="flex-1 bg-transparent border border-slate-300 text-slate-700 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
                         )}
 
                         <button
                             onClick={() => {
-                                isAdmin ? adminLogout() : userLogout();
+                                logout();
                                 navigate('/');
                             }}
                             className="mt-4 w-full flex items-center justify-center gap-2 py-3 text-red-500 font-medium text-sm hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200"
