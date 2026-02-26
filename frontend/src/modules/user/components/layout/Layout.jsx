@@ -30,6 +30,15 @@ const Layout = () => {
 
     const isAccountPage = location.pathname === '/account';
     const isHome = location.pathname === '/';
+    const showBottomNav =
+        !location.pathname.includes('/product/') &&
+        !location.pathname.includes('/checkout') &&
+        !location.pathname.includes('/login') &&
+        !location.pathname.includes('/signup') &&
+        !location.pathname.includes('/track-order') &&
+        !location.pathname.includes('/category/') &&
+        !location.pathname.includes('/play');
+    const showFooter = !isCategory;
 
     return (
         <div className="w-full min-h-screen flex flex-col relative bg-background-light">
@@ -38,7 +47,7 @@ const Layout = () => {
                     <Header />
                 </div>
             )}
-            <main className={`flex flex-col pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 w-full transition-all duration-300 bg-white
+            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 bg-white
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
@@ -58,17 +67,8 @@ const Layout = () => {
                     </motion.div>
                 </AnimatePresence>
             </main>
-            {
-                !location.pathname.includes('/product/') &&
-
-                !location.pathname.includes('/checkout') &&
-                !location.pathname.includes('/login') &&
-                !location.pathname.includes('/signup') &&
-                !location.pathname.includes('/track-order') &&
-                !location.pathname.includes('/category/') &&
-                !location.pathname.includes('/play') && <BottomNav />
-            }
-            {!isCategory && (
+            {showBottomNav && <BottomNav />}
+            {showFooter && (
                 <Footer />
             )}
         </div >
