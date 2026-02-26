@@ -159,6 +159,51 @@ const CategoryPage = () => {
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
 
+    const formatPrice = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
+
+    const getDiscountPercent = (product) => {
+        if (product?.discount) {
+            const parsed = parseInt(String(product.discount).replace(/\D/g, ''), 10);
+            if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+        }
+        const original = Number(product?.originalPrice || 0);
+        const current = Number(product?.price || 0);
+        if (original > current && current > 0) {
+            return Math.round(((original - current) / original) * 100);
+        }
+        return 0;
+    };
+
+    const getProductHighlights = (product) => {
+        const bullets = [];
+
+        if (Array.isArray(product?.highlights)) {
+            product.highlights.forEach((section) => {
+                if (Array.isArray(section?.points)) {
+                    section.points.forEach((point) => {
+                        if (point && String(point).trim()) bullets.push(String(point).trim());
+                    });
+                }
+            });
+        }
+
+        if (bullets.length === 0 && Array.isArray(product?.specifications)) {
+            product.specifications.forEach((group) => {
+                if (Array.isArray(group?.specs)) {
+                    group.specs.forEach((spec) => {
+                        if (spec?.key && spec?.value) bullets.push(`${spec.key}: ${spec.value}`);
+                    });
+                }
+            });
+        }
+
+        if (bullets.length === 0 && product?.warranty?.summary) {
+            bullets.push(product.warranty.summary);
+        }
+
+        return bullets.slice(0, 6);
+    };
+
     if (productsLoading || categoriesLoading) {
         return <div className="p-10 text-center">Loading products...</div>;
     }
@@ -171,6 +216,7 @@ const CategoryPage = () => {
         breadcrumbs.length === 1 &&
         Array.isArray(categoryData.subCategories) &&
         categoryData.subCategories.length > 0;
+    const isSubCategoryProductsView = breadcrumbs.length > 1;
 
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
@@ -436,6 +482,8 @@ const CategoryPage = () => {
                                     subCategories={categoryData.subCategories}
                                     categoryName={breadcrumbs[0]?.name}
                                     smallBanners={breadcrumbs[0]?.smallBanners || categoryData.smallBanners || []}
+                                    secondaryBannerTitle={breadcrumbs[0]?.secondaryBannerTitle || categoryData.secondaryBannerTitle || ''}
+                                    secondaryBanners={breadcrumbs[0]?.secondaryBanners || categoryData.secondaryBanners || []}
                                 />
                             </div>
                         ) : (
@@ -451,6 +499,8 @@ const CategoryPage = () => {
                                         subCategories={categoryData.subCategories}
                                         categoryName={breadcrumbs[0]?.name}
                                         smallBanners={breadcrumbs[0]?.smallBanners || []}
+                                        secondaryBannerTitle={breadcrumbs[0]?.secondaryBannerTitle || ''}
+                                        secondaryBanners={breadcrumbs[0]?.secondaryBanners || []}
                                     />
                             </div>
                                 )}
@@ -469,13 +519,93 @@ const CategoryPage = () => {
                             </div>
 
                             {sortedProducts.length > 0 ? (
-                                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                                    {sortedProducts.map((product) => (
-                                        <div key={product.id} className="h-full">
-                                            <ProductCard product={product} />
-                                        </div>
-                                    ))}
-                                </div>
+                                isSubCategoryProductsView ? (
+                                    <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                                        {sortedProducts.map((product) => {
+                                            const productId = product.id || product._id;
+                                            const highlights = getProductHighlights(product);
+                                            const discountPercent = getDiscountPercent(product);
+
+                                            return (
+                                                <div
+                                                    key={productId}
+                                                    className="bg-white hover:bg-[#f8fbff] transition-colors"
+                                                >
+                                                    <div className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-[200px_1fr_300px] gap-4 md:gap-6">
+                                                        <div className="flex flex-col items-start">
+                                                            <div
+                                                                className="w-full max-w-[170px] mx-auto md:mx-0 aspect-square bg-white border border-gray-100 rounded-lg p-2 cursor-pointer"
+                                                                onClick={() => navigate(`/product/${productId}`)}
+                                                            >
+                                                                <img
+                                                                    src={product.images?.[0] || product.image}
+                                                                    alt={product.name}
+                                                                    className="w-full h-full object-contain"
+                                                                />
+                                                            </div>
+                                                            <label className="mt-3 text-xs text-gray-700 flex items-center gap-2 select-none">
+                                                                <input type="checkbox" className="rounded border-gray-300" />
+                                                                <span>Add to Compare</span>
+                                                            </label>
+                                                        </div>
+
+                                                        <div>
+                                                            <h3
+                                                                onClick={() => navigate(`/product/${productId}`)}
+                                                                className="text-lg font-semibold text-[#2874f0] cursor-pointer hover:underline"
+                                                            >
+                                                                {product.name}
+                                                            </h3>
+                                                            {Number(product.rating || 0) > 0 && (
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    <span className="bg-green-700 text-white text-xs font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1">
+                                                                        {(Number(product.rating || 0)).toFixed(1)} <span className="text-[10px]">★</span>
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {highlights.length > 0 && (
+                                                                <ul className="mt-3 space-y-1.5">
+                                                                    {highlights.map((point, idx) => (
+                                                                        <li key={`${productId}-hl-${idx}`} className="text-[15px] text-gray-800 flex gap-2">
+                                                                            <span className="text-gray-400">•</span>
+                                                                            <span>{point}</span>
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="md:pl-2">
+                                                            <div className="text-3xl md:text-[42px] font-semibold text-[#212121] tracking-tight leading-none">
+                                                                {formatPrice(product.price)}
+                                                            </div>
+                                                            {Number(product.originalPrice) > Number(product.price) && (
+                                                                <div className="mt-2 flex items-center gap-2">
+                                                                    <span className="text-base text-gray-500 line-through">{formatPrice(product.originalPrice)}</span>
+                                                                    {discountPercent > 0 && (
+                                                                        <span className="text-lg text-green-700 font-medium">{discountPercent}% off</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="mt-2 text-lg md:text-[20px] text-gray-900 font-medium leading-tight">
+                                                                Upto <span className="font-semibold">{formatPrice(Math.max(1000, Math.round(Number(product.price || 0) * 0.75)))}</span> Off on Exchange
+                                                            </div>
+                                                            <div className="text-xl md:text-[32px] text-green-700 font-medium mt-1">Bank Offer</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
+                                        {sortedProducts.map((product) => (
+                                            <div key={product.id} className="h-full">
+                                                <ProductCard product={product} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-24 text-center">
                                     <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6">

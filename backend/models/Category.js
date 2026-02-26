@@ -12,6 +12,13 @@ const categorySchema = mongoose.Schema({
             alt: { type: String, default: '' }
         }
     ],
+    secondaryBannerTitle: { type: String, default: '' },
+    secondaryBanners: [
+        {
+            image: { type: String, required: true },
+            alt: { type: String, default: '' }
+        }
+    ],
     active: { type: Boolean, default: true },
     // subCategories removed - now using separate SubCategory model
 }, {

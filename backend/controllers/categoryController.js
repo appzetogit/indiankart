@@ -91,6 +91,8 @@ export const createCategory = async (req, res) => {
         let icon = req.body.icon;
         let bannerImage = req.body.bannerImage;
         const smallBanners = normalizeSmallBanners(req.body.smallBanners, normalizedName);
+        const secondaryBanners = normalizeSmallBanners(req.body.secondaryBanners, normalizedName);
+        const secondaryBannerTitle = String(req.body.secondaryBannerTitle || '').trim();
 
         if (req.files) {
             if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -120,6 +122,19 @@ export const createCategory = async (req, res) => {
                     });
                 }
             }
+            if (Array.isArray(req.files.secondaryBanners)) {
+                for (const file of req.files.secondaryBanners) {
+                    if (!file?.buffer) continue;
+                    const uploadedSecondaryBanner = await uploadBufferToCloudinary(
+                        file.buffer,
+                        { folder: 'ecom_uploads/categories/secondary-banners' }
+                    );
+                    secondaryBanners.push({
+                        image: uploadedSecondaryBanner.secure_url,
+                        alt: normalizedName
+                    });
+                }
+            }
         }
         
         const category = new Category({
@@ -129,6 +144,8 @@ export const createCategory = async (req, res) => {
             bannerImage,
             bannerAlt,
             smallBanners: smallBanners.slice(0, 20),
+            secondaryBannerTitle,
+            secondaryBanners: secondaryBanners.slice(0, 30),
             active: req.body.active !== undefined ? req.body.active : true
         });
 
@@ -172,6 +189,11 @@ export const updateCategory = async (req, res) => {
                 req.body.smallBanners,
                 requestedName || category.name
             );
+            const secondaryBanners = normalizeSmallBanners(
+                req.body.secondaryBanners,
+                requestedName || category.name
+            );
+            const secondaryBannerTitle = String(req.body.secondaryBannerTitle || '').trim();
 
             if (req.files) {
                 if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -201,6 +223,19 @@ export const updateCategory = async (req, res) => {
                         });
                     }
                 }
+                if (Array.isArray(req.files.secondaryBanners)) {
+                    for (const file of req.files.secondaryBanners) {
+                        if (!file?.buffer) continue;
+                        const uploadedSecondaryBanner = await uploadBufferToCloudinary(
+                            file.buffer,
+                            { folder: 'ecom_uploads/categories/secondary-banners' }
+                        );
+                        secondaryBanners.push({
+                            image: uploadedSecondaryBanner.secure_url,
+                            alt: requestedName || category.name
+                        });
+                    }
+                }
             }
 
             category.name = requestedName || category.name;
@@ -209,6 +244,10 @@ export const updateCategory = async (req, res) => {
             category.bannerAlt = req.body.bannerAlt || category.bannerAlt;
             if (req.body.smallBanners !== undefined || req.files?.smallBanners) {
                 category.smallBanners = smallBanners.slice(0, 20);
+            }
+            category.secondaryBannerTitle = secondaryBannerTitle;
+            if (req.body.secondaryBanners !== undefined || req.files?.secondaryBanners) {
+                category.secondaryBanners = secondaryBanners.slice(0, 30);
             }
             if (req.body.active !== undefined) category.active = req.body.active;
 

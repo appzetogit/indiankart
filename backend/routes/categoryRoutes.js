@@ -17,7 +17,8 @@ router.route('/')
         upload.fields([
             { name: 'icon', maxCount: 1 },
             { name: 'bannerImage', maxCount: 1 },
-            { name: 'smallBanners', maxCount: 20 }
+            { name: 'smallBanners', maxCount: 20 },
+            { name: 'secondaryBanners', maxCount: 30 }
         ]),
         createCategory
     );
@@ -29,7 +30,8 @@ router.route('/:id')
         upload.fields([
             { name: 'icon', maxCount: 1 },
             { name: 'bannerImage', maxCount: 1 },
-            { name: 'smallBanners', maxCount: 20 }
+            { name: 'smallBanners', maxCount: 20 },
+            { name: 'secondaryBanners', maxCount: 30 }
         ]),
         updateCategory
     )

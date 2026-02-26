@@ -7,7 +7,13 @@ const buildSubCategoryRoute = (categoryName, subCategoryName) => {
     return `/category/${categorySegment}/${subCategorySegment}`;
 };
 
-const SubCategoryList = ({ subCategories, categoryName, smallBanners = [] }) => {
+const SubCategoryList = ({
+    subCategories,
+    categoryName,
+    smallBanners = [],
+    secondaryBannerTitle = '',
+    secondaryBanners = []
+}) => {
     if (!categoryName) return null;
     const bannerRailRef = useRef(null);
 
@@ -41,6 +47,16 @@ const SubCategoryList = ({ subCategories, categoryName, smallBanners = [] }) => 
             })
             .filter(Boolean);
     }, [smallBanners, categoryName, primaryTargetName]);
+
+    const normalizedSecondaryBanners = useMemo(() => {
+        return (Array.isArray(secondaryBanners) ? secondaryBanners : [])
+            .map((item) => {
+                if (typeof item === 'string') return { image: item, title: secondaryBannerTitle || categoryName };
+                if (item?.image) return { image: item.image, title: item.title || secondaryBannerTitle || categoryName };
+                return null;
+            })
+            .filter(Boolean);
+    }, [secondaryBanners, secondaryBannerTitle, categoryName]);
 
     useEffect(() => {
         if (!bannerRailRef.current || normalizedBannerCards.length <= 1) return undefined;
@@ -120,6 +136,31 @@ const SubCategoryList = ({ subCategories, categoryName, smallBanners = [] }) => 
                 </div>
                 )}
 
+                {normalizedSecondaryBanners.length > 0 && (
+                    <div className="px-1 md:px-2 mt-8 md:mt-10">
+                        <h2 className="text-3xl md:text-6xl font-black text-black mb-4 md:mb-6">
+                            {secondaryBannerTitle || 'Launch of the Day'}
+                        </h2>
+                        <div className="space-y-3 md:space-y-4">
+                            {normalizedSecondaryBanners.map((banner, index) => (
+                                <div
+                                    key={`${banner.image}-${index}`}
+                                    className="w-full rounded-2xl overflow-hidden border border-gray-200"
+                                >
+                                    <img
+                                        src={banner.image}
+                                        alt={banner.title}
+                                        className="w-full h-[180px] md:h-[420px] object-cover"
+                                        onError={(e) => {
+                                            e.currentTarget.onerror = null;
+                                            e.currentTarget.src = '';
+                                        }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

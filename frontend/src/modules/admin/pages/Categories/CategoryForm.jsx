@@ -12,7 +12,10 @@ const CategoryForm = ({ category, onClose }) => {
         active: true,
         file: null,
         smallBanners: [],
-        newSmallBannerUploads: []
+        newSmallBannerUploads: [],
+        secondaryBannerTitle: '',
+        secondaryBanners: [],
+        newSecondaryBannerUploads: []
     });
 
     const extractBannerImage = (banner) => {
@@ -33,7 +36,12 @@ const CategoryForm = ({ category, onClose }) => {
                 active: category.active,
                 file: null,
                 smallBanners: existingSmallBanners,
-                newSmallBannerUploads: []
+                newSmallBannerUploads: [],
+                secondaryBannerTitle: category.secondaryBannerTitle || '',
+                secondaryBanners: Array.isArray(category.secondaryBanners)
+                    ? category.secondaryBanners.map(extractBannerImage).filter(Boolean)
+                    : [],
+                newSecondaryBannerUploads: []
             });
         } else {
             setFormData({
@@ -42,7 +50,10 @@ const CategoryForm = ({ category, onClose }) => {
                 active: true,
                 file: null,
                 smallBanners: [],
-                newSmallBannerUploads: []
+                newSmallBannerUploads: [],
+                secondaryBannerTitle: '',
+                secondaryBanners: [],
+                newSecondaryBannerUploads: []
             });
         }
     }, [category]);
@@ -65,10 +76,21 @@ const CategoryForm = ({ category, onClose }) => {
             alt: formData.name
         }));
         data.append('smallBanners', JSON.stringify(retainedSmallBanners));
+        data.append('secondaryBannerTitle', formData.secondaryBannerTitle || '');
+        const retainedSecondaryBanners = formData.secondaryBanners.map((image) => ({
+            image,
+            alt: formData.name
+        }));
+        data.append('secondaryBanners', JSON.stringify(retainedSecondaryBanners));
 
         formData.newSmallBannerUploads.forEach((item) => {
             if (item?.file) {
                 data.append('smallBanners', item.file);
+            }
+        });
+        formData.newSecondaryBannerUploads.forEach((item) => {
+            if (item?.file) {
+                data.append('secondaryBanners', item.file);
             }
         });
 
@@ -137,6 +159,44 @@ const CategoryForm = ({ category, onClose }) => {
             return {
                 ...prev,
                 newSmallBannerUploads: prev.newSmallBannerUploads.filter((item) => item.preview !== previewToRemove)
+            };
+        });
+    };
+
+    const handleSecondaryBannersChange = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const uploads = files.map((file) => ({
+            file,
+            preview: URL.createObjectURL(file)
+        }));
+
+        setFormData((prev) => ({
+            ...prev,
+            newSecondaryBannerUploads: [...prev.newSecondaryBannerUploads, ...uploads]
+        }));
+
+        e.target.value = '';
+    };
+
+    const removeExistingSecondaryBanner = (imageToRemove) => {
+        setFormData((prev) => ({
+            ...prev,
+            secondaryBanners: prev.secondaryBanners.filter((image) => image !== imageToRemove)
+        }));
+    };
+
+    const removeNewSecondaryBannerUpload = (previewToRemove) => {
+        setFormData((prev) => {
+            const itemToRemove = prev.newSecondaryBannerUploads.find((item) => item.preview === previewToRemove);
+            if (itemToRemove?.preview) {
+                URL.revokeObjectURL(itemToRemove.preview);
+            }
+
+            return {
+                ...prev,
+                newSecondaryBannerUploads: prev.newSecondaryBannerUploads.filter((item) => item.preview !== previewToRemove)
             };
         });
     };
@@ -247,6 +307,81 @@ const CategoryForm = ({ category, onClose }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => removeNewSmallBannerUpload(item.preview)}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                                                    title="Remove banner"
+                                                >
+                                                    <MdDelete size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-lg p-3 md:p-4 bg-gray-50/60">
+                        <div className="mb-2 md:mb-3">
+                            <h3 className="text-sm md:text-base font-bold text-gray-800">Secondary Banner Section</h3>
+                            <p className="text-[11px] md:text-xs text-gray-500 mt-0.5">
+                                Shown after category icons on the user category page.
+                            </p>
+                        </div>
+
+                        <div className="mb-3">
+                            <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1.5">
+                                Section Title
+                            </label>
+                            <input
+                                type="text"
+                                name="secondaryBannerTitle"
+                                value={formData.secondaryBannerTitle}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
+                                placeholder="e.g. Launch of the Day"
+                            />
+                        </div>
+
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleSecondaryBannersChange}
+                            className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
+                        />
+
+                        <div className="mt-3 space-y-3">
+                            {formData.secondaryBanners.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-2">Saved Secondary Banners</p>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {formData.secondaryBanners.map((image) => (
+                                            <div key={image} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                                <img src={image} alt="Secondary banner" className="w-full h-28 object-cover rounded-md" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeExistingSecondaryBanner(image)}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                                                    title="Remove banner"
+                                                >
+                                                    <MdDelete size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.newSecondaryBannerUploads.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-2">New Secondary Uploads</p>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {formData.newSecondaryBannerUploads.map((item) => (
+                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                                <img src={item.preview} alt="New secondary banner preview" className="w-full h-28 object-cover rounded-md" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeNewSecondaryBannerUpload(item.preview)}
                                                     className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
                                                     title="Remove banner"
                                                 >
