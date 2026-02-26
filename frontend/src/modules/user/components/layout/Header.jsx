@@ -45,9 +45,25 @@ const Header = () => {
     const location = useLocation();
     const { categories, loading: categoriesLoading } = useCategories();
     const { headerCategories, fetchHeaderConfig, isLoading: headerLoading } = useHeaderStore();
+    const [headerLogo, setHeaderLogo] = useState(logo);
 
     useEffect(() => {
         fetchHeaderConfig();
+    }, []);
+
+    useEffect(() => {
+        const fetchHeaderLogo = async () => {
+            try {
+                const { data } = await API.get('/settings');
+                if (data?.logoUrl) {
+                    setHeaderLogo(data.logoUrl);
+                }
+            } catch (error) {
+                console.error('Failed to fetch header logo:', error);
+            }
+        };
+
+        fetchHeaderLogo();
     }, []);
 
     // Always hide inactive categories on homepage, including admin-pinned header categories.
@@ -204,7 +220,7 @@ const Header = () => {
                             className="flex items-center md:hidden -my-4 cursor-pointer shrink-0"
                             onClick={() => navigate('/')}
                         >
-                            <img src="/indiankart-logo.png" alt="IndianKart" className="h-32 object-contain" />
+                            <img src={headerLogo} alt="IndianKart" className="h-32 object-contain" />
                         </div>
                     )}
 
@@ -213,7 +229,7 @@ const Header = () => {
                         className="hidden md:flex flex-col cursor-pointer"
                         onClick={() => navigate('/')}
                     >
-                        <img src="/indiankart-logo.png" alt="IndianKart" className="h-[70px] lg:h-[100px] object-contain" />
+                        <img src={headerLogo} alt="IndianKart" className="h-[70px] lg:h-[100px] object-contain" />
                     </div>
 
                     {/* Mobile Header Actions (Seller + Language) - Only on Homepage */}
