@@ -5,6 +5,38 @@ import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
 
+const normalizeSmallBanners = (rawValue, fallbackAlt = '') => {
+    if (!rawValue) return [];
+
+    let parsed = rawValue;
+    if (typeof rawValue === 'string') {
+        try {
+            parsed = JSON.parse(rawValue);
+        } catch {
+            parsed = [];
+        }
+    }
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+        .map((item) => {
+            if (typeof item === 'string') {
+                return { image: item, alt: fallbackAlt };
+            }
+
+            if (item && typeof item === 'object' && item.image) {
+                return {
+                    image: item.image,
+                    alt: item.alt || fallbackAlt
+                };
+            }
+
+            return null;
+        })
+        .filter(Boolean);
+};
+
 // @desc    Fetch all categories
 // @route   GET /api/categories
 // @access  Public
@@ -58,6 +90,7 @@ export const createCategory = async (req, res) => {
 
         let icon = req.body.icon;
         let bannerImage = req.body.bannerImage;
+        const smallBanners = normalizeSmallBanners(req.body.smallBanners, normalizedName);
 
         if (req.files) {
             if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -74,6 +107,19 @@ export const createCategory = async (req, res) => {
                 );
                 bannerImage = uploadedBanner.secure_url;
             }
+            if (Array.isArray(req.files.smallBanners)) {
+                for (const file of req.files.smallBanners) {
+                    if (!file?.buffer) continue;
+                    const uploadedSmallBanner = await uploadBufferToCloudinary(
+                        file.buffer,
+                        { folder: 'ecom_uploads/categories/small-banners' }
+                    );
+                    smallBanners.push({
+                        image: uploadedSmallBanner.secure_url,
+                        alt: normalizedName
+                    });
+                }
+            }
         }
         
         const category = new Category({
@@ -82,6 +128,7 @@ export const createCategory = async (req, res) => {
             icon,
             bannerImage,
             bannerAlt,
+            smallBanners: smallBanners.slice(0, 20),
             active: req.body.active !== undefined ? req.body.active : true
         });
 
@@ -121,6 +168,10 @@ export const updateCategory = async (req, res) => {
 
             let icon = req.body.icon;
             let bannerImage = req.body.bannerImage;
+            const smallBanners = normalizeSmallBanners(
+                req.body.smallBanners,
+                requestedName || category.name
+            );
 
             if (req.files) {
                 if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -137,12 +188,28 @@ export const updateCategory = async (req, res) => {
                     );
                     bannerImage = uploadedBanner.secure_url;
                 }
+                if (Array.isArray(req.files.smallBanners)) {
+                    for (const file of req.files.smallBanners) {
+                        if (!file?.buffer) continue;
+                        const uploadedSmallBanner = await uploadBufferToCloudinary(
+                            file.buffer,
+                            { folder: 'ecom_uploads/categories/small-banners' }
+                        );
+                        smallBanners.push({
+                            image: uploadedSmallBanner.secure_url,
+                            alt: requestedName || category.name
+                        });
+                    }
+                }
             }
 
             category.name = requestedName || category.name;
             if (icon) category.icon = icon;
             if (bannerImage) category.bannerImage = bannerImage;
             category.bannerAlt = req.body.bannerAlt || category.bannerAlt;
+            if (req.body.smallBanners !== undefined || req.files?.smallBanners) {
+                category.smallBanners = smallBanners.slice(0, 20);
+            }
             if (req.body.active !== undefined) category.active = req.body.active;
 
             const updatedCategory = await category.save();

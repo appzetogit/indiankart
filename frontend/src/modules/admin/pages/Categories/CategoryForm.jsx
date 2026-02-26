@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdClose } from 'react-icons/md';
+import { MdClose, MdDelete } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 
@@ -10,23 +10,39 @@ const CategoryForm = ({ category, onClose }) => {
         name: '',
         image: '',
         active: true,
-        file: null
+        file: null,
+        smallBanners: [],
+        newSmallBannerUploads: []
     });
+
+    const extractBannerImage = (banner) => {
+        if (!banner) return '';
+        if (typeof banner === 'string') return banner;
+        return banner.image || '';
+    };
 
     useEffect(() => {
         if (category?.id) {
+            const existingSmallBanners = Array.isArray(category.smallBanners)
+                ? category.smallBanners.map(extractBannerImage).filter(Boolean)
+                : [];
+
             setFormData({
                 name: category.name,
                 image: category.icon || category.image || '',
                 active: category.active,
-                file: null
+                file: null,
+                smallBanners: existingSmallBanners,
+                newSmallBannerUploads: []
             });
         } else {
             setFormData({
                 name: '',
                 image: '',
                 active: true,
-                file: null
+                file: null,
+                smallBanners: [],
+                newSmallBannerUploads: []
             });
         }
     }, [category]);
@@ -43,6 +59,18 @@ const CategoryForm = ({ category, onClose }) => {
         } else if (formData.image) {
             data.append('icon', formData.image);
         }
+
+        const retainedSmallBanners = formData.smallBanners.map((image) => ({
+            image,
+            alt: formData.name
+        }));
+        data.append('smallBanners', JSON.stringify(retainedSmallBanners));
+
+        formData.newSmallBannerUploads.forEach((item) => {
+            if (item?.file) {
+                data.append('smallBanners', item.file);
+            }
+        });
 
         try {
             if (category?.id) {
@@ -75,10 +103,48 @@ const CategoryForm = ({ category, onClose }) => {
         }
     };
 
+    const handleSmallBannersChange = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        const uploads = files.map((file) => ({
+            file,
+            preview: URL.createObjectURL(file)
+        }));
+
+        setFormData((prev) => ({
+            ...prev,
+            newSmallBannerUploads: [...prev.newSmallBannerUploads, ...uploads]
+        }));
+
+        e.target.value = '';
+    };
+
+    const removeExistingSmallBanner = (imageToRemove) => {
+        setFormData((prev) => ({
+            ...prev,
+            smallBanners: prev.smallBanners.filter((image) => image !== imageToRemove)
+        }));
+    };
+
+    const removeNewSmallBannerUpload = (previewToRemove) => {
+        setFormData((prev) => {
+            const itemToRemove = prev.newSmallBannerUploads.find((item) => item.preview === previewToRemove);
+            if (itemToRemove?.preview) {
+                URL.revokeObjectURL(itemToRemove.preview);
+            }
+
+            return {
+                ...prev,
+                newSmallBannerUploads: prev.newSmallBannerUploads.filter((item) => item.preview !== previewToRemove)
+            };
+        });
+    };
+
     return (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-3 md:p-6 bg-black/10 backdrop-blur-[1px]">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200">
-                <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200 max-h-[92vh] flex flex-col overflow-hidden">
+                <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100 shrink-0">
                     <h2 className="text-lg md:text-xl font-bold text-gray-800">
                         {category ? 'Edit Category' : 'Add New Category'}
                     </h2>
@@ -91,7 +157,7 @@ const CategoryForm = ({ category, onClose }) => {
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-3 md:p-4 space-y-3 md:space-y-4">
+                <form onSubmit={handleSubmit} className="p-3 md:p-4 space-y-3 md:space-y-4 overflow-y-auto">
                     <div>
                         <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
                             Category Name *
@@ -133,6 +199,67 @@ const CategoryForm = ({ category, onClose }) => {
                         )}
                     </div>
 
+                    <div className="border border-gray-200 rounded-lg p-3 md:p-4 bg-gray-50/60">
+                        <div className="mb-2 md:mb-3">
+                            <h3 className="text-sm md:text-base font-bold text-gray-800">Category Small Banners</h3>
+                            <p className="text-[11px] md:text-xs text-gray-500 mt-0.5">
+                                These banners are shown on the category landing page as horizontal cards.
+                            </p>
+                        </div>
+
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleSmallBannersChange}
+                            className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
+                        />
+
+                        <div className="mt-3 space-y-3">
+                            {formData.smallBanners.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-2">Saved Banners</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {formData.smallBanners.map((image) => (
+                                            <div key={image} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                                <img src={image} alt="Small banner" className="w-full h-20 object-cover rounded-md" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeExistingSmallBanner(image)}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                                                    title="Remove banner"
+                                                >
+                                                    <MdDelete size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.newSmallBannerUploads.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-gray-700 mb-2">New Uploads</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {formData.newSmallBannerUploads.map((item) => (
+                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                                <img src={item.preview} alt="New banner preview" className="w-full h-20 object-cover rounded-md" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeNewSmallBannerUpload(item.preview)}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
+                                                    title="Remove banner"
+                                                >
+                                                    <MdDelete size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                     <div className="flex items-center gap-2 md:gap-3">
                         <input
                             type="checkbox"
@@ -147,7 +274,7 @@ const CategoryForm = ({ category, onClose }) => {
                         </label>
                     </div>
 
-                    <div className="flex gap-2 md:gap-3 pt-1 md:pt-2">
+                    <div className="flex gap-2 md:gap-3 pt-1 md:pt-2 sticky bottom-0 bg-white pb-1">
                         <button
                             type="button"
                             onClick={onClose}

@@ -190,8 +190,9 @@ export const useProduct = (id) => {
     return { product, loading, error };
 };
 
-export const useCategories = () => {
-    const initialCategories = readCache('categories') || [];
+export const useCategories = (options = {}) => {
+    const { forceRefresh = false } = options;
+    const initialCategories = forceRefresh ? [] : (readCache('categories') || []);
     const [categories, setCategories] = useState(initialCategories);
     const [loading, setLoading] = useState(initialCategories.length === 0);
     const [error, setError] = useState(null);
@@ -201,10 +202,16 @@ export const useCategories = () => {
 
         const fetchCategories = async () => {
             try {
-                const data = await getOrFetch('categories', async () => {
-                    const { data } = await API.get('/categories');
-                    return data;
-                });
+                const data = forceRefresh
+                    ? await (async () => {
+                        const { data } = await API.get('/categories');
+                        writeCache('categories', data);
+                        return data;
+                    })()
+                    : await getOrFetch('categories', async () => {
+                        const { data } = await API.get('/categories');
+                        return data;
+                    });
 
                 if (!active) return;
                 setCategories(data);
@@ -222,7 +229,7 @@ export const useCategories = () => {
         return () => {
             active = false;
         };
-    }, []);
+    }, [forceRefresh]);
 
     return { categories, loading, error };
 };

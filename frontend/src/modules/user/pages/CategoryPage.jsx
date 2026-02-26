@@ -3,10 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack, MdExpandMore } from 'react-icons/md';
 import { useProducts, useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
-import CategoryBanner from '../components/category/CategoryBanner';
 import SubCategoryList from '../components/category/SubCategoryList';
-import CategoryDeals from '../components/category/CategoryDeals';
-import CategoryScrollDeals from '../components/category/CategoryScrollDeals';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
 
@@ -14,7 +11,7 @@ const CategoryPage = () => {
     const navigate = useNavigate();
     const { categoryName, "*": subPath } = useParams();
     const { products, loading: productsLoading } = useProducts();
-    const { categories, loading: categoriesLoading } = useCategories();
+    const { categories, loading: categoriesLoading } = useCategories({ forceRefresh: true });
 
     const [categoryData, setCategoryData] = useState(null);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -170,9 +167,15 @@ const CategoryPage = () => {
         return <div className="p-10 text-center">Category not found</div>;
     }
 
+    const isSubCategoryLandingView =
+        breadcrumbs.length === 1 &&
+        Array.isArray(categoryData.subCategories) &&
+        categoryData.subCategories.length > 0;
+
     return (
-        <div className="bg-[#f1f3f6] min-h-screen pb-36 md:pb-10">
+        <div className="bg-white min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
+            {!isSubCategoryLandingView && (
             <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[116px] z-40">
                 <div className="max-w-[1440px] mx-auto px-4 pt-3 pb-3 md:pt-3 md:pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-3 md:gap-6">
@@ -276,12 +279,14 @@ const CategoryPage = () => {
                     </div>
                 </div>
             </div>
+            )}
 
             <div className="max-w-[1440px] mx-auto md:px-4 pt-1 pb-4 md:py-4 min-h-[calc(100vh-160px)] md:min-h-[calc(100vh-144px)] flex flex-col">
                 <div className="flex flex-col lg:flex-row gap-4 h-full relative">
 
                     {/* LEFT SIDEBAR (Desktop) */}
-                    <aside className="hidden lg:block w-[280px] shrink-0 h-full overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[116px]">
+                    {!isSubCategoryLandingView && (
+                        <aside className="hidden lg:block w-[280px] shrink-0 h-full overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[116px]">
                         <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0 z-10">
                             <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Filters</h3>
                             <button
@@ -420,23 +425,38 @@ const CategoryPage = () => {
                                 </div>
                             </div>
                         </div>
-                    </aside>
+                        </aside>
+                    )}
 
                     {/* MAIN CONTENT AREA */}
-                    <main className="flex-1 min-w-0 h-full overflow-y-auto no-scrollbar md:pr-2">
-                        {/* Highlights / Subcategories */}
-                        {categoryData.subCategories?.length > 0 && (
+                    <main className={`flex-1 min-w-0 h-full overflow-y-auto no-scrollbar ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
+                        {isSubCategoryLandingView ? (
+                            <div className="md:rounded-lg md:overflow-hidden">
+                                <SubCategoryList
+                                    subCategories={categoryData.subCategories}
+                                    categoryName={breadcrumbs[0]?.name}
+                                    smallBanners={breadcrumbs[0]?.smallBanners || categoryData.smallBanners || []}
+                                />
+                            </div>
+                        ) : (
+                            <>
+                                {/* Highlights / Subcategories */}
+                                {categoryData.subCategories?.length > 0 && (
                             <div className="bg-white md:rounded-lg md:shadow-sm border border-gray-100 mb-4">
                                 <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
                                     <h2 className="text-[13px] font-black text-gray-900 uppercase tracking-[2px]">Shop by Department</h2>
                                     <span className="material-icons text-gray-300">chevron_right</span>
                                 </div>
-                                <SubCategoryList subCategories={categoryData.subCategories} />
+                                    <SubCategoryList
+                                        subCategories={categoryData.subCategories}
+                                        categoryName={breadcrumbs[0]?.name}
+                                        smallBanners={breadcrumbs[0]?.smallBanners || []}
+                                    />
                             </div>
-                        )}
+                                )}
 
-                        {/* Product Grid Area */}
-                        <div className="bg-white md:rounded-lg md:shadow-sm border border-gray-100 p-3 md:p-6 min-h-[600px]">
+                                {/* Product Grid Area */}
+                                <div className="bg-white md:rounded-lg md:shadow-sm border border-gray-100 p-3 md:p-6 min-h-[600px]">
                             {/* Product Header */}
                             <div className="flex items-center justify-between mb-6">
                                 <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
@@ -476,32 +496,36 @@ const CategoryPage = () => {
                                 </div>
                             )}
                         </div>
+                            </>
+                        )}
                     </main>
                 </div>
             </div>
 
             {/* Sticky Mobile Sort/Filter Bar */}
-            <div className="lg:hidden fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 bg-white border-t border-gray-200 h-14 flex z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
-                <button
-                    onClick={() => setShowSortModal(true)}
-                    className="flex-1 flex items-center justify-center gap-2.5 border-r border-gray-100 group active:bg-gray-50 transition-colors"
-                >
-                    <span className="material-icons text-[20px] text-gray-400 group-hover:text-blue-600 transition-colors">sort</span>
-                    <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Sort By</span>
-                </button>
-                <button
-                    onClick={() => setShowFilterModal(true)}
-                    className="flex-1 flex items-center justify-center gap-2.5 group active:bg-gray-50 transition-colors"
-                >
-                    <span className="material-icons text-[20px] text-gray-400 group-hover:text-blue-600 transition-colors">tune</span>
-                    <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Filters</span>
-                </button>
-            </div>
+            {!isSubCategoryLandingView && (
+                <div className="lg:hidden fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 bg-white border-t border-gray-200 h-14 flex z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+                    <button
+                        onClick={() => setShowSortModal(true)}
+                        className="flex-1 flex items-center justify-center gap-2.5 border-r border-gray-100 group active:bg-gray-50 transition-colors"
+                    >
+                        <span className="material-icons text-[20px] text-gray-400 group-hover:text-blue-600 transition-colors">sort</span>
+                        <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Sort By</span>
+                    </button>
+                    <button
+                        onClick={() => setShowFilterModal(true)}
+                        className="flex-1 flex items-center justify-center gap-2.5 group active:bg-gray-50 transition-colors"
+                    >
+                        <span className="material-icons text-[20px] text-gray-400 group-hover:text-blue-600 transition-colors">tune</span>
+                        <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Filters</span>
+                    </button>
+                </div>
+            )}
 
             <BottomNav />
 
             {/* Mobile Modals (Sort & Filter) - Consistent with the new aesthetic */}
-            {showSortModal && (
+            {!isSubCategoryLandingView && showSortModal && (
                 <div className="fixed inset-0 z-[100] flex items-end justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)}></div>
                     <div className="relative w-full bg-white rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300">
@@ -536,7 +560,7 @@ const CategoryPage = () => {
             )}
 
             {/* Filter Modal Mobile */}
-            {showFilterModal && (
+            {!isSubCategoryLandingView && showFilterModal && (
                 <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300">
                     <div className="h-full flex flex-col">
                         <div className="px-5 py-4 border-b flex items-center justify-between">

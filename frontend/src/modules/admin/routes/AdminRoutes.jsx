@@ -57,6 +57,7 @@ const AdminRoutes = () => {
                 <Route path="products/edit/:id" element={<ProductForm />} />
                 <Route path="stock" element={<StockManagement />} />
                 <Route path="categories" element={<CategoryList />} />
+                <Route path="category-banners" element={<CategoryList />} />
                 <Route path="subcategories" element={<SubCategoryList />} />
                 <Route path="orders" element={<OrderList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
