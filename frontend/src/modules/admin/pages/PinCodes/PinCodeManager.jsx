@@ -171,13 +171,13 @@ const PinCodeManager = () => {
                 </h2>
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                     <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">Upload an Excel file (.xlsx, .xls) with columns: <span className="font-mono font-bold">Pincode, DeliveryTime, Unit</span></p>
+                        <p className="text-sm text-gray-600 mb-2">Upload an Excel/CSV file (.xlsx, .csv) with columns: <span className="font-mono font-bold">Pincode, DeliveryTime, Unit</span></p>
                         <label className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-lg shadow-purple-200 cursor-pointer">
                             <MdUpload size={20} />
                             {isImporting ? 'Importing...' : 'Choose Excel File'}
                             <input
                                 type="file"
-                                accept=".xlsx,.xls,.csv"
+                                accept=".xlsx,.csv"
                                 onChange={handleFileUpload}
                                 disabled={isImporting}
                                 className="hidden"

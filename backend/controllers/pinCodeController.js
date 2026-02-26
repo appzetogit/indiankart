@@ -111,6 +111,9 @@ const bulkImportPinCodes = async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: 'Please upload an Excel file' });
         }
+        if (!req.file.buffer || req.file.buffer.length === 0) {
+            return res.status(400).json({ message: 'Uploaded file is empty' });
+        }
 
         const fileName = (req.file.originalname || '').toLowerCase();
         const isCSV = fileName.endsWith('.csv');
@@ -133,7 +136,7 @@ const bulkImportPinCodes = async (req, res) => {
 
         try {
             if (isCSV) {
-                await workbook.csv.read(Readable.from(req.file.buffer.toString('utf8')));
+                await workbook.csv.read(Readable.from(req.file.buffer));
             } else {
                 await workbook.xlsx.load(req.file.buffer);
             }
