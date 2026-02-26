@@ -1,4 +1,6 @@
 import PinCode from '../models/PinCode.js';
+import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 
 // @desc    Add a new serviceable PIN code
 // @route   POST /api/pincodes
@@ -110,97 +112,113 @@ const bulkImportPinCodes = async (req, res) => {
             return res.status(400).json({ message: 'Please upload an Excel file' });
         }
 
-        const XLSX = (await import('xlsx')).default || (await import('xlsx'));
-        
-        // Detect file type and parse accordingly
-        const fileName = req.file.originalname || '';
-        const isCSV = fileName.toLowerCase().endsWith('.csv');
-        console.log('Processing file:', fileName, 'isCSV:', isCSV);
-        
-        let workbook;
+        const fileName = (req.file.originalname || '').toLowerCase();
+        const isCSV = fileName.endsWith('.csv');
+        const isXLSX = fileName.endsWith('.xlsx');
+        const isXLS = fileName.endsWith('.xls');
+
+        if (isXLS) {
+            return res.status(400).json({
+                message: 'The .xls format is not supported. Please upload .xlsx or .csv'
+            });
+        }
+
+        if (!isCSV && !isXLSX) {
+            return res.status(400).json({
+                message: 'Unsupported file format. Please upload .xlsx or .csv'
+            });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+
         try {
             if (isCSV) {
-                // Parse CSV file
-                const csvContent = req.file.buffer.toString('utf-8');
-                workbook = XLSX.read(csvContent, { type: 'string' });
+                await workbook.csv.read(Readable.from(req.file.buffer.toString('utf8')));
             } else {
-                // Parse Excel file
-                workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+                await workbook.xlsx.load(req.file.buffer);
             }
         } catch (parseError) {
             console.error('Parse error:', parseError);
             return res.status(400).json({ message: 'Failed to parse file', error: parseError.message });
         }
-        
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        
-        // Get raw data to see all values
-        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        console.log('Raw data (first 5 rows):', rawData.slice(0, 5));
-        
-        // Parse with headers from first row
-        const data = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-        if (data.length === 0) {
-            return res.status(400).json({ message: 'Excel file is empty' });
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+            return res.status(400).json({ message: 'No worksheet found in uploaded file' });
         }
 
-        // Filter out completely empty rows
-        const validRows = data.filter(row => {
-            // Check if row has any non-empty values
-            const hasData = Object.values(row).some(value => 
+        const headerRow = worksheet.getRow(1);
+        const headers = (headerRow.values || [])
+            .slice(1)
+            .map((h) => String(h || '').trim());
+
+        if (headers.length === 0 || headers.every(h => !h)) {
+            return res.status(400).json({ message: 'Header row is missing in uploaded file' });
+        }
+
+        const dataRows = [];
+        for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex++) {
+            const row = worksheet.getRow(rowIndex);
+            const values = (row.values || []).slice(1);
+
+            const rowObj = {};
+            headers.forEach((header, idx) => {
+                if (header) rowObj[header] = values[idx];
+            });
+
+            const hasData = Object.values(rowObj).some(value =>
                 value !== null && value !== undefined && String(value).trim() !== ''
             );
-            return hasData;
-        });
+            if (hasData) dataRows.push({ rowNumber: rowIndex, row: rowObj });
+        }
 
-        // Helper function to find value from row by flexible column name matching
+        if (dataRows.length === 0) {
+            return res.status(400).json({ message: 'Excel/CSV file has no data rows' });
+        }
+
+        const normalize = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
         const getValueFromRow = (row, possibleNames) => {
-            // First try exact matches
-            for (const name of possibleNames) {
-                if (row[name]) return row[name];
-            }
-            
-            // Then try case-insensitive and trimmed matches
-            const rowKeys = Object.keys(row);
-            for (const name of possibleNames) {
-                const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const matchingKey = rowKeys.find(key => 
-                    key.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedName
-                );
-                if (matchingKey && row[matchingKey]) return row[matchingKey];
+            const normalizedNameSet = new Set(possibleNames.map(normalize));
+            for (const [key, val] of Object.entries(row)) {
+                if (normalizedNameSet.has(normalize(key)) && val !== undefined && val !== null && String(val).trim() !== '') {
+                    return val;
+                }
             }
             return null;
         };
-
-        console.log('Sample row:', validRows[0]); // Debug: see actual column names
-        console.log('Total valid rows:', validRows.length);
 
         const results = {
             successful: 0,
             skipped: 0,
             errors: [],
-            total: validRows.length,
-            debug: {
-                firstRowColumns: validRows.length > 0 ? Object.keys(validRows[0]) : [],
-                sampleData: validRows.length > 0 ? validRows[0] : null
-            }
+            total: dataRows.length
         };
 
-        for (let i = 0; i < validRows.length; i++) {
-            const row = validRows[i];
-            
+        for (let i = 0; i < dataRows.length; i++) {
+            const { rowNumber, row } = dataRows[i];
+
             // Flexible column matching
             const pincode = getValueFromRow(row, ['Pincode', 'pincode', 'code', 'Code', 'PIN', 'pin']);
-            const deliveryTime = getValueFromRow(row, ['DeliveryTime', 'deliveryTime', 'Delivery Time', 'DeliveryTim', 'DeliveryTin', 'delivery_time', 'Time']);
+            const deliveryTime = getValueFromRow(row, ['DeliveryTime', 'deliveryTime', 'Delivery Time', 'delivery_time', 'Time']);
             const unit = getValueFromRow(row, ['Unit', 'unit', 'Units']) || 'days';
             const isCODVal = getValueFromRow(row, ['isCOD', 'COD', 'cod', 'CashOnDelivery']);
-            const isCOD = isCODVal === 'false' || isCODVal === false || isCODVal === 'No' || isCODVal === 'no' ? false : true;
+            const isCOD = ['false', 'no', '0'].includes(String(isCODVal).toLowerCase()) ? false : true;
 
             // Validate row data
             if (!pincode || !deliveryTime) {
-                results.errors.push(`Row ${i + 2}: Missing pincode or delivery time`);
+                results.errors.push(`Row ${rowNumber}: Missing pincode or delivery time`);
+                continue;
+            }
+
+            const deliveryTimeNumber = Number(deliveryTime);
+            if (!Number.isFinite(deliveryTimeNumber) || deliveryTimeNumber <= 0) {
+                results.errors.push(`Row ${rowNumber}: Invalid delivery time`);
+                continue;
+            }
+
+            const normalizedUnit = String(unit).toLowerCase();
+            if (!['minutes', 'hours', 'days'].includes(normalizedUnit)) {
+                results.errors.push(`Row ${rowNumber}: Unit must be minutes, hours, or days`);
                 continue;
             }
 
@@ -214,13 +232,13 @@ const bulkImportPinCodes = async (req, res) => {
             try {
                 await PinCode.create({
                     code: String(pincode).trim(),
-                    deliveryTime: Number(deliveryTime),
-                    unit: String(unit).toLowerCase(),
+                    deliveryTime: deliveryTimeNumber,
+                    unit: normalizedUnit,
                     isCOD: isCOD
                 });
                 results.successful++;
             } catch (error) {
-                results.errors.push(`Row ${i + 2}: ${error.message}`);
+                results.errors.push(`Row ${rowNumber}: ${error.message}`);
             }
         }
 

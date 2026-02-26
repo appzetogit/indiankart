@@ -16,17 +16,20 @@ const storage = multer.memoryStorage();
 const upload = multer({
     storage,
     fileFilter: (req, file, cb) => {
+        const fileName = (file.originalname || '').toLowerCase();
+        const hasAllowedExtension = fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv');
         const allowedTypes = [
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
             'application/vnd.ms-excel', // .xls
             'text/csv', // .csv
             'application/csv', // .csv alternative
-            'text/plain' // .csv sometimes detected as text/plain
+            'text/plain', // .csv sometimes detected as text/plain
+            'application/octet-stream'
         ];
-        if (allowedTypes.includes(file.mimetype)) {
+        if (hasAllowedExtension || allowedTypes.includes(file.mimetype)) {
             cb(null, true);
         } else {
-            cb(new Error('Only Excel or CSV files are allowed'));
+            cb(new Error('Only .xlsx, .xls, or .csv files are allowed'));
         }
     }
 });

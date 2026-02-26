@@ -77,13 +77,8 @@ const Header = () => {
         cat.active !== false &&
         activeCategoryIds.has(String(cat._id || cat.id))
     );
-    const fallbackActiveCategories = categories.filter((cat) => cat.active !== false);
-    const pinnedIds = new Set(activeHeaderCategories.map((cat) => String(cat._id || cat.id)));
-    const remainingCategories = fallbackActiveCategories.filter(
-        (cat) => !pinnedIds.has(String(cat._id || cat.id))
-    );
-    // Keep admin-pinned order first, then append remaining active categories so new categories don't disappear.
-    const displayCategories = [...activeHeaderCategories, ...remainingCategories];
+    // Show only categories explicitly configured in Admin -> Header Settings.
+    const displayCategories = activeHeaderCategories;
     const shouldSpreadCategories = displayCategories.length >= 6;
 
 
@@ -473,7 +468,7 @@ const Header = () => {
             </div>
 
             {/* Category Navigation - Only on Homepage */}
-            {location.pathname === '/' && !categoriesLoading && (
+            {location.pathname === '/' && !categoriesLoading && !headerLoading && displayCategories.length > 0 && (
                 <div className="max-w-[1200px] mx-auto relative px-2">
                     <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-8 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
                         {displayCategories.map((cat, index) => {

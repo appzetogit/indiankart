@@ -1,5 +1,4 @@
 import HeaderConfig from '../models/HeaderConfig.js';
-import Category from '../models/Category.js';
 
 // @desc    Get header configuration
 // @route   GET /api/header
@@ -12,12 +11,8 @@ export const getHeaderConfig = async (req, res) => {
         });
         
         if (!config) {
-            // First time: Default to all active categories or first 5
-            const categories = await Category.find({ active: true }).limit(8);
-            config = await HeaderConfig.create({
-                categories: categories.map(c => c._id)
-            });
-            // Re-fetch to populate
+            // First time: keep empty until admin selects categories in Header Settings.
+            config = await HeaderConfig.create({ categories: [] });
             config = await HeaderConfig.findById(config._id).populate({
                 path: 'categories',
                 populate: { path: 'subCategories' }

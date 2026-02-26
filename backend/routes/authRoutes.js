@@ -53,6 +53,10 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
         let token;
         if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
             token = req.headers.authorization.split(' ')[1];
+        } else if (req.cookies.user_jwt) {
+            token = req.cookies.user_jwt;
+        } else if (req.cookies.admin_jwt) {
+            token = req.cookies.admin_jwt;
         } else if (req.cookies.jwt) {
             token = req.cookies.jwt;
         }

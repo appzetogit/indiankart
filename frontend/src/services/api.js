@@ -10,8 +10,7 @@ API.interceptors.request.use((config) => {
         const currentPath =
             typeof window !== 'undefined' ? window.location.pathname : '';
         const isAdminContext = currentPath.startsWith('/admin');
-        const isAdminApiCall =
-            requestUrl.includes('/admin') || requestUrl.includes('/notifications');
+        const isAdminApiCall = requestUrl.includes('/admin');
 
         const adminStorageData = localStorage.getItem('admin-auth-storage');
         const userStorageData = localStorage.getItem('user-auth-storage');
@@ -25,16 +24,16 @@ API.interceptors.request.use((config) => {
             ? (JSON.parse(userStorageData)?.state?.user?.token || JSON.parse(userStorageData)?.state?.token)
             : null;
 
-        // In admin UI, always prefer admin token for all requests.
+        // Keep admin/user sessions isolated:
+        // admin pages -> admin token, user pages -> user token.
         if (isAdminContext && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
         } else if (isAdminApiCall && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
         } else if (userToken) {
             config.headers.Authorization = `Bearer ${userToken}`;
-        } else if (adminToken) {
-            // Fallback so admin-only sessions still work on shared endpoints.
-            config.headers.Authorization = `Bearer ${adminToken}`;
+        } else {
+            delete config.headers.Authorization;
         }
     } catch (error) {
         console.error('Error retrieving auth token:', error);

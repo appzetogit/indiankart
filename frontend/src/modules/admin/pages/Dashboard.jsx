@@ -24,6 +24,31 @@ import useCouponStore from '../store/couponStore';
 import useReturnStore from '../store/returnStore';
 import useSupportStore from '../store/supportStore';
 
+const parseAmount = (value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const parsed = parseFloat(value.replace(/[^0-9.-]+/g, ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+};
+
+const getOrderDate = (order) => {
+    const raw = order?.date || order?.createdAt || order?.updatedAt;
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getProductStock = (product) => {
+    if (Array.isArray(product?.skus) && product.skus.length > 0) {
+        return product.skus.reduce((sum, sku) => sum + (Number(sku?.stock) || 0), 0);
+    }
+    return Number(product?.stock) || 0;
+};
+
+const normalizeStatus = (status) => String(status || '').trim().toUpperCase();
+
 const Dashboard = () => {
     const navigate = useNavigate();
     const { products = [], fetchProducts } = useProductStore();
@@ -50,45 +75,77 @@ const Dashboard = () => {
     // --- Analytics Logic ---
 
     // 1. Revenue Stats
-    const { todayRevenue, monthRevenue, totalRevenue, avgOrderValue } = useMemo(() => {
+    const {
+        todayRevenue,
+        monthRevenue,
+        previousMonthRevenue,
+        totalRevenue,
+        avgOrderValue,
+        todayOrdersCount
+    } = useMemo(() => {
         const today = new Date().toDateString();
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        const previousMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
         let todayRev = 0;
         let monthRev = 0;
+        let prevMonthRev = 0;
         let totalRev = 0;
+        let ordersToday = 0;
 
         orders.forEach(order => {
-            const orderDate = new Date(order.date);
-            const amount = typeof order.total === 'string'
-                ? parseFloat(order.total.replace(/[^0-9.-]+/g, ""))
-                : order.total;
+            const orderDate = getOrderDate(order);
+            if (!orderDate) return;
 
-            if (orderDate.toDateString() === today) todayRev += amount;
+            const amount = parseAmount(order.total);
+            if (orderDate.toDateString() === today) {
+                todayRev += amount;
+                ordersToday += 1;
+            }
             if (orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear) monthRev += amount;
+            if (orderDate.getMonth() === previousMonth && orderDate.getFullYear() === previousMonthYear) prevMonthRev += amount;
             totalRev += amount;
         });
 
         return {
             todayRevenue: todayRev,
             monthRevenue: monthRev,
+            previousMonthRevenue: prevMonthRev,
             totalRevenue: totalRev,
-            avgOrderValue: orders.length > 0 ? totalRev / orders.length : 0
+            avgOrderValue: orders.length > 0 ? totalRev / orders.length : 0,
+            todayOrdersCount: ordersToday
         };
     }, [orders]);
 
+    const revenueGrowthPct = useMemo(() => {
+        if (previousMonthRevenue <= 0) return monthRevenue > 0 ? 100 : 0;
+        return ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100;
+    }, [monthRevenue, previousMonthRevenue]);
+
     // 2. Pending Tasks Counts
-    const pendingOrders = orders.filter(o => o.status === 'Pending').length;
-    const pendingReturns = returns.filter(r => r.status === 'Pending').length;
+    const pendingOrders = orders.filter(o => ['PENDING', 'PLACED', 'PROCESSING'].includes(normalizeStatus(o.status))).length;
+    const pendingReturns = returns.filter(r => ['PENDING', 'REQUESTED', 'OPEN'].includes(normalizeStatus(r.status))).length;
     const openTickets = supportRequests.filter(r => r.status === 'OPEN').length;
 
-    // 3. Low Stock Alerts (Simulated as mock data doesn't have stock)
-    // We'll deterministically simulate stock based on product ID to keep it consistent
+    const totalStockUnits = useMemo(
+        () => products.reduce((sum, product) => sum + getProductStock(product), 0),
+        [products]
+    );
+
+    const outOfStockProducts = useMemo(
+        () => products.filter(product => getProductStock(product) <= 0).length,
+        [products]
+    );
+
+    // 3. Low Stock Alerts
     const lowStockProducts = useMemo(() => {
         return products
-            .map(p => ({ ...p, stock: (p.id % 20) })) // Simulate stock: 0-19
-            .filter(p => p.stock < 5)
+            .map(p => ({ ...p, computedStock: getProductStock(p) }))
+            .filter(p => p.computedStock > 0 && p.computedStock <= 5)
+            .sort((a, b) => a.computedStock - b.computedStock)
             .slice(0, 5);
     }, [products]);
 
@@ -99,7 +156,7 @@ const Dashboard = () => {
                 type: 'order',
                 id: o.id,
                 text: `New order ${o.id} placed by ${o.user?.name || 'Customer'}`,
-                time: o.date,
+                time: o.date || o.createdAt || o.updatedAt,
                 icon: MdShoppingCart,
                 color: 'gray'
             })),
@@ -115,37 +172,40 @@ const Dashboard = () => {
                 type: 'return',
                 id: r.id,
                 text: `Return requested for Order ${r.orderId}`,
-                time: r.date,
+                time: r.date || r.createdAt || r.updatedAt,
                 icon: MdAssignment,
                 color: 'gray'
             }))
         ];
 
-        // Sort by time descending and take top 10
-        return activity.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 6);
+        // Sort by time descending and take top 6
+        return activity
+            .filter(a => a.time)
+            .sort((a, b) => new Date(b.time) - new Date(a.time))
+            .slice(0, 6);
     }, [orders, users, returns]);
 
     // 5. Top Customers
     const topCustomers = useMemo(() => {
         const customerSpend = {};
         orders.forEach(order => {
-            if (!order.user || !order.user.email) return;
+            if (!order.user) return;
+            const customerKey = order.user.email || order.user._id || order.user.id;
+            if (!customerKey) return;
 
-            const amount = typeof order.total === 'string'
-                ? parseFloat(order.total.replace(/[^0-9.-]+/g, ""))
-                : order.total;
+            const amount = parseAmount(order.total);
 
-            if (!customerSpend[order.user.email]) {
-                customerSpend[order.user.email] = {
+            if (!customerSpend[customerKey]) {
+                customerSpend[customerKey] = {
                     id: order.user._id || order.user.id, // Support both _id and id
-                    name: order.user.name,
+                    name: order.user.name || 'Customer',
                     email: order.user.email,
                     spend: 0,
                     orders: 0
                 };
             }
-            customerSpend[order.user.email].spend += amount;
-            customerSpend[order.user.email].orders += 1;
+            customerSpend[customerKey].spend += amount;
+            customerSpend[customerKey].orders += 1;
         });
 
         return Object.values(customerSpend)
@@ -161,8 +221,8 @@ const Dashboard = () => {
                 <p className="text-gray-500 mt-2 font-medium">Welcome back! Here's what's happening today.</p>
             </div>
 
-            {/* 1. Key Metrics Grid (Old Stats + Revenue) */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 1. Key Metrics Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
                 {/* Standard Counts */}
                 <div
                     onClick={() => navigate('/admin/products')}
@@ -215,19 +275,45 @@ const Dashboard = () => {
                         <MdLocalOffer size={24} />
                     </div>
                 </div>
+
+                <div
+                    onClick={() => navigate('/admin/stock')}
+                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer"
+                >
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Stock Units</p>
+                        <h3 className="text-xl font-black text-gray-900">{totalStockUnits.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-10 h-10 bg-gray-50 text-gray-600 rounded-2xl flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                        <MdInventory size={24} />
+                    </div>
+                </div>
+
+                <div
+                    onClick={() => navigate('/admin/stock')}
+                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer"
+                >
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Out Of Stock</p>
+                        <h3 className="text-xl font-black text-gray-900">{outOfStockProducts.toLocaleString()}</h3>
+                    </div>
+                    <div className="w-10 h-10 bg-gray-50 text-gray-600 rounded-2xl flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+                        <MdWarning size={24} />
+                    </div>
+                </div>
             </div>
 
             {/* 2. Financial Overview */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div
                     onClick={() => navigate('/admin/orders')}
                     className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition-all cursor-pointer"
                 >
                     <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Revenue</p>
-                        <h3 className="text-xl font-black text-gray-900">₹{totalRevenue.toLocaleString()}</h3>
-                        <p className="text-xs font-medium text-green-600 mt-1 flex items-center gap-1">
-                            <MdTrendingUp /> +12% from last month
+                        <h3 className="text-xl font-black text-gray-900">&#8377;{Math.round(totalRevenue).toLocaleString()}</h3>
+                        <p className={`text-xs font-medium mt-1 flex items-center gap-1 ${revenueGrowthPct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <MdTrendingUp /> {revenueGrowthPct >= 0 ? '+' : ''}{Math.round(revenueGrowthPct)}% vs last month
                         </p>
                     </div>
                     <div className="w-10 h-10 bg-gray-50 text-gray-600 rounded-2xl flex items-center justify-center">
@@ -240,9 +326,9 @@ const Dashboard = () => {
                 >
                     <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Today's Sales</p>
-                        <h3 className="text-xl font-black text-gray-900">₹{todayRevenue.toLocaleString()}</h3>
+                        <h3 className="text-xl font-black text-gray-900">&#8377;{Math.round(todayRevenue).toLocaleString()}</h3>
                         <p className="text-xs font-medium text-gray-500 mt-1">
-                            {orders.filter(o => new Date(o.date).toDateString() === new Date().toDateString()).length} orders today
+                            {todayOrdersCount} orders today
                         </p>
                     </div>
                     <div className="w-10 h-10 bg-gray-50 text-gray-600 rounded-2xl flex items-center justify-center">
@@ -252,7 +338,7 @@ const Dashboard = () => {
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
                     <div>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Avg. Order Value</p>
-                        <h3 className="text-xl font-black text-gray-900">₹{Math.round(avgOrderValue).toLocaleString()}</h3>
+                        <h3 className="text-xl font-black text-gray-900">&#8377;{Math.round(avgOrderValue).toLocaleString()}</h3>
                     </div>
                     <div className="w-10 h-10 bg-gray-50 text-gray-600 rounded-2xl flex items-center justify-center">
                         <MdCategory size={24} />
@@ -387,7 +473,7 @@ const Dashboard = () => {
                                         <img src={product.image} alt={product.name} className="w-10 h-10 rounded-lg object-cover bg-white" />
                                         <div className="flex-1 min-w-0">
                                             <h4 className="text-xs font-bold text-gray-800 truncate">{product.name}</h4>
-                                            <p className="text-[10px] text-gray-500">Stock: <span className="text-red-600 font-black">{product.stock} left</span></p>
+                                            <p className="text-[10px] text-gray-500">Stock: <span className="text-red-600 font-black">{product.computedStock} left</span></p>
                                         </div>
                                     </div>
                                 ))
@@ -417,7 +503,7 @@ const Dashboard = () => {
                                             <p className="text-[10px] text-gray-400">{customer.orders} orders</p>
                                         </div>
                                     </div>
-                                    <span className="text-xs font-black text-gray-900">₹{customer.spend.toLocaleString()}</span>
+                                    <span className="text-xs font-black text-gray-900">&#8377;{Math.round(customer.spend).toLocaleString()}</span>
                                 </div>
                             ))}
                         </div>
@@ -429,3 +515,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

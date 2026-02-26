@@ -7,6 +7,7 @@ const HARDCODED_LOGIN_MOBILE = '7610416911';
 
 export const protect = async (req, res, next) => {
     let token;
+    const isAdminPath = req.originalUrl.startsWith('/api/admin');
 
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
         try {
@@ -16,8 +17,15 @@ export const protect = async (req, res, next) => {
         }
     }
     
-    if (!token && req.cookies.jwt) {
-        token = req.cookies.jwt;
+    if (!token) {
+        if (isAdminPath && req.cookies.admin_jwt) {
+            token = req.cookies.admin_jwt;
+        } else if (!isAdminPath && req.cookies.user_jwt) {
+            token = req.cookies.user_jwt;
+        } else if (req.cookies.jwt) {
+            // Backward compatibility for legacy shared cookie.
+            token = req.cookies.jwt;
+        }
     }
 
     if (token) {
@@ -58,7 +66,7 @@ export const protect = async (req, res, next) => {
             res.status(401).json({ message: 'Not authorized, token failed' });
         }
     } else {
-        console.log('No token found in cookies. Cookies present:', Object.keys(req.cookies));
+        console.log('No token found in cookies. Cookies present:', Object.keys(req.cookies || {}));
         res.status(401).json({ message: 'Not authorized, no token' });
     }
 };

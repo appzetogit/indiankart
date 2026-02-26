@@ -3,6 +3,7 @@ import Layout from '../components/layout/Layout';
 import Home from '../pages/Home';
 import Play from '../pages/Play';
 import Account from '../pages/Account';
+import ProfileSettings from '../pages/ProfileSettings';
 import Cart from '../pages/Cart';
 import TopDeals from '../pages/TopDeals';
 import ProductDetails from '../pages/ProductDetails';
@@ -35,6 +36,7 @@ const UserRoutes = () => {
                 <Route path="products" element={<ProductListingPage />} />
                 <Route path="play" element={<Play />} />
                 <Route path="account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+                <Route path="settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
                 <Route path="addresses" element={<ProtectedRoute><Addresses /></ProtectedRoute>} />
                 <Route path="select-language" element={<SelectLanguage />} />
                 <Route path="notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
