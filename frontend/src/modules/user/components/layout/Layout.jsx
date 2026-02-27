@@ -8,27 +8,30 @@ const Layout = () => {
     const location = useLocation();
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
+    const isAccountSectionPage = [
+        '/account',
+        '/settings',
+        '/addresses',
+        '/wishlist',
+        '/my-orders'
+    ].some(path => location.pathname.includes(path));
 
     // Pages that provide their own header/navigation and should hide the global header
     const isStandalonePage = [
         '/cart',
         '/checkout',
         '/order-success',
-        '/my-orders',
         '/track-order',
         '/deals',
         '/notification-settings',
         '/select-language',
         '/help-center',
-        '/addresses',
         '/login',
         '/signup',
         '/play',
-        '/categories',
-        '/wishlist'
+        '/categories'
     ].some(path => location.pathname.includes(path));
 
-    const isAccountPage = location.pathname === '/account' || location.pathname === '/settings';
     const isHome = location.pathname === '/';
     const showBottomNav =
         !location.pathname.includes('/product/') &&
@@ -43,16 +46,14 @@ const Layout = () => {
     return (
         <div className="w-full min-h-screen flex flex-col relative bg-background-light">
             {!isStandalonePage && (
-                <div className={isAccountPage ? 'hidden md:block' : ''}>
-                    <Header />
-                </div>
+                <Header />
             )}
             <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 bg-white
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
                             isHome ? 'pt-[260px] md:pt-[240px]' :
-                                isAccountPage ? 'pt-0 md:pt-[160px]' :
+                                isAccountSectionPage ? 'pt-[110px] md:pt-[104px]' :
                                     'pt-[110px] md:pt-[160px]'}`}>
                 <AnimatePresence mode="wait" initial={false}>
                     <motion.div

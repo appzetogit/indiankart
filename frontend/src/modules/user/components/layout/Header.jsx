@@ -29,7 +29,6 @@ import {
     MdKeyboardArrowRight,
     MdArrowBack,
     MdStore,
-    MdMoreVert,
     MdKitchen,
     MdFlight,
     MdSportsEsports,
@@ -460,10 +459,6 @@ const Header = () => {
                         <span className="text-gray-800 font-medium text-[15px]">{cartText}</span>
                     </div>
 
-                    {/* More */}
-                    <div className="p-2 cursor-pointer hover:bg-gray-50 rounded-full">
-                        <MdMoreVert className="text-[24px] text-gray-700" />
-                    </div>
                 </div>
             </div>
 

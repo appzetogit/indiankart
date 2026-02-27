@@ -87,7 +87,7 @@ const MyOrders = () => {
     return (
         <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 pb-24 md:pb-6">
             {/* Mobile Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-4 flex items-center justify-between sticky top-0 z-10 md:hidden shadow-lg">
+            <div className="hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-4 flex items-center justify-between sticky top-0 z-10 md:hidden shadow-lg">
                 <div className="flex items-center gap-1">
                     <button
                         onClick={() => navigate('/account')}
@@ -103,7 +103,7 @@ const MyOrders = () => {
             {/* Desktop Container */}
             <div className="md:max-w-6xl md:mx-auto md:px-4">
                 {/* Desktop Breadcrumbs */}
-                <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 mb-6 mt-4">
+                <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 mb-6">
                     <span onClick={() => navigate('/')} className="cursor-pointer hover:text-blue-600 font-medium">Home</span>
                     <span className="material-icons text-xs">chevron_right</span>
                     <span onClick={() => navigate('/account')} className="cursor-pointer hover:text-blue-600 font-medium">My Account</span>
