@@ -7,10 +7,11 @@ import LazySection from '../components/common/LazySection';
 const DealGrid = lazy(() => import('../components/home/DealGrid'));
 const ProductSection = lazy(() => import('../components/home/ProductSection'));
 const HomeBanner = lazy(() => import('../components/home/HomeBanner'));
+const FIXED_BANNER_HEIGHT_CLASS = 'h-[180px] md:h-[360px]';
 
 // Skeletons
 const BannerSkeleton = () => (
-    <div className="w-full h-[200px] md:h-[400px] shimmer md:rounded-2xl mx-auto mb-6"></div>
+    <div className={`w-full ${FIXED_BANNER_HEIGHT_CLASS} shimmer rounded-2xl mx-auto mb-6`}></div>
 );
 
 const SectionSkeleton = () => (
@@ -55,6 +56,7 @@ const Home = () => {
 
                     if (item.type === 'banner') {
                         const banner = banners.find(b => String(b._id) === String(item.referenceId) || String(b.id) === String(item.referenceId));
+                        const isFixedHeightBanner = banner && ['hero', 'slides'].includes(banner.type);
                         if (!banner) {
                             if (isHomeLoading) {
                                 return (
@@ -73,7 +75,10 @@ const Home = () => {
                         );
 
                         return (
-                            <div key={`${item.type}-${index}`} className="max-w-[1440px] mx-auto w-full">
+                            <div
+                                key={`${item.type}-${index}`}
+                                className={`max-w-[1440px] mx-auto w-full ${isFixedHeightBanner ? FIXED_BANNER_HEIGHT_CLASS : ''}`}
+                            >
                                 {isFirstItem ? bannerComponent : (
                                     <LazySection placeholder={<BannerSkeleton />}>
                                         {bannerComponent}

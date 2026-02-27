@@ -100,16 +100,33 @@
 }
 
 /* Swiper Custom Styling for Modern Look */
+.home-banner-swiper {
+  height: 180px !important;
+}
+
+.home-banner-swiper .swiper-wrapper,
+.home-banner-swiper .swiper-slide {
+  height: 100% !important;
+}
+
+@media (min-width: 768px) {
+  .home-banner-swiper {
+    height: 360px !important;
+  }
+}
+
 .home-banner-swiper .swiper-button-next,
 .home-banner-swiper .swiper-button-prev {
-  background-color: transparent;
-  width: 48px !important;
-  height: 48px !important;
+  background-color: rgba(0, 0, 0, 0.28);
+  width: clamp(24px, 2.8vw, 34px) !important;
+  height: clamp(24px, 2.8vw, 34px) !important;
+  padding: 8px;
+  border-radius: 9999px;
   top: 50%;
   transform: translateY(-50%);
   margin-top: 0;
-  box-shadow: none;
-  opacity: 0;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  opacity: 1;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 20;
   display: flex !important;
@@ -117,22 +134,29 @@
   justify-content: center !important;
 }
 
-.home-banner-swiper:hover .swiper-button-next,
-.home-banner-swiper:hover .swiper-button-prev {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .home-banner-swiper .swiper-button-next,
+  .home-banner-swiper .swiper-button-prev {
+    opacity: 0;
+  }
+
+  .home-banner-swiper:hover .swiper-button-next,
+  .home-banner-swiper:hover .swiper-button-prev {
+    opacity: 1;
+  }
 }
 
 .home-banner-swiper .swiper-button-next {
-  right: 20px !important;
+  right: clamp(8px, 1.4vw, 20px) !important;
 }
 
 .home-banner-swiper .swiper-button-prev {
-  left: 20px !important;
+  left: clamp(8px, 1.4vw, 20px) !important;
 }
 
 .home-banner-swiper .swiper-button-next::after,
 .home-banner-swiper .swiper-button-prev::after {
-  font-size: 32px !important;
+  font-size: clamp(12px, 1.5vw, 18px) !important;
   font-weight: 900 !important;
   color: #fff;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -142,11 +166,12 @@
 
   .home-banner-swiper .swiper-button-next,
   .home-banner-swiper .swiper-button-prev {
-    width: 32px !important;
-    height: 32px !important;
-    background-color: transparent !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+    width: clamp(18px, 5.5vw, 24px) !important;
+    height: clamp(18px, 5.5vw, 24px) !important;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.32) !important;
+    border-radius: 9999px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
     opacity: 1 !important;
     display: flex !important;
     top: 50% !important;
@@ -156,19 +181,19 @@
 
   .home-banner-swiper .swiper-button-next::after,
   .home-banner-swiper .swiper-button-prev::after {
-    font-size: 24px !important;
+    font-size: clamp(10px, 2.6vw, 13px) !important;
     color: #fff !important;
     font-weight: 900 !important;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
   }
 
   .home-banner-swiper .swiper-button-next {
-    right: 8px !important;
+    right: clamp(6px, 2.5vw, 10px) !important;
     left: auto !important;
   }
 
   .home-banner-swiper .swiper-button-prev {
-    left: 8px !important;
+    left: clamp(6px, 2.5vw, 10px) !important;
     right: auto !important;
   }
 }
