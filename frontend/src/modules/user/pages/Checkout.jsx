@@ -439,19 +439,19 @@ const Checkout = () => {
     }
 
     return (
-        <div className="bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 min-h-screen pb-10">
+        <div className="bg-white min-h-screen pb-10">
             {/* Enhanced Header */}
-            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 sticky top-0 z-50 shadow-lg md:static md:shadow-xl md:mb-6">
+            <div className="bg-white sticky top-0 z-50 shadow-sm border-b border-gray-200 md:static md:shadow-sm md:mb-6">
                 <div className="px-4 py-5 flex items-center gap-4 md:max-w-[1248px] md:mx-auto md:px-6 md:rounded-2xl">
                     <button
                         onClick={() => step === 3 ? setStep(2) : navigate(-1)}
-                        className="p-2 -ml-1 text-white hover:bg-white/20 rounded-full transition-all md:hidden"
+                        className="p-2 -ml-1 text-gray-700 hover:bg-gray-100 rounded-full transition-all md:hidden"
                     >
                         <MdArrowBack size={24} />
                     </button>
                     <div className="flex-1">
-                        <h1 className="text-xl font-black text-white tracking-tight">{step === 2 ? '🛒 Order Summary' : '💳 Payment'}</h1>
-                        <p className="text-xs text-white/80 mt-0.5">Complete your purchase securely</p>
+                        <h1 className="text-xl font-black text-gray-900 tracking-tight">{step === 2 ? '🛒 Order Summary' : '💳 Payment'}</h1>
+                        <p className="text-xs text-gray-500 mt-0.5">Complete your purchase securely</p>
                     </div>
                 </div>
             </div>
@@ -462,7 +462,7 @@ const Checkout = () => {
                 {/* Left Column */}
                 <div className="md:flex-1 md:min-w-0">
                     {/* Enhanced Steps Progress */}
-                    <div className="bg-gradient-to-r from-white to-blue-50 px-4 py-6 border-2 border-blue-100 flex items-center justify-center mb-4 md:rounded-2xl md:shadow-lg">
+                    <div className="bg-white px-4 py-6 border-2 border-blue-100 flex items-center justify-center mb-4 md:rounded-2xl md:shadow-lg">
                         <div className="flex items-center w-full max-w-md">
                             {/* Cart Step */}
                             <div className="flex flex-col items-center flex-1 relative">
@@ -713,7 +713,7 @@ const Checkout = () => {
                                             disabled={!isPincodeServiceable || isPincodeChecking}
                                             className={`px-10 py-3.5 rounded-xl font-black text-sm shadow-lg hover:shadow-xl transition-all uppercase tracking-wide flex items-center gap-2 ${
                                                 isPincodeServiceable && !isPincodeChecking
-                                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white'
+                                                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
                                                 : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed shadow-none'
                                             }`}
                                         >
@@ -746,7 +746,7 @@ const Checkout = () => {
                                     ) : (
                                         <button
                                             onClick={() => handleApplyCoupon()}
-                                            className="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer hover:shadow-lg transition-all shadow-md"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer transition-all shadow-md hover:shadow-lg"
                                         >
                                             Apply
                                         </button>
@@ -868,7 +868,7 @@ const Checkout = () => {
                                             disabled={!isPincodeServiceable || isPincodeChecking}
                                             className={`px-6 py-3 rounded-xl font-black uppercase text-[11px] shadow-lg active:scale-[0.98] transition-all flex items-center gap-2 ${
                                                 isPincodeServiceable && !isPincodeChecking
-                                                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-blue-600/20'
+                                                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20'
                                                 : 'bg-gray-100 text-gray-300 shadow-none cursor-not-allowed'
                                             }`}
                                         >
@@ -991,7 +991,7 @@ const Checkout = () => {
                                 ) : (
                                     <button
                                         onClick={() => handleApplyCoupon()}
-                                        className="bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer hover:shadow-lg transition-all shadow-md"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer transition-all shadow-md hover:shadow-lg"
                                     >
                                         Apply
                                     </button>
@@ -1053,4 +1053,5 @@ const Checkout = () => {
 };
 
 export default Checkout;
+
 
