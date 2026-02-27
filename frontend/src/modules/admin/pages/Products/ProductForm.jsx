@@ -393,7 +393,7 @@ const ProductForm = () => {
                 combination: comb,
                 price: existing ? (existing.price ?? '') : '',
                 originalPrice: existing ? (existing.originalPrice ?? '') : '',
-                stock: existing ? existing.stock : 0
+                stock: existing ? (existing.stock ?? '') : ''
             };
         });
 
@@ -589,12 +589,14 @@ const ProductForm = () => {
         // --- Handle Main Images ---
 
         // 1. Thumbnail
-        if (formData.thumbnail.type === 'file') {
+        if (formData.thumbnail?.type === 'file') {
+            data.append('image', formData.thumbnail.content);
+        } else if (formData.thumbnail?.content) {
+            // Existing thumbnail URL
             data.append('image', formData.thumbnail.content);
         } else {
-            // If it's a URL, we might need to send it if backend expects 'image' field update?
-            // Usually backend keeps existing if not provided, or consumes string.
-            data.append('image', formData.thumbnail.content);
+            // Explicitly allow clearing primary image
+            data.append('image', '');
         }
 
         // 2. Gallery Images
@@ -605,6 +607,10 @@ const ProductForm = () => {
                 data.append('images', img.content); // Existing URL
             }
         });
+        // Send explicit empty marker so backend can clear gallery when all images are removed.
+        if (formData.galleryImages.length === 0) {
+            data.append('images', '');
+        }
 
         // ... (inside ProductForm component)
 
@@ -613,6 +619,7 @@ const ProductForm = () => {
             if (isEdit) {
                 savedProduct = await updateProduct(parseInt(id), data);
                 toast.success('Product updated successfully!');
+                navigate('/admin/products');
             } else {
                 savedProduct = await addProduct(data);
                 toast.success('Product created successfully!');
@@ -1319,14 +1326,21 @@ const ProductForm = () => {
                                                                         </td>
                                                                         <td className="px-3 py-2 md:px-6 md:py-4 text-right">
                                                                             <div className="flex items-center justify-end gap-3 group/input">
-                                                                                {sku.stock <= 5 && sku.stock > 0 && (
+                                                                                {Number(sku.stock) > 0 && Number(sku.stock) <= 5 && (
                                                                                     <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest animate-pulse">Low Stock</span>
                                                                                 )}
                                                                                 <input
                                                                                     type="number"
                                                                                     min="0"
-                                                                                    value={sku.stock}
-                                                                                    onChange={(e) => updateSkuField(originalIdx, 'stock', Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                                                                    value={sku.stock ?? ''}
+                                                                                    onChange={(e) => {
+                                                                                        const raw = e.target.value;
+                                                                                        if (raw === '') {
+                                                                                            updateSkuField(originalIdx, 'stock', '');
+                                                                                            return;
+                                                                                        }
+                                                                                        updateSkuField(originalIdx, 'stock', Math.max(0, parseInt(raw, 10) || 0));
+                                                                                    }}
                                                                                     className="w-20 text-right px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 outline-none text-sm font-black text-gray-900 transition-all shadow-inner caret-black"
                                                                                 />
                                                                             </div>

@@ -326,9 +326,14 @@ export const updateProduct = async (req, res) => {
                 );
                 image = uploadedMain.secure_url;
             }
+            const hasImageFieldInBody = Object.prototype.hasOwnProperty.call(req.body, 'image');
+            const hasUploadedMainImage = Boolean(req.files && req.files.image && req.files.image.length > 0);
+
+            const hasImagesFieldInBody = Object.prototype.hasOwnProperty.call(req.body, 'images');
+            const hasUploadedGalleryImages = Boolean(req.files && req.files.images && req.files.images.length > 0);
 
             let images = req.body.images || [];
-             if (!Array.isArray(images)) {
+            if (!Array.isArray(images)) {
                 images = [images];
             }
 
@@ -341,6 +346,7 @@ export const updateProduct = async (req, res) => {
                 const uploadedImages = uploadedImagesResults.map(r => r.secure_url);
                 images = [...images, ...uploadedImages];
             }
+            images = images.filter(Boolean);
              
             const parseJSON = (data) => {
                 if (Array.isArray(data)) {
@@ -475,8 +481,10 @@ export const updateProduct = async (req, res) => {
                 updateData.specifications = parseJSON(updateData.specifications) || [];
             }
 
-            if (image) updateData.image = image;
-            if (images.length > 0) updateData.images = images;
+            // Update thumbnail even when empty, if client explicitly sent the field.
+            if (hasImageFieldInBody || hasUploadedMainImage) updateData.image = image || '';
+            // Update gallery even when empty, if client explicitly sent the field.
+            if (hasImagesFieldInBody || hasUploadedGalleryImages) updateData.images = images;
 
             // Update fields
             Object.assign(product, updateData);

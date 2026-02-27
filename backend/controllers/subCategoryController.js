@@ -10,8 +10,7 @@ const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
 export const getSubCategories = async (req, res) => {
     try {
         const subCategories = await SubCategory.find({})
-            .populate('category', 'name')
-            .populate('parentSubCategory', 'name category');
+            .populate('category', 'name');
         res.json(subCategories);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -24,8 +23,7 @@ export const getSubCategories = async (req, res) => {
 export const getSubCategoriesByCategory = async (req, res) => {
     try {
         const subCategories = await SubCategory.find({ category: req.params.categoryId })
-            .populate('category', 'name')
-            .populate('parentSubCategory', 'name category');
+            .populate('category', 'name');
         res.json(subCategories);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -37,7 +35,7 @@ export const getSubCategoriesByCategory = async (req, res) => {
 // @access  Private/Admin
 export const createSubCategory = async (req, res) => {
     try {
-        const { name, category, parentSubCategory, image } = req.body;
+        const { name, category, image } = req.body;
         const normalizedName = name?.trim();
 
         if (!normalizedName) {
@@ -55,33 +53,20 @@ export const createSubCategory = async (req, res) => {
             return res.status(409).json({ message: 'This name is already used by a category' });
         }
 
-        let resolvedCategory = category;
-        let resolvedParentSubCategory = parentSubCategory || null;
-
-        if (resolvedParentSubCategory) {
-            const parentSub = await SubCategory.findById(resolvedParentSubCategory).select('category');
-            if (!parentSub) {
-                return res.status(404).json({ message: 'Parent subcategory not found' });
-            }
-            // Keep hierarchy consistent: child always inherits top-level category from parent subcategory.
-            resolvedCategory = parentSub.category;
-        }
-
-        const categoryExists = await Category.findById(resolvedCategory);
+        const categoryExists = await Category.findById(category);
         if (!categoryExists) {
             return res.status(404).json({ message: 'Parent category not found' });
         }
 
         const subCategory = new SubCategory({
             name: normalizedName,
-            category: resolvedCategory,
-            parentSubCategory: resolvedParentSubCategory,
+            category,
+            parentSubCategory: null,
             image
         });
 
         const createdSubCategory = await subCategory.save();
         await createdSubCategory.populate('category', 'name');
-        await createdSubCategory.populate('parentSubCategory', 'name category');
         res.status(201).json(createdSubCategory);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -111,7 +96,7 @@ export const deleteSubCategory = async (req, res) => {
 // @access  Private/Admin
 export const updateSubCategory = async (req, res) => {
     try {
-        const { name, image, isActive, category, parentSubCategory } = req.body;
+        const { name, image, isActive, category } = req.body;
         const subCategory = await SubCategory.findById(req.params.id);
 
         if (subCategory) {
@@ -134,31 +119,16 @@ export const updateSubCategory = async (req, res) => {
                 }
             }
 
-            let resolvedCategory = category ?? subCategory.category;
-            let resolvedParentSubCategory = parentSubCategory === undefined
-                ? subCategory.parentSubCategory
-                : (parentSubCategory || null);
-
-            if (resolvedParentSubCategory) {
-                if (String(resolvedParentSubCategory) === String(subCategory._id)) {
-                    return res.status(400).json({ message: 'A subcategory cannot be its own parent' });
-                }
-                const parentSub = await SubCategory.findById(resolvedParentSubCategory).select('category');
-                if (!parentSub) {
-                    return res.status(404).json({ message: 'Parent subcategory not found' });
-                }
-                resolvedCategory = parentSub.category;
-            }
+            const resolvedCategory = category ?? subCategory.category;
 
             subCategory.name = requestedName || subCategory.name;
             subCategory.image = image || subCategory.image;
             if (isActive !== undefined) subCategory.isActive = isActive;
             if (resolvedCategory !== undefined) subCategory.category = resolvedCategory;
-            subCategory.parentSubCategory = resolvedParentSubCategory;
+            subCategory.parentSubCategory = null;
 
             const updatedSubCategory = await subCategory.save();
             await updatedSubCategory.populate('category', 'name');
-            await updatedSubCategory.populate('parentSubCategory', 'name category');
             res.json(updatedSubCategory);
         } else {
             res.status(404).json({ message: 'Subcategory not found' });

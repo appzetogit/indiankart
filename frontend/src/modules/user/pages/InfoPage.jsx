@@ -61,14 +61,14 @@ const InfoPage = () => {
     return (
         <div className="bg-white min-h-screen text-gray-900">
             {/* Header */}
-            <div className="bg-white sticky top-0 z-10 border-b border-gray-100 px-8 py-6 flex items-center justify-center">
+            <div className="bg-white sticky top-0 z-10 border-b border-gray-100 px-6 md:px-8 pt-0 pb-4 md:pb-5 flex items-center justify-center">
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
                     {title}
                 </h1>
             </div>
 
             {/* Content Container */}
-            <div className="max-w-4xl mx-auto px-6 py-12 md:py-20">
+            <div className="max-w-4xl mx-auto px-5 md:px-6 pt-6 pb-12 md:pt-8 md:pb-16">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-20 gap-4">
                         <div className="w-12 h-12 border-4 border-blue-50 border-t-blue-600 rounded-full animate-spin"></div>

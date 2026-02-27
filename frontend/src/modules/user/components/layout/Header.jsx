@@ -476,7 +476,7 @@ const Header = () => {
                                     categoryImage.startsWith('/') ||
                                     categoryImage.startsWith('data:') ||
                                     categoryImage.startsWith('blob:'));
-                            const isHovered = hoveredCategory === cat.name;
+                            const isHovered = false;
                             const isRightSide = index > displayCategories.length / 2;
 
                             return (

@@ -7,6 +7,8 @@ const buildSubCategoryRoute = (categoryName, subCategoryName) => {
     return `/category/${categorySegment}/${subCategorySegment}`;
 };
 
+const isExternalUrl = (url = '') => /^https?:\/\//i.test(String(url).trim());
+
 const SubCategoryList = ({
     subCategories,
     categoryName,
@@ -40,7 +42,8 @@ const SubCategoryList = ({
                     return {
                         image: item.image,
                         title: item.title || categoryName,
-                        linkSubCategoryName: item.linkSubCategoryName || primaryTargetName
+                        linkSubCategoryName: item.linkSubCategoryName || primaryTargetName,
+                        redirectLink: item.redirectLink || ''
                     };
                 }
                 return null;
@@ -51,12 +54,18 @@ const SubCategoryList = ({
     const normalizedSecondaryBanners = useMemo(() => {
         return (Array.isArray(secondaryBanners) ? secondaryBanners : [])
             .map((item) => {
-                if (typeof item === 'string') return { image: item, title: secondaryBannerTitle || categoryName };
-                if (item?.image) return { image: item.image, title: item.title || secondaryBannerTitle || categoryName };
+                if (typeof item === 'string') return { image: item, title: categoryName, redirectLink: '' };
+                if (item?.image) {
+                    return {
+                        image: item.image,
+                        title: item.title || categoryName,
+                        redirectLink: item.redirectLink || ''
+                    };
+                }
                 return null;
             })
             .filter(Boolean);
-    }, [secondaryBanners, secondaryBannerTitle, categoryName]);
+    }, [secondaryBanners, categoryName]);
 
     useEffect(() => {
         if (!bannerRailRef.current || normalizedBannerCards.length <= 1) return undefined;
@@ -92,21 +101,41 @@ const SubCategoryList = ({
                     className="flex gap-3 md:gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory"
                 >
                     {normalizedBannerCards.map((banner, index) => (
-                        <Link
-                            key={`${banner.image}-${index}`}
-                            to={buildSubCategoryRoute(categoryName, banner.linkSubCategoryName || primaryTargetName)}
-                            className="relative overflow-hidden rounded-2xl border border-gray-200 h-[180px] md:h-[266px] min-w-[78%] md:min-w-[calc(44%-8px)] snap-start shrink-0"
-                        >
-                            <img
-                                src={banner.image}
-                                alt={banner.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    e.currentTarget.onerror = null;
-                                    e.currentTarget.src = '';
-                                }}
-                            />
-                        </Link>
+                        banner.redirectLink ? (
+                            <a
+                                key={`${banner.image}-${index}`}
+                                href={banner.redirectLink}
+                                target={isExternalUrl(banner.redirectLink) ? '_blank' : undefined}
+                                rel={isExternalUrl(banner.redirectLink) ? 'noreferrer' : undefined}
+                                className="relative overflow-hidden rounded-2xl border border-gray-200 h-[180px] md:h-[266px] min-w-[78%] md:min-w-[calc(44%-8px)] snap-start shrink-0 block"
+                            >
+                                <img
+                                    src={banner.image}
+                                    alt={banner.title}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.currentTarget.onerror = null;
+                                        e.currentTarget.src = '';
+                                    }}
+                                />
+                            </a>
+                        ) : (
+                            <Link
+                                key={`${banner.image}-${index}`}
+                                to={buildSubCategoryRoute(categoryName, banner.linkSubCategoryName || primaryTargetName)}
+                                className="relative overflow-hidden rounded-2xl border border-gray-200 h-[180px] md:h-[266px] min-w-[78%] md:min-w-[calc(44%-8px)] snap-start shrink-0"
+                            >
+                                <img
+                                    src={banner.image}
+                                    alt={banner.title}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                        e.currentTarget.onerror = null;
+                                        e.currentTarget.src = '';
+                                    }}
+                                />
+                            </Link>
+                        )
                     ))}
                 </div>
                 )}
@@ -138,25 +167,52 @@ const SubCategoryList = ({
 
                 {normalizedSecondaryBanners.length > 0 && (
                     <div className="px-1 md:px-2 mt-8 md:mt-10">
-                        <h2 className="text-3xl md:text-6xl font-black text-black mb-4 md:mb-6">
-                            {secondaryBannerTitle || 'Launch of the Day'}
-                        </h2>
                         <div className="space-y-3 md:space-y-4">
                             {normalizedSecondaryBanners.map((banner, index) => (
-                                <div
-                                    key={`${banner.image}-${index}`}
-                                    className="w-full rounded-2xl overflow-hidden border border-gray-200"
-                                >
-                                    <img
-                                        src={banner.image}
-                                        alt={banner.title}
-                                        className="w-full h-[180px] md:h-[420px] object-cover"
-                                        onError={(e) => {
-                                            e.currentTarget.onerror = null;
-                                            e.currentTarget.src = '';
-                                        }}
-                                    />
-                                </div>
+                                banner.redirectLink ? (
+                                    <a
+                                        key={`${banner.image}-${index}`}
+                                        href={banner.redirectLink}
+                                        target={isExternalUrl(banner.redirectLink) ? '_blank' : undefined}
+                                        rel={isExternalUrl(banner.redirectLink) ? 'noreferrer' : undefined}
+                                        className="w-full block"
+                                    >
+                                        {banner.title && (
+                                            <div className="mb-2 px-1 text-lg md:text-3xl font-bold text-black leading-tight">
+                                                {banner.title}
+                                            </div>
+                                        )}
+                                        <img
+                                            src={banner.image}
+                                            alt={banner.title}
+                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
+                                            onError={(e) => {
+                                                e.currentTarget.onerror = null;
+                                                e.currentTarget.src = '';
+                                            }}
+                                        />
+                                    </a>
+                                ) : (
+                                    <div
+                                        key={`${banner.image}-${index}`}
+                                        className="w-full"
+                                    >
+                                        {banner.title && (
+                                            <div className="mb-2 px-1 text-lg md:text-3xl font-bold text-black leading-tight">
+                                                {banner.title}
+                                            </div>
+                                        )}
+                                        <img
+                                            src={banner.image}
+                                            alt={banner.title}
+                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
+                                            onError={(e) => {
+                                                e.currentTarget.onerror = null;
+                                                e.currentTarget.src = '';
+                                            }}
+                                        />
+                                    </div>
+                                )
                             ))}
                         </div>
                     </div>

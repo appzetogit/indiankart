@@ -263,32 +263,14 @@ const ProductDetails = () => {
         ? Math.round(((selectedOriginalPrice - selectedPrice) / selectedOriginalPrice) * 100)
         : 0;
 
-    const productImages = React.useMemo(() => {
+    const baseProductImages = React.useMemo(() => {
         if (!product) return [];
 
-        const baseImages = [
+        return [
             product.image,
             ...(Array.isArray(product.images) ? product.images : [])
-        ];
-
-        // Add ONLY the images of currently selected variants
-        const variantImages = [];
-        displayVariantHeadings.forEach(vh => {
-            if (vh.hasImage && vh.options) {
-                // Find the image for the currently selected option in this category
-                const selectedOpt = vh.options.find(opt => opt.name === selectedVariants[vh.name]);
-                if (selectedOpt) {
-                    if (selectedOpt.image) variantImages.push(selectedOpt.image);
-                    if (Array.isArray(selectedOpt.images)) {
-                        variantImages.push(...selectedOpt.images);
-                    }
-                }
-            }
-        });
-
-        // Combine base images and selected variant images, unique and filtered
-        return Array.from(new Set([...baseImages, ...variantImages])).filter(Boolean);
-    }, [product, displayVariantHeadings, selectedVariants]);
+        ].filter(Boolean);
+    }, [product]);
 
     const selectedVariantSummary = React.useMemo(() => {
         if (displayVariantHeadings.length === 0) return null;
@@ -304,16 +286,25 @@ const ProductDetails = () => {
         );
     }, [displayVariantHeadings, selectedVariants]);
 
-    const handleVariantSelect = (vhName, optName, optImage, optImages) => {
-        setSelectedVariants(prev => ({ ...prev, [vhName]: optName }));
+    const selectedVariantImages = React.useMemo(() => {
+        const variantImages = [];
+        displayVariantHeadings.forEach(vh => {
+            const selectedOpt = (vh.options || []).find(opt => opt.name === selectedVariants[vh.name]);
+            if (!selectedOpt) return;
+            if (selectedOpt.image) variantImages.push(selectedOpt.image);
+            if (Array.isArray(selectedOpt.images)) variantImages.push(...selectedOpt.images);
+        });
+        return Array.from(new Set(variantImages.filter(Boolean)));
+    }, [displayVariantHeadings, selectedVariants]);
 
-        // When a variant with images is selected, we want to jump to the first one.
-        if (optImage || (Array.isArray(optImages) && optImages.length > 0)) {
-            // Find where these images start in the recomputed productImages list.
-            // They always appear after baseImages.
-            const baseImagesCount = [product.image, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean).length;
-            setCurrentImageIndex(baseImagesCount);
-        }
+    const productImages = React.useMemo(() => {
+        const imagesToShow = selectedVariantImages.length > 0 ? selectedVariantImages : baseProductImages;
+        return Array.from(new Set(imagesToShow)).filter(Boolean);
+    }, [selectedVariantImages, baseProductImages]);
+
+    const handleVariantSelect = (vhName, optName) => {
+        setSelectedVariants(prev => ({ ...prev, [vhName]: optName }));
+        setCurrentImageIndex(0);
     };
 
     const handleAddToCart = () => {
@@ -437,6 +428,16 @@ const ProductDetails = () => {
     const [showFullDescription, setShowFullDescription] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [bankOffers, setBankOffers] = useState([]);
+
+    useEffect(() => {
+        setCurrentImageIndex(0);
+    }, [id]);
+
+    useEffect(() => {
+        if (currentImageIndex >= productImages.length) {
+            setCurrentImageIndex(0);
+        }
+    }, [productImages, currentImageIndex]);
 
     useEffect(() => {
         if (!id || !product) return;
@@ -649,7 +650,7 @@ const ProductDetails = () => {
                                                 vh.hasImage ? (
                                                     <div
                                                         key={idx}
-                                                        onClick={() => handleVariantSelect(vh.name, opt.name, opt.image, opt.images)}
+                                                        onClick={() => handleVariantSelect(vh.name, opt.name)}
                                                         className={`w-14 h-16 rounded border-2 p-0.5 cursor-pointer transition-all hover:scale-105 ${selectedVariants[vh.name] === opt.name ? 'border-blue-600' : 'border-transparent'}`}
                                                     >
                                                         <img
@@ -1085,13 +1086,13 @@ const ProductDetails = () => {
                                             vh.hasImage ? (
                                                 <button
                                                     key={idx}
-                                                    onClick={() => handleVariantSelect(vh.name, opt.name, opt.image)}
+                                                    onClick={() => handleVariantSelect(vh.name, opt.name)}
                                                     className={`w-14 h-16 rounded-xl border-2 p-0.5 transition-all shadow-sm ${selectedVariants[vh.name] === opt.name
                                                         ? 'border-blue-600 bg-blue-50/50 scale-105 shadow-md'
                                                         : 'border-gray-100 bg-white hover:border-gray-200'
                                                         }`}
                                                 >
-                                                    <img src={opt.image} alt={opt.name} className="w-full h-full object-cover rounded-lg" />
+                                                    <img src={opt.image || (Array.isArray(opt.images) ? opt.images[0] : '')} alt={opt.name} className="w-full h-full object-cover rounded-lg" />
                                                 </button>
                                             ) : (
                                                 <button

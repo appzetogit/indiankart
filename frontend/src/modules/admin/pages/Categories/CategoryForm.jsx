@@ -3,8 +3,10 @@ import { MdClose, MdDelete } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 
-const CategoryForm = ({ category, onClose }) => {
+const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
     const { addCategory, updateCategory, isLoading } = useCategoryStore();
+    const isEditMode = Boolean(category?.id);
+    const canManageBanners = isEditMode || isBannerMode;
 
     const [formData, setFormData] = useState({
         name: '',
@@ -24,10 +26,40 @@ const CategoryForm = ({ category, onClose }) => {
         return banner.image || '';
     };
 
+    const normalizeSmallBannerItem = (banner) => {
+        if (!banner) return null;
+        if (typeof banner === 'string') {
+            return { image: banner, title: '', redirectLink: '' };
+        }
+        if (banner.image) {
+            return {
+                image: banner.image,
+                title: banner.title || '',
+                redirectLink: banner.redirectLink || ''
+            };
+        }
+        return null;
+    };
+
+    const normalizeSecondaryBannerItem = (banner) => {
+        if (!banner) return null;
+        if (typeof banner === 'string') {
+            return { image: banner, title: '', redirectLink: '' };
+        }
+        if (banner.image) {
+            return {
+                image: banner.image,
+                title: banner.title || '',
+                redirectLink: banner.redirectLink || ''
+            };
+        }
+        return null;
+    };
+
     useEffect(() => {
         if (category?.id) {
             const existingSmallBanners = Array.isArray(category.smallBanners)
-                ? category.smallBanners.map(extractBannerImage).filter(Boolean)
+                ? category.smallBanners.map(normalizeSmallBannerItem).filter(Boolean)
                 : [];
 
             setFormData({
@@ -37,9 +69,9 @@ const CategoryForm = ({ category, onClose }) => {
                 file: null,
                 smallBanners: existingSmallBanners,
                 newSmallBannerUploads: [],
-                secondaryBannerTitle: category.secondaryBannerTitle || '',
+                secondaryBannerTitle: '',
                 secondaryBanners: Array.isArray(category.secondaryBanners)
-                    ? category.secondaryBanners.map(extractBannerImage).filter(Boolean)
+                    ? category.secondaryBanners.map(normalizeSecondaryBannerItem).filter(Boolean)
                     : [],
                 newSecondaryBannerUploads: []
             });
@@ -62,45 +94,71 @@ const CategoryForm = ({ category, onClose }) => {
         e.preventDefault();
 
         const data = new FormData();
-        data.append('name', formData.name);
+        const normalizedName = isBannerMode
+            ? (formData.name || `Banner-${Date.now()}`)
+            : formData.name;
+        data.append('name', normalizedName);
         data.append('active', formData.active);
+        if (isBannerMode) {
+            data.append('allowBannerData', 'true');
+        }
 
-        if (formData.file) {
+        if (!isBannerMode && formData.file) {
             data.append('icon', formData.file);
-        } else if (formData.image) {
+        } else if (!isBannerMode && formData.image) {
             data.append('icon', formData.image);
         }
 
-        const retainedSmallBanners = formData.smallBanners.map((image) => ({
-            image,
-            alt: formData.name
-        }));
-        data.append('smallBanners', JSON.stringify(retainedSmallBanners));
-        data.append('secondaryBannerTitle', formData.secondaryBannerTitle || '');
-        const retainedSecondaryBanners = formData.secondaryBanners.map((image) => ({
-            image,
-            alt: formData.name
-        }));
-        data.append('secondaryBanners', JSON.stringify(retainedSecondaryBanners));
+        if (canManageBanners) {
+            const retainedSmallBanners = formData.smallBanners.map((banner) => ({
+                image: banner.image,
+                alt: normalizedName,
+                redirectLink: banner.redirectLink || ''
+            }));
+            data.append('smallBanners', JSON.stringify(retainedSmallBanners));
+            data.append('secondaryBannerTitle', '');
+            const retainedSecondaryBanners = formData.secondaryBanners.map((banner) => ({
+                image: banner.image,
+                alt: normalizedName,
+                title: banner.title || '',
+                redirectLink: banner.redirectLink || ''
+            }));
+            data.append('secondaryBanners', JSON.stringify(retainedSecondaryBanners));
 
-        formData.newSmallBannerUploads.forEach((item) => {
-            if (item?.file) {
-                data.append('smallBanners', item.file);
-            }
-        });
-        formData.newSecondaryBannerUploads.forEach((item) => {
-            if (item?.file) {
-                data.append('secondaryBanners', item.file);
-            }
-        });
+            formData.newSmallBannerUploads.forEach((item) => {
+                if (item?.file) {
+                    data.append('smallBanners', item.file);
+                }
+            });
+            const newSmallBannersMeta = formData.newSmallBannerUploads.map((item) => ({
+                redirectLink: item.redirectLink || ''
+            }));
+            data.append('newSmallBannersMeta', JSON.stringify(newSmallBannersMeta));
+            formData.newSecondaryBannerUploads.forEach((item) => {
+                if (item?.file) {
+                    data.append('secondaryBanners', item.file);
+                }
+            });
+            const newSecondaryBannersMeta = formData.newSecondaryBannerUploads.map((item) => ({
+                title: item.title || '',
+                redirectLink: item.redirectLink || ''
+            }));
+            data.append('newSecondaryBannersMeta', JSON.stringify(newSecondaryBannersMeta));
+        }
 
         try {
-            if (category?.id) {
+            if (isEditMode) {
                 await updateCategory(category.id, data);
-                toast.success('Category updated successfully', { duration: 1200 });
+                toast.success(
+                    isBannerMode ? 'Banner updated successfully' : 'Category updated successfully',
+                    { duration: 1200 }
+                );
             } else {
                 await addCategory(data);
-                toast.success('Category created successfully', { duration: 1200 });
+                toast.success(
+                    isBannerMode ? 'Banner created successfully' : 'Category created successfully',
+                    { duration: 1200 }
+                );
             }
             onClose();
         } catch (error) {
@@ -131,7 +189,8 @@ const CategoryForm = ({ category, onClose }) => {
 
         const uploads = files.map((file) => ({
             file,
-            preview: URL.createObjectURL(file)
+            preview: URL.createObjectURL(file),
+            redirectLink: ''
         }));
 
         setFormData((prev) => ({
@@ -142,10 +201,28 @@ const CategoryForm = ({ category, onClose }) => {
         e.target.value = '';
     };
 
-    const removeExistingSmallBanner = (imageToRemove) => {
+    const updateExistingSmallBannerMeta = (indexToUpdate, field, value) => {
         setFormData((prev) => ({
             ...prev,
-            smallBanners: prev.smallBanners.filter((image) => image !== imageToRemove)
+            smallBanners: prev.smallBanners.map((banner, index) => (
+                index === indexToUpdate ? { ...banner, [field]: value } : banner
+            ))
+        }));
+    };
+
+    const removeExistingSmallBanner = (indexToRemove) => {
+        setFormData((prev) => ({
+            ...prev,
+            smallBanners: prev.smallBanners.filter((_, index) => index !== indexToRemove)
+        }));
+    };
+
+    const updateNewSmallBannerMeta = (previewToUpdate, field, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            newSmallBannerUploads: prev.newSmallBannerUploads.map((item) => (
+                item.preview === previewToUpdate ? { ...item, [field]: value } : item
+            ))
         }));
     };
 
@@ -169,7 +246,9 @@ const CategoryForm = ({ category, onClose }) => {
 
         const uploads = files.map((file) => ({
             file,
-            preview: URL.createObjectURL(file)
+            preview: URL.createObjectURL(file),
+            title: '',
+            redirectLink: ''
         }));
 
         setFormData((prev) => ({
@@ -180,10 +259,28 @@ const CategoryForm = ({ category, onClose }) => {
         e.target.value = '';
     };
 
-    const removeExistingSecondaryBanner = (imageToRemove) => {
+    const updateExistingSecondaryBannerMeta = (indexToUpdate, field, value) => {
         setFormData((prev) => ({
             ...prev,
-            secondaryBanners: prev.secondaryBanners.filter((image) => image !== imageToRemove)
+            secondaryBanners: prev.secondaryBanners.map((banner, index) => (
+                index === indexToUpdate ? { ...banner, [field]: value } : banner
+            ))
+        }));
+    };
+
+    const removeExistingSecondaryBanner = (indexToRemove) => {
+        setFormData((prev) => ({
+            ...prev,
+            secondaryBanners: prev.secondaryBanners.filter((_, index) => index !== indexToRemove)
+        }));
+    };
+
+    const updateNewSecondaryBannerMeta = (previewToUpdate, field, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            newSecondaryBannerUploads: prev.newSecondaryBannerUploads.map((item) => (
+                item.preview === previewToUpdate ? { ...item, [field]: value } : item
+            ))
         }));
     };
 
@@ -206,7 +303,9 @@ const CategoryForm = ({ category, onClose }) => {
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md border border-gray-200 max-h-[92vh] flex flex-col overflow-hidden">
                 <div className="flex items-center justify-between p-3 md:p-4 border-b border-gray-100 shrink-0">
                     <h2 className="text-lg md:text-xl font-bold text-gray-800">
-                        {category ? 'Edit Category' : 'Add New Category'}
+                        {category
+                            ? (isBannerMode ? 'Edit Banner' : 'Edit Category')
+                            : (isBannerMode ? 'Create Banner' : 'Add New Category')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -218,9 +317,10 @@ const CategoryForm = ({ category, onClose }) => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-3 md:p-4 space-y-3 md:space-y-4 overflow-y-auto">
+                    {!isBannerMode && (
                     <div>
                         <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
-                            Category Name *
+                            {isBannerMode ? 'Banner Name *' : 'Category Name *'}
                         </label>
                         <input
                             type="text"
@@ -232,14 +332,16 @@ const CategoryForm = ({ category, onClose }) => {
                             autoCapitalize="none"
                             spellCheck={false}
                             className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 placeholder:text-gray-500 text-sm md:text-base"
-                            placeholder="Enter category name"
+                            placeholder={isBannerMode ? 'Enter banner name' : 'Enter category name'}
                             required
                         />
                     </div>
+                    )}
 
+                    {!isBannerMode && (
                     <div>
                         <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">
-                            Category Image
+                            {isBannerMode ? 'Banner Image' : 'Category Image'}
                         </label>
                         <input
                             type="file"
@@ -252,13 +354,15 @@ const CategoryForm = ({ category, onClose }) => {
                                 <p className="text-xs text-gray-600 mb-2">Image Preview:</p>
                                 <img
                                     src={formData.image}
-                                    alt="Category preview"
+                                    alt={isBannerMode ? 'Banner preview' : 'Category preview'}
                                     className="w-24 h-24 object-cover rounded-lg"
                                 />
                             </div>
                         )}
                     </div>
+                    )}
 
+                    {canManageBanners && (
                     <div className="border border-gray-200 rounded-lg p-3 md:p-4 bg-gray-50/60">
                         <div className="mb-2 md:mb-3">
                             <h3 className="text-sm md:text-base font-bold text-gray-800">Category Small Banners</h3>
@@ -280,12 +384,21 @@ const CategoryForm = ({ category, onClose }) => {
                                 <div>
                                     <p className="text-xs font-semibold text-gray-700 mb-2">Saved Banners</p>
                                     <div className="grid grid-cols-2 gap-2">
-                                        {formData.smallBanners.map((image) => (
-                                            <div key={image} className="relative rounded-lg border border-gray-200 bg-white p-1">
-                                                <img src={image} alt="Small banner" className="w-full h-20 object-cover rounded-md" />
+                                        {formData.smallBanners.map((banner, index) => (
+                                            <div key={`${banner.image}-${index}`} className="relative rounded-lg border border-gray-200 bg-white p-2">
+                                                <img src={banner.image} alt="Small banner" className="w-full h-20 object-cover rounded-md" />
+                                                <div className="mt-2 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        value={banner.redirectLink || ''}
+                                                        onChange={(e) => updateExistingSmallBannerMeta(index, 'redirectLink', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Redirect link"
+                                                    />
+                                                </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeExistingSmallBanner(image)}
+                                                    onClick={() => removeExistingSmallBanner(index)}
                                                     className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
                                                     title="Remove banner"
                                                 >
@@ -302,8 +415,17 @@ const CategoryForm = ({ category, onClose }) => {
                                     <p className="text-xs font-semibold text-gray-700 mb-2">New Uploads</p>
                                     <div className="grid grid-cols-2 gap-2">
                                         {formData.newSmallBannerUploads.map((item) => (
-                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-2">
                                                 <img src={item.preview} alt="New banner preview" className="w-full h-20 object-cover rounded-md" />
+                                                <div className="mt-2 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.redirectLink || ''}
+                                                        onChange={(e) => updateNewSmallBannerMeta(item.preview, 'redirectLink', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Redirect link"
+                                                    />
+                                                </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => removeNewSmallBannerUpload(item.preview)}
@@ -319,27 +441,15 @@ const CategoryForm = ({ category, onClose }) => {
                             )}
                         </div>
                     </div>
+                    )}
 
+                    {canManageBanners && (
                     <div className="border border-gray-200 rounded-lg p-3 md:p-4 bg-gray-50/60">
                         <div className="mb-2 md:mb-3">
                             <h3 className="text-sm md:text-base font-bold text-gray-800">Secondary Banner Section</h3>
                             <p className="text-[11px] md:text-xs text-gray-500 mt-0.5">
                                 Shown after category icons on the user category page.
                             </p>
-                        </div>
-
-                        <div className="mb-3">
-                            <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1.5">
-                                Section Title
-                            </label>
-                            <input
-                                type="text"
-                                name="secondaryBannerTitle"
-                                value={formData.secondaryBannerTitle}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900 text-sm md:text-base"
-                                placeholder="e.g. Launch of the Day"
-                            />
                         </div>
 
                         <input
@@ -355,12 +465,28 @@ const CategoryForm = ({ category, onClose }) => {
                                 <div>
                                     <p className="text-xs font-semibold text-gray-700 mb-2">Saved Secondary Banners</p>
                                     <div className="grid grid-cols-1 gap-2">
-                                        {formData.secondaryBanners.map((image) => (
-                                            <div key={image} className="relative rounded-lg border border-gray-200 bg-white p-1">
-                                                <img src={image} alt="Secondary banner" className="w-full h-28 object-cover rounded-md" />
+                                        {formData.secondaryBanners.map((banner, index) => (
+                                            <div key={`${banner.image}-${index}`} className="relative rounded-lg border border-gray-200 bg-white p-2">
+                                                <img src={banner.image} alt="Secondary banner" className="w-full h-28 object-cover rounded-md" />
+                                                <div className="mt-2 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        value={banner.title || ''}
+                                                        onChange={(e) => updateExistingSecondaryBannerMeta(index, 'title', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Heading"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={banner.redirectLink || ''}
+                                                        onChange={(e) => updateExistingSecondaryBannerMeta(index, 'redirectLink', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Redirect link"
+                                                    />
+                                                </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => removeExistingSecondaryBanner(image)}
+                                                    onClick={() => removeExistingSecondaryBanner(index)}
                                                     className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center"
                                                     title="Remove banner"
                                                 >
@@ -377,8 +503,24 @@ const CategoryForm = ({ category, onClose }) => {
                                     <p className="text-xs font-semibold text-gray-700 mb-2">New Secondary Uploads</p>
                                     <div className="grid grid-cols-1 gap-2">
                                         {formData.newSecondaryBannerUploads.map((item) => (
-                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-1">
+                                            <div key={item.preview} className="relative rounded-lg border border-gray-200 bg-white p-2">
                                                 <img src={item.preview} alt="New secondary banner preview" className="w-full h-28 object-cover rounded-md" />
+                                                <div className="mt-2 space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        value={item.title || ''}
+                                                        onChange={(e) => updateNewSecondaryBannerMeta(item.preview, 'title', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Heading"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        value={item.redirectLink || ''}
+                                                        onChange={(e) => updateNewSecondaryBannerMeta(item.preview, 'redirectLink', e.target.value)}
+                                                        className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        placeholder="Redirect link"
+                                                    />
+                                                </div>
                                                 <button
                                                     type="button"
                                                     onClick={() => removeNewSecondaryBannerUpload(item.preview)}
@@ -394,6 +536,7 @@ const CategoryForm = ({ category, onClose }) => {
                             )}
                         </div>
                     </div>
+                    )}
 
                     <div className="flex items-center gap-2 md:gap-3">
                         <input
@@ -405,7 +548,7 @@ const CategoryForm = ({ category, onClose }) => {
                             className="w-4 h-4 md:w-5 md:h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                         />
                         <label htmlFor="active" className="text-xs md:text-sm font-medium text-gray-700">
-                            Active (Category will be visible to users)
+                            {isBannerMode ? 'Active (Banner will be visible to users)' : 'Active (Category will be visible to users)'}
                         </label>
                     </div>
 
@@ -429,7 +572,9 @@ const CategoryForm = ({ category, onClose }) => {
                                     <span>{category ? 'Updating...' : 'Creating...'}</span>
                                 </>
                             ) : (
-                                `${category ? 'Update' : 'Create'} Category`
+                                isBannerMode
+                                    ? `${category ? 'Update' : 'Create'} Banner`
+                                    : `${category ? 'Update' : 'Create'} Category`
                             )}
                         </button>
                     </div>

@@ -9,14 +9,18 @@ const categorySchema = mongoose.Schema({
     smallBanners: [
         {
             image: { type: String, required: true },
-            alt: { type: String, default: '' }
+            alt: { type: String, default: '' },
+            title: { type: String, default: '' },
+            redirectLink: { type: String, default: '' }
         }
     ],
     secondaryBannerTitle: { type: String, default: '' },
     secondaryBanners: [
         {
             image: { type: String, required: true },
-            alt: { type: String, default: '' }
+            alt: { type: String, default: '' },
+            title: { type: String, default: '' },
+            redirectLink: { type: String, default: '' }
         }
     ],
     active: { type: Boolean, default: true },

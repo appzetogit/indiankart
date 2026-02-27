@@ -33,6 +33,7 @@ const Layout = () => {
     ].some(path => location.pathname.includes(path));
 
     const isHome = location.pathname === '/';
+    const standardTopPadding = 'pt-[110px] md:pt-[160px]';
     const showBottomNav =
         !location.pathname.includes('/product/') &&
         !location.pathname.includes('/checkout') &&
@@ -52,9 +53,9 @@ const Layout = () => {
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
-                            isHome ? 'pt-[260px] md:pt-[240px]' :
-                                isAccountSectionPage ? 'pt-[110px] md:pt-[104px]' :
-                                    'pt-[110px] md:pt-[160px]'}`}>
+                            isHome ? 'pt-[260px] md:pt-[210px]' :
+                                isAccountSectionPage ? standardTopPadding :
+                                    standardTopPadding}`}>
                 <AnimatePresence mode="wait" initial={false}>
                     <motion.div
                         key={location.pathname}

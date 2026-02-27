@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MdArrowBack, MdExpandMore } from 'react-icons/md';
+import { MdArrowBack } from 'react-icons/md';
 import { useProducts, useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
 import SubCategoryList from '../components/category/SubCategoryList';
@@ -32,7 +32,6 @@ const CategoryPage = () => {
     const [showAllRam, setShowAllRam] = useState(false);
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
-    const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
 
     const handleBackNavigation = () => {
         // React Router sets history.state.idx for in-app entries.
@@ -217,115 +216,25 @@ const CategoryPage = () => {
         Array.isArray(categoryData.subCategories) &&
         categoryData.subCategories.length > 0;
     const isSubCategoryProductsView = breadcrumbs.length > 1;
-
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
-            {!isSubCategoryLandingView && (
             <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[116px] z-40">
-                <div className="max-w-[1440px] mx-auto px-4 pt-3 pb-3 md:pt-3 md:pb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3 md:gap-6">
+                <div className="max-w-[1440px] mx-auto px-4 pt-3 pb-3 md:pt-3 md:pb-3">
+                    <div className="flex items-center gap-3">
                         <button
                             onClick={handleBackNavigation}
-                            className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 transition-colors group md:hidden"
+                            className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 transition-colors group"
                         >
                             <MdArrowBack className="text-xl text-gray-700" />
                         </button>
 
-                        <div className="hidden md:block">
-                            <nav className="flex items-center gap-2 text-[12px] text-gray-400 font-medium mb-1">
-                                <span className="hover:text-blue-600 cursor-pointer" onClick={() => navigate('/')}>Home</span>
-                                {breadcrumbs.map((crumb, i) => (
-                                    <React.Fragment key={i}>
-                                        <span className="material-icons text-[14px]">chevron_right</span>
-                                        <span
-                                            className={`hover:text-blue-600 cursor-pointer ${i === breadcrumbs.length - 1 ? 'text-gray-900 font-bold' : ''}`}
-                                            onClick={() =>
-                                                navigate(
-                                                    `/category/${breadcrumbs
-                                                        .slice(0, i + 1)
-                                                        .map((b) => encodeURIComponent(b.name))
-                                                        .join('/')}`
-                                                )
-                                            }
-                                        >
-                                            {crumb.name}
-                                        </span>
-                                    </React.Fragment>
-                                ))}
-                            </nav>
-                            <h1 className="text-xl md:text-2xl font-black text-gray-900 capitalize tracking-tight flex items-center gap-3">
-                                {categoryData.name}
-                                <span className="text-[12px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full lowercase">
-                                    {sortedProducts.length} items
-                                </span>
-                            </h1>
-                        </div>
-
-                        {/* Mobile Title */}
-                        <div className="md:hidden">
-                            <h1 className="text-base font-bold text-gray-900 capitalize">{categoryData.name}</h1>
-                            <p className="text-[10px] text-gray-500 font-medium">{sortedProducts.length} items</p>
-                        </div>
-                    </div>
-
-                    {/* Desktop Sort Dropdown */}
-                    <div className="hidden md:flex items-center gap-4 relative">
-                        <span className="text-[12px] font-black text-gray-400 uppercase tracking-widest">Sort By:</span>
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-                                className="flex items-center gap-3 bg-white border border-gray-200 px-4 py-2 rounded-lg hover:border-blue-500 transition-all shadow-sm"
-                            >
-                                <span className="text-sm font-bold text-gray-700 capitalize">
-                                    {[
-                                        { id: 'popularity', label: 'Popularity' },
-                                        { id: 'price-low', label: 'Price: Low to High' },
-                                        { id: 'price-high', label: 'Price: High to Low' },
-                                        { id: 'rating', label: 'Rating' }
-                                    ].find(opt => opt.id === sortBy)?.label}
-                                </span>
-                                <MdExpandMore className={`text-xl text-gray-400 transition-transform duration-300 ${isSortDropdownOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {isSortDropdownOpen && (
-                                <>
-                                    <div
-                                        className="fixed inset-0 z-10"
-                                        onClick={() => setIsSortDropdownOpen(false)}
-                                    ></div>
-                                    <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 z-20 animate-in fade-in zoom-in duration-200">
-                                        {[
-                                            { id: 'popularity', label: 'Popularity', desc: 'Highest rated first' },
-                                            { id: 'price-low', label: 'Price: Low to High', desc: 'Budget friendly first' },
-                                            { id: 'price-high', label: 'Price: High to Low', desc: 'Premium first' },
-                                            { id: 'rating', label: 'Customer Rating', desc: 'Trust verified first' }
-                                        ].map(opt => (
-                                            <button
-                                                key={opt.id}
-                                                onClick={() => {
-                                                    setSortBy(opt.id);
-                                                    setIsSortDropdownOpen(false);
-                                                }}
-                                                className={`w-full text-left px-5 py-3 transition-colors hover:bg-blue-50 group ${sortBy === opt.id ? 'bg-blue-50/50' : ''
-                                                    }`}
-                                            >
-                                                <div className="flex flex-col">
-                                                    <span className={`text-sm font-bold ${sortBy === opt.id ? 'text-blue-600' : 'text-gray-700'}`}>
-                                                        {opt.label}
-                                                    </span>
-                                                    <span className="text-[10px] text-gray-400 font-medium">{opt.desc}</span>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                        <h1 className="text-base md:text-2xl font-bold md:font-black text-gray-900 capitalize tracking-tight">
+                            {categoryData.name}
+                        </h1>
                     </div>
                 </div>
             </div>
-            )}
 
             <div className="max-w-[1440px] mx-auto md:px-4 pt-1 pb-4 md:py-4 min-h-[calc(100vh-160px)] md:min-h-[calc(100vh-144px)] flex flex-col">
                 <div className="flex flex-col lg:flex-row gap-4 h-full relative">

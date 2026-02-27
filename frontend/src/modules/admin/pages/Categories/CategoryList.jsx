@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { MdAdd, MdEdit, MdDelete } from 'react-icons/md';
+import { useLocation } from 'react-router-dom';
 import useCategoryStore from '../../store/categoryStore';
 import CategoryForm from './CategoryForm';
 import Pagination from '../../components/common/Pagination';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
 const CategoryList = () => {
+    const location = useLocation();
+    const isCategoryBannersPage = location.pathname === '/admin/category-banners';
+    const entityLabel = isCategoryBannersPage ? 'Banner' : 'Category';
     const { categories, deleteCategory, toggleCategoryStatus, fetchCategories } = useCategoryStore();
     const [showForm, setShowForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
@@ -30,7 +34,7 @@ const CategoryList = () => {
             message: `Are you sure you want to delete "${name}"?\nAll subcategories under it will also be deleted.`,
             type: 'danger',
             icon: 'delete_sweep',
-            confirmText: 'Delete Category',
+            confirmText: `Delete ${entityLabel}`,
             onConfirm: () => deleteCategory(id)
         });
     };
@@ -44,7 +48,9 @@ const CategoryList = () => {
         <div className="space-y-4 md:space-y-6">
             <div className="flex items-center justify-between gap-2">
                 <div>
-                    <h1 className="text-xl md:text-3xl font-bold text-gray-800">Category Management</h1>
+                    <h1 className="text-xl md:text-3xl font-bold text-gray-800">
+                        {isCategoryBannersPage ? 'Category Banner Management' : 'Category Management'}
+                    </h1>
                     <p className="text-xs md:text-base text-gray-500 mt-1">Only root categories are shown here.</p>
                 </div>
                 <button
@@ -52,7 +58,7 @@ const CategoryList = () => {
                     className="flex items-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition text-xs md:text-base font-bold"
                 >
                     <MdAdd size={16} className="md:w-5 md:h-5" />
-                    Add Category
+                    {isCategoryBannersPage ? 'Create Banner' : 'Add Category'}
                 </button>
             </div>
 
@@ -64,7 +70,11 @@ const CategoryList = () => {
 
                 {categories.length === 0 ? (
                     <div className="p-12 text-center text-gray-500">
-                        <p>No categories found. Create your first category.</p>
+                        <p>
+                            {isCategoryBannersPage
+                                ? 'No banners found. Create your first banner.'
+                                : 'No categories found. Create your first category.'}
+                        </p>
                     </div>
                 ) : (
                     <div>
@@ -137,6 +147,7 @@ const CategoryList = () => {
                 <CategoryForm
                     category={editingCategory}
                     onClose={handleCloseForm}
+                    isBannerMode={isCategoryBannersPage}
                 />
             )}
         </div>

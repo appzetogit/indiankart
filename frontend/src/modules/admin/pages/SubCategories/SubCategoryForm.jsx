@@ -6,18 +6,15 @@ import useCategoryStore from '../../store/categoryStore';
 
 const getId = (item) => String(item?._id || item?.id || '');
 const getCategoryId = (sub) => String(sub?.category?._id || sub?.category || '');
-const getParentSubId = (sub) => String(sub?.parentSubCategory?._id || sub?.parentSubCategory || '');
 
 const SubCategoryForm = ({ subCategory, onClose }) => {
-    const { addSubCategory, updateSubCategory, isLoading, subCategories, fetchSubCategories } = useSubCategoryStore();
+    const { addSubCategory, updateSubCategory, isLoading, fetchSubCategories } = useSubCategoryStore();
     const { categories, fetchCategories, isLoading: isCategoriesLoading } = useCategoryStore();
 
     const [formData, setFormData] = useState({
         name: '',
         image: '',
         category: '',
-        parentSubCategory: '',
-        parentSelector: '',
         isActive: true,
         file: null
     });
@@ -41,71 +38,12 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
         return deduped;
     }, [categories]);
 
-    const subCategoryOptions = useMemo(() => {
-        const seen = new Set();
-        const deduped = [];
-
-        for (const sub of subCategories || []) {
-            const key = getId(sub);
-            if (!key || seen.has(key)) continue;
-            seen.add(key);
-            deduped.push(sub);
-        }
-
-        return deduped;
-    }, [subCategories]);
-
-    const hierarchyOptions = useMemo(() => {
-        const currentId = getId(subCategory);
-
-        const byParent = new Map();
-        for (const sub of subCategoryOptions) {
-            if (getId(sub) === currentId) continue;
-            const parentId = getParentSubId(sub) || 'root';
-            if (!byParent.has(parentId)) byParent.set(parentId, []);
-            byParent.get(parentId).push(sub);
-        }
-
-        const sortedByName = (arr) => [...arr].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-
-        const buildSubTree = (categoryId, parentId = 'root', depth = 1) => {
-            const nodes = sortedByName(byParent.get(parentId) || []);
-            const rows = [];
-            const indent = '\u00A0\u00A0\u00A0';
-
-            for (const node of nodes) {
-                if (getCategoryId(node) !== String(categoryId)) continue;
-                rows.push({
-                    value: `sub:${getId(node)}`,
-                    label: `${indent.repeat(depth)}↳ ${node.name}`
-                });
-                rows.push(...buildSubTree(categoryId, getId(node), depth + 1));
-            }
-
-            return rows;
-        };
-
-        const rows = [];
-        for (const cat of categoryOptions) {
-            const catId = getId(cat);
-            rows.push({ value: `cat:${catId}`, label: cat.name });
-            rows.push(...buildSubTree(catId));
-        }
-
-        return rows;
-    }, [categoryOptions, subCategoryOptions, subCategory]);
-
     useEffect(() => {
         if (subCategory) {
-            const categoryId = getCategoryId(subCategory);
-            const parentSubId = getParentSubId(subCategory);
-
             setFormData({
                 name: subCategory.name,
                 image: subCategory.image || '',
-                category: categoryId,
-                parentSubCategory: parentSubId,
-                parentSelector: parentSubId ? `sub:${parentSubId}` : `cat:${categoryId}`,
+                category: getCategoryId(subCategory),
                 isActive: subCategory.isActive ?? true,
                 file: null
             });
@@ -114,8 +52,6 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
                 name: '',
                 image: '',
                 category: '',
-                parentSubCategory: '',
-                parentSelector: '',
                 isActive: true,
                 file: null
             });
@@ -127,42 +63,6 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
         setFormData((prev) => ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value
-        }));
-    };
-
-    const handleParentSelectionChange = (e) => {
-        const value = e.target.value;
-
-        if (!value) {
-            setFormData((prev) => ({
-                ...prev,
-                parentSelector: '',
-                category: '',
-                parentSubCategory: ''
-            }));
-            return;
-        }
-
-        const [kind, id] = value.split(':');
-
-        if (kind === 'cat') {
-            setFormData((prev) => ({
-                ...prev,
-                parentSelector: value,
-                category: id,
-                parentSubCategory: ''
-            }));
-            return;
-        }
-
-        const selectedSub = subCategoryOptions.find((sub) => getId(sub) === id);
-        const selectedSubCategoryId = selectedSub ? getCategoryId(selectedSub) : '';
-
-        setFormData((prev) => ({
-            ...prev,
-            parentSelector: value,
-            category: selectedSubCategoryId,
-            parentSubCategory: id
         }));
     };
 
@@ -185,14 +85,13 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
         e.preventDefault();
 
         if (!formData.category) {
-            toast.error('Please select a parent from hierarchy.');
+            toast.error('Please select a category.');
             return;
         }
 
         const data = {
             name: formData.name,
             category: formData.category,
-            parentSubCategory: formData.parentSubCategory || null,
             isActive: formData.isActive,
             image: formData.image
         };
@@ -246,20 +145,20 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
                     </div>
 
                     <div>
-                        <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">Primary Category *</label>
+                        <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-1 md:mb-2">Category *</label>
                         <select
-                            name="parentSelector"
-                            value={formData.parentSelector}
-                            onChange={handleParentSelectionChange}
+                            name="category"
+                            value={formData.category}
+                            onChange={handleChange}
                             className="w-full px-3 py-2 md:px-4 md:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
                             required
                         >
                             <option value="">
-                                {isCategoriesLoading ? 'Loading categories...' : '-- Select --'}
+                                {isCategoriesLoading ? 'Loading categories...' : '-- Select Category --'}
                             </option>
-                            {hierarchyOptions.map((item) => (
-                                <option key={item.value} value={item.value}>
-                                    {item.label}
+                            {categoryOptions.map((cat) => (
+                                <option key={getId(cat)} value={getId(cat)}>
+                                    {cat.name}
                                 </option>
                             ))}
                         </select>

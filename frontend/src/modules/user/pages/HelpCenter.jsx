@@ -25,7 +25,7 @@ const HelpCenter = () => {
         { title: 'Orders', icon: 'local_shipping', desc: 'Tracking, cancellations & returns' },
         { title: 'Payments', icon: 'account_balance_wallet', desc: 'Refunds & failed transactions' },
         { title: 'Account', icon: 'person', desc: 'Login, security & profile' },
-        { title: 'Flipkart Plus', icon: 'stars', desc: 'Benefits & coin management' }
+        { title: 'IndianKart', icon: 'stars', desc: 'Benefits & coin management' }
     ];
 
     const [expandedFaq, setExpandedFaq] = useState(null);
@@ -60,8 +60,8 @@ const HelpCenter = () => {
     return (
         <div className="bg-[#f1f3f6] min-h-screen pb-10">
             {/* Mobile Header - Hidden on Desktop */}
-            <div className="bg-blue-600 px-4 pt-4 pb-16 sticky top-0 z-10 md:hidden">
-                <div className="flex items-center gap-4 text-white mb-6">
+            <div className="bg-blue-600 px-4 pt-0 pb-4 sticky top-0 z-10 md:hidden">
+                <div className="flex items-center gap-4 text-white mb-3">
                     <button onClick={() => navigate(-1)} className="material-icons">arrow_back</button>
                     <h1 className="text-lg font-bold">Help Center</h1>
                 </div>
@@ -80,7 +80,7 @@ const HelpCenter = () => {
             </div>
 
             {/* Desktop Header & Container */}
-            <div className="md:max-w-4xl md:mx-auto md:pt-6 md:px-4">
+            <div className="md:max-w-4xl md:mx-auto md:pt-0 md:px-4">
 
                 {/* Desktop Breadcrumbs */}
                 <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 mb-6">
@@ -109,7 +109,7 @@ const HelpCenter = () => {
                     </div>
                 </div>
 
-                <div className="-mt-10 px-4 space-y-4 relative z-20 md:mt-0 md:px-0 md:space-y-6">
+                <div className="mt-0 px-4 space-y-4 relative z-20 md:mt-0 md:px-0 md:space-y-6">
                     {/* Quick Help Grid */}
                     <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
                         {categories.map((cat, idx) => (

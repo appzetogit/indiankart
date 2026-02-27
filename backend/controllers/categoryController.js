@@ -28,7 +28,9 @@ const normalizeSmallBanners = (rawValue, fallbackAlt = '') => {
             if (item && typeof item === 'object' && item.image) {
                 return {
                     image: item.image,
-                    alt: item.alt || fallbackAlt
+                    alt: item.alt || fallbackAlt,
+                    title: String(item.title || '').trim(),
+                    redirectLink: String(item.redirectLink || '').trim()
                 };
             }
 
@@ -72,6 +74,23 @@ export const createCategory = async (req, res) => {
         const { name, bannerAlt } = req.body;
         let { subCategories } = req.body;
         const normalizedName = name?.trim();
+        const allowBannerData = String(req.body.allowBannerData || '').toLowerCase() === 'true';
+        const parseNewSmallBannersMeta = () => {
+            try {
+                const parsed = JSON.parse(req.body.newSmallBannersMeta || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+        const parseNewSecondaryBannersMeta = () => {
+            try {
+                const parsed = JSON.parse(req.body.newSecondaryBannersMeta || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
 
         if (!normalizedName) {
             return res.status(400).json({ message: 'Category name is required' });
@@ -90,9 +109,15 @@ export const createCategory = async (req, res) => {
 
         let icon = req.body.icon;
         let bannerImage = req.body.bannerImage;
-        const smallBanners = normalizeSmallBanners(req.body.smallBanners, normalizedName);
-        const secondaryBanners = normalizeSmallBanners(req.body.secondaryBanners, normalizedName);
-        const secondaryBannerTitle = String(req.body.secondaryBannerTitle || '').trim();
+        const smallBanners = allowBannerData
+            ? normalizeSmallBanners(req.body.smallBanners, normalizedName)
+            : [];
+        const secondaryBanners = allowBannerData
+            ? normalizeSmallBanners(req.body.secondaryBanners, normalizedName)
+            : [];
+        const secondaryBannerTitle = allowBannerData ? String(req.body.secondaryBannerTitle || '').trim() : '';
+        const newSmallBannersMeta = allowBannerData ? parseNewSmallBannersMeta() : [];
+        const newSecondaryBannersMeta = allowBannerData ? parseNewSecondaryBannersMeta() : [];
 
         if (req.files) {
             if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -109,29 +134,37 @@ export const createCategory = async (req, res) => {
                 );
                 bannerImage = uploadedBanner.secure_url;
             }
-            if (Array.isArray(req.files.smallBanners)) {
-                for (const file of req.files.smallBanners) {
+            if (allowBannerData && Array.isArray(req.files.smallBanners)) {
+                for (let index = 0; index < req.files.smallBanners.length; index += 1) {
+                    const file = req.files.smallBanners[index];
                     if (!file?.buffer) continue;
                     const uploadedSmallBanner = await uploadBufferToCloudinary(
                         file.buffer,
                         { folder: 'ecom_uploads/categories/small-banners' }
                     );
+                    const meta = newSmallBannersMeta[index] || {};
                     smallBanners.push({
                         image: uploadedSmallBanner.secure_url,
-                        alt: normalizedName
+                        alt: normalizedName,
+                        title: String(meta.title || '').trim(),
+                        redirectLink: String(meta.redirectLink || '').trim()
                     });
                 }
             }
-            if (Array.isArray(req.files.secondaryBanners)) {
-                for (const file of req.files.secondaryBanners) {
+            if (allowBannerData && Array.isArray(req.files.secondaryBanners)) {
+                for (let index = 0; index < req.files.secondaryBanners.length; index += 1) {
+                    const file = req.files.secondaryBanners[index];
                     if (!file?.buffer) continue;
                     const uploadedSecondaryBanner = await uploadBufferToCloudinary(
                         file.buffer,
                         { folder: 'ecom_uploads/categories/secondary-banners' }
                     );
+                    const meta = newSecondaryBannersMeta[index] || {};
                     secondaryBanners.push({
                         image: uploadedSecondaryBanner.secure_url,
-                        alt: normalizedName
+                        alt: normalizedName,
+                        title: String(meta.title || '').trim(),
+                        redirectLink: String(meta.redirectLink || '').trim()
                     });
                 }
             }
@@ -194,6 +227,20 @@ export const updateCategory = async (req, res) => {
                 requestedName || category.name
             );
             const secondaryBannerTitle = String(req.body.secondaryBannerTitle || '').trim();
+            let newSmallBannersMeta = [];
+            try {
+                const parsedMeta = JSON.parse(req.body.newSmallBannersMeta || '[]');
+                newSmallBannersMeta = Array.isArray(parsedMeta) ? parsedMeta : [];
+            } catch {
+                newSmallBannersMeta = [];
+            }
+            let newSecondaryBannersMeta = [];
+            try {
+                const parsedMeta = JSON.parse(req.body.newSecondaryBannersMeta || '[]');
+                newSecondaryBannersMeta = Array.isArray(parsedMeta) ? parsedMeta : [];
+            } catch {
+                newSecondaryBannersMeta = [];
+            }
 
             if (req.files) {
                 if (req.files.icon && req.files.icon[0]?.buffer) {
@@ -211,28 +258,36 @@ export const updateCategory = async (req, res) => {
                     bannerImage = uploadedBanner.secure_url;
                 }
                 if (Array.isArray(req.files.smallBanners)) {
-                    for (const file of req.files.smallBanners) {
+                    for (let index = 0; index < req.files.smallBanners.length; index += 1) {
+                        const file = req.files.smallBanners[index];
                         if (!file?.buffer) continue;
                         const uploadedSmallBanner = await uploadBufferToCloudinary(
                             file.buffer,
                             { folder: 'ecom_uploads/categories/small-banners' }
                         );
+                        const meta = newSmallBannersMeta[index] || {};
                         smallBanners.push({
                             image: uploadedSmallBanner.secure_url,
-                            alt: requestedName || category.name
+                            alt: requestedName || category.name,
+                            title: String(meta.title || '').trim(),
+                            redirectLink: String(meta.redirectLink || '').trim()
                         });
                     }
                 }
                 if (Array.isArray(req.files.secondaryBanners)) {
-                    for (const file of req.files.secondaryBanners) {
+                    for (let index = 0; index < req.files.secondaryBanners.length; index += 1) {
+                        const file = req.files.secondaryBanners[index];
                         if (!file?.buffer) continue;
                         const uploadedSecondaryBanner = await uploadBufferToCloudinary(
                             file.buffer,
                             { folder: 'ecom_uploads/categories/secondary-banners' }
                         );
+                        const meta = newSecondaryBannersMeta[index] || {};
                         secondaryBanners.push({
                             image: uploadedSecondaryBanner.secure_url,
-                            alt: requestedName || category.name
+                            alt: requestedName || category.name,
+                            title: String(meta.title || '').trim(),
+                            redirectLink: String(meta.redirectLink || '').trim()
                         });
                     }
                 }
