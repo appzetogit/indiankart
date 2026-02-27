@@ -68,7 +68,11 @@ const StockManagement = () => {
             // Update local state instead of full refetch for better UX
             setProducts(prev => prev.map(p => {
                 if (p.id === product.id) {
-                    return { ...p, ...(isSku ? { skus: payload.skus } : { stock: payload.stock }) };
+                    if (isSku) {
+                        const derivedStock = payload.skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
+                        return { ...p, skus: payload.skus, stock: derivedStock };
+                    }
+                    return { ...p, stock: payload.stock };
                 }
                 return p;
             }));

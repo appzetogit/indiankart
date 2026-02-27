@@ -28,6 +28,9 @@ const useOrderStore = create((set) => ({
                     serialType: item.serialType // Mapping Serial Type
                 })) || [],
                 total: order.totalPrice,
+                itemsPrice: order.itemsPrice ?? 0,
+                shippingPrice: order.shippingPrice ?? 0,
+                taxPrice: order.taxPrice ?? 0,
                 payment: {
                     method: order.paymentMethod === 'COD' ? 'COD' : order.paymentMethod,
                     status: order.isPaid ? 'Paid' : 'Pending',
@@ -83,6 +86,9 @@ const useOrderStore = create((set) => ({
                     serialType: item.serialType // Mapping Serial Type
                 })) || [],
                 total: data.totalPrice,
+                itemsPrice: data.itemsPrice ?? 0,
+                shippingPrice: data.shippingPrice ?? 0,
+                taxPrice: data.taxPrice ?? 0,
                 payment: {
                     method: data.paymentMethod === 'COD' ? 'COD' : data.paymentMethod,
                     status: data.isPaid ? 'Paid' : 'Pending',
@@ -138,6 +144,9 @@ const useOrderStore = create((set) => ({
                     quantity: item.qty
                 })) || [],
                 total: data.totalPrice,
+                itemsPrice: data.itemsPrice ?? 0,
+                shippingPrice: data.shippingPrice ?? 0,
+                taxPrice: data.taxPrice ?? 0,
                 payment: {
                     method: data.paymentMethod === 'COD' ? 'COD' : data.paymentMethod,
                     status: data.isPaid ? 'Paid' : 'Pending',
@@ -195,6 +204,9 @@ const useOrderStore = create((set) => ({
                     serialType: item.serialType // Mapping Serial Type
                 })) || [],
                 total: data.totalPrice,
+                itemsPrice: data.itemsPrice ?? 0,
+                shippingPrice: data.shippingPrice ?? 0,
+                taxPrice: data.taxPrice ?? 0,
                 payment: {
                     method: data.paymentMethod === 'COD' ? 'COD' : data.paymentMethod,
                     status: data.isPaid ? 'Paid' : 'Pending',

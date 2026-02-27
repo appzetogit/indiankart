@@ -72,8 +72,8 @@ const ProfileSettings = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f1f3f6] py-4 md:py-8 px-3 md:px-6">
-            <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="min-h-screen bg-[#f1f3f6] py-4 md:py-0 px-3 md:px-6">
+            <div className="max-w-3xl mx-auto md:mt-4 bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-4 md:p-6 border-b border-gray-100 flex items-center gap-3">
                     <button
                         onClick={() => navigate('/account')}

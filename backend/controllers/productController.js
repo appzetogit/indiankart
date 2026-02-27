@@ -531,15 +531,22 @@ export const updateProductStock = async (req, res) => {
             const { stock, skus } = req.body;
 
             if (stock !== undefined) {
-                product.stock = Number(stock);
+                product.stock = Math.max(0, Number(stock) || 0);
             }
 
             if (skus !== undefined && Array.isArray(skus)) {
-                // In Mongoose, replacing a Map-based subdocument array requires caution.
-                // However, since we are sending the full skus array from frontend, 
-                // we can update it. We need to mark it modified if it's a complex type.
-                product.skus = skus;
+                const normalizedSkus = skus.map((sku) => ({
+                    ...sku,
+                    stock: Math.max(0, Number(sku?.stock) || 0),
+                    price: Math.max(0, Number(sku?.price) || 0),
+                    originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)
+                }));
+
+                product.skus = normalizedSkus;
                 product.markModified('skus');
+
+                // Keep parent stock in sync with variant stock sum.
+                product.stock = normalizedSkus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
             }
 
             const updatedProduct = await product.save();

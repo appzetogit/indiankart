@@ -534,18 +534,20 @@ const OrderDetails = () => {
                             </button>
                         )}
 
-                        {/* Download Invoice Button */}
-                        <button
-                            onClick={() => {
-                                import('../../../utils/invoiceGenerator').then(({ generateInvoice }) => {
-                                    generateInvoice(order, settings);
-                                });
-                            }}
-                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                        >
-                            <span className="material-icons">download</span>
-                            Download Invoice
-                        </button>
+                        {/* Download Invoice Button - visible only after delivery */}
+                        {order.status === 'Delivered' && (
+                            <button
+                                onClick={() => {
+                                    import('../../../utils/invoiceGenerator').then(({ generateInvoice }) => {
+                                        generateInvoice(order, settings);
+                                    });
+                                }}
+                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                            >
+                                <span className="material-icons">download</span>
+                                Download Invoice
+                            </button>
+                        )}
 
                         {/* Help Button */}
                         <button

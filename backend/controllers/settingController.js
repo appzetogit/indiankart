@@ -12,6 +12,10 @@ const getSettings = async (req, res) => {
             settings = await Setting.create({
                 sellerName: 'My E-com Store',
                 sellerAddress: '123 E-com St, Digital City',
+                shippingCharge: 40,
+                freeShippingThreshold: 500,
+                minShippingOrderAmount: 0,
+                maxShippingOrderAmount: 499
             });
         }
         res.json(settings);
@@ -32,7 +36,11 @@ const updateSettings = async (req, res) => {
             panNumber,
             contactEmail,
             contactPhone,
-            fssai
+            fssai,
+            shippingCharge,
+            freeShippingThreshold,
+            minShippingOrderAmount,
+            maxShippingOrderAmount
         } = req.body;
 
         let settings = await Setting.findOne();
@@ -68,6 +76,22 @@ const updateSettings = async (req, res) => {
             settings.contactEmail = contactEmail || settings.contactEmail;
             settings.contactPhone = contactPhone || settings.contactPhone;
             settings.fssai = fssai || settings.fssai;
+            if (shippingCharge !== undefined) {
+                const parsed = Number(shippingCharge);
+                if (Number.isFinite(parsed) && parsed >= 0) settings.shippingCharge = parsed;
+            }
+            if (freeShippingThreshold !== undefined) {
+                const parsed = Number(freeShippingThreshold);
+                if (Number.isFinite(parsed) && parsed >= 0) settings.freeShippingThreshold = parsed;
+            }
+            if (minShippingOrderAmount !== undefined) {
+                const parsed = Number(minShippingOrderAmount);
+                if (Number.isFinite(parsed) && parsed >= 0) settings.minShippingOrderAmount = parsed;
+            }
+            if (maxShippingOrderAmount !== undefined) {
+                const parsed = Number(maxShippingOrderAmount);
+                if (Number.isFinite(parsed) && parsed >= 0) settings.maxShippingOrderAmount = parsed;
+            }
 
             const updatedSettings = await settings.save();
             res.json(updatedSettings);
@@ -82,7 +106,11 @@ const updateSettings = async (req, res) => {
                 signatureUrl,
                 contactEmail,
                 contactPhone,
-                fssai
+                fssai,
+                shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
+                freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
+                minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,
+                maxShippingOrderAmount: Number.isFinite(Number(maxShippingOrderAmount)) ? Number(maxShippingOrderAmount) : 499
             });
             res.json(newSettings);
         }

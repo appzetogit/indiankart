@@ -26,6 +26,35 @@ const isCouponExpired = (coupon) => {
     return expiry < todayDateOnly;
 };
 
+const buildEstimatedDeliveryText = (deliveryTime, unit) => {
+    const timeValue = Number(deliveryTime);
+    const normalizedUnit = String(unit || '').toLowerCase();
+    if (!Number.isFinite(timeValue) || timeValue <= 0 || !normalizedUnit) {
+        return '';
+    }
+
+    const now = new Date();
+    const eta = new Date(now.getTime());
+
+    if (normalizedUnit === 'days') {
+        eta.setDate(eta.getDate() + timeValue);
+    } else if (normalizedUnit === 'hours') {
+        eta.setHours(eta.getHours() + timeValue);
+    } else if (normalizedUnit === 'minutes') {
+        eta.setMinutes(eta.getMinutes() + timeValue);
+    } else {
+        return '';
+    }
+
+    const dateLabel = eta.toLocaleDateString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short'
+    });
+    const unitLabel = timeValue === 1 ? normalizedUnit.slice(0, -1) : normalizedUnit;
+    return `Estimated delivery by ${dateLabel} (${timeValue} ${unitLabel})`;
+};
+
 const Checkout = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -59,6 +88,29 @@ const Checkout = () => {
     const [isPincodeServiceable, setIsPincodeServiceable] = useState(true);
     const [isCODServiceable, setIsCODServiceable] = useState(true);
     const [isPincodeChecking, setIsPincodeChecking] = useState(false);
+    const [estimatedDeliveryText, setEstimatedDeliveryText] = useState('');
+    const [shippingConfig, setShippingConfig] = useState({
+        shippingCharge: 40,
+        minShippingOrderAmount: 0,
+        maxShippingOrderAmount: 499
+    });
+
+    useEffect(() => {
+        const fetchShippingSettings = async () => {
+            try {
+                const { data } = await API.get('/settings');
+                const fallbackMax = Number(data?.freeShippingThreshold ?? 500) - 1;
+                setShippingConfig({
+                    shippingCharge: Number(data?.shippingCharge ?? 40),
+                    minShippingOrderAmount: Number(data?.minShippingOrderAmount ?? 0),
+                    maxShippingOrderAmount: Number(data?.maxShippingOrderAmount ?? (fallbackMax >= 0 ? fallbackMax : 499))
+                });
+            } catch (error) {
+                console.error('Failed to fetch shipping settings:', error);
+            }
+        };
+        fetchShippingSettings();
+    }, []);
 
     useEffect(() => {
         const checkServiceability = async () => {
@@ -69,10 +121,18 @@ const Checkout = () => {
                     const { data } = await API.get(`/pincodes/check/${selectedAddrObj.pincode}`);
                     setIsPincodeServiceable(data.isServiceable);
                     setIsCODServiceable(data.isCOD !== false); // Default to true if undefined, but API sends it now
+                    if (data.isServiceable) {
+                        setEstimatedDeliveryText(
+                            buildEstimatedDeliveryText(data.deliveryTime, data.unit) || data.message || ''
+                        );
+                    } else {
+                        setEstimatedDeliveryText('');
+                    }
                 } catch (error) {
                     console.error('Error checking serviceability:', error);
                     setIsPincodeServiceable(false);
                     setIsCODServiceable(false);
+                    setEstimatedDeliveryText('');
                 } finally {
                     setIsPincodeChecking(false);
                 }
@@ -212,7 +272,13 @@ const Checkout = () => {
         ? buyNowItem.price * buyNowItem.quantity 
         : getTotalPrice();
     const discount = appliedCoupon ? appliedCoupon.discount : 0;
-    const delivery = totalPrice > 500 ? 0 : 40;
+    const shippingCharge = Number.isFinite(Number(shippingConfig.shippingCharge)) ? Number(shippingConfig.shippingCharge) : 40;
+    const minShippingOrderAmount = Number.isFinite(Number(shippingConfig.minShippingOrderAmount)) ? Number(shippingConfig.minShippingOrderAmount) : 0;
+    const maxShippingOrderAmount = Number.isFinite(Number(shippingConfig.maxShippingOrderAmount)) ? Number(shippingConfig.maxShippingOrderAmount) : 499;
+    const isInShippingRange = maxShippingOrderAmount >= minShippingOrderAmount
+        && totalPrice >= minShippingOrderAmount
+        && totalPrice <= maxShippingOrderAmount;
+    const delivery = isInShippingRange ? shippingCharge : 0;
     const finalAmount = Math.max(0, totalPrice + delivery - discount);
 
     const handlePlaceOrder = async (paymentMethodOverride = 'COD') => {
@@ -439,6 +505,9 @@ const Checkout = () => {
                                             <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded text-gray-500 font-bold uppercase tracking-tighter">{addresses.find(a => a.id === selectedAddress)?.type}</span>
                                         </div>
                                         <p className="text-[11px] text-gray-500 leading-normal">{addresses.find(a => a.id === selectedAddress)?.address}, {addresses.find(a => a.id === selectedAddress)?.city}</p>
+                                        {isPincodeServiceable && !isPincodeChecking && estimatedDeliveryText && (
+                                            <p className="text-[11px] text-green-600 font-bold leading-normal">{estimatedDeliveryText}</p>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => setIsChangingAddress(true)}

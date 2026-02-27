@@ -103,7 +103,7 @@ const MyOrders = () => {
             {/* Desktop Container */}
             <div className="md:max-w-6xl md:mx-auto md:px-4">
                 {/* Desktop Breadcrumbs */}
-                <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 mb-6">
+                <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 mt-2 mb-6">
                     <span onClick={() => navigate('/')} className="cursor-pointer hover:text-blue-600 font-medium">Home</span>
                     <span className="material-icons text-xs">chevron_right</span>
                     <span onClick={() => navigate('/account')} className="cursor-pointer hover:text-blue-600 font-medium">My Account</span>

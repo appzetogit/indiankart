@@ -162,10 +162,9 @@ export const useProduct = (id) => {
             }
 
             try {
-                const productData = await getOrFetch(`product:${String(id)}`, async () => {
-                    const { data } = await API.get(`/products/${id}`);
-                    return data;
-                });
+                // Product detail should always revalidate from API so stock/price
+                // updates from admin are reflected immediately on PDP.
+                const { data: productData } = await API.get(`/products/${id}`);
 
                 rememberProduct(productData);
 

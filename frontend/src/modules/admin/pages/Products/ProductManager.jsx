@@ -175,7 +175,6 @@ const ProductManager = () => {
                                     <tr className="bg-gray-50/50 border-b border-gray-100">
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Details</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Category</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Price</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Stock Status</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
                                     </tr>
@@ -209,17 +208,6 @@ const ProductManager = () => {
                                                         <span className="inline-block px-2.5 py-1 rounded-full bg-gray-100 text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
                                                             <span className="text-gray-300">↳</span> {product.subCategory.name}
                                                         </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
-                                                <div className="flex flex-col items-center">
-                                                    <span className="text-[13px] font-black text-gray-900">₹{product.price.toLocaleString()}</span>
-                                                    {product.originalPrice > product.price && (
-                                                        <div className="flex items-center gap-1">
-                                                            <span className="text-[9px] text-gray-400 line-through">₹{product.originalPrice.toLocaleString()}</span>
-                                                            <span className="text-[9px] font-bold text-green-500">{product.discount}</span>
-                                                        </div>
                                                     )}
                                                 </div>
                                             </td>
@@ -353,3 +341,6 @@ const ProductManager = () => {
 };
 
 export default ProductManager;
+
+
+

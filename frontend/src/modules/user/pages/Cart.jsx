@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -6,6 +6,7 @@ import { confirmToast } from '../../../utils/toastUtils.jsx';
 import ProductSection from '../components/home/ProductSection';
 import { products } from '../data/mockData';
 import toast from 'react-hot-toast';
+import API from '../../../services/api';
 
 const Cart = () => {
     const navigate = useNavigate();
@@ -23,6 +24,28 @@ const Cart = () => {
         addresses
     } = useCartStore();
     const { isAuthenticated } = useAuthStore();
+    const [shippingConfig, setShippingConfig] = useState({
+        shippingCharge: 40,
+        minShippingOrderAmount: 0,
+        maxShippingOrderAmount: 499
+    });
+
+    useEffect(() => {
+        const fetchShippingSettings = async () => {
+            try {
+                const { data } = await API.get('/settings');
+                const fallbackMax = Number(data?.freeShippingThreshold ?? 500) - 1;
+                setShippingConfig({
+                    shippingCharge: Number(data?.shippingCharge ?? 40),
+                    minShippingOrderAmount: Number(data?.minShippingOrderAmount ?? 0),
+                    maxShippingOrderAmount: Number(data?.maxShippingOrderAmount ?? (fallbackMax >= 0 ? fallbackMax : 499))
+                });
+            } catch (error) {
+                console.error('Failed to fetch shipping settings:', error);
+            }
+        };
+        fetchShippingSettings();
+    }, []);
 
     const handleCheckout = () => {
         if (!isAuthenticated) {
@@ -49,7 +72,13 @@ const Cart = () => {
     const price = getTotalPrice();
     const originalPrice = getTotalOriginalPrice();
     const savings = getTotalSavings();
-    const delivery = price > 500 ? 0 : 40;
+    const shippingCharge = Number.isFinite(Number(shippingConfig.shippingCharge)) ? Number(shippingConfig.shippingCharge) : 40;
+    const minShippingOrderAmount = Number.isFinite(Number(shippingConfig.minShippingOrderAmount)) ? Number(shippingConfig.minShippingOrderAmount) : 0;
+    const maxShippingOrderAmount = Number.isFinite(Number(shippingConfig.maxShippingOrderAmount)) ? Number(shippingConfig.maxShippingOrderAmount) : 499;
+    const isInShippingRange = maxShippingOrderAmount >= minShippingOrderAmount
+        && price >= minShippingOrderAmount
+        && price <= maxShippingOrderAmount;
+    const delivery = isInShippingRange ? shippingCharge : 0;
 
     return (
         <div className="bg-gradient-to-b from-blue-50 via-white to-gray-50 min-h-screen">

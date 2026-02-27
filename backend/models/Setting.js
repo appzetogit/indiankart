@@ -10,6 +10,10 @@ const settingSchema = mongoose.Schema({
     contactEmail: { type: String, default: '' },
     contactPhone: { type: String, default: '' },
     fssai: { type: String, default: '' },
+    shippingCharge: { type: Number, default: 40 },
+    freeShippingThreshold: { type: Number, default: 500 },
+    minShippingOrderAmount: { type: Number, default: 0 },
+    maxShippingOrderAmount: { type: Number, default: 499 },
 }, {
     timestamps: true,
 });

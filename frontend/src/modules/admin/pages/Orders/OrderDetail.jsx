@@ -22,6 +22,13 @@ const OrderDetail = () => {
     // Initialize selected status when modal opens
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [settings, setSettings] = useState(null);
+    const fulfillmentStatuses = ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
+
+    const normalizeFulfillmentStatus = (status = '') => {
+        const value = String(status || '').trim();
+        if (value === 'Shipped') return 'Dispatched';
+        return value;
+    };
 
     React.useEffect(() => {
         if (!order) {
@@ -65,12 +72,12 @@ const OrderDetail = () => {
         setShowCancelConfirm(false);
         setActionNote('');
         // Set next logical status or current status
-        const statuses = ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
-        const currentIdx = statuses.indexOf(order.status);
-        if (currentIdx !== -1 && currentIdx < statuses.length - 1) {
-            setSelectedStatus(statuses[currentIdx + 1]);
+        const normalizedOrderStatus = normalizeFulfillmentStatus(order.status);
+        const currentIdx = fulfillmentStatuses.indexOf(normalizedOrderStatus);
+        if (currentIdx !== -1 && currentIdx < fulfillmentStatuses.length - 1) {
+            setSelectedStatus(fulfillmentStatuses[currentIdx + 1]);
         } else {
-            setSelectedStatus(order.status);
+            setSelectedStatus(fulfillmentStatuses.includes(normalizedOrderStatus) ? normalizedOrderStatus : '');
         }
     };
 
@@ -152,6 +159,58 @@ const OrderDetail = () => {
         if (currentIdx >= stepIdx) return 'completed';
         return 'upcoming';
     };
+
+    const orderedTimeline = Array.isArray(order.timeline)
+        ? [...order.timeline].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
+        : [];
+    const timelineFlow = ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
+    const normalizedCurrentStatus = normalizeFulfillmentStatus(order.status);
+    const currentFlowIndex = timelineFlow.indexOf(normalizedCurrentStatus);
+    const timelineByStatus = orderedTimeline.reduce((acc, event) => {
+        const normalizedStatus = normalizeFulfillmentStatus(event.status);
+        if (!acc[normalizedStatus]) {
+            acc[normalizedStatus] = event;
+        }
+        return acc;
+    }, {});
+    const createdTimeMs = new Date(order.createdAt || order.date || Date.now()).getTime();
+    const currentStatusTimeMs = new Date(
+        timelineByStatus[normalizedCurrentStatus]?.time || order.updatedAt || order.createdAt || order.date || Date.now()
+    ).getTime();
+    const completedCount = currentFlowIndex >= 0 ? currentFlowIndex + 1 : 0;
+    const fallbackTimeByStatus = {};
+    if (completedCount > 0) {
+        for (let i = 0; i < completedCount; i += 1) {
+            const status = timelineFlow[i];
+            const existingTime = timelineByStatus[status]?.time;
+            if (existingTime) {
+                fallbackTimeByStatus[status] = new Date(existingTime);
+                continue;
+            }
+            if (i === 0) {
+                fallbackTimeByStatus[status] = new Date(createdTimeMs);
+                continue;
+            }
+            if (i === currentFlowIndex) {
+                fallbackTimeByStatus[status] = new Date(currentStatusTimeMs);
+                continue;
+            }
+            const ratio = currentFlowIndex > 0 ? i / currentFlowIndex : 0;
+            const syntheticMs = createdTimeMs + ((currentStatusTimeMs - createdTimeMs) * ratio);
+            fallbackTimeByStatus[status] = new Date(syntheticMs);
+        }
+    }
+    const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
+    const paymentStatusLabel = isOrderDelivered
+        ? 'Completed'
+        : (order.payment?.status || (order.isPaid ? 'Paid' : 'Pending'));
+    const paymentStatusClass =
+        paymentStatusLabel === 'Completed' || paymentStatusLabel === 'Paid'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-amber-100 text-amber-700';
+    const summaryItemsPrice = Number(order.itemsPrice ?? Math.max(0, (order.total || 0) - Number(order.shippingPrice || 0) - Number(order.taxPrice || 0)));
+    const summaryShippingPrice = Number(order.shippingPrice || 0);
+    const summaryTotal = Number(order.total || 0);
 
     return (
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-8 animate-in fade-in duration-500">
@@ -252,15 +311,17 @@ const OrderDetail = () => {
                         <div className="p-4 md:p-8 bg-gray-50/30 border-t border-gray-50 flex flex-col items-end gap-2 md:gap-3 text-right">
                             <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-[10px] md:text-xs font-bold text-gray-400 uppercase">
                                 <span>Subtotal</span>
-                                <span>₹{order.total.toLocaleString()}</span>
+                                <span>₹{summaryItemsPrice.toLocaleString()}</span>
                             </div>
                             <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-[10px] md:text-xs font-bold text-gray-400 uppercase">
                                 <span>Shipping</span>
-                                <span className="text-green-500">FREE</span>
+                                <span className={summaryShippingPrice === 0 ? 'text-green-500' : 'text-gray-700'}>
+                                    {summaryShippingPrice === 0 ? 'FREE' : `₹${summaryShippingPrice.toLocaleString()}`}
+                                </span>
                             </div>
                             <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-lg md:text-xl font-black text-gray-900 mt-1 md:mt-2">
                                 <span>TOTAL</span>
-                                <span>₹{order.total.toLocaleString()}</span>
+                                <span>₹{summaryTotal.toLocaleString()}</span>
                             </div>
                         </div>
                     </div>
@@ -270,24 +331,72 @@ const OrderDetail = () => {
                         <h2 className="text-xs md:text-sm font-black text-gray-800 uppercase tracking-widest mb-6 md:mb-8 flex items-center gap-2 md:gap-3">
                             <MdSchedule className="text-blue-500" size={18} /> Order Timeline
                         </h2>
-                        <div className="relative space-y-8 before:absolute before:inset-0 before:left-[19px] before:w-0.5 before:bg-gray-100 before:pointer-events-none pb-4">
-                            {order.timeline.map((event, idx) => (
-                                <div key={idx} className="relative flex gap-8">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center relative z-10 shadow-sm transition-transform hover:scale-110 ${event.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
-                                        event.status === 'Delivered' ? 'bg-green-100 text-green-600' :
-                                            'bg-blue-100 text-blue-600'
-                                        }`}>
-                                        <div className="w-4 h-4 rounded-full bg-current"></div>
+                        <div className="space-y-4 md:space-y-5">
+                            {timelineFlow.map((status, idx) => {
+                                const statusEvent = timelineByStatus[status];
+                                const isCompleted = currentFlowIndex >= idx;
+                                const isCurrent = normalizedCurrentStatus === status;
+                                const isUpcoming = currentFlowIndex !== -1 ? idx > currentFlowIndex : !statusEvent;
+                                const displayTime = statusEvent?.time ? new Date(statusEvent.time) : fallbackTimeByStatus[status];
+                                return (
+                                <div key={status} className="flex items-start gap-3 md:gap-4">
+                                    <div className="flex flex-col items-center pt-1">
+                                        <div className={`w-3 h-3 rounded-full ${isCurrent
+                                            ? 'bg-blue-600 ring-4 ring-blue-100'
+                                            : isCompleted
+                                                ? 'bg-green-500'
+                                                : 'bg-gray-300'
+                                            }`}></div>
+                                        {idx < timelineFlow.length - 1 && (
+                                            <div className="w-[2px] h-10 md:h-12 bg-gray-200 mt-1"></div>
+                                        )}
                                     </div>
-                                    <div className="pt-2">
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">{event.status}</h4>
-                                            <span className="text-[10px] text-gray-400 font-bold">{new Date(event.time).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}</span>
-                                        </div>
-                                        {event.note && <p className="text-xs text-gray-500 font-medium italic">"{event.note}"</p>}
+                                    <div className="flex-1 border-b border-gray-100 pb-3 md:pb-4">
+                                        <h4 className={`text-sm md:text-base font-black uppercase tracking-wide ${isUpcoming ? 'text-gray-400' : 'text-gray-900'}`}>
+                                            {status}
+                                        </h4>
+                                        {displayTime ? (
+                                            <p className="text-[11px] md:text-xs text-gray-500 font-bold mt-1">
+                                                {displayTime.toLocaleString('en-IN', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        ) : (
+                                            <p className="text-[11px] md:text-xs text-gray-400 font-bold mt-1">Pending update</p>
+                                        )}
+                                        {isCurrent && (
+                                            <p className="text-[10px] text-blue-600 font-black uppercase tracking-wider mt-1">Current status</p>
+                                        )}
+                                        {statusEvent?.note && <p className="text-xs text-gray-500 font-medium italic">"{statusEvent.note}"</p>}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
+                            {normalizedCurrentStatus === 'Cancelled' && (
+                                <div className="flex items-start gap-3 md:gap-4">
+                                    <div className="flex flex-col items-center pt-1">
+                                        <div className="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-100"></div>
+                                    </div>
+                                    <div className="flex-1 border-b border-gray-100 pb-3 md:pb-4">
+                                        <h4 className="text-sm md:text-base font-black uppercase tracking-wide text-red-600">
+                                            Cancelled
+                                        </h4>
+                                        <p className="text-[11px] md:text-xs text-gray-500 font-bold mt-1">
+                                            {new Date((timelineByStatus.Cancelled || orderedTimeline[orderedTimeline.length - 1])?.time || order.updatedAt || Date.now()).toLocaleString('en-IN', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -336,37 +445,38 @@ const OrderDetail = () => {
 
                     {/* Payment Info */}
                     <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm space-y-4 md:space-y-6">
-                        <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Metadata</h2>
+                        <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Payment Metadata</h2>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-xs">
-                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Method</span>
-                                <span className="font-black text-gray-800">{order.payment?.method || order.paymentMethod || 'COD'}</span>
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Method</span>
+                                <span className="font-black text-gray-900">{order.payment?.method || order.paymentMethod || 'COD'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
-                                <span className="text-gray-400 font-bold uppercase tracking-widest text-[9px]">Status</span>
-                                <span className={`font-black uppercase tracking-tighter px-2 py-0.5 rounded ${order.payment?.status === 'Paid' || order.isPaid ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'
-                                    }`}>{order.payment?.status || (order.isPaid ? 'Paid' : 'Pending')}</span>
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Status</span>
+                                <span className={`font-black uppercase tracking-tighter px-2 py-0.5 rounded ${paymentStatusClass}`}>
+                                    {paymentStatusLabel}
+                                </span>
                             </div>
                             {order.payment?.transactionId && (
                                 <div className="pt-4 border-t border-gray-50">
-                                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Transaction ID</p>
-                                    <p className="text-[11px] font-bold text-gray-600 font-mono break-all bg-gray-50 p-2 rounded-lg">{order.payment.transactionId}</p>
+                                    <p className="text-[9px] font-black text-gray-600 uppercase mb-1">Transaction ID</p>
+                                    <p className="text-[11px] font-bold text-gray-800 font-mono break-all bg-gray-50 p-2 rounded-lg">{order.payment.transactionId}</p>
                                 </div>
                             )}
 
                             {order.payment?.cardNetwork && (
                                 <div className="pt-4 border-t border-gray-50 grid grid-cols-2 gap-4">
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Card Network</p>
-                                        <p className="text-[11px] font-black text-gray-800 uppercase tracking-wider">{order.payment.cardNetwork}</p>
+                                        <p className="text-[9px] font-black text-gray-600 uppercase mb-1">Card Network</p>
+                                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-wider">{order.payment.cardNetwork}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Card Type</p>
-                                        <p className="text-[11px] font-black text-gray-800 uppercase tracking-wider">{order.payment.cardType || 'N/A'}</p>
+                                        <p className="text-[9px] font-black text-gray-600 uppercase mb-1">Card Type</p>
+                                        <p className="text-[11px] font-black text-gray-900 uppercase tracking-wider">{order.payment.cardType || 'N/A'}</p>
                                     </div>
                                     <div className="col-span-2">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Card Number</p>
-                                        <p className="text-[11px] font-bold text-gray-600 font-mono">**** **** **** {order.payment.cardLast4}</p>
+                                        <p className="text-[9px] font-black text-gray-600 uppercase mb-1">Card Number</p>
+                                        <p className="text-[11px] font-bold text-gray-800 font-mono">**** **** **** {order.payment.cardLast4}</p>
                                     </div>
                                 </div>
                             )}
@@ -396,8 +506,8 @@ const OrderDetail = () => {
                                                 className="w-full bg-gray-50 text-gray-900 border-2 border-transparent focus:border-blue-500 rounded-2xl p-4 outline-none text-sm font-bold appearance-none cursor-pointer"
                                             >
                                                 <option value="" disabled>Select Status</option>
-                                                {['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].map(status => (
-                                                    <option key={status} value={status} disabled={order.status === status}>
+                                                {fulfillmentStatuses.map(status => (
+                                                    <option key={status} value={status} disabled={normalizeFulfillmentStatus(order.status) === status}>
                                                         {status}
                                                     </option>
                                                 ))}
@@ -408,6 +518,9 @@ const OrderDetail = () => {
                                                 </svg>
                                             </div>
                                         </div>
+                                        <p className="text-[11px] font-bold text-gray-500 px-1">
+                                            Selected: <span className="text-gray-800">{selectedStatus || 'None'}</span>
+                                        </p>
                                     </div>
 
                                     {/* Serial Number Input for Packed Status and above (Edit Mode) */}

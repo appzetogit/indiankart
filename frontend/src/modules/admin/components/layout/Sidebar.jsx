@@ -46,6 +46,7 @@ const Sidebar = () => {
         { name: 'Users', icon: MdPeople, path: '/admin/users' },
         { name: 'Seller Requests', icon: MdStorefront, path: '/admin/seller-requests' },
         { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
+        { name: 'Shipping Charges', icon: MdLocalShipping, path: '/admin/shipping-charges' },
         { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
         { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
         { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },

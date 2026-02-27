@@ -34,6 +34,7 @@ import StockManagement from '../pages/StockManagement/StockManagement';
 import FooterManager from '../pages/Settings/FooterManager';
 import HeaderManager from '../pages/Settings/HeaderManager';
 import NotificationManager from '../pages/Notifications/NotificationManager';
+import ShippingCharges from '../pages/Settings/ShippingCharges';
 
 const AdminRoutes = () => {
     return (
@@ -83,6 +84,7 @@ const AdminRoutes = () => {
                 <Route path="bank-offers" element={<BankOfferManager />} />
                 <Route path="support" element={<SupportRequests />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="shipping-charges" element={<ShippingCharges />} />
                 <Route path="footer-settings" element={<FooterManager />} />
                 <Route path="header-settings" element={<HeaderManager />} />
                 <Route path="notifications" element={<NotificationManager />} />
