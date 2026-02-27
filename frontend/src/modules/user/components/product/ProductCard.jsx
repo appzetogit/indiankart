@@ -32,8 +32,13 @@ const ProductCard = ({ product, footerText }) => {
         prefetchProductById(product.id);
     };
 
+    // Variant Price Logic: Use first variant's price if available
+    const firstSku = product?.skus?.[0];
+    const displayPrice = (firstSku?.price !== undefined && firstSku?.price !== null) ? firstSku.price : product.price;
+    const displayOriginalPrice = (firstSku?.originalPrice !== undefined && firstSku?.originalPrice !== null) ? firstSku.originalPrice : product.originalPrice;
+
     // Calculate dynamic discount if not provided
-    const discountPercent = product.discount || (product.originalPrice ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) + `% ${offText}` : null);
+    const discountPercent = product.discount || (displayOriginalPrice ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100) + `% ${offText}` : null);
 
     const displayFooterText = footerText ? translatedFooter : '';
 
@@ -81,10 +86,10 @@ const ProductCard = ({ product, footerText }) => {
 
                 {/* Prices */}
                 <div className="flex items-center gap-1.5 mb-0.5">
-                    {product.originalPrice && (
-                        <span className="text-[11px] md:text-sm text-gray-500 line-through">&#8377;{product.originalPrice.toLocaleString()}</span>
+                    {displayOriginalPrice && displayOriginalPrice > displayPrice && (
+                        <span className="text-[11px] md:text-sm text-gray-500 line-through">&#8377;{displayOriginalPrice.toLocaleString()}</span>
                     )}
-                    <span className="text-[13px] md:text-lg font-bold text-gray-900">&#8377;{product.price.toLocaleString()}</span>
+                    <span className="text-[13px] md:text-lg font-bold text-gray-900">&#8377;{displayPrice.toLocaleString()}</span>
                     {discountPercent && (
                         <span className="text-[10px] md:text-xs font-bold text-green-700 uppercase">
                             {discountPercent}

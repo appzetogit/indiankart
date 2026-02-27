@@ -68,14 +68,28 @@ const getOrFetch = async (key, fetcher) => {
     return request;
 };
 
+const normalizeProduct = (product) => {
+    if (!product) return product;
+    if (product.skus && Array.isArray(product.skus) && product.skus.length > 0) {
+        const firstSku = product.skus[0];
+        return {
+            ...product,
+            price: firstSku.price ?? product.price,
+            originalPrice: firstSku.originalPrice ?? product.originalPrice ?? firstSku.price ?? product.price
+        };
+    }
+    return product;
+};
+
 const rememberProduct = (product) => {
     if (!product) return;
+    const normalized = normalizeProduct(product);
 
-    const keys = [product.id, product._id]
+    const keys = [normalized.id, normalized._id]
         .filter(Boolean)
         .map((value) => `product:${String(value)}`);
 
-    keys.forEach((key) => writeCache(key, product));
+    keys.forEach((key) => writeCache(key, normalized));
 };
 
 const rememberProductList = (products) => {
@@ -119,7 +133,7 @@ export const useProducts = (options = {}) => {
             try {
                 const data = await getOrFetch('products', async () => {
                     const { data } = await API.get('/products');
-                    return data;
+                    return Array.isArray(data) ? data.map(normalizeProduct) : data;
                 });
 
                 rememberProductList(data);
@@ -164,7 +178,8 @@ export const useProduct = (id) => {
             try {
                 // Product detail should always revalidate from API so stock/price
                 // updates from admin are reflected immediately on PDP.
-                const { data: productData } = await API.get(`/products/${id}`);
+                const { data: rawData } = await API.get(`/products/${id}`);
+                const productData = normalizeProduct(rawData);
 
                 rememberProduct(productData);
 
@@ -248,7 +263,7 @@ export const useHomeSections = () => {
                 writeCache('home-sections', data);
 
                 const sectionProducts = data.flatMap((section) =>
-                    Array.isArray(section.products) ? section.products : []
+                    Array.isArray(section.products) ? section.products.map(normalizeProduct) : []
                 );
                 rememberProductList(sectionProducts);
 
