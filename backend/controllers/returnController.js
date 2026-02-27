@@ -1,14 +1,100 @@
 import Return from '../models/Return.js';
 import Order from '../models/Order.js';
 import Notification from '../models/Notification.js';
+import Product from '../models/Product.js';
 import mongoose from 'mongoose';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 // @desc    Create a new return request
 // @route   POST /api/returns
 // @access  Private
 export const createReturnRequest = async (req, res) => {
     try {
-        const { orderId, productId, reason, comment, type, images, selectedReplacementSize, selectedReplacementColor, pickupAddress } = req.body;
+        const {
+            orderId,
+            productId,
+            reason,
+            comment,
+            type,
+            images,
+            googleDriveLink,
+            bankDetails,
+            selectedReplacementSize,
+            selectedReplacementColor,
+            pickupAddress
+        } = req.body;
+        const parseJSON = (value) => {
+            if (!value) return value;
+            if (typeof value === 'object') return value;
+            if (typeof value === 'string') {
+                try {
+                    return JSON.parse(value);
+                } catch {
+                    return value;
+                }
+            }
+            return value;
+        };
+        const parsedPickupAddressRaw = parseJSON(pickupAddress);
+        const parsedPickupAddress = parsedPickupAddressRaw && typeof parsedPickupAddressRaw === 'object'
+            ? parsedPickupAddressRaw
+            : null;
+        const parsedBankDetailsRaw = parseJSON(bankDetails);
+        const parsedBankDetails = parsedBankDetailsRaw && typeof parsedBankDetailsRaw === 'object'
+            ? {
+                accountHolderName: String(parsedBankDetailsRaw.accountHolderName || '').trim(),
+                accountNumber: String(parsedBankDetailsRaw.accountNumber || '').trim(),
+                ifscCode: String(parsedBankDetailsRaw.ifscCode || '').trim().toUpperCase()
+            }
+            : null;
+
+        const normalizedProofLink = String(googleDriveLink || '').trim();
+        const proofFiles = Array.isArray(req.files) ? req.files : [];
+        const uploadedProofMedia = [];
+
+        if (normalizedProofLink && !/(drive\.google\.com|docs\.google\.com)/i.test(normalizedProofLink)) {
+            return res.status(400).json({ message: 'Please provide a valid Google Drive/Docs link for proof.' });
+        }
+
+        if (parsedBankDetails) {
+            const hasAnyBankField = Boolean(
+                parsedBankDetails.accountHolderName || parsedBankDetails.accountNumber || parsedBankDetails.ifscCode
+            );
+
+            if (hasAnyBankField) {
+                if (!parsedBankDetails.accountHolderName || !parsedBankDetails.accountNumber || !parsedBankDetails.ifscCode) {
+                    return res.status(400).json({ message: 'Please provide complete bank details (name, account number, IFSC).' });
+                }
+                if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(parsedBankDetails.ifscCode)) {
+                    return res.status(400).json({ message: 'Invalid IFSC code format.' });
+                }
+                if (!/^\d{9,18}$/.test(parsedBankDetails.accountNumber)) {
+                    return res.status(400).json({ message: 'Invalid account number.' });
+                }
+            }
+        }
+
+        for (const file of proofFiles) {
+            if (!file?.mimetype || (!file.mimetype.startsWith('image/') && !file.mimetype.startsWith('video/'))) {
+                return res.status(400).json({ message: 'Only image/video files are allowed as proof.' });
+            }
+
+            if (Number(file.size || 0) > 10 * 1024 * 1024) {
+                return res.status(400).json({ message: 'Each proof file must be 10MB or smaller.' });
+            }
+        }
+
+        if (proofFiles.length > 0) {
+            const uploadResults = await Promise.all(
+                proofFiles.map((file) =>
+                    uploadBufferToCloudinary(file.buffer, {
+                        folder: 'ecom_uploads/returns/proofs',
+                        resource_type: 'auto'
+                    })
+                )
+            );
+            uploadedProofMedia.push(...uploadResults.map((result) => result.secure_url).filter(Boolean));
+        }
 
         const order = await Order.findOne({ _id: orderId });
         if (!order) {
@@ -45,7 +131,7 @@ export const createReturnRequest = async (req, res) => {
                 type,
                 reason,
                 comment,
-                pickupAddress: pickupAddress || {
+                pickupAddress: parsedPickupAddress || {
                     name: order.shippingAddress?.name,
                     phone: order.shippingAddress?.phone,
                     address: order.shippingAddress?.street,
@@ -54,13 +140,22 @@ export const createReturnRequest = async (req, res) => {
                     pincode: order.shippingAddress?.postalCode,
                     type: 'Home'
                 },
-                images,
+                bankDetails: type === 'Return' ? (parsedBankDetails || undefined) : undefined,
+                googleDriveLink: normalizedProofLink || '',
+                proofMedia: uploadedProofMedia,
+                images: uploadedProofMedia.length > 0 ? uploadedProofMedia : images,
                 status: 'Pending',
                 timeline: [{
                     status: 'Pending',
                     note: `${type} request initiated`
                 }]
             });
+
+            if (!normalizedProofLink && uploadedProofMedia.length === 0) {
+                return res.status(400).json({
+                    message: 'Please provide proof: either Google Drive link or image/video files (max 10MB each).'
+                });
+            }
 
             const createdReturn = await newReturn.save();
 
@@ -223,7 +318,7 @@ export const updateReturnStatus = async (req, res) => {
                             order.status = 'Cancelled';
                             
                             for (const item of order.orderItems) {
-                                const product = await ProductModel.findOne({ id: item.product });
+                                const product = await Product.findOne({ id: item.product });
                                 if (product) {
                                     const update = { $inc: { stock: item.qty } };
                                     
@@ -240,7 +335,7 @@ export const updateReturnStatus = async (req, res) => {
                                         }
                                     }
 
-                                    await ProductModel.findOneAndUpdate(
+                                    await Product.findOneAndUpdate(
                                         { _id: product._id },
                                         update
                                     );

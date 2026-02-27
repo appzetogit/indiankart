@@ -67,7 +67,6 @@ const AdminRoutes = () => {
                 <Route path="reviews" element={<ReviewList />} />
                 <Route path="coupons" element={<CouponManager />} />
                 <Route path="offers" element={<OfferList />} />
-                <Route path="offers/add" element={<OfferForm />} />
                 <Route path="offers/edit/:id" element={<OfferForm />} />
                 <Route path="play" element={<PlayManager />} />
                 <Route path="homepage" element={<BannerManager />} />

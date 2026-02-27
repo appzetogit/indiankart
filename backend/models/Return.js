@@ -16,6 +16,7 @@ const returnSchema = mongoose.Schema({
     },
     reason: { type: String, required: true },
     comment: { type: String },
+    googleDriveLink: { type: String },
     pickupAddress: {
         name: { type: String },
         phone: { type: String },
@@ -25,6 +26,12 @@ const returnSchema = mongoose.Schema({
         pincode: { type: String },
         type: { type: String },
     },
+    bankDetails: {
+        accountHolderName: { type: String },
+        accountNumber: { type: String },
+        ifscCode: { type: String }
+    },
+    proofMedia: [{ type: String }],
     images: [{ type: String }],
     status: { 
         type: String, 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack } from 'react-icons/md';
 import { useProducts, useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
+import API from '../../../services/api';
 import SubCategoryList from '../components/category/SubCategoryList';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
@@ -32,6 +33,8 @@ const CategoryPage = () => {
     const [showAllRam, setShowAllRam] = useState(false);
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
+    const [bankOffersByProduct, setBankOffersByProduct] = useState({});
+    const [availableCoupons, setAvailableCoupons] = useState([]);
 
     const handleBackNavigation = () => {
         // React Router sets history.state.idx for in-app entries.
@@ -113,6 +116,54 @@ const CategoryPage = () => {
         setSortedProducts(updated);
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, categoryProducts]);
 
+    useEffect(() => {
+        const fetchCoupons = async () => {
+            try {
+                const { data } = await API.get('/coupons');
+                setAvailableCoupons(Array.isArray(data) ? data : []);
+            } catch (error) {
+                console.error('Error fetching coupons:', error);
+                setAvailableCoupons([]);
+            }
+        };
+        fetchCoupons();
+    }, []);
+
+    useEffect(() => {
+        const fetchBankOffersForVisibleProducts = async () => {
+            const showDetailedProductsView = breadcrumbs.length > 1;
+            if (!showDetailedProductsView || sortedProducts.length === 0) {
+                setBankOffersByProduct({});
+                return;
+            }
+
+            try {
+                const productIds = sortedProducts
+                    .map((p) => p.id || p._id)
+                    .filter(Boolean)
+                    .slice(0, 30);
+
+                const responses = await Promise.all(
+                    productIds.map(async (pid) => {
+                        try {
+                            const { data } = await API.get(`/bank-offers/product/${pid}`);
+                            return [String(pid), Array.isArray(data) ? data : []];
+                        } catch {
+                            return [String(pid), []];
+                        }
+                    })
+                );
+
+                setBankOffersByProduct(Object.fromEntries(responses));
+            } catch (error) {
+                console.error('Error fetching bank offers for category listing:', error);
+                setBankOffersByProduct({});
+            }
+        };
+
+        fetchBankOffersForVisibleProducts();
+    }, [breadcrumbs.length, sortedProducts]);
+
     // Unique Brands, RAM, and Subcategories from tags
     const availableBrands = [...new Set(categoryProducts.map(p => p.brand).filter(Boolean))];
     const availableRam = [...new Set(categoryProducts.map(p => p.ram).filter(Boolean))];
@@ -173,6 +224,16 @@ const CategoryPage = () => {
         return 0;
     };
 
+    const getListingPriceData = (product) => {
+        const firstSku = Array.isArray(product?.skus) && product.skus.length > 0 ? product.skus[0] : null;
+        const sellingPrice = Number(firstSku?.price ?? product?.price ?? 0);
+        const markedPrice = Number(firstSku?.originalPrice ?? product?.originalPrice ?? sellingPrice);
+        return {
+            sellingPrice,
+            markedPrice
+        };
+    };
+
     const getProductHighlights = (product) => {
         const bullets = [];
 
@@ -201,6 +262,30 @@ const CategoryPage = () => {
         }
 
         return bullets.slice(0, 6);
+    };
+
+    const getApplicableCouponsForProduct = (product, sellingPrice) => {
+        const now = new Date();
+        const productCategory = String(product?.category || '').toLowerCase();
+
+        return availableCoupons.filter((coupon) => {
+            if (!coupon || coupon.isOffer === true) return false;
+            if (coupon.active === false) return false;
+            if (!coupon.code) return false;
+
+            if (coupon.expiryDate) {
+                const expiry = new Date(`${coupon.expiryDate}T23:59:59.999Z`);
+                if (!Number.isNaN(expiry.getTime()) && expiry < now) return false;
+            }
+
+            const minPurchase = Number(coupon.minPurchase || 0);
+            if (minPurchase > Number(sellingPrice || 0)) return false;
+
+            const applicableCategory = String(coupon.applicableCategory || 'all').toLowerCase();
+            if (applicableCategory !== 'all' && applicableCategory !== productCategory) return false;
+
+            return true;
+        });
     };
 
     if (productsLoading || categoriesLoading) {
@@ -433,7 +518,15 @@ const CategoryPage = () => {
                                         {sortedProducts.map((product) => {
                                             const productId = product.id || product._id;
                                             const highlights = getProductHighlights(product);
-                                            const discountPercent = getDiscountPercent(product);
+                                            const { sellingPrice, markedPrice } = getListingPriceData(product);
+                                            const discountPercent = getDiscountPercent({
+                                                ...product,
+                                                price: sellingPrice,
+                                                originalPrice: markedPrice
+                                            });
+                                            const productBankOffers = bankOffersByProduct[String(productId)] || [];
+                                            const primaryBankOffer = productBankOffers[0];
+                                            const applicableCoupons = getApplicableCouponsForProduct(product, sellingPrice).slice(0, 2);
 
                                             return (
                                                 <div
@@ -485,21 +578,34 @@ const CategoryPage = () => {
                                                         </div>
 
                                                         <div className="md:pl-2">
-                                                            <div className="text-3xl md:text-[42px] font-semibold text-[#212121] tracking-tight leading-none">
-                                                                {formatPrice(product.price)}
+                                                            <div className="text-2xl md:text-3xl font-bold text-[#212121] tracking-tight leading-none">
+                                                                {formatPrice(sellingPrice)}
                                                             </div>
-                                                            {Number(product.originalPrice) > Number(product.price) && (
-                                                                <div className="mt-2 flex items-center gap-2">
-                                                                    <span className="text-base text-gray-500 line-through">{formatPrice(product.originalPrice)}</span>
+                                                            {markedPrice > sellingPrice && (
+                                                                <div className="mt-1.5 flex items-center gap-2">
+                                                                    <span className="text-sm text-gray-500 line-through">{formatPrice(markedPrice)}</span>
                                                                     {discountPercent > 0 && (
-                                                                        <span className="text-lg text-green-700 font-medium">{discountPercent}% off</span>
+                                                                        <span className="text-xs text-green-700 font-bold">{discountPercent}% off</span>
                                                                     )}
                                                                 </div>
                                                             )}
-                                                            <div className="mt-2 text-lg md:text-[20px] text-gray-900 font-medium leading-tight">
-                                                                Upto <span className="font-semibold">{formatPrice(Math.max(1000, Math.round(Number(product.price || 0) * 0.75)))}</span> Off on Exchange
-                                                            </div>
-                                                            <div className="text-xl md:text-[32px] text-green-700 font-medium mt-1">Bank Offer</div>
+                                                            {primaryBankOffer && (
+                                                                <div className="mt-2 text-xs md:text-sm text-green-700 font-semibold leading-snug">
+                                                                    {`${primaryBankOffer.bankName} Offer: ${primaryBankOffer.offerName} - Get ${primaryBankOffer.discountType === 'flat' ? `Flat Rs.${primaryBankOffer.discountValue}` : `${primaryBankOffer.discountValue}%`} Off. ${primaryBankOffer.description || ''}`}
+                                                                </div>
+                                                            )}
+                                                            {applicableCoupons.length > 0 && (
+                                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                                    {applicableCoupons.map((coupon) => (
+                                                                        <span
+                                                                            key={`${productId}-${coupon._id || coupon.code}`}
+                                                                            className="text-[10px] md:text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-bold"
+                                                                        >
+                                                                            {coupon.code}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

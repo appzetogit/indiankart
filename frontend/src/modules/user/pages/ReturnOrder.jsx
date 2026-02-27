@@ -19,6 +19,13 @@ const ReturnOrder = () => {
     const [returnMode, setReturnMode] = useState('REFUND'); // REFUND or REPLACEMENT
     const [subReason, setSubReason] = useState('');
     const [comment, setComment] = useState('');
+    const [bankDetails, setBankDetails] = useState({
+        accountHolderName: '',
+        accountNumber: '',
+        ifscCode: ''
+    });
+    const [googleDriveLink, setGoogleDriveLink] = useState('');
+    const [proofFiles, setProofFiles] = useState([]);
     const [loading, setLoading] = useState(false);
     const updateItemStatus = useCartStore(state => state.updateItemStatus);
     const addresses = useCartStore((state) => state.addresses || []);
@@ -157,6 +164,11 @@ const ReturnOrder = () => {
             return;
         }
 
+        if (!googleDriveLink.trim() && proofFiles.length === 0) {
+            toast.error('Please add Google Drive link or upload proof files.');
+            return;
+        }
+
         setLoading(true);
         try {
             // We need to submit a request for each item, or one request for multiple?
@@ -170,19 +182,28 @@ const ReturnOrder = () => {
             // Let's loop through targetItems and send a request for each.
             
             for (const item of targetItems) {
-                const payload = {
-                    orderId: order.id,
-                    productId: item.id, // Ensure this is the product ID or item ID expected by backend
-                    type: returnMode === 'REFUND' ? 'Return' : 'Replacement',
-                    reason: reason,
-                    comment: `${subReason}. ${comment}`, // Combine subReason and comment
-                    images: [], // Images not handled in UI yet, sending empty
-                    pickupAddress: selectedPickupAddress,
-                    selectedReplacementSize: returnMode === 'REPLACEMENT' ? selectedReplacementSize : undefined,
-                    selectedReplacementColor: returnMode === 'REPLACEMENT' ? selectedReplacementColor : undefined
-                };
-                
-                await API.post('/returns', payload);
+                const payload = new FormData();
+                payload.append('orderId', order.id);
+                payload.append('productId', item.id);
+                payload.append('type', returnMode === 'REFUND' ? 'Return' : 'Replacement');
+                payload.append('reason', reason);
+                payload.append('comment', `${subReason}. ${comment}`.trim());
+                payload.append('googleDriveLink', googleDriveLink.trim());
+                payload.append('pickupAddress', JSON.stringify(selectedPickupAddress || {}));
+
+                if (returnMode === 'REPLACEMENT') {
+                    payload.append('selectedReplacementSize', selectedReplacementSize);
+                    payload.append('selectedReplacementColor', selectedReplacementColor);
+                }
+                if (returnMode === 'REFUND') {
+                    payload.append('bankDetails', JSON.stringify(bankDetails));
+                }
+
+                proofFiles.forEach((file) => payload.append('proof_files', file));
+
+                await API.post('/returns', payload, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
                 
                 // Optimistic Update (Optional, but good for UX)
                 const itemStatus = returnMode === 'REFUND' ? 'Return Requested' : 'Replacement Requested';
@@ -448,11 +469,85 @@ const ReturnOrder = () => {
                                     ></textarea>
                                 </div>
 
+                                {returnMode === 'REFUND' && (
+                                    <div className="mt-6">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                                            Bank Details (For Refund)
+                                        </label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <input
+                                                type="text"
+                                                value={bankDetails.accountHolderName}
+                                                onChange={(e) => setBankDetails((prev) => ({ ...prev, accountHolderName: e.target.value }))}
+                                                placeholder="Account Holder Name"
+                                                className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={bankDetails.accountNumber}
+                                                onChange={(e) => setBankDetails((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))}
+                                                placeholder="Account Number"
+                                                className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900"
+                                            />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={bankDetails.ifscCode}
+                                            onChange={(e) => setBankDetails((prev) => ({ ...prev, ifscCode: e.target.value.toUpperCase() }))}
+                                            placeholder="IFSC Code"
+                                            className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900 mt-3"
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-2">
+                                            If added, admin can verify and process refund to this account.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="mt-6">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 block">
+                                        Proof (Required)
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={googleDriveLink}
+                                        onChange={(e) => setGoogleDriveLink(e.target.value)}
+                                        placeholder="Paste Google Drive/Docs link (optional if uploading files)"
+                                        className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900"
+                                    />
+                                    <div className="mt-3">
+                                        <input
+                                            type="file"
+                                            multiple
+                                            accept="image/*,video/*"
+                                            onChange={(e) => {
+                                                const incoming = Array.from(e.target.files || []);
+                                                const invalid = incoming.find((f) => f.size > 10 * 1024 * 1024);
+                                                if (invalid) {
+                                                    toast.error('Each file must be max 10MB');
+                                                    e.target.value = '';
+                                                    return;
+                                                }
+                                                setProofFiles(incoming);
+                                            }}
+                                            className="w-full text-xs text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-xs file:font-bold file:text-blue-700 hover:file:bg-blue-100"
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-2">
+                                            Upload optional photos/videos (max 10MB each), or provide Google link.
+                                        </p>
+                                        {proofFiles.length > 0 && (
+                                            <p className="text-[10px] text-green-700 mt-1 font-bold">
+                                                {proofFiles.length} file(s) selected
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <button
                                     onClick={handleReturnSubmit}
+                                    disabled={loading}
                                     className="w-full bg-[#fb641b] text-white py-4 rounded-xl font-black uppercase mt-8 shadow-xl shadow-[#fb641b]/20 active:scale-95 transition-all text-sm tracking-widest hover:bg-[#e65a17] hover:shadow-2xl"
                                 >
-                                    Initiate {returnMode === 'REFUND' ? 'Return' : 'Replacement'}
+                                    {loading ? 'Submitting...' : `Initiate ${returnMode === 'REFUND' ? 'Return' : 'Replacement'}`}
                                 </button>
                             </div>
                         </div>

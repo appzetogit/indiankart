@@ -12,6 +12,7 @@ const ReturnRequests = () => {
     const [typeFilter, setTypeFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('All');
     const [selectedReturn, setSelectedReturn] = useState(null);
+    const [selectedProof, setSelectedProof] = useState(null);
     const [actionNote, setActionNote] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
@@ -50,10 +51,13 @@ const ReturnRequests = () => {
         }
     };
 
-    const handleStatusUpdate = (id, newStatus) => {
-        updateReturnStatus(id, newStatus, actionNote);
+    const handleStatusUpdate = async (id, newStatus) => {
+        await updateReturnStatus(id, newStatus, actionNote);
+        setSelectedReturn((prev) => prev ? { ...prev, status: newStatus } : prev);
         setActionNote('');
     };
+
+    const isVideoUrl = (url = '') => /\.(mp4|mov|webm|mkv|avi)(\?|$)/i.test(url);
 
     return (
         <div className="space-y-6">
@@ -250,11 +254,56 @@ const ReturnRequests = () => {
                                         <p className="text-sm font-black text-gray-800">{selectedReturn.reason}</p>
                                         <p className="text-xs text-gray-500 italic mt-1 font-medium">"{selectedReturn.comment}"</p>
                                     </div>
-                                    {selectedReturn.images && selectedReturn.images.length > 0 && (
-                                        <div className="flex gap-2 pt-2">
-                                            {selectedReturn.images.map((img, i) => (
-                                                <img key={i} src={img} className="w-16 h-16 rounded-xl object-cover border border-white shadow-sm" alt="" />
-                                            ))}
+                                    {selectedReturn.googleDriveLink && (
+                                        <div className="pt-2">
+                                            <a
+                                                href={selectedReturn.googleDriveLink}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-2 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 transition-all break-all"
+                                            >
+                                                Open Google Proof Link
+                                            </a>
+                                        </div>
+                                    )}
+                                    {((selectedReturn.proofMedia && selectedReturn.proofMedia.length > 0) ||
+                                        (selectedReturn.images && selectedReturn.images.length > 0)) && (
+                                        <div className="flex gap-2 pt-2 flex-wrap">
+                                            {(selectedReturn.proofMedia || selectedReturn.images || []).map((media, i) => {
+                                                const isVideo = isVideoUrl(media);
+                                                if (isVideo) {
+                                                    return (
+                                                        <button
+                                                            key={i}
+                                                            type="button"
+                                                            onClick={() => setSelectedProof(media)}
+                                                            className="relative w-24 h-24 rounded-xl overflow-hidden border border-white shadow-sm bg-black"
+                                                        >
+                                                            <video
+                                                                src={media}
+                                                                className="w-full h-full object-cover opacity-90"
+                                                            />
+                                                            <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-black bg-black/20">
+                                                                VIEW
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                }
+                                                return (
+                                                    <button
+                                                        key={i}
+                                                        type="button"
+                                                        onClick={() => setSelectedProof(media)}
+                                                        className="w-16 h-16 rounded-xl overflow-hidden border border-white shadow-sm"
+                                                    >
+                                                        <img
+                                                            src={media}
+                                                            className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                                            alt=""
+                                                        />
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
@@ -269,6 +318,25 @@ const ReturnRequests = () => {
                                         <p className="text-xs font-black text-gray-800">{selectedReturn.customer}</p>
                                     </div>
                                 </div>
+
+                                {selectedReturn.bankDetails && (
+                                    <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100">
+                                        <p className="text-[9px] font-black text-emerald-500 uppercase mb-2 tracking-widest">
+                                            Refund Bank Details
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">Name:</span> {selectedReturn.bankDetails.accountHolderName || '-'}
+                                            </p>
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">Account:</span> {selectedReturn.bankDetails.accountNumber || '-'}
+                                            </p>
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">IFSC:</span> {selectedReturn.bankDetails.ifscCode || '-'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -347,6 +415,40 @@ const ReturnRequests = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {selectedProof && (
+                <div
+                    className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setSelectedProof(null)}
+                >
+                    <button
+                        type="button"
+                        className="absolute top-4 right-4 text-white bg-black/40 hover:bg-black/60 rounded-full p-2"
+                        onClick={() => setSelectedProof(null)}
+                    >
+                        <MdCancel size={26} />
+                    </button>
+                    <div
+                        className="max-w-5xl max-h-[88vh] w-full flex items-center justify-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {isVideoUrl(selectedProof) ? (
+                            <video
+                                src={selectedProof}
+                                controls
+                                autoPlay
+                                className="max-w-full max-h-[88vh] rounded-xl bg-black"
+                            />
+                        ) : (
+                            <img
+                                src={selectedProof}
+                                alt="Proof Preview"
+                                className="max-w-full max-h-[88vh] rounded-xl object-contain"
+                            />
+                        )}
                     </div>
                 </div>
             )}

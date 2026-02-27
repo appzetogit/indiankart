@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    MdAdd,
     MdEdit,
     MdDelete,
     MdToggleOn,
@@ -103,13 +102,6 @@ const OfferList = () => {
                         Create and manage promotional offers ({filteredOffers.length} offers)
                     </p>
                 </div>
-                <button
-                    onClick={() => navigate('/admin/offers/add')}
-                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-                >
-                    <MdAdd size={20} />
-                    Add New Offer
-                </button>
             </div>
 
             {/* Filters */}
