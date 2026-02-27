@@ -32,8 +32,9 @@ const ProductCard = ({ product, footerText }) => {
         prefetchProductById(product.id);
     };
 
-    // Calculate dynamic discount if not provided
-    const discountPercent = product.discount || (product.originalPrice ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100) + `% ${offText}` : null);
+    const discountPercent = product.originalPrice > product.price
+        ? `${Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% ${offText}`
+        : (product.discount || null);
 
     const displayFooterText = footerText ? translatedFooter : '';
 
