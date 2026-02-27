@@ -30,48 +30,32 @@ const normalizePlatform = (platform = 'web') => {
 };
 
 const saveFcmToken = async (req, res, forcedPlatform = null) => {
-    console.log('FCM Token endpoint hit:', {
-        hasToken: !!req.body.fcmToken || !!req.body.fcmTokenWeb || !!req.body.fcmTokenMobile,
-        headers: !!req.headers.authorization,
-        platform: forcedPlatform || req.body.platform
-    });
-
-    const fcmToken = req.body.fcmToken || req.body.fcmTokenWeb || req.body.fcmTokenMobile;
-    const normalizedPlatform = normalizePlatform(forcedPlatform || req.body.platform || 'web');
-
-    if (!fcmToken) {
-        return res.status(400).json({ message: 'FCM Token is required' });
-    }
-
-    if (!normalizedPlatform) {
-        return res.status(400).json({ message: 'Platform must be one of: web, mobile, app, android, ios' });
-    }
-
-    // Check if user is authenticated via header or cookie
-    let userId = null;
     try {
-        let token;
-        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-            token = req.headers.authorization.split(' ')[1];
-        } else if (req.cookies.user_jwt) {
-            token = req.cookies.user_jwt;
-        } else if (req.cookies.admin_jwt) {
-            token = req.cookies.admin_jwt;
-        } else if (req.cookies.jwt) {
-            token = req.cookies.jwt;
+        console.log('FCM Token endpoint hit:', {
+            userId: req.user?._id,
+            hasToken: !!req.body.fcmToken || !!req.body.fcmTokenWeb || !!req.body.fcmTokenMobile,
+            platform: forcedPlatform || req.body.platform
+        });
+
+        const fcmToken = req.body.fcmToken || req.body.fcmTokenWeb || req.body.fcmTokenMobile;
+        const normalizedPlatform = normalizePlatform(forcedPlatform || req.body.platform || 'web');
+
+        if (!fcmToken) {
+            return res.status(400).json({ message: 'FCM Token is required' });
         }
 
-        if (token) {
-            const jwt = await import('jsonwebtoken');
-            const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'secret');
-            userId = decoded.id;
-            console.log('Decoded user ID:', userId);
+        if (!normalizedPlatform) {
+            return res.status(400).json({ message: 'Platform must be one of: web, mobile, app, android, ios' });
         }
-    } catch (err) {
-        console.log('No valid auth token:', err.message);
-    }
 
-    if (userId) {
+        if (!req.user) {
+            // This should ideally not happen if 'protect' middleware is used
+            console.log('Token received but user not authenticated');
+            return res.json({ message: 'FCM Token received but user not authenticated. Will save when user logs in.', saved: false });
+        }
+
+        const userId = req.user._id;
+
         if (String(userId) === HARDCODED_BYPASS_USER_ID) {
             return res.json({
                 message: 'FCM Token received for bypass test user',
@@ -82,69 +66,56 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
         }
 
         const FcmToken = (await import('../models/FcmToken.js')).default;
-
-        // Try to save token for regular User first
         const User = (await import('../models/User.js')).default;
-        const user = await User.findById(userId);
+        const Admin = (await import('../models/Admin.js')).default;
 
-        if (user) {
+        // Determine if it's a regular user or admin
+        const isUser = await User.exists({ _id: userId });
+        const isAdmin = !isUser && await Admin.exists({ _id: userId });
+
+        if (isUser) {
+            const user = await User.findById(userId);
             if (normalizedPlatform === 'web') {
                 user.fcmTokenWeb = fcmToken;
             } else {
                 user.fcmTokenMobile = fcmToken;
             }
-
-            // Backward compatibility for old code paths that still read fcmToken.
-            user.fcmToken = fcmToken;
+            user.fcmToken = fcmToken; // Backward compatibility
             await user.save();
-            await FcmToken.findOneAndUpdate(
-                { userId: String(userId), token: fcmToken },
-                {
-                    userId: String(userId),
-                    token: fcmToken,
-                    platform: normalizedPlatform,
-                    updatedAt: new Date()
-                },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-
             console.log('FCM Token saved for USER:', userId, normalizedPlatform);
-            return res.json({
-                message: 'FCM Token saved successfully',
-                saved: true,
-                userType: 'user',
-                platform: normalizedPlatform
-            });
-        }
-
-        // If not a regular user, try Admin
-        const Admin = (await import('../models/Admin.js')).default;
-        const adminUser = await Admin.findById(userId);
-
-        if (adminUser) {
-            // Admin model currently stores one token.
+        } else if (isAdmin) {
+            const adminUser = await Admin.findById(userId);
             adminUser.fcmToken = fcmToken;
             await adminUser.save();
-            await FcmToken.findOneAndUpdate(
-                { userId: String(userId), token: fcmToken },
-                {
-                    userId: String(userId),
-                    token: fcmToken,
-                    platform: normalizedPlatform,
-                    updatedAt: new Date()
-                },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
             console.log('FCM Token saved for ADMIN:', userId);
-            return res.json({ message: 'FCM Token saved successfully', saved: true, userType: 'admin' });
+        } else {
+            console.log('User/Admin not found for ID:', userId);
+            return res.status(404).json({ message: 'User or Admin not found' });
         }
 
-        console.log('User/Admin not found for ID:', userId);
-    }
+        // Always update the FcmToken collection
+        await FcmToken.findOneAndUpdate(
+            { userId: String(userId), token: fcmToken },
+            {
+                userId: String(userId),
+                token: fcmToken,
+                platform: normalizedPlatform,
+                updatedAt: new Date()
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
-    // User not authenticated, just acknowledge
-    console.log('Token received but user not authenticated');
-    return res.json({ message: 'FCM Token received. Will save when user logs in.', saved: false });
+        return res.json({
+            message: 'FCM Token saved successfully',
+            saved: true,
+            userType: isUser ? 'user' : 'admin',
+            platform: normalizedPlatform
+        });
+
+    } catch (error) {
+        console.error('Error in saveFcmToken:', error);
+        return res.status(500).json({ message: 'Internal Server Error while saving FCM token', error: error.message });
+    }
 };
 
 router.post('/register', registerUser);
@@ -189,12 +160,12 @@ router.get('/debug-tokens', async (req, res) => {
 });
 
 // Generic FCM route
-router.post('/fcm-token', async (req, res) => saveFcmToken(req, res));
+router.post('/fcm-token', protect, async (req, res) => saveFcmToken(req, res));
 
 // Explicit platform routes for app clients
-router.post('/fcm-token/web', async (req, res) => saveFcmToken(req, res, 'web'));
-router.post('/fcm-token/mobile', async (req, res) => saveFcmToken(req, res, 'mobile'));
-router.post('/fcm-token/app', async (req, res) => saveFcmToken(req, res, 'mobile'));
+router.post('/fcm-token/web', protect, async (req, res) => saveFcmToken(req, res, 'web'));
+router.post('/fcm-token/mobile', protect, async (req, res) => saveFcmToken(req, res, 'mobile'));
+router.post('/fcm-token/app', protect, async (req, res) => saveFcmToken(req, res, 'mobile'));
 
 router.route('/profile')
     .get(protect, getUserProfile)
