@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import logo from '../../../assets/indiankart-logo.png';
-
 import toast from 'react-hot-toast';
 
 const Login = () => {
@@ -13,14 +12,24 @@ const Login = () => {
         const digits = String(value || '').replace(/\D/g, '');
         return digits.length > 10 ? digits.slice(-10) : digits;
     };
+    const isRealEmail = (value) => {
+        const trimmed = String(value || '').trim().toLowerCase();
+        return (
+            trimmed.includes('@') &&
+            !trimmed.endsWith('@otp.local') &&
+            !/^\d{10}$/.test(trimmed)
+        );
+    };
+
     const navigate = useNavigate();
     const location = useLocation();
-    const { sendOtp, verifyOtp, loading, error } = useAuthStore();
+    const { sendOtp, verifyOtp, updateProfile, loading, error } = useAuthStore();
+
     const [mobile, setMobile] = useState(location.state?.mobile || '');
-    const [name, setName] = useState(location.state?.name || '');
-    const [email, setEmail] = useState(location.state?.email || '');
-    const [otp, setOtp] = useState(''); // State for OTP
-    const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [otp, setOtp] = useState('');
+    const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP, 3: Profile
     const [resendCooldown, setResendCooldown] = useState(0);
     const from = location.state?.from?.pathname || '/';
 
@@ -57,18 +66,61 @@ const Login = () => {
     };
 
     const handleVerifyOtp = async () => {
-        if (otp.length === 4) {
-            try {
-                await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer', name, email);
-                toast.success('Login successful!');
-                navigate(from, { replace: true });
-            } catch (err) {
-                toast.error(err?.response?.data?.message || error || 'Invalid OTP');
-            }
-        } else {
+        if (otp.length !== 4) {
             toast.error('Please enter a valid 4-digit OTP');
+            return;
+        }
+
+        try {
+            const data = await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer');
+            if (data?.requiresProfile) {
+                setName(data?.name || '');
+                setEmail(isRealEmail(data?.email) ? data.email : '');
+                setStep(3);
+                toast.success('OTP verified');
+                return;
+            }
+
+            toast.success('Login successful!');
+            navigate(from, { replace: true });
+        } catch (err) {
+            toast.error(err?.response?.data?.message || error || 'Invalid OTP');
         }
     };
+
+    const handleCompleteProfile = async () => {
+        if (!name.trim()) {
+            toast.error('Please enter your name');
+            return;
+        }
+
+        const trimmedEmail = email.trim().toLowerCase();
+        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+            toast.error('Please enter a valid email');
+            return;
+        }
+
+        try {
+            await updateProfile({ name: name.trim(), email: trimmedEmail });
+            toast.success('Profile saved successfully!');
+            navigate(from, { replace: true });
+        } catch (err) {
+            toast.error(err?.response?.data?.message || error || 'Failed to save profile');
+        }
+    };
+
+    const title =
+        step === 1
+            ? 'Log in for the best experience'
+            : step === 2
+                ? 'Verify with OTP'
+                : 'Complete your profile';
+    const subtitle =
+        step === 1
+            ? 'Enter your phone number to continue'
+            : step === 2
+                ? `Enter OTP sent to +91 ${mobile}`
+                : 'You are new here. Add your name and email to continue';
 
     return (
         <div className="md:min-h-screen md:bg-gray-50 md:flex md:items-center md:justify-center">
@@ -82,12 +134,8 @@ const Login = () => {
                         <div className="w-56 h-56 bg-white flex items-center justify-center mb-2">
                             <img src={logo} alt="logo" className="w-full h-full object-contain" />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
-                            {step === 1 ? 'Log in for the best experience' : 'Verify with OTP'}
-                        </h2>
-                        <p className="text-sm text-gray-500 text-center">
-                            {step === 1 ? 'Enter your phone number to continue' : `Enter OTP sent to +91 ${mobile}`}
-                        </p>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">{title}</h2>
+                        <p className="text-sm text-gray-500 text-center">{subtitle}</p>
                     </div>
 
                     {error && (
@@ -97,7 +145,7 @@ const Login = () => {
                     )}
 
                     <div className="space-y-4">
-                        {step === 1 ? (
+                        {step === 1 && (
                             <>
                                 <div className="relative">
                                     <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">Mobile Number</label>
@@ -140,7 +188,9 @@ const Login = () => {
                                     {loading ? 'Sending OTP...' : 'Continue'}
                                 </button>
                             </>
-                        ) : (
+                        )}
+
+                        {step === 2 && (
                             <>
                                 <div className="relative">
                                     <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">OTP</label>
@@ -187,15 +237,45 @@ const Login = () => {
                                 </div>
                             </>
                         )}
-                    </div>
 
-                    {step === 1 && (
-                        <div className="mt-auto text-center pb-8">
-                            <p className="text-sm text-gray-500">
-                                New here? <button onClick={() => navigate('/signup')} className="text-blue-600 font-bold">Create an account</button>
-                            </p>
-                        </div>
-                    )}
+                        {step === 3 && (
+                            <>
+                                <div className="relative">
+                                    <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">Full Name</label>
+                                    <div className="flex items-center border border-blue-600 rounded-lg overflow-hidden h-12">
+                                        <input
+                                            type="text"
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            className="flex-1 h-full px-4 outline-none text-gray-900 font-medium"
+                                            placeholder="Enter your full name"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="relative">
+                                    <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">Email Address</label>
+                                    <div className="flex items-center border border-blue-600 rounded-lg overflow-hidden h-12">
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="flex-1 h-full px-4 outline-none text-gray-900 font-medium"
+                                            placeholder="Enter your email"
+                                        />
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={handleCompleteProfile}
+                                    disabled={loading}
+                                    className="w-full bg-[#fb641b] text-white py-3.5 rounded-sm font-bold text-sm shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all disabled:opacity-70"
+                                >
+                                    {loading ? 'Saving...' : 'Continue'}
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

@@ -27,7 +27,6 @@ const Layout = () => {
         '/select-language',
         '/help-center',
         '/login',
-        '/signup',
         '/play',
         '/categories'
     ].some(path => location.pathname.includes(path));
@@ -39,7 +38,6 @@ const Layout = () => {
         !location.pathname.includes('/product/') &&
         !location.pathname.includes('/checkout') &&
         !location.pathname.includes('/login') &&
-        !location.pathname.includes('/signup') &&
         !location.pathname.includes('/track-order') &&
         !location.pathname.includes('/category/') &&
         !location.pathname.includes('/play');

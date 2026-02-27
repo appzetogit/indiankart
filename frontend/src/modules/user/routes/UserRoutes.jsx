@@ -20,7 +20,6 @@ import SelectLanguage from '../pages/SelectLanguage';
 import NotificationSettings from '../pages/NotificationSettings';
 import HelpCenter from '../pages/HelpCenter';
 import Login from '../pages/Login';
-import Signup from '../pages/Signup';
 import ProtectedRoute from './ProtectedRoute';
 import ProductListingPage from '../pages/ProductListingPage';
 import AllCategories from '../pages/AllCategories';
@@ -57,7 +56,6 @@ const UserRoutes = () => {
                 <Route path="category/:categoryName/*" element={<CategoryPage />} />
                 <Route path="product/:id" element={<ProductDetails />} />
                 <Route path="login" element={<Login />} />
-                <Route path="signup" element={<Signup />} />
                 <Route path="offers/:id" element={<OfferPage />} />
                 <Route path="info" element={<InfoPage />} />
                 <Route path="become-seller" element={<BecomeSeller />} />

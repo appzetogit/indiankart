@@ -56,6 +56,8 @@ export const verifyLoginOtp = async (req, res) => {
                 email: email || `${HARDCODED_LOGIN_MOBILE}@temp.local`,
                 phone: HARDCODED_LOGIN_MOBILE,
                 gender: 'male',
+                isNewUser: false,
+                requiresProfile: false,
                 token
             });
         }
@@ -66,20 +68,35 @@ export const verifyLoginOtp = async (req, res) => {
 
         const isValid = await verifyOTP(mobile, otp, userType || 'Customer');
         if (!isValid) return res.status(400).json({ message: 'Invalid or expired OTP' });
-        let user = await User.findOne({ $or: [{ email: mobile }, { phone: mobile }] });
+        let user = await User.findOne({ $or: [{ email: normalizedMobile }, { phone: normalizedMobile }] });
+        let isNewUser = false;
         if (!user) {
+            isNewUser = true;
             user = await User.create({
-                name: name || 'New User',
-                email: email || mobile,
-                phone: mobile,
+                name: (name || '').trim(),
+                email: (email || `${normalizedMobile}@otp.local`).trim().toLowerCase(),
+                phone: normalizedMobile,
                 password: await bcrypt.hash(Math.random().toString(36), 10),
             });
-        } else {
-            // Update name and email if provided (handles case where user had only mobile/first name before)
-            if (name) user.name = name;
-            if (email) user.email = email;
-            await user.save();
         }
+
+        if (name && String(name).trim()) user.name = String(name).trim();
+        if (email && String(email).trim()) user.email = String(email).trim().toLowerCase();
+
+        if (name || email) {
+            await user.save();
+            isNewUser = false;
+        }
+
+        const hasRealName = Boolean(user.name && user.name.trim());
+        const hasRealEmail = Boolean(
+            user.email &&
+            user.email.includes('@') &&
+            !user.email.endsWith('@otp.local') &&
+            user.email !== normalizedMobile
+        );
+        const requiresProfile = !hasRealName || !hasRealEmail;
+
         const token = generateToken(res, user._id, 'user_jwt');
         res.json({
             _id: user._id,
@@ -87,6 +104,8 @@ export const verifyLoginOtp = async (req, res) => {
             email: user.email,
             phone: user.phone,
             gender: user.gender,
+            isNewUser,
+            requiresProfile,
             token
         });
     } catch (error) {
