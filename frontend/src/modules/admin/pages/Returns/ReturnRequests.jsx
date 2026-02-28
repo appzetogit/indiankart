@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdSearch, MdFilterList, MdCheckCircle, MdCancel, MdPendingActions, MdAutorenew, MdHistory, MdVisibility, MdLocalShipping, MdInventory, MdAssignmentReturn, MdChevronLeft, MdChevronRight } from 'react-icons/md';
+import { MdSearch, MdCheckCircle, MdCancel, MdPendingActions, MdHistory, MdVisibility, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import useReturnStore from '../../store/returnStore';
 
 const ReturnRequests = () => {
@@ -14,6 +14,7 @@ const ReturnRequests = () => {
     const [selectedReturn, setSelectedReturn] = useState(null);
     const [selectedProof, setSelectedProof] = useState(null);
     const [actionNote, setActionNote] = useState('');
+    const [nextStatus, setNextStatus] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
 
@@ -58,6 +59,71 @@ const ReturnRequests = () => {
     };
 
     const isVideoUrl = (url = '') => /\.(mp4|mov|webm|mkv|avi)(\?|$)/i.test(url);
+    const formatLifecycleTime = (value) => {
+        if (!value) return '--';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return '--';
+        return parsed.toLocaleString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+    };
+
+    const getLifecycleSteps = (type) => {
+        if (type === 'Cancellation') return ['Pending', 'Approved', 'Completed'];
+        if (type === 'Replacement') return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Replacement Dispatched', 'Completed'];
+        return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
+    };
+
+    const getStatusOptions = (ret) => {
+        if (!ret) return [];
+        if (ret.status === 'Completed' || ret.status === 'Rejected') return [];
+
+        const steps = getLifecycleSteps(ret.type);
+        const currentIndex = steps.indexOf(ret.status);
+        if (currentIndex === -1) return [];
+
+        const forwardStatuses = steps.slice(currentIndex + 1);
+
+        if (ret.status === 'Pending') {
+            return [...forwardStatuses, 'Rejected'];
+        }
+
+        return forwardStatuses;
+    };
+
+    const getActionLabel = (status, type) => {
+        if (status === 'Approved') return type === 'Cancellation' ? 'Approve Cancellation' : 'Approve Request';
+        if (status === 'Rejected') return type === 'Cancellation' ? 'Reject Cancellation' : 'Reject Request';
+        if (status === 'Pickup Scheduled') return 'Schedule Pickup';
+        if (status === 'Received at Warehouse') return 'Confirm Item Received';
+        if (status === 'Refund Initiated') return 'Initiate Refund';
+        if (status === 'Replacement Dispatched') return 'Dispatch Replacement';
+        if (status === 'Completed') return 'Mark as Completed';
+        return 'Update Status';
+    };
+
+    useEffect(() => {
+        if (!selectedReturn) return;
+        const options = getStatusOptions(selectedReturn);
+        setNextStatus(options[0] || '');
+    }, [selectedReturn]);
+
+    useEffect(() => {
+        if (!selectedReturn) return;
+        const refreshedReturn = returns.find((ret) =>
+            (selectedReturn._id && ret._id === selectedReturn._id) ||
+            (selectedReturn.id && ret.id === selectedReturn.id)
+        );
+        if (refreshedReturn) {
+            setSelectedReturn(refreshedReturn);
+        }
+    }, [returns, selectedReturn?._id, selectedReturn?.id]);
 
     return (
         <div className="space-y-6">
@@ -350,22 +416,54 @@ const ReturnRequests = () => {
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                                <div className="relative before:absolute before:inset-0 before:left-[15px] before:w-0.5 before:bg-blue-200 before:pointer-events-none pb-4">
-                                    {selectedReturn.timeline.map((event, idx) => (
-                                        <div key={idx} className="relative flex gap-6 mb-8 last:mb-0">
-                                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center relative z-10 shadow-lg shadow-blue-100 text-white">
-                                                <MdCheckCircle size={16} />
-                                            </div>
-                                            <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-xs font-black text-gray-900 uppercase tracking-widest">{event.status}</span>
-                                                    <span className="text-[9px] text-gray-400 font-bold">{new Date(event.time).toLocaleString()}</span>
-                                                </div>
-                                                {event.note && <p className="text-[11px] text-gray-500 font-medium italic">"{event.note}"</p>}
-                                            </div>
+                                {(() => {
+                                    const baseSteps = getLifecycleSteps(selectedReturn.type);
+                                    const lifecycleSteps = baseSteps.includes(selectedReturn.status)
+                                        ? baseSteps
+                                        : [...baseSteps, selectedReturn.status];
+                                    const timelineEvents = Array.isArray(selectedReturn.timeline) ? selectedReturn.timeline : [];
+                                    const currentIndex = lifecycleSteps.indexOf(selectedReturn.status);
+                                    const safeCurrentIndex = currentIndex < 0 ? 0 : currentIndex;
+                                    const progressHeight = lifecycleSteps.length > 1
+                                        ? `${(safeCurrentIndex / (lifecycleSteps.length - 1)) * 100}%`
+                                        : '0%';
+
+                                    return (
+                                        <div className="relative pb-4">
+                                            <div className="absolute left-[15px] top-0 bottom-0 w-0.5 bg-blue-200 pointer-events-none"></div>
+                                            <div
+                                                className="absolute left-[15px] top-0 w-0.5 bg-blue-600 pointer-events-none transition-all duration-300"
+                                                style={{ height: progressHeight }}
+                                            ></div>
+
+                                            {lifecycleSteps.map((step, idx) => {
+                                                const event = [...timelineEvents].reverse().find((entry) => entry.status === step);
+                                                const isCompleted = idx <= safeCurrentIndex;
+                                                const isCurrent = idx === safeCurrentIndex;
+                                                return (
+                                                    <div key={`${selectedReturn.id}-${step}`} className="relative flex gap-6 mb-8 last:mb-0">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center relative z-10 text-white transition-all ${isCompleted ? 'bg-blue-600 shadow-lg shadow-blue-100' : 'bg-gray-300'}`}>
+                                                            {isCompleted ? <MdCheckCircle size={16} /> : <MdPendingActions size={16} />}
+                                                        </div>
+                                                        <div className={`flex-1 bg-white p-4 rounded-2xl shadow-sm border transition-all ${isCurrent ? 'border-blue-200' : 'border-gray-100'}`}>
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <span className="text-xs font-black text-gray-900 uppercase tracking-widest">{step}</span>
+                                                                <span className="text-[9px] text-gray-400 font-bold">
+                                                                    {event?.time ? formatLifecycleTime(event.time) : '--'}
+                                                                </span>
+                                                            </div>
+                                                            {event?.note ? (
+                                                                <p className="text-[11px] text-gray-500 font-medium italic">"{event.note}"</p>
+                                                            ) : (
+                                                                <p className="text-[11px] text-gray-400 font-medium italic">No update yet</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    ))}
-                                </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* Action Footer */}
@@ -377,41 +475,44 @@ const ReturnRequests = () => {
                                         value={actionNote}
                                         onChange={(e) => setActionNote(e.target.value)}
                                     />
-                                    <div className="grid grid-cols-2 gap-3">
-                                        {selectedReturn.status === 'Pending' && (
-                                            <>
-                                                <button
-                                                    onClick={() => handleStatusUpdate(selectedReturn._id, 'Approved')}
-                                                    className="py-3 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100"
-                                                >
-                                                    {selectedReturn.type === 'Cancellation' ? 'Approve Cancellation' : 'Approve Request'}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleStatusUpdate(selectedReturn._id, 'Rejected')}
-                                                    className="py-3 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-600 hover:text-white transition"
-                                                >
-                                                    {selectedReturn.type === 'Cancellation' ? 'Reject Cancellation' : 'Reject Request'}
-                                                </button>
-                                            </>
-                                        )}
-                                        {selectedReturn.status === 'Approved' && (
-                                            <button onClick={() => handleStatusUpdate(selectedReturn._id, 'Pickup Scheduled')} className="col-span-2 py-3 bg-purple-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-purple-700 transition shadow-lg shadow-purple-100 flex items-center justify-center gap-2"><MdLocalShipping size={16} /> Schedule Pickup</button>
-                                        )}
-                                        {selectedReturn.status === 'Pickup Scheduled' && (
-                                            <button onClick={() => handleStatusUpdate(selectedReturn._id, 'Received at Warehouse')} className="col-span-2 py-3 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 flex items-center justify-center gap-2"><MdInventory size={16} /> Confirm Item Received</button>
-                                        )}
-                                        {selectedReturn.status === 'Received at Warehouse' && (
+                                    {selectedReturn.status === 'Pending' ? (
+                                        <div className="grid grid-cols-2 gap-3">
                                             <button
-                                                onClick={() => handleStatusUpdate(selectedReturn._id, selectedReturn.type === 'Return' ? 'Refund Initiated' : 'Replacement Dispatched')}
-                                                className="col-span-2 py-3 bg-cyan-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-cyan-700 transition shadow-lg shadow-cyan-100 flex items-center justify-center gap-2"
+                                                onClick={() => handleStatusUpdate(selectedReturn._id, 'Approved')}
+                                                className="py-3 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100"
                                             >
-                                                <MdAssignmentReturn size={16} /> {selectedReturn.type === 'Return' ? 'Initiate Refund' : 'Dispatch Replacement'}
+                                                {selectedReturn.type === 'Cancellation' ? 'Approve Cancellation' : 'Accept Request'}
                                             </button>
-                                        )}
-                                        {(selectedReturn.status === 'Refund Initiated' || selectedReturn.status === 'Replacement Dispatched') && (
-                                            <button onClick={() => handleStatusUpdate(selectedReturn._id, 'Completed')} className="col-span-2 py-3 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-green-700 transition shadow-lg shadow-green-100 flex items-center justify-center gap-2"><MdCheckCircle size={16} /> Mark as Completed</button>
-                                        )}
-                                    </div>
+                                            <button
+                                                onClick={() => handleStatusUpdate(selectedReturn._id, 'Rejected')}
+                                                className="py-3 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-600 hover:text-white transition"
+                                            >
+                                                {selectedReturn.type === 'Cancellation' ? 'Reject Cancellation' : 'Reject Request'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+                                            <select
+                                                value={nextStatus}
+                                                onChange={(e) => setNextStatus(e.target.value)}
+                                                className="w-full bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-xl px-4 py-3 outline-none text-xs font-black text-gray-900"
+                                            >
+                                                <option value="" disabled>Select next status</option>
+                                                {getStatusOptions(selectedReturn).map((status) => (
+                                                    <option key={status} value={status}>
+                                                        {status}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={() => handleStatusUpdate(selectedReturn._id, nextStatus)}
+                                                disabled={!nextStatus}
+                                                className="py-3 px-5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                            >
+                                                {getActionLabel(nextStatus, selectedReturn.type)}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

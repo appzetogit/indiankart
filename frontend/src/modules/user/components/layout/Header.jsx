@@ -76,8 +76,18 @@ const Header = () => {
         cat.active !== false &&
         activeCategoryIds.has(String(cat._id || cat.id))
     );
-    // Show only categories explicitly configured in Admin -> Header Settings.
-    const displayCategories = activeHeaderCategories;
+    // Keep "For You" static at first position across mobile + desktop.
+    const forYouCategory = {
+        id: 'for-you',
+        name: 'For You',
+        icon: 'home',
+        children: []
+    };
+    // Show configured header categories, but avoid duplicate "For You".
+    const displayCategories = [
+        forYouCategory,
+        ...activeHeaderCategories.filter((cat) => String(cat?.name || '').trim().toLowerCase() !== 'for you')
+    ];
     const shouldSpreadCategories = displayCategories.length >= 6;
 
 
@@ -504,7 +514,7 @@ const Header = () => {
                                             }, 150); // Small delay to prevent accidental closure
                                         }
                                     }}
-                                    className={`relative flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group ${cat.name === 'For You' ? 'md:hidden' : ''}`}
+                                    className="relative flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group"
                                 >
                                     <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
                                         {hasCategoryImage ? (
@@ -520,7 +530,7 @@ const Header = () => {
                                             />
                                         ) : null}
                                         <IconComponent
-                                            className="text-[20px] md:text-2xl"
+                                            className={cat.name === 'For You' ? 'text-[24px] md:text-[30px]' : 'text-[20px] md:text-2xl'}
                                             style={{ display: hasCategoryImage ? 'none' : 'block' }}
                                         />
                                     </div>
