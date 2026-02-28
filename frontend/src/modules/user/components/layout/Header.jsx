@@ -393,7 +393,7 @@ const Header = () => {
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-sm font-black text-gray-900">₹{product.price?.toLocaleString()}</div>
+                                                    <div className="text-sm font-black text-gray-900">₹{(product.skus?.[0]?.price ?? product.price)?.toLocaleString()}</div>
                                                     {product.discount > 0 && (
                                                         <div className="text-[9px] font-bold text-green-600 bg-green-50 px-1 rounded inline-block">{product.discount}% OFF</div>
                                                     )}
@@ -630,11 +630,11 @@ const Header = () => {
                                                                     <div className="flex items-center justify-between mt-auto">
                                                                         <div className="flex flex-col">
                                                                             <span className="text-sm font-black text-gray-900">
-                                                                                ₹{product.price?.toLocaleString()}
+                                                                                ₹{(product.skus?.[0]?.price ?? product.price)?.toLocaleString()}
                                                                             </span>
-                                                                            {product.originalPrice && product.originalPrice > product.price && (
+                                                                            {(product.skus?.[0]?.originalPrice ?? product.originalPrice) > (product.skus?.[0]?.price ?? product.price) && (
                                                                                 <span className="text-[10px] text-gray-400 line-through">
-                                                                                    ₹{product.originalPrice?.toLocaleString()}
+                                                                                    ₹{(product.skus?.[0]?.originalPrice ?? product.originalPrice)?.toLocaleString()}
                                                                                 </span>
                                                                             )}
                                                                         </div>

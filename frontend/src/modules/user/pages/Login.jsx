@@ -73,16 +73,10 @@ const Login = () => {
 
         try {
             const data = await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer');
-            if (data?.requiresProfile) {
-                setName(data?.name || '');
-                setEmail(isRealEmail(data?.email) ? data.email : '');
-                setStep(3);
-                toast.success('OTP verified');
-                return;
-            }
-
+            
             toast.success('Login successful!');
             navigate(from, { replace: true });
+            return;
         } catch (err) {
             toast.error(err?.response?.data?.message || error || 'Invalid OTP');
         }
