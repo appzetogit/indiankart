@@ -14,6 +14,19 @@ const ProductSection = ({
 }) => {
     const scrollRef = React.useRef(null);
     const skeletonItems = [1, 2, 3, 4, 5, 6];
+    const normalizedProducts = React.useMemo(() => {
+        return (products || []).map((product) => {
+            const firstSku = Array.isArray(product?.skus) && product.skus.length > 0 ? product.skus[0] : null;
+            const price = Number(firstSku?.price ?? product?.price ?? 0);
+            const originalPrice = Number(firstSku?.originalPrice ?? product?.originalPrice ?? price);
+
+            return {
+                ...product,
+                price,
+                originalPrice
+            };
+        });
+    }, [products]);
     
     // Translate Title and Subtitle
     const translatedTitle = useGoogleTranslation(title);
@@ -74,8 +87,8 @@ const ProductSection = ({
                                 </div>
                             ))
                         ) : (
-                            products.map((product) => (
-                                <div key={product.id} className="min-w-[130px] w-[130px] md:min-w-[240px] md:w-[240px] flex-shrink-0">
+                            normalizedProducts.map((product) => (
+                                <div key={product.id || product._id} className="min-w-[130px] w-[130px] md:min-w-[240px] md:w-[240px] flex-shrink-0">
                                     <ProductCard product={product} />
                                 </div>
                             ))
@@ -92,8 +105,8 @@ const ProductSection = ({
                 </div>
             ) : (
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6">
-                    {products.map((product) => (
-                        <ProductCard key={product.id} product={product} />
+                    {normalizedProducts.map((product) => (
+                        <ProductCard key={product.id || product._id} product={product} />
                     ))}
                 </div>
             )}

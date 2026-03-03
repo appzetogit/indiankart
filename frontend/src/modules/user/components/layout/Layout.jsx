@@ -54,7 +54,7 @@ const Layout = () => {
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
-                            isCheckout ? 'pt-0 md:pt-[160px]' :
+                            isCheckout ? 'pt-0 md:pt-[96px]' :
                             isHome ? 'pt-[260px] md:pt-[210px]' :
                                 isAccountSectionPage ? accountSectionTopPadding :
                                     standardTopPadding}`}>

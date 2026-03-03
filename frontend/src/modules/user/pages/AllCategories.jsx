@@ -28,9 +28,9 @@ const AllCategories = () => {
     const displayCategories = useMemo(() => {
         if (categoriesLoading) return [];
         
-        // Filter out "For You" category and ensure they are active
-        const allActive = categories.filter(cat => cat.name !== "For You" && cat.active !== false);
-        const pinned = headerCategories.filter(cat => cat.name !== "For You" && cat.active !== false);
+        // Keep active categories, but exclude "For You" on this page.
+        const allActive = categories.filter(cat => cat.active !== false && cat.name !== 'For You');
+        const pinned = headerCategories.filter(cat => cat.active !== false && cat.name !== 'For You');
         
         const pinnedIds = new Set(pinned.map(cat => cat.id || cat._id));
         const remaining = allActive.filter(cat => !pinnedIds.has(cat.id || cat._id));
@@ -61,6 +61,7 @@ const AllCategories = () => {
         'home': MdHome,
         'shopping_basket': MdShoppingBasket,
     };
+    const isImageSource = (value = '') => /^(https?:\/\/|\/|data:|blob:)/i.test(String(value || '').trim());
 
     if (categoriesLoading) {
         return <div className="p-10 text-center">Loading categories...</div>;
@@ -80,21 +81,40 @@ const AllCategories = () => {
                 <div className="w-1/4 max-w-[100px] bg-gray-50 border-r border-gray-200 no-scrollbar">
                     {displayCategories.map((cat) => {
                         const IconComponent = iconMap[cat.icon] || MdGridView;
+                        const categoryImage = cat.image || cat.icon || '';
+                        const hasCategoryImage = isImageSource(categoryImage);
+                        const isSelected = selectedCategory === (cat.id || cat._id);
+                        const isForYou = String(cat.name || '').trim().toLowerCase() === 'for you';
                         return (
                             <div
                                 key={cat.id || cat._id}
                                 onClick={() => setSelectedCategory(cat.id || cat._id)}
-                                className={`flex flex-col items-center justify-center py-4 px-1 cursor-pointer relative ${selectedCategory === (cat.id || cat._id) ? 'bg-white' : ''}`}
+                                className={`flex flex-col items-center justify-center py-4 px-1 cursor-pointer relative ${isSelected ? 'bg-white' : ''}`}
                             >
                                 {/* Active Indicator Strip */}
-                                {selectedCategory === (cat.id || cat._id) && (
+                                {isSelected && !isForYou && (
                                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-r-full"></div>
                                 )}
 
-                                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center mb-1 ${selectedCategory === (cat.id || cat._id) ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                                    <IconComponent className="text-xl" />
+                                <div className={`relative w-12 h-12 rounded-full flex items-center justify-center mb-1 border transition-all ${isSelected && !isForYou ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                    {hasCategoryImage ? (
+                                        <img
+                                            src={categoryImage}
+                                            alt={cat.name}
+                                            className="w-full h-full object-cover rounded-full"
+                                            onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                const fallbackIcon = e.currentTarget.nextElementSibling;
+                                                if (fallbackIcon) fallbackIcon.style.display = 'block';
+                                            }}
+                                        />
+                                    ) : null}
+                                    <IconComponent
+                                        className="text-2xl"
+                                        style={{ display: hasCategoryImage ? 'none' : 'block' }}
+                                    />
                                 </div>
-                                <span className={`text-[10px] text-center font-medium leading-tight ${selectedCategory === (cat.id || cat._id) ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
+                                <span className={`text-[10px] text-center font-medium leading-tight ${isSelected && !isForYou ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
                                     {cat.name}
                                 </span>
                             </div>

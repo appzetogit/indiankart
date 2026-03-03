@@ -202,7 +202,7 @@ const OrderDetails = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 flex items-center justify-center">
+            <div className="min-h-screen bg-white flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-gray-600 font-semibold">Loading order details...</p>
@@ -213,12 +213,12 @@ const OrderDetails = () => {
 
     if (error || !order) {
         return (
-            <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 flex items-center justify-center p-4">
+            <div className="min-h-screen bg-white flex items-center justify-center p-4">
                 <div className="text-center bg-white p-10 rounded-xl shadow-lg">
                     <span className="material-icons text-red-400 text-6xl mb-4">error</span>
                     <h2 className="text-2xl font-bold text-gray-800 mb-2">Order Not Found</h2>
                     <p className="text-gray-600 mb-6">{error || 'Unable to load order details'}</p>
-                    <button onClick={() => navigate('/my-orders')} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:shadow-lg transition-all">
+                    <button onClick={() => navigate('/my-orders')} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold transition-all">
                         Back to Orders
                     </button>
                 </div>
@@ -227,6 +227,10 @@ const OrderDetails = () => {
     }
 
     const currentStep = getStatusStep(order.status);
+    const normalizedOrderStatus = String(order?.status || '').trim();
+    const paymentInfoStatus = order.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
+        ? 'Confirmed'
+        : 'Pending';
     const steps = [
         { name: 'Order Placed', status: 'Pending', icon: 'shopping_cart' },
         { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
@@ -237,19 +241,19 @@ const OrderDetails = () => {
     ];
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50 pb-20">
+        <div className="min-h-screen bg-white pb-20">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-5 sticky top-0 z-50 shadow-lg">
+            <div className="bg-white px-4 py-5 sticky top-[110px] md:top-[96px] z-30 shadow-sm border-b border-gray-200">
                 <div className="max-w-6xl mx-auto flex items-center gap-4">
                     <button
                         onClick={() => navigate('/my-orders')}
-                        className="material-icons p-2 -ml-2 active:bg-white/10 rounded-full transition-all cursor-pointer"
+                        className="material-icons p-2 -ml-2 text-gray-700 hover:bg-gray-100 rounded-full transition-all cursor-pointer"
                     >
                         arrow_back
                     </button>
                     <div className="flex-1">
-                        <h1 className="text-lg font-bold">Order Details</h1>
-                        <p className="text-xs text-white/80">#{order.displayId || order._id.slice(-8).toUpperCase()}</p>
+                        <h1 className="text-lg font-bold text-gray-900">Order Details</h1>
+                        <p className="text-xs text-gray-500">#{order.displayId || order._id.slice(-8).toUpperCase()}</p>
                     </div>
                     <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(order.status)}`}>
                         <span className="material-icons text-sm">{getStatusIcon(order.status)}</span>
@@ -274,7 +278,7 @@ const OrderDetails = () => {
                                     {/* Progress Bar */}
                                     <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 hidden md:block">
                                         <div
-                                            className="h-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-500"
+                                            className="h-full bg-blue-600 transition-all duration-500"
                                             style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
                                         ></div>
                                     </div>
@@ -287,7 +291,7 @@ const OrderDetails = () => {
                                             return (
                                                 <div key={step.status} className="flex flex-col items-center relative z-10">
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all ${isCompleted
-                                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+                                                            ? 'bg-blue-600 text-white shadow-lg'
                                                             : 'bg-white border-2 border-gray-300 text-gray-400'
                                                         } ${isCurrent ? 'ring-4 ring-blue-200 scale-110' : ''}`}>
                                                         <span className="material-icons text-lg">{step.icon}</span>
@@ -429,7 +433,7 @@ const OrderDetails = () => {
                             </h2>
                             <div className="space-y-4">
                                 {order.orderItems.map((item, index) => (
-                                    <div key={index} className="flex gap-4 p-4 bg-gradient-to-r from-white to-blue-50 rounded-lg border border-blue-100">
+                                    <div key={index} className="flex gap-4 p-4 bg-white rounded-lg border border-blue-100">
                                         <div className="w-20 h-20 bg-white rounded-lg border-2 border-blue-100 p-2 flex-shrink-0">
                                             <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
                                         </div>
@@ -452,7 +456,7 @@ const OrderDetails = () => {
                                                         </div>
                                                     )}
                                             <p className="text-xs text-gray-500 mt-1">Quantity: {item.qty}</p>
-                                            <p className="text-lg font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mt-1">
+                                            <p className="text-lg font-extrabold text-gray-900 mt-1">
                                                 ₹{item.price.toLocaleString()}
                                             </p>
 
@@ -475,7 +479,7 @@ const OrderDetails = () => {
                                 <span className="material-icons text-blue-600">location_on</span>
                                 Delivery Address
                             </h2>
-                            <div className="bg-gradient-to-r from-white to-blue-50 p-4 rounded-lg border border-blue-100">
+                            <div className="bg-white p-4 rounded-lg border border-blue-100">
                                 <p className="font-bold text-gray-800">{order.shippingAddress.street}</p>
                                 <p className="text-sm text-gray-600 mt-1">
                                     {order.shippingAddress.city}, {order.shippingAddress.postalCode}
@@ -516,7 +520,7 @@ const OrderDetails = () => {
                                 )}
                                 <div className="border-t-2 border-dashed border-blue-200 pt-3 flex justify-between">
                                     <span className="text-base font-bold text-gray-800">Total Amount</span>
-                                    <span className="text-xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                    <span className="text-xl font-extrabold text-gray-900">
                                         ₹{order.totalPrice.toLocaleString()}
                                     </span>
                                 </div>
@@ -536,17 +540,17 @@ const OrderDetails = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-600">Status</span>
-                                    {order.isPaid ? (
-                                        <div className="flex items-center gap-1 bg-green-50 border border-green-200 px-3 py-1 rounded-full">
-                                            <span className="material-icons text-green-600 text-sm">check_circle</span>
-                                            <span className="text-xs font-bold text-green-700">Paid</span>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-200 px-3 py-1 rounded-full">
-                                            <span className="material-icons text-yellow-600 text-sm">pending</span>
-                                            <span className="text-xs font-bold text-yellow-700">COD</span>
-                                        </div>
-                                    )}
+                                    <div className={`flex items-center gap-1 px-3 py-1 rounded-full border ${paymentInfoStatus === 'Confirmed'
+                                            ? 'bg-blue-50 border-blue-200'
+                                            : 'bg-amber-50 border-amber-200'
+                                        }`}>
+                                        <span className={`material-icons text-sm ${paymentInfoStatus === 'Confirmed' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                            {paymentInfoStatus === 'Confirmed' ? 'check_circle' : 'pending'}
+                                        </span>
+                                        <span className={`text-xs font-bold ${paymentInfoStatus === 'Confirmed' ? 'text-blue-700' : 'text-amber-700'}`}>
+                                            {paymentInfoStatus}
+                                        </span>
+                                    </div>
                                 </div>
                                 {order.paidAt && (
                                     <div className="text-xs text-gray-500 mt-2">
@@ -656,3 +660,4 @@ const OrderDetails = () => {
 };
 
 export default OrderDetails;
+

@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack } from 'react-icons/md';
 import { useProducts, useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
-import API from '../../../services/api';
 import SubCategoryList from '../components/category/SubCategoryList';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
@@ -33,8 +32,26 @@ const CategoryPage = () => {
     const [showAllRam, setShowAllRam] = useState(false);
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
-    const [bankOffersByProduct, setBankOffersByProduct] = useState({});
-    const [availableCoupons, setAvailableCoupons] = useState([]);
+
+    const normalizeText = (value) => String(value || '').trim().toLowerCase();
+    const parseAmount = (value, fallback = 0) => {
+        const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
+        return Number.isFinite(parsed) ? parsed : fallback;
+    };
+
+    const getEffectivePricing = (product) => {
+        const skus = Array.isArray(product?.skus) ? product.skus : [];
+        const firstSku = skus.length > 0 ? skus[0] : null;
+
+        const price = parseAmount(firstSku?.price ?? product?.price ?? 0, 0);
+        const rawOriginalPrice = parseAmount(firstSku?.originalPrice ?? product?.originalPrice ?? price, price);
+        const originalPrice = Math.max(rawOriginalPrice, price);
+        const discountFromText = Number.parseInt(String(product?.discount || '').replace(/\D/g, ''), 10) || 0;
+        const discountPercent = originalPrice > price
+            ? Math.round(((originalPrice - price) / originalPrice) * 100)
+            : discountFromText;
+        return { price, originalPrice, discountPercent };
+    };
 
     const handleBackNavigation = () => {
         // React Router sets history.state.idx for in-app entries.
@@ -60,7 +77,7 @@ const CategoryPage = () => {
 
             // Calculate price range from products
             if (result.products.length > 0) {
-                const prices = result.products.map(p => p.price);
+                const prices = result.products.map((p) => getEffectivePricing(p).price);
                 const min = Math.min(...prices);
                 const max = Math.max(...prices);
                 setPriceRange({ min, max });
@@ -75,14 +92,17 @@ const CategoryPage = () => {
     useEffect(() => {
         let updated = [...categoryProducts];
 
-        // Apply Price Filter
-        updated = updated.filter(p => p.price >= filterRange[0] && p.price <= filterRange[1]);
+        // Apply Price Filter (first variant price if variants exist)
+        updated = updated.filter((p) => {
+            const { price } = getEffectivePricing(p);
+            return price >= filterRange[0] && price <= filterRange[1];
+        });
 
         // Apply Sorting
         if (sortBy === 'price-low') {
-            updated.sort((a, b) => a.price - b.price);
+            updated.sort((a, b) => getEffectivePricing(a).price - getEffectivePricing(b).price);
         } else if (sortBy === 'price-high') {
-            updated.sort((a, b) => b.price - a.price);
+            updated.sort((a, b) => getEffectivePricing(b).price - getEffectivePricing(a).price);
         } else if (sortBy === 'rating') {
             updated.sort((a, b) => b.rating - a.rating);
         }
@@ -90,25 +110,30 @@ const CategoryPage = () => {
         // Apply Category Filter (now filtering by subcategories from tags)
         if (selectedCategories.length > 0) {
             updated = updated.filter(p =>
-                p.tags && p.tags.some(tag => selectedCategories.includes(tag))
+                Array.isArray(p.tags) && p.tags.some((tag) =>
+                    selectedCategories.some((selected) => normalizeText(selected) === normalizeText(tag))
+                )
             );
         }
 
         // Apply Brand Filter
         if (selectedBrands.length > 0) {
-            updated = updated.filter(p => p.brand && selectedBrands.includes(p.brand));
+            updated = updated.filter((p) =>
+                p.brand && selectedBrands.some((brand) => normalizeText(brand) === normalizeText(p.brand))
+            );
         }
 
         // Apply RAM Filter
         if (selectedRam.length > 0) {
-            updated = updated.filter(p => p.ram && selectedRam.includes(p.ram));
+            updated = updated.filter((p) =>
+                p.ram && selectedRam.some((ram) => normalizeText(ram) === normalizeText(p.ram))
+            );
         }
 
         // Apply Discount Filter
         if (selectedDiscount) {
-            updated = updated.filter(p => {
-                if (!p.discount) return false;
-                const discountPercent = parseInt(p.discount.replace(/\D/g, ''));
+            updated = updated.filter((p) => {
+                const { discountPercent } = getEffectivePricing(p);
                 return discountPercent >= selectedDiscount;
             });
         }
@@ -116,63 +141,16 @@ const CategoryPage = () => {
         setSortedProducts(updated);
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, categoryProducts]);
 
-    useEffect(() => {
-        const fetchCoupons = async () => {
-            try {
-                const { data } = await API.get('/coupons');
-                setAvailableCoupons(Array.isArray(data) ? data : []);
-            } catch (error) {
-                console.error('Error fetching coupons:', error);
-                setAvailableCoupons([]);
-            }
-        };
-        fetchCoupons();
-    }, []);
-
-    useEffect(() => {
-        const fetchBankOffersForVisibleProducts = async () => {
-            const showDetailedProductsView = breadcrumbs.length > 1;
-            if (!showDetailedProductsView || sortedProducts.length === 0) {
-                setBankOffersByProduct({});
-                return;
-            }
-
-            try {
-                const productIds = sortedProducts
-                    .map((p) => p.id || p._id)
-                    .filter(Boolean)
-                    .slice(0, 30);
-
-                const responses = await Promise.all(
-                    productIds.map(async (pid) => {
-                        try {
-                            const { data } = await API.get(`/bank-offers/product/${pid}`);
-                            return [String(pid), Array.isArray(data) ? data : []];
-                        } catch {
-                            return [String(pid), []];
-                        }
-                    })
-                );
-
-                setBankOffersByProduct(Object.fromEntries(responses));
-            } catch (error) {
-                console.error('Error fetching bank offers for category listing:', error);
-                setBankOffersByProduct({});
-            }
-        };
-
-        fetchBankOffersForVisibleProducts();
-    }, [breadcrumbs.length, sortedProducts]);
-
     // Unique Brands, RAM, and Subcategories from tags
-    const availableBrands = [...new Set(categoryProducts.map(p => p.brand).filter(Boolean))];
-    const availableRam = [...new Set(categoryProducts.map(p => p.ram).filter(Boolean))];
+    const availableBrands = [...new Set(categoryProducts.map(p => String(p.brand || '').trim()).filter(Boolean))];
+    const availableRam = [...new Set(categoryProducts.map(p => String(p.ram || '').trim()).filter(Boolean))];
 
     // Extract subcategories from tags, excluding the main category name
     const availableCategories = [...new Set(
         categoryProducts
             .flatMap(p => p.tags || [])
-            .filter(tag => tag !== categoryData?.name) // Exclude main category
+            .map((tag) => String(tag || '').trim())
+            .filter(tag => normalizeText(tag) !== normalizeText(categoryData?.name)) // Exclude main category
             .filter(Boolean)
     )];
 
@@ -204,89 +182,18 @@ const CategoryPage = () => {
         setFilterRange(newRange);
     };
 
+    const resetAllFilters = () => {
+        setFilterRange([priceRange.min, priceRange.max]);
+        setSelectedBrands([]);
+        setSelectedRam([]);
+        setSelectedCategories([]);
+        setSelectedDiscount(null);
+    };
+
     // Show limited items
     const displayedBrands = showAllBrands ? filteredBrands : filteredBrands.slice(0, 6);
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
-
-    const formatPrice = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
-
-    const getDiscountPercent = (product) => {
-        if (product?.discount) {
-            const parsed = parseInt(String(product.discount).replace(/\D/g, ''), 10);
-            if (!Number.isNaN(parsed) && parsed > 0) return parsed;
-        }
-        const original = Number(product?.originalPrice || 0);
-        const current = Number(product?.price || 0);
-        if (original > current && current > 0) {
-            return Math.round(((original - current) / original) * 100);
-        }
-        return 0;
-    };
-
-    const getListingPriceData = (product) => {
-        const firstSku = Array.isArray(product?.skus) && product.skus.length > 0 ? product.skus[0] : null;
-        const sellingPrice = Number(firstSku?.price ?? product?.price ?? 0);
-        const markedPrice = Number(firstSku?.originalPrice ?? product?.originalPrice ?? sellingPrice);
-        return {
-            sellingPrice,
-            markedPrice
-        };
-    };
-
-    const getProductHighlights = (product) => {
-        const bullets = [];
-
-        if (Array.isArray(product?.highlights)) {
-            product.highlights.forEach((section) => {
-                if (Array.isArray(section?.points)) {
-                    section.points.forEach((point) => {
-                        if (point && String(point).trim()) bullets.push(String(point).trim());
-                    });
-                }
-            });
-        }
-
-        if (bullets.length === 0 && Array.isArray(product?.specifications)) {
-            product.specifications.forEach((group) => {
-                if (Array.isArray(group?.specs)) {
-                    group.specs.forEach((spec) => {
-                        if (spec?.key && spec?.value) bullets.push(`${spec.key}: ${spec.value}`);
-                    });
-                }
-            });
-        }
-
-        if (bullets.length === 0 && product?.warranty?.summary) {
-            bullets.push(product.warranty.summary);
-        }
-
-        return bullets.slice(0, 6);
-    };
-
-    const getApplicableCouponsForProduct = (product, sellingPrice) => {
-        const now = new Date();
-        const productCategory = String(product?.category || '').toLowerCase();
-
-        return availableCoupons.filter((coupon) => {
-            if (!coupon || coupon.isOffer === true) return false;
-            if (coupon.active === false) return false;
-            if (!coupon.code) return false;
-
-            if (coupon.expiryDate) {
-                const expiry = new Date(`${coupon.expiryDate}T23:59:59.999Z`);
-                if (!Number.isNaN(expiry.getTime()) && expiry < now) return false;
-            }
-
-            const minPurchase = Number(coupon.minPurchase || 0);
-            if (minPurchase > Number(sellingPrice || 0)) return false;
-
-            const applicableCategory = String(coupon.applicableCategory || 'all').toLowerCase();
-            if (applicableCategory !== 'all' && applicableCategory !== productCategory) return false;
-
-            return true;
-        });
-    };
 
     if (productsLoading || categoriesLoading) {
         return <div className="p-10 text-center">Loading products...</div>;
@@ -296,11 +203,7 @@ const CategoryPage = () => {
         return <div className="p-10 text-center">Category not found</div>;
     }
 
-    const isSubCategoryLandingView =
-        breadcrumbs.length === 1 &&
-        Array.isArray(categoryData.subCategories) &&
-        categoryData.subCategories.length > 0;
-    const isSubCategoryProductsView = breadcrumbs.length > 1;
+    const isSubCategoryLandingView = breadcrumbs.length === 1;
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
@@ -330,13 +233,7 @@ const CategoryPage = () => {
                         <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0 z-10">
                             <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Filters</h3>
                             <button
-                                onClick={() => {
-                                    setFilterRange([0, 100000]);
-                                    setSelectedBrands([]);
-                                    setSelectedRam([]);
-                                    setSelectedCategories([]);
-                                    setSelectedDiscount(null);
-                                }}
+                                onClick={resetAllFilters}
                                 className="text-[11px] font-black text-blue-600 hover:text-blue-700 uppercase tracking-wider"
                             >
                                 Clear All
@@ -513,114 +410,25 @@ const CategoryPage = () => {
                             </div>
 
                             {sortedProducts.length > 0 ? (
-                                isSubCategoryProductsView ? (
-                                    <div className="divide-y divide-gray-100 border border-gray-100 rounded-xl overflow-hidden">
-                                        {sortedProducts.map((product) => {
-                                            const productId = product.id || product._id;
-                                            const highlights = getProductHighlights(product);
-                                            const { sellingPrice, markedPrice } = getListingPriceData(product);
-                                            const discountPercent = getDiscountPercent({
-                                                ...product,
-                                                price: sellingPrice,
-                                                originalPrice: markedPrice
-                                            });
-                                            const productBankOffers = bankOffersByProduct[String(productId)] || [];
-                                            const primaryBankOffer = productBankOffers[0];
-                                            const applicableCoupons = getApplicableCouponsForProduct(product, sellingPrice).slice(0, 2);
-
-                                            return (
-                                                <div
-                                                    key={productId}
-                                                    className="bg-white hover:bg-[#f8fbff] transition-colors"
-                                                >
-                                                    <div className="p-4 md:p-6 grid grid-cols-1 md:grid-cols-[200px_1fr_300px] gap-4 md:gap-6">
-                                                        <div className="flex flex-col items-start">
-                                                            <div
-                                                                className="w-full max-w-[170px] mx-auto md:mx-0 aspect-square bg-white border border-gray-100 rounded-lg p-2 cursor-pointer"
-                                                                onClick={() => navigate(`/product/${productId}`)}
-                                                            >
-                                                                <img
-                                                                    src={product.images?.[0] || product.image}
-                                                                    alt={product.name}
-                                                                    className="w-full h-full object-contain"
-                                                                />
-                                                            </div>
-                                                            <label className="mt-3 text-xs text-gray-700 flex items-center gap-2 select-none">
-                                                                <input type="checkbox" className="rounded border-gray-300" />
-                                                                <span>Add to Compare</span>
-                                                            </label>
-                                                        </div>
-
-                                                        <div>
-                                                            <h3
-                                                                onClick={() => navigate(`/product/${productId}`)}
-                                                                className="text-lg font-semibold text-[#2874f0] cursor-pointer hover:underline"
-                                                            >
-                                                                {product.name}
-                                                            </h3>
-                                                            {Number(product.rating || 0) > 0 && (
-                                                                <div className="flex items-center gap-2 mt-1">
-                                                                    <span className="bg-green-700 text-white text-xs font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1">
-                                                                        {(Number(product.rating || 0)).toFixed(1)} <span className="text-[10px]">★</span>
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                            {highlights.length > 0 && (
-                                                                <ul className="mt-3 space-y-1.5">
-                                                                    {highlights.map((point, idx) => (
-                                                                        <li key={`${productId}-hl-${idx}`} className="text-[15px] text-gray-800 flex gap-2">
-                                                                            <span className="text-gray-400">•</span>
-                                                                            <span>{point}</span>
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="md:pl-2">
-                                                            <div className="text-2xl md:text-3xl font-bold text-[#212121] tracking-tight leading-none">
-                                                                {formatPrice(sellingPrice)}
-                                                            </div>
-                                                            {markedPrice > sellingPrice && (
-                                                                <div className="mt-1.5 flex items-center gap-2">
-                                                                    <span className="text-sm text-gray-500 line-through">{formatPrice(markedPrice)}</span>
-                                                                    {discountPercent > 0 && (
-                                                                        <span className="text-xs text-green-700 font-bold">{discountPercent}% off</span>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                            {primaryBankOffer && (
-                                                                <div className="mt-2 text-xs md:text-sm text-green-700 font-semibold leading-snug">
-                                                                    {`${primaryBankOffer.bankName} Offer: ${primaryBankOffer.offerName} - Get ${primaryBankOffer.discountType === 'flat' ? `Flat Rs.${primaryBankOffer.discountValue}` : `${primaryBankOffer.discountValue}%`} Off. ${primaryBankOffer.description || ''}`}
-                                                                </div>
-                                                            )}
-                                                            {applicableCoupons.length > 0 && (
-                                                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                                                    {applicableCoupons.map((coupon) => (
-                                                                        <span
-                                                                            key={`${productId}-${coupon._id || coupon.code}`}
-                                                                            className="text-[10px] md:text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-100 font-bold"
-                                                                        >
-                                                                            {coupon.code}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                                        {sortedProducts.map((product) => (
-                                            <div key={product.id} className="h-full">
-                                                <ProductCard product={product} />
+                                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
+                                    {sortedProducts.map((product) => {
+                                        const pricing = getEffectivePricing(product);
+                                        return (
+                                            <div key={product.id || product._id} className="h-full">
+                                                <ProductCard
+                                                    product={{
+                                                        ...product,
+                                                        price: pricing.price,
+                                                        originalPrice: pricing.originalPrice,
+                                                        discount: pricing.discountPercent > 0
+                                                            ? `${pricing.discountPercent}% OFF`
+                                                            : product.discount
+                                                    }}
+                                                />
                                             </div>
-                                        ))}
-                                    </div>
-                                )
+                                        );
+                                    })}
+                                </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-24 text-center">
                                     <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6">
@@ -629,11 +437,7 @@ const CategoryPage = () => {
                                     <h3 className="text-xl font-bold text-gray-900 mb-2">No products found</h3>
                                     <p className="text-gray-500 text-sm max-w-xs mb-8">Try adjusting your filters or search terms to find what you're looking for.</p>
                                     <button
-                                        onClick={() => {
-                                            setFilterRange([0, 1000000]);
-                                            setSelectedBrands([]);
-                                            setSelectedDiscount(null);
-                                        }}
+                                        onClick={resetAllFilters}
                                         className="bg-blue-600 text-white px-8 py-3 rounded-lg font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-100 hover:scale-105 active:scale-95 transition-all"
                                     >
                                         Clear All Filters
@@ -714,11 +518,7 @@ const CategoryPage = () => {
                                 <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">Filters</h3>
                             </div>
                             <button
-                                onClick={() => {
-                                    setFilterRange([0, 100000]);
-                                    setSelectedBrands([]);
-                                    setSelectedDiscount(null);
-                                }}
+                                onClick={resetAllFilters}
                                 className="text-[11px] font-black text-blue-600 uppercase"
                             >
                                 Clear all
