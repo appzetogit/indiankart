@@ -76,14 +76,16 @@ const Header = () => {
         cat.active !== false &&
         activeCategoryIds.has(String(cat._id || cat.id))
     );
-    // Keep "For You" static at first position across mobile + desktop.
-    const forYouCategory = {
+    // Keep "For You" at first position, but prefer admin-configured category/icon when present.
+    const configuredForYouCategory = activeHeaderCategories.find(
+        (cat) => String(cat?.name || '').trim().toLowerCase() === 'for you'
+    );
+    const forYouCategory = configuredForYouCategory || {
         id: 'for-you',
         name: 'For You',
         icon: 'home',
         children: []
     };
-    // Show configured header categories, but avoid duplicate "For You".
     const displayCategories = [
         forYouCategory,
         ...activeHeaderCategories.filter((cat) => String(cat?.name || '').trim().toLowerCase() !== 'for you')

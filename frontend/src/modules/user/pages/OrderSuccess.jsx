@@ -108,7 +108,7 @@ const OrderSuccess = () => {
                     </div>
 
                     <div className="mt-auto mb-10 text-center text-[10px] text-gray-400 max-w-[80%] uppercase tracking-widest font-bold md:mt-8 md:mb-0">
-                        Thank you for shopping with Flipkart
+                        Thank you for shopping with Indiankart
                     </div>
                 </div>
             </div>

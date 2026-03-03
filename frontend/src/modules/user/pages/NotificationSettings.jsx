@@ -112,7 +112,7 @@ const NotificationSettings = () => {
 
                     <div className="p-4 mt-4">
                         <p className="text-[10px] text-gray-400 text-center uppercase tracking-widest font-bold">
-                            Flipkart Private Limited
+                            IndianKart Private Limited
                         </p>
                     </div>
                 </div>
