@@ -477,7 +477,7 @@ const Header = () => {
             {/* Category Navigation - Only on Homepage */}
             {location.pathname === '/' && !categoriesLoading && !headerLoading && displayCategories.length > 0 && (
                 <div className="max-w-[1200px] mx-auto relative px-2">
-                    <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-8 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
+                    <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-6 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 touch-pan-x overscroll-x-contain snap-x snap-mandatory scroll-smooth [scrollbar-gutter:stable] ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
                         {displayCategories.map((cat, index) => {
                             const active = isActiveCategory(cat.name);
                             const IconComponent = iconMap[cat.icon] || MdGridView;
@@ -516,7 +516,7 @@ const Header = () => {
                                             }, 150); // Small delay to prevent accidental closure
                                         }
                                     }}
-                                    className="relative flex flex-col items-center gap-1 min-w-[60px] cursor-pointer group"
+                                    className="relative flex shrink-0 flex-col items-center gap-1 min-w-[60px] cursor-pointer group snap-start"
                                 >
                                     <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
                                         {hasCategoryImage ? (
