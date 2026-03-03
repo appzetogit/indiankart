@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import API from '../../../services/api';
@@ -14,8 +14,9 @@ const ReturnOrder = () => {
 
     const [step, setStep] = useState(1);
     const [reason, setReason] = useState('');
-    const [selectedReplacementSize, setSelectedReplacementSize] = useState('M');
-    const [selectedReplacementColor, setSelectedReplacementColor] = useState('Black');
+    const [selectedReplacementSize, setSelectedReplacementSize] = useState('');
+    const [selectedReplacementColor, setSelectedReplacementColor] = useState('');
+    const [replacementProduct, setReplacementProduct] = useState(null);
     const [returnMode, setReturnMode] = useState('REFUND'); // REFUND or REPLACEMENT
     const [subReason, setSubReason] = useState('');
     const [comment, setComment] = useState('');
@@ -128,10 +129,6 @@ const ReturnOrder = () => {
         }
     ];
 
-    if (loadingOrder) return <div className="p-10 text-center">Loading...</div>;
-    if (!order) return <div className="p-10 text-center">Order not found.</div>;
-
-    // Filter items based on productId if it exists, and only include items that can be returned/replaced
     const isEligibleForReturn = (itemStatus) => {
         if (!itemStatus) return true;
         const normalized = String(itemStatus).trim().toLowerCase();
@@ -154,9 +151,187 @@ const ReturnOrder = () => {
         return !blocked.includes(normalized);
     };
 
-    const targetItems = (productId
-        ? order.items.filter(i => String(i.id) === String(productId))
-        : order.items).filter(item => isEligibleForReturn(item.status));
+    const targetItems = useMemo(() => {
+        if (!order?.items) return [];
+        const itemsToCheck = productId
+            ? order.items.filter((item) => String(item.id) === String(productId))
+            : order.items;
+        return itemsToCheck.filter((item) => isEligibleForReturn(item.status));
+    }, [order, productId]);
+
+    const replacementItem = targetItems[0] || null;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchReplacementProduct = async () => {
+            if (!replacementItem?.id) {
+                setReplacementProduct(null);
+                return;
+            }
+
+            try {
+                const { data } = await API.get(`/products/${replacementItem.id}?all=true`);
+                if (!cancelled) setReplacementProduct(data);
+            } catch (err) {
+                if (!cancelled) setReplacementProduct(null);
+            }
+        };
+
+        fetchReplacementProduct();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [replacementItem?.id]);
+
+    const replacementVariantMeta = useMemo(() => {
+        const orderedVariant = (replacementItem?.variant && typeof replacementItem.variant === 'object')
+            ? replacementItem.variant
+            : {};
+
+        const headings = Array.isArray(replacementProduct?.variantHeadings)
+            ? replacementProduct.variantHeadings
+            : [];
+
+        const normalizedHeadings = headings
+            .map((heading) => ({
+                name: String(heading?.name || '').trim(),
+                options: Array.isArray(heading?.options)
+                    ? heading.options
+                        .map((opt) => String(opt?.name || '').trim())
+                        .filter(Boolean)
+                    : []
+            }))
+            .filter((heading) => heading.name && heading.options.length > 0);
+
+        const orderedKeys = Object.keys(orderedVariant);
+        const findHeading = (matcher) => normalizedHeadings.find((h) => matcher.test(h.name));
+
+        let sizeHeading = findHeading(/size/i);
+        let colorHeading = findHeading(/colou?r/i);
+
+        if (!sizeHeading && orderedKeys[0]) {
+            sizeHeading = normalizedHeadings.find((h) => h.name === orderedKeys[0]);
+        }
+        if (!colorHeading && orderedKeys[1]) {
+            colorHeading = normalizedHeadings.find((h) => h.name === orderedKeys[1]);
+        }
+
+        if (!sizeHeading && normalizedHeadings[0]) sizeHeading = normalizedHeadings[0];
+        if (!colorHeading && normalizedHeadings[1] && normalizedHeadings[1].name !== sizeHeading?.name) {
+            colorHeading = normalizedHeadings[1];
+        }
+
+        const fallbackSizeOptions = sizeHeading?.name && orderedVariant[sizeHeading.name]
+            ? [String(orderedVariant[sizeHeading.name])]
+            : [];
+        const fallbackColorOptions = colorHeading?.name && orderedVariant[colorHeading.name]
+            ? [String(orderedVariant[colorHeading.name])]
+            : [];
+
+        return {
+            sizeKey: sizeHeading?.name || '',
+            sizeLabel: sizeHeading?.name || 'Size',
+            sizeOptions: sizeHeading?.options?.length ? sizeHeading.options : fallbackSizeOptions,
+            colorKey: colorHeading?.name || '',
+            colorLabel: colorHeading?.name || 'Color',
+            colorOptions: colorHeading?.options?.length ? colorHeading.options : fallbackColorOptions
+        };
+    }, [replacementProduct, replacementItem]);
+
+    const inStockSkus = useMemo(() => {
+        const skus = Array.isArray(replacementProduct?.skus) ? replacementProduct.skus : [];
+        return skus
+            .map((sku) => {
+                const rawCombination = sku?.combination;
+                const combination = rawCombination && typeof rawCombination === 'object'
+                    ? rawCombination
+                    : {};
+                return {
+                    stock: Number(sku?.stock) || 0,
+                    combination
+                };
+            })
+            .filter((sku) => sku.stock > 0);
+    }, [replacementProduct]);
+
+    const availableSizeOptions = useMemo(() => {
+        const { sizeKey, colorKey, sizeOptions } = replacementVariantMeta;
+        if (!sizeOptions.length) return [];
+        if (!sizeKey || inStockSkus.length === 0) return sizeOptions;
+
+        return sizeOptions.filter((sizeValue) =>
+            inStockSkus.some((sku) => {
+                const comb = sku.combination || {};
+                const matchesSize = String(comb[sizeKey] || '') === String(sizeValue);
+                const matchesColor = !colorKey || !selectedReplacementColor || String(comb[colorKey] || '') === String(selectedReplacementColor);
+                return matchesSize && matchesColor;
+            })
+        );
+    }, [replacementVariantMeta, inStockSkus, selectedReplacementColor]);
+
+    const availableColorOptions = useMemo(() => {
+        const { sizeKey, colorKey, colorOptions } = replacementVariantMeta;
+        if (!colorOptions.length) return [];
+        if (!colorKey || inStockSkus.length === 0) return colorOptions;
+
+        return colorOptions.filter((colorValue) =>
+            inStockSkus.some((sku) => {
+                const comb = sku.combination || {};
+                const matchesColor = String(comb[colorKey] || '') === String(colorValue);
+                const matchesSize = !sizeKey || !selectedReplacementSize || String(comb[sizeKey] || '') === String(selectedReplacementSize);
+                return matchesColor && matchesSize;
+            })
+        );
+    }, [replacementVariantMeta, inStockSkus, selectedReplacementSize]);
+
+    useEffect(() => {
+        if (returnMode !== 'REPLACEMENT') return;
+
+        const orderedVariant = (replacementItem?.variant && typeof replacementItem.variant === 'object')
+            ? replacementItem.variant
+            : {};
+        const orderedValue = replacementVariantMeta.sizeKey
+            ? String(orderedVariant[replacementVariantMeta.sizeKey] || '')
+            : '';
+
+        if (!availableSizeOptions.length) {
+            setSelectedReplacementSize('');
+            return;
+        }
+
+        setSelectedReplacementSize((prev) => {
+            if (prev && availableSizeOptions.includes(prev)) return prev;
+            if (orderedValue && availableSizeOptions.includes(orderedValue)) return orderedValue;
+            return availableSizeOptions[0];
+        });
+    }, [returnMode, replacementItem, replacementVariantMeta.sizeKey, availableSizeOptions]);
+
+    useEffect(() => {
+        if (returnMode !== 'REPLACEMENT') return;
+
+        const orderedVariant = (replacementItem?.variant && typeof replacementItem.variant === 'object')
+            ? replacementItem.variant
+            : {};
+        const orderedValue = replacementVariantMeta.colorKey
+            ? String(orderedVariant[replacementVariantMeta.colorKey] || '')
+            : '';
+
+        if (!availableColorOptions.length) {
+            setSelectedReplacementColor('');
+            return;
+        }
+
+        setSelectedReplacementColor((prev) => {
+            if (prev && availableColorOptions.includes(prev)) return prev;
+            if (orderedValue && availableColorOptions.includes(orderedValue)) return orderedValue;
+            return availableColorOptions[0];
+        });
+    }, [returnMode, replacementItem, replacementVariantMeta.colorKey, availableColorOptions]);
+
+    if (loadingOrder) return <div className="p-10 text-center">Loading...</div>;
+    if (!order) return <div className="p-10 text-center">Order not found.</div>;
 
     const handleReturnSubmit = async () => {
         if (targetItems.length === 0) {
@@ -377,43 +552,49 @@ const ReturnOrder = () => {
                                                 <p className="text-[11px] text-gray-500 mt-0.5 leading-tight">We will send you a brand new item in place of the current one.</p>
                                                 {returnMode === 'REPLACEMENT' && (
                                                     <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                                        {/* Size Selection */}
-                                                        <div>
-                                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Select New Size</label>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {['S', 'M', 'L', 'XL', 'XXL'].map(s => (
-                                                                    <div
-                                                                        key={s}
-                                                                        onClick={(e) => { e.stopPropagation(); setSelectedReplacementSize(s); }}
-                                                                        className={`min-w-[40px] h-10 border rounded-lg text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${selectedReplacementSize === s ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                                                                    >
-                                                                        {s}
-                                                                    </div>
-                                                                ))}
+                                                        {availableSizeOptions.length > 0 && (
+                                                            <div>
+                                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">
+                                                                    Select New {replacementVariantMeta.sizeLabel}
+                                                                </label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {availableSizeOptions.map((sizeValue) => (
+                                                                        <div
+                                                                            key={sizeValue}
+                                                                            onClick={(e) => { e.stopPropagation(); setSelectedReplacementSize(sizeValue); }}
+                                                                            className={`min-w-[40px] h-10 border rounded-lg text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${selectedReplacementSize === sizeValue ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                                                        >
+                                                                            {sizeValue}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        )}
 
-                                                        {/* Color Selection */}
-                                                        <div>
-                                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Select New Color</label>
-                                                            <div className="flex flex-wrap gap-3">
-                                                                {[
-                                                                    { name: 'Black', hex: '#000000' },
-                                                                    { name: 'Blue', hex: '#2874f0' },
-                                                                    { name: 'Red', hex: '#ff0000' },
-                                                                    { name: 'White', hex: '#ffffff shadow-inner' },
-                                                                ].map(c => (
-                                                                    <div
-                                                                        key={c.name}
-                                                                        onClick={(e) => { e.stopPropagation(); setSelectedReplacementColor(c.name); }}
-                                                                        className={`flex items-center gap-2 px-3 py-2 border rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${selectedReplacementColor === c.name ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 bg-white text-gray-500 hover:bg-gray-50'}`}
-                                                                    >
-                                                                        <div className={`w-3 h-3 rounded-full border border-gray-100 ${c.name === 'White' ? 'bg-white' : ''}`} style={{ backgroundColor: c.name !== 'White' ? c.hex : undefined }}></div>
-                                                                        {c.name}
-                                                                    </div>
-                                                                ))}
+                                                        {availableColorOptions.length > 0 && (
+                                                            <div>
+                                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">
+                                                                    Select New {replacementVariantMeta.colorLabel}
+                                                                </label>
+                                                                <div className="flex flex-wrap gap-3">
+                                                                    {availableColorOptions.map((colorValue) => (
+                                                                        <div
+                                                                            key={colorValue}
+                                                                            onClick={(e) => { e.stopPropagation(); setSelectedReplacementColor(colorValue); }}
+                                                                            className={`flex items-center gap-2 px-3 py-2 border rounded-full text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${selectedReplacementColor === colorValue ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-100 bg-white text-gray-500 hover:bg-gray-50'}`}
+                                                                        >
+                                                                            {colorValue}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                        )}
+
+                                                        {availableSizeOptions.length === 0 && availableColorOptions.length === 0 && (
+                                                            <div className="text-[10px] font-bold text-gray-500 bg-white/60 rounded-lg border border-blue-100 px-3 py-2">
+                                                                No replacement variant options found for this product. We will process replacement with the closest available variant.
+                                                            </div>
+                                                        )}
 
                                                         <div className="py-2 px-3 bg-white/50 rounded-lg border border-blue-200">
                                                             <div className="flex items-center gap-2 leading-tight">
@@ -452,7 +633,7 @@ const ReturnOrder = () => {
                                             <p className="text-xs text-gray-600">
                                                 {returnMode === 'REFUND'
                                                     ? <><span className="font-bold text-gray-800">Refund Triggered:</span> Refund initiated after successful pickup check.</>
-                                                    : <><span className="font-bold text-gray-800">Replacement Delivered:</span> Your new <span className="text-blue-600 font-bold">{selectedReplacementSize}</span> size item will be dispatched.</>
+                                                    : <><span className="font-bold text-gray-800">Replacement Delivered:</span> Your new <span className="text-blue-600 font-bold">{[selectedReplacementSize, selectedReplacementColor].filter(Boolean).join(' / ') || 'variant'}</span> item will be dispatched.</>
                                                 }
                                             </p>
                                         </div>
