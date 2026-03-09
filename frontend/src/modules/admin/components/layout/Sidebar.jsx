@@ -55,6 +55,7 @@ const Sidebar = () => {
         { name: 'Home Layout', icon: MdLayers, path: '/admin/content/layout' },
         { name: 'Home Sections', icon: MdViewAgenda, path: '/admin/content/sections' },
         { name: 'Home Banners', icon: MdViewCarousel, path: '/admin/content/banners' },
+        { name: 'Help Center', icon: MdHelpCenter, path: '/admin/content/help-center' },
         { name: 'Content Pages', icon: MdDescription, path: '/admin/pages' },
         { name: 'Footer Settings', icon: MdViewCompact, path: '/admin/footer-settings' },
         { name: 'Header Settings', icon: MdViewCompact, path: '/admin/header-settings' },

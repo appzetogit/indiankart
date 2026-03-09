@@ -24,6 +24,7 @@ import HomeContentManager from '../pages/Content/HomeContentManager'; // Can be 
 import HomeLayoutEditor from '../pages/Content/HomeLayoutEditor';
 import HomeSections from '../pages/Content/HomeSections';
 import HomeBanners from '../pages/Content/HomeBanners';
+import HelpCenterContentManager from '../pages/Content/HelpCenterContentManager';
 import ReviewList from '../pages/Reviews/ReviewList';
 import PinCodeManager from '../pages/PinCodes/PinCodeManager';
 import BankOfferManager from '../pages/BankOffers/BankOfferManager';
@@ -77,6 +78,7 @@ const AdminRoutes = () => {
                 <Route path="content/layout" element={<HomeLayoutEditor />} />
                 <Route path="content/sections" element={<HomeSections />} />
                 <Route path="content/banners" element={<HomeBanners />} />
+                <Route path="content/help-center" element={<HelpCenterContentManager />} />
                 {/* Legacy redirect or keep for backward compat for a moment if needed, but sidebar changes will shift traffic */}
                 <Route path="content/home" element={<HomeLayoutEditor />} />
                 <Route path="pincodes" element={<PinCodeManager />} />
