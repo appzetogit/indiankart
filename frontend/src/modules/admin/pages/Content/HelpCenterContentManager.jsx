@@ -27,7 +27,7 @@ const createCategory = () => ({
     title: 'New Category',
     icon: 'help',
     desc: '',
-    faqs: [createFaq()]
+    faqs: []
 });
 
 const defaultConfig = {
@@ -266,7 +266,7 @@ const HelpCenterContentManager = () => {
             categories: prev.categories.map((cat) => {
                 if (cat.id !== categoryId) return cat;
                 const nextFaqs = cat.faqs.filter((faq) => faq.id !== faqId);
-                return { ...cat, faqs: nextFaqs.length > 0 ? nextFaqs : [createFaq()] };
+                return { ...cat, faqs: nextFaqs };
             })
         }));
     };

@@ -320,6 +320,12 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
         setExpandedFaq(expandedFaq === id ? null : id);
     };
 
+    const getFilledFaqs = (category) => (
+        Array.isArray(category?.faqs)
+            ? category.faqs.filter((faq) => String(faq?.question || '').trim() || String(faq?.answer || '').trim())
+            : []
+    );
+
     const filteredFaqs = useMemo(() => {
         let result = [];
         const query = searchQuery.trim().toLowerCase();
@@ -329,7 +335,7 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
             : helpData.filter(c => c.id === activeCategory);
 
         categoriesToSearch.forEach(category => {
-            category.faqs.forEach((faq, faqIdx) => {
+            getFilledFaqs(category).forEach((faq, faqIdx) => {
                 const matchesSearch = !query ||
                     faq.question.toLowerCase().includes(query) ||
                     faq.answer.toLowerCase().includes(query);
@@ -348,7 +354,8 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
     }, [searchQuery, activeCategory]);
 
     const getCategoryCount = (catId) => {
-        return helpData.find(c => c.id === catId)?.faqs.length || 0;
+        const category = helpData.find(c => c.id === catId);
+        return getFilledFaqs(category).length;
     };
 
     return (
