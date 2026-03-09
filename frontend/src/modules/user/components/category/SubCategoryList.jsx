@@ -18,6 +18,8 @@ const SubCategoryList = ({
 }) => {
     if (!categoryName) return null;
     const bannerRailRef = useRef(null);
+    const largeBannerFrameClass = 'w-full aspect-[16/8] sm:aspect-[16/7] md:aspect-[16/4] rounded-2xl bg-gray-100 overflow-hidden';
+    const largeBannerImageClass = 'w-full h-full object-contain object-center';
 
     const normalizedSubCategories = Array.isArray(subCategories)
         ? subCategories.filter((sub) => sub?.name)
@@ -185,7 +187,7 @@ const SubCategoryList = ({
                                         <img
                                             src={banner.image}
                                             alt={banner.title}
-                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
+                                            className={`${largeBannerFrameClass} ${largeBannerImageClass}`}
                                             onError={(e) => {
                                                 e.currentTarget.onerror = null;
                                                 e.currentTarget.src = '';
@@ -205,7 +207,7 @@ const SubCategoryList = ({
                                         <img
                                             src={banner.image}
                                             alt={banner.title}
-                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
+                                            className={`${largeBannerFrameClass} ${largeBannerImageClass}`}
                                             onError={(e) => {
                                                 e.currentTarget.onerror = null;
                                                 e.currentTarget.src = '';

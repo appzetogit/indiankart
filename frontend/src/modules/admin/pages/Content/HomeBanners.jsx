@@ -428,11 +428,14 @@ const HomeBanners = () => {
             data.append('active', String(formData.active));
 
             if (formData.type === 'slides') {
-                const slidesMetadata = formData.slides.map((s, i) => {
+                let uploadedFileIndex = 0;
+                const slidesMetadata = formData.slides.map((s) => {
                     if (s.file) {
+                        const currentFileIndex = uploadedFileIndex;
+                        uploadedFileIndex += 1;
                         return { 
                             ...s, 
-                            imageUrl: `SLIDE_IMG_INDEX::${i}`, 
+                            imageUrl: `SLIDE_IMG_INDEX::${currentFileIndex}`, 
                             targetType: s.targetType || 'product',
                             linkedOffer: s.linkedOffer || null,
                             linkedUrl: s.linkedUrl || '',

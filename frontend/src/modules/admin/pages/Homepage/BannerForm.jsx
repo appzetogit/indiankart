@@ -14,6 +14,19 @@ const BannerForm = ({ banner, onClose }) => {
         slides: []
     });
 
+    const getOfferId = (linkedOffer) => {
+        if (!linkedOffer) return '';
+        if (typeof linkedOffer === 'string') return linkedOffer;
+        if (typeof linkedOffer === 'object') return linkedOffer._id || linkedOffer.id || '';
+        return '';
+    };
+
+    const getOfferBannerImage = (slide) => {
+        const offerId = getOfferId(slide?.linkedOffer);
+        if (!offerId || !Array.isArray(offers) || offers.length === 0) return '';
+        return offers.find((o) => String(o._id) === String(offerId))?.bannerImage || '';
+    };
+
     useEffect(() => {
         // Fetch offers
         API.get('/offers').then(({ data }) => setOffers(data)).catch(console.error);
@@ -28,9 +41,13 @@ const BannerForm = ({ banner, onClose }) => {
                     const inferredType = slide.linkedOffer ? 'offer' : 
                                         (slide.targetValue || slide.linkedProduct) ? 'product' : 
                                         slide.link ? 'url' : 'product';
+
+                    const offerId = getOfferId(slide.linkedOffer);
                     
                     const result = {
                         ...slide,
+                        linkedOffer: offerId || null,
+                        imageUrl: slide.imageUrl || slide?.linkedOffer?.bannerImage || '',
                         targetType: slide.targetType || inferredType
                     };
                     
@@ -54,42 +71,60 @@ const BannerForm = ({ banner, onClose }) => {
         targetValue: ''
     });
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-
-        // Filter out slides without images
-        const validSlides = formData.slides.filter(s => s.imageUrl);
-
-        if (validSlides.length === 0) {
-            toast.error('Please add at least one slide with an image.');
-            return;
-        }
 
         const data = new FormData();
         data.append('section', formData.section);
         data.append('active', formData.active);
         
         const slideImages = [];
-        const processedSlides = validSlides.map(slide => {
+        const processedSlides = formData.slides.map((slide) => {
             if (slide.file) {
                 slideImages.push(slide.file);
                 return { ...slide, imageUrl: `SLIDE_IMG_INDEX::${slideImages.length - 1}`, file: undefined }; // Remove file object from JSON
             }
+            // Blob URLs are temporary and should never be persisted.
+            if (typeof slide.imageUrl === 'string' && slide.imageUrl.startsWith('blob:')) {
+                return { ...slide, imageUrl: '' };
+            }
             return slide;
         });
+
+        const validSlides = processedSlides.filter((slide) => {
+            if (!slide?.imageUrl) return false;
+            if (typeof slide.imageUrl !== 'string') return false;
+            return !slide.imageUrl.startsWith('blob:');
+        });
+
+        if (validSlides.length === 0) {
+            toast.error('Please add at least one slide with an image.');
+            return;
+        }
         
-        data.append('slides', JSON.stringify(processedSlides));
+        data.append('slides', JSON.stringify(validSlides));
         
         slideImages.forEach(file => {
             data.append('slide_images', file);
         });
 
-        if (banner) {
-            updateBanner(banner.id, data);
-        } else {
-            addBanner(data);
+        try {
+            if (banner) {
+                const bannerId = banner._id || banner.id;
+                if (!bannerId) {
+                    toast.error('Banner ID not found. Please refresh and try again.');
+                    return;
+                }
+                await updateBanner(bannerId, data);
+                toast.success('Banner updated successfully');
+            } else {
+                await addBanner(data);
+                toast.success('Banner created successfully');
+            }
+            onClose();
+        } catch (error) {
+            toast.error(error?.response?.data?.message || 'Failed to save banner');
         }
-        onClose();
     };
 
     const handleSlideImageChange = (index, e) => {
@@ -106,7 +141,7 @@ const BannerForm = ({ banner, onClose }) => {
         
         // If an offer is selected, auto-populate image from offer's bannerImage
         if (updates.linkedOffer && offers.length > 0) {
-            const selectedOffer = offers.find(o => o._id === updates.linkedOffer);
+            const selectedOffer = offers.find((o) => String(o._id) === String(updates.linkedOffer));
             if (selectedOffer && selectedOffer.bannerImage) {
                 newSlides[index].imageUrl = selectedOffer.bannerImage;
                 // Clear any file upload since we're using offer's image
@@ -197,13 +232,13 @@ const BannerForm = ({ banner, onClose }) => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* Image Upload */}
                                     <div>
-                                        {slide.linkedOffer && offers.find(o => o._id === slide.linkedOffer)?.bannerImage ? (
+                                        {slide.linkedOffer && getOfferBannerImage(slide) ? (
                                             <>
                                                 <label className="text-xs font-semibold text-green-600 mb-1 block">
                                                     Image from Offer
                                                 </label>
                                                 <div className="border-2 border-green-300 rounded-lg h-32 flex items-center justify-center relative bg-white overflow-hidden">
-                                                    <img src={slide.imageUrl} alt="Offer Banner" className="w-full h-full object-cover" />
+                                                    <img src={slide.imageUrl || getOfferBannerImage(slide)} alt="Offer Banner" className="w-full h-full object-cover" />
                                                 </div>
                                             </>
                                         ) : (

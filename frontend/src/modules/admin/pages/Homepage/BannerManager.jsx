@@ -79,7 +79,7 @@ const BannerManager = () => {
                     </div>
                 ) : (
                     filteredBanners.map(banner => (
-                        <div key={banner.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition">
+                        <div key={banner._id || banner.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-md transition">
                             {/* Slide Preview Grid */}
                             <div className="h-48 w-full bg-gray-100 relative grid grid-cols-2 gap-0.5">
                                 {banner.slides.slice(0, 4).map((slide, index) => (
@@ -105,7 +105,7 @@ const BannerManager = () => {
                                         <MdEdit size={16} />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(banner.id)}
+                                        onClick={() => handleDelete(banner._id || banner.id)}
                                         className="p-2 bg-white rounded-full text-red-500 shadow-sm hover:scale-105"
                                     >
                                         <MdDelete size={16} />
@@ -124,7 +124,7 @@ const BannerManager = () => {
                                             {banner.slides.length} {banner.slides.length === 1 ? 'Slide' : 'Slides'}
                                         </p>
                                     </div>
-                                    <button onClick={() => toggleBannerStatus(banner.id)}>
+                                    <button onClick={() => toggleBannerStatus(banner._id || banner.id)}>
                                         {banner.active ? (
                                             <MdToggleOn size={28} className="text-green-500" />
                                         ) : (

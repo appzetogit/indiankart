@@ -56,11 +56,17 @@ export const createBanner = async (req, res) => {
                 )
             );
             if (Array.isArray(slides)) {
+                let fallbackUploadIndex = 0;
                 slides = slides.map(slide => {
                     if (slide.imageUrl && slide.imageUrl.startsWith('SLIDE_IMG_INDEX::')) {
                         const idx = parseInt(slide.imageUrl.split('::')[1]);
-                        if (uploadedSlideUrls[idx]) {
+                        if (Number.isInteger(idx) && uploadedSlideUrls[idx]) {
                              return { ...slide, imageUrl: uploadedSlideUrls[idx].secure_url };
+                        }
+                        if (uploadedSlideUrls[fallbackUploadIndex]) {
+                            const mapped = { ...slide, imageUrl: uploadedSlideUrls[fallbackUploadIndex].secure_url };
+                            fallbackUploadIndex += 1;
+                            return mapped;
                         }
                     }
                     return slide;
@@ -131,11 +137,17 @@ export const updateBanner = async (req, res) => {
                         )
                     );
                     if (Array.isArray(slides)) {
+                        let fallbackUploadIndex = 0;
                         slides = slides.map(slide => {
                             if (slide.imageUrl && slide.imageUrl.startsWith('SLIDE_IMG_INDEX::')) {
                                 const idx = parseInt(slide.imageUrl.split('::')[1]);
-                                if (uploadedSlideUrls[idx]) {
+                                if (Number.isInteger(idx) && uploadedSlideUrls[idx]) {
                                     return { ...slide, imageUrl: uploadedSlideUrls[idx].secure_url };
+                                }
+                                if (uploadedSlideUrls[fallbackUploadIndex]) {
+                                    const mapped = { ...slide, imageUrl: uploadedSlideUrls[fallbackUploadIndex].secure_url };
+                                    fallbackUploadIndex += 1;
+                                    return mapped;
                                 }
                             }
                             return slide;

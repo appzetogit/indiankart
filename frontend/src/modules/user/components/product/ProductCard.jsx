@@ -32,19 +32,18 @@ const ProductCard = ({ product, footerText }) => {
         prefetchProductById(product.id);
     };
 
-<<<<<<< HEAD
-    const discountPercent = product.originalPrice > product.price
-        ? `${Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% ${offText}`
-        : (product.discount || null);
-=======
     // Variant Price Logic: Use first variant's price if available
     const firstSku = product?.skus?.[0];
     const displayPrice = (firstSku?.price !== undefined && firstSku?.price !== null) ? firstSku.price : product.price;
     const displayOriginalPrice = (firstSku?.originalPrice !== undefined && firstSku?.originalPrice !== null) ? firstSku.originalPrice : product.originalPrice;
 
     // Calculate dynamic discount if not provided
-    const discountPercent = product.discount || (displayOriginalPrice ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100) + `% ${offText}` : null);
->>>>>>> 56d6e2d76e6a0b7c85f7b8d3211e173c9ee65d5c
+    const discountPercent = product.discount
+        || (
+            displayOriginalPrice && displayOriginalPrice > displayPrice
+                ? `${Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)}% ${offText}`
+                : null
+        );
 
     const displayFooterText = footerText ? translatedFooter : '';
 
