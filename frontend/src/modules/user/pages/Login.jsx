@@ -31,7 +31,6 @@ const Login = () => {
     const [otp, setOtp] = useState('');
     const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP, 3: Profile
     const [resendCooldown, setResendCooldown] = useState(0);
-    const from = location.state?.from?.pathname || '/';
 
     useEffect(() => {
         if (step !== 2 || resendCooldown <= 0) return undefined;
@@ -75,7 +74,7 @@ const Login = () => {
             const data = await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer');
             
             toast.success('Login successful!');
-            navigate(from, { replace: true });
+            navigate('/', { replace: true });
             return;
         } catch (err) {
             toast.error(err?.response?.data?.message || error || 'Invalid OTP');
@@ -97,7 +96,7 @@ const Login = () => {
         try {
             await updateProfile({ name: name.trim(), email: trimmedEmail });
             toast.success('Profile saved successfully!');
-            navigate(from, { replace: true });
+            navigate('/', { replace: true });
         } catch (err) {
             toast.error(err?.response?.data?.message || error || 'Failed to save profile');
         }
@@ -156,7 +155,7 @@ const Login = () => {
                                 </div>
 
                                 <p className="text-[10px] text-gray-400 leading-tight">
-                                    By continuing, you agree to Flipkart&apos;s{' '}
+                                    By continuing, you agree to Indiankart&apos;s{' '}
                                     <button
                                         type="button"
                                         onClick={() => navigate('/info?type=dynamic&key=terms-of-use')}

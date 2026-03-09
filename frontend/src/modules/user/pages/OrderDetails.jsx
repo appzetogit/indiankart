@@ -4,6 +4,36 @@ import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import Loader from '../../../components/common/Loader';
+import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
+
+const buildEstimatedDeliveryText = (deliveryTime, unit) => {
+    const timeValue = Number(deliveryTime);
+    const normalizedUnit = String(unit || '').toLowerCase();
+    if (!Number.isFinite(timeValue) || timeValue <= 0 || !normalizedUnit) {
+        return '';
+    }
+
+    const now = new Date();
+    const eta = new Date(now.getTime());
+
+    if (normalizedUnit === 'days') {
+        eta.setDate(eta.getDate() + timeValue);
+    } else if (normalizedUnit === 'hours') {
+        eta.setHours(eta.getHours() + timeValue);
+    } else if (normalizedUnit === 'minutes') {
+        eta.setMinutes(eta.getMinutes() + timeValue);
+    } else {
+        return '';
+    }
+
+    const dateLabel = eta.toLocaleDateString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short'
+    });
+    const unitLabel = timeValue === 1 ? normalizedUnit.slice(0, -1) : normalizedUnit;
+    return `Estimated delivery by ${dateLabel} (${timeValue} ${unitLabel})`;
+};
 
 const OrderDetails = () => {
     const { orderId } = useParams();
@@ -12,11 +42,63 @@ const OrderDetails = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [settings, setSettings] = useState(null);
+    const [deliveryEstimate, setDeliveryEstimate] = useState({
+        loading: false,
+        isServiceable: null,
+        text: ''
+    });
 
     useEffect(() => {
         fetchOrderDetails();
         fetchSettings();
     }, [orderId]);
+
+    useEffect(() => {
+        const shippingPincode = order?.shippingAddress?.postalCode || order?.shippingAddress?.pincode;
+        if (!shippingPincode) {
+            setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
+            return;
+        }
+
+        let cancelled = false;
+        const fetchEstimatedDelivery = async () => {
+            setDeliveryEstimate({ loading: true, isServiceable: null, text: '' });
+            try {
+                const { data } = await API.get(`/pincodes/check/${shippingPincode}`);
+                if (cancelled) return;
+
+                if (data?.isServiceable) {
+                    const estimatedText =
+                        buildEstimatedDeliveryText(data.deliveryTime, data.unit) ||
+                        data.message ||
+                        `Delivered in ${data.deliveryTime} ${data.unit}`;
+                    setDeliveryEstimate({
+                        loading: false,
+                        isServiceable: true,
+                        text: estimatedText
+                    });
+                } else {
+                    setDeliveryEstimate({
+                        loading: false,
+                        isServiceable: false,
+                        text: data?.message || 'Delivery not available for this pincode'
+                    });
+                }
+            } catch (err) {
+                if (cancelled) return;
+                setDeliveryEstimate({
+                    loading: false,
+                    isServiceable: null,
+                    text: 'Unable to fetch estimated delivery time'
+                });
+            }
+        };
+
+        fetchEstimatedDelivery();
+        return () => {
+            cancelled = true;
+        };
+    }, [order?.shippingAddress?.postalCode, order?.shippingAddress?.pincode]);
 
     const fetchSettings = async () => {
         try {
@@ -501,6 +583,12 @@ const OrderDetails = () => {
                                         })}
                                     </p>
                                 </div>
+                                <div>
+                                    <span className="text-gray-600">Estimated Delivery</span>
+                                    <p className={`font-semibold ${deliveryEstimate.isServiceable === false ? 'text-red-600' : 'text-blue-700'}`}>
+                                        {deliveryEstimate.loading ? 'Checking delivery estimate...' : (deliveryEstimate.text || 'Not available')}
+                                    </p>
+                                </div>
                                 {order.deliveredAt && (
                                     <div>
                                         <span className="text-gray-600">Delivered On</span>
@@ -540,17 +628,20 @@ const OrderDetails = () => {
 
                         {/* Download Invoice Button - visible only after delivery */}
                         {order.status === 'Delivered' && (
-                            <button
-                                onClick={() => {
-                                    import('../../../utils/invoiceGenerator').then(({ generateInvoice }) => {
-                                        generateInvoice(order, settings);
-                                    });
-                                }}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-                            >
-                                <span className="material-icons">download</span>
-                                Download Invoice
-                            </button>
+                            <InvoiceGenerator
+                                order={order}
+                                items={order.orderItems}
+                                settings={settings || {}}
+                                includeShippingLabel={false}
+                                customTrigger={
+                                    <button
+                                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <span className="material-icons">download</span>
+                                        Download Invoice
+                                    </button>
+                                }
+                            />
                         )}
 
                         {/* Help Button */}

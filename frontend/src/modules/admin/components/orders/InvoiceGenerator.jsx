@@ -6,7 +6,7 @@ import { useReactToPrint } from "react-to-print";
 ============================================ */
 
 export const InvoiceDisplay = React.forwardRef(
-  ({ order, item, items, settings: apiSettings }, ref) => {
+  ({ order, item, items, settings: apiSettings, includeShippingLabel = true }, ref) => {
     if (!order) return null;
 
     // Specific seller requirements - prioritize apiSettings from DB
@@ -193,6 +193,8 @@ export const InvoiceDisplay = React.forwardRef(
           }
         `}</style>
 
+        {includeShippingLabel && (
+          <>
         {/* ================= SHIPPING LABEL ================= */}
         <div className="label">
           <table>
@@ -268,6 +270,8 @@ export const InvoiceDisplay = React.forwardRef(
         </div>
 
         <hr className="dashed" />
+          </>
+        )}
 
         {/* ================= TAX INVOICE ================= */}
         <div className="tax">
@@ -415,7 +419,7 @@ export const InvoiceDisplay = React.forwardRef(
    INVOICE GENERATOR WRAPPER
 ============================================ */
 
-const InvoiceGenerator = ({ order, item, items, settings, customTrigger }) => {
+const InvoiceGenerator = ({ order, item, items, settings, customTrigger, includeShippingLabel = true }) => {
   const componentRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -449,6 +453,7 @@ const InvoiceGenerator = ({ order, item, items, settings, customTrigger }) => {
           item={item}
           items={items}
           settings={settings || {}}
+          includeShippingLabel={includeShippingLabel}
         />
       </div>
       {trigger}
@@ -460,7 +465,7 @@ const InvoiceGenerator = ({ order, item, items, settings, customTrigger }) => {
    BULK INVOICE GENERATOR
 ============================================ */
 
-export const BulkInvoiceGenerator = ({ orders, settings, customTrigger }) => {
+export const BulkInvoiceGenerator = ({ orders, settings, customTrigger, includeShippingLabel = true }) => {
   const componentRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -495,6 +500,7 @@ export const BulkInvoiceGenerator = ({ orders, settings, customTrigger }) => {
                 order={order}
                 items={order.items || order.orderItems}
                 settings={settings || {}}
+                includeShippingLabel={includeShippingLabel}
               />
             </div>
           ))}

@@ -734,6 +734,12 @@ const ProductDetails = () => {
                                             {currentlyNotAvailableText}
                                         </p>
                                     )}
+                                    <div className="mt-1 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 max-w-[420px]">
+                                        <span className="material-icons text-[16px] text-amber-600">videocam</span>
+                                        <p className="text-[11px] leading-tight text-amber-800 font-medium">
+                                            Please record an unboxing video while opening the package. Return requests are processed only with opening proof.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1170,6 +1176,12 @@ const ProductDetails = () => {
                                 {freeText}
                             </div>
                         )}
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
+                            <span className="material-icons text-[16px] text-amber-600">videocam</span>
+                            <p className="text-[10px] leading-tight text-amber-800 font-medium">
+                                Record an unboxing video while opening the package. Returns are processed only with opening proof.
+                            </p>
+                        </div>
                     </div>
                 </div>
 

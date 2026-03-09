@@ -38,12 +38,16 @@ const ProductCard = ({ product, footerText }) => {
     const displayOriginalPrice = (firstSku?.originalPrice !== undefined && firstSku?.originalPrice !== null) ? firstSku.originalPrice : product.originalPrice;
 
     // Calculate dynamic discount if not provided
+<<<<<<< HEAD
     const discountPercent = product.discount
         || (
             displayOriginalPrice && displayOriginalPrice > displayPrice
                 ? `${Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)}% ${offText}`
                 : null
         );
+=======
+    const discountPercent = product.discount || (displayOriginalPrice ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100) + `% ${offText}` : null);
+>>>>>>> f614e6d2cebbf3e28ad7e52b81aa5d829b25a957
 
     const displayFooterText = footerText ? translatedFooter : '';
 
