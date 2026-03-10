@@ -23,7 +23,7 @@ export const getBanners = async (req, res) => {
 // @access  Private/Admin
 export const createBanner = async (req, res) => {
     try {
-        const { section, active, type } = req.body;
+        const { section, active, type, targetDevice } = req.body;
         let { slides, content } = req.body;
         
         // Parse JSON fields
@@ -74,6 +74,32 @@ export const createBanner = async (req, res) => {
             }
         }
 
+        if (req.files && req.files.slide_mobile_images) {
+            const slideMobileFiles = req.files.slide_mobile_images;
+            const uploadedSlideMobileUrls = await Promise.all(
+                slideMobileFiles.map(file =>
+                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
+                )
+            );
+            if (Array.isArray(slides)) {
+                let fallbackUploadIndex = 0;
+                slides = slides.map(slide => {
+                    if (slide.mobileImageUrl && slide.mobileImageUrl.startsWith('SLIDE_MOBILE_IMG_INDEX::')) {
+                        const idx = parseInt(slide.mobileImageUrl.split('::')[1]);
+                        if (Number.isInteger(idx) && uploadedSlideMobileUrls[idx]) {
+                            return { ...slide, mobileImageUrl: uploadedSlideMobileUrls[idx].secure_url };
+                        }
+                        if (uploadedSlideMobileUrls[fallbackUploadIndex]) {
+                            const mapped = { ...slide, mobileImageUrl: uploadedSlideMobileUrls[fallbackUploadIndex].secure_url };
+                            fallbackUploadIndex += 1;
+                            return mapped;
+                        }
+                    }
+                    return slide;
+                });
+            }
+        }
+
         // Handle Hero Image
         if (req.files && req.files.hero_image && req.files.hero_image[0]?.buffer) {
             const uploadedHero = await uploadBufferToCloudinary(
@@ -92,10 +118,19 @@ export const createBanner = async (req, res) => {
             content.backgroundImageUrl = uploadedBg.secure_url;
         }
 
+        if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]?.buffer) {
+            const uploadedMobileBg = await uploadBufferToCloudinary(
+                req.files.background_mobile_image[0].buffer,
+                { folder: 'ecom_uploads/banners' }
+            );
+            content.mobileBackgroundImageUrl = uploadedMobileBg.secure_url;
+        }
+
         const banner = new Banner({
             section,
             type: type || 'slides',
             active: active !== undefined ? active : true,
+            targetDevice: targetDevice || 'all',
             slides: slides || [],
             content: content || {}
         });
@@ -115,6 +150,7 @@ export const updateBanner = async (req, res) => {
         if (banner) {
              banner.section = req.body.section || banner.section;
              banner.type = req.body.type || banner.type;
+             banner.targetDevice = req.body.targetDevice || banner.targetDevice || 'all';
              
              let slides = req.body.slides;
              let content = req.body.content;
@@ -154,6 +190,32 @@ export const updateBanner = async (req, res) => {
                         });
                     }
                 }
+
+                if (req.files && req.files.slide_mobile_images) {
+                    const slideMobileFiles = req.files.slide_mobile_images;
+                    const uploadedSlideMobileUrls = await Promise.all(
+                        slideMobileFiles.map(file =>
+                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
+                        )
+                    );
+                    if (Array.isArray(slides)) {
+                        let fallbackUploadIndex = 0;
+                        slides = slides.map(slide => {
+                            if (slide.mobileImageUrl && slide.mobileImageUrl.startsWith('SLIDE_MOBILE_IMG_INDEX::')) {
+                                const idx = parseInt(slide.mobileImageUrl.split('::')[1]);
+                                if (Number.isInteger(idx) && uploadedSlideMobileUrls[idx]) {
+                                    return { ...slide, mobileImageUrl: uploadedSlideMobileUrls[idx].secure_url };
+                                }
+                                if (uploadedSlideMobileUrls[fallbackUploadIndex]) {
+                                    const mapped = { ...slide, mobileImageUrl: uploadedSlideMobileUrls[fallbackUploadIndex].secure_url };
+                                    fallbackUploadIndex += 1;
+                                    return mapped;
+                                }
+                            }
+                            return slide;
+                        });
+                    }
+                }
                 banner.slides = slides;
              }
 
@@ -184,6 +246,16 @@ export const updateBanner = async (req, res) => {
                     content.backgroundImageUrl = uploadedBg.secure_url;
                 } else if (req.body.background_image_url) {
                     content.backgroundImageUrl = req.body.background_image_url;
+                }
+
+                if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]?.buffer) {
+                    const uploadedMobileBg = await uploadBufferToCloudinary(
+                        req.files.background_mobile_image[0].buffer,
+                        { folder: 'ecom_uploads/banners' }
+                    );
+                    content.mobileBackgroundImageUrl = uploadedMobileBg.secure_url;
+                } else if (req.body.background_mobile_image_url) {
+                    content.mobileBackgroundImageUrl = req.body.background_mobile_image_url;
                 }
                 
                 // Merge content or replace? Replace feels safer for now as form sends full object

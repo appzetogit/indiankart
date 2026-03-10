@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHomeSections, useBanners, useHomeLayout } from '../../../hooks/useData';
 import LazySection from '../components/common/LazySection';
@@ -7,11 +7,10 @@ import LazySection from '../components/common/LazySection';
 const DealGrid = lazy(() => import('../components/home/DealGrid'));
 const ProductSection = lazy(() => import('../components/home/ProductSection'));
 const HomeBanner = lazy(() => import('../components/home/HomeBanner'));
-const FIXED_BANNER_HEIGHT_CLASS = 'h-[180px] sm:h-[240px] md:h-[300px] lg:h-[400px] xl:h-[460px]';
 
 // Skeletons
 const BannerSkeleton = () => (
-    <div className={`w-full ${FIXED_BANNER_HEIGHT_CLASS} shimmer rounded-2xl mx-auto mb-6`}></div>
+    <div className="w-full aspect-[16/7] md:aspect-[16/5] shimmer rounded-2xl mx-auto mb-6"></div>
 );
 
 const SectionSkeleton = () => (
@@ -30,9 +29,20 @@ const Home = () => {
     const { sections, loading: sectionsLoading } = useHomeSections();
     const { banners, loading: bannersLoading } = useBanners();
     const { layout, loading: layoutLoading } = useHomeLayout();
+    const [isMobileViewport, setIsMobileViewport] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth < 768;
+    });
     const isHomeLoading = sectionsLoading || bannersLoading || layoutLoading;
 
     const isLayoutLoading = layoutLoading && layout.length === 0;
+
+    useEffect(() => {
+        const handleResize = () => setIsMobileViewport(window.innerWidth < 768);
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     if (isLayoutLoading) {
         return (
@@ -56,7 +66,6 @@ const Home = () => {
 
                     if (item.type === 'banner') {
                         const banner = banners.find(b => String(b._id) === String(item.referenceId) || String(b.id) === String(item.referenceId));
-                        const isFixedHeightBanner = banner && ['hero', 'slides'].includes(banner.type);
                         if (!banner) {
                             if (isHomeLoading) {
                                 return (
@@ -70,14 +79,14 @@ const Home = () => {
 
                         const bannerComponent = (
                             <Suspense fallback={<BannerSkeleton />}>
-                                <HomeBanner banner={banner} />
+                                <HomeBanner banner={banner} isMobileViewport={isMobileViewport} />
                             </Suspense>
                         );
 
                         return (
                             <div
                                 key={`${item.type}-${index}`}
-                                className={`max-w-[1440px] mx-auto w-full ${isFixedHeightBanner ? FIXED_BANNER_HEIGHT_CLASS : ''}`}
+                                className="max-w-[1440px] mx-auto w-full"
                             >
                                 {isFirstItem ? bannerComponent : (
                                     <LazySection placeholder={<BannerSkeleton />}>

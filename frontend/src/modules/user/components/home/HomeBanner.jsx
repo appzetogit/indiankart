@@ -7,10 +7,16 @@ import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 
-const HomeBanner = ({ banner }) => {
+const HomeBanner = ({ banner, isMobileViewport = false }) => {
     const navigate = useNavigate();
-    const bannerFrameClass = 'w-full h-[180px] sm:h-[240px] md:h-[300px] lg:h-[400px] xl:h-[460px]';
-    const bannerImageClass = 'w-full h-full object-cover object-center block';
+    const bannerFrameClass = 'w-full';
+    const bannerImageClass = 'w-full h-auto object-contain object-center block';
+    const getHeroImage = () =>
+        (isMobileViewport && banner?.content?.mobileBackgroundImageUrl) ||
+        banner?.content?.backgroundImageUrl ||
+        banner?.content?.imageUrl;
+    const getSlideImage = (slide) =>
+        (isMobileViewport && slide?.mobileImageUrl) || slide?.imageUrl;
 
     // Debugging Banner Data
     if (banner?.active && banner?.type === 'hero') {
@@ -70,14 +76,14 @@ const HomeBanner = ({ banner }) => {
             <section className="w-full">
                 <div
                     onClick={handleBannerContentClick}
-                    className={`relative ${bannerFrameClass} rounded-2xl overflow-hidden shadow-lg border border-white/5 group cursor-pointer`}
+                    className={`relative ${bannerFrameClass} rounded-2xl overflow-hidden shadow-lg border border-white/5 group cursor-pointer bg-white`}
                     style={{ backgroundColor: bgColor }}
                 >
                     {/* Background Image Layer */}
-                    {(content.backgroundImageUrl || content.imageUrl) && (
-                        <div className="relative w-full h-full bg-white/10">
+                    {getHeroImage() && (
+                        <div className="relative w-full bg-white/10">
                             <img
-                                src={content.backgroundImageUrl || content.imageUrl}
+                                src={getHeroImage()}
                                 className={`${bannerImageClass} group-hover:scale-[1.02] transition-transform duration-1000`}
                                 alt=""
                             />
@@ -181,17 +187,17 @@ const HomeBanner = ({ banner }) => {
                     pagination={{ clickable: true }}
                     navigation={true}
                     loop={true}
-                    autoHeight={false}
+                    autoHeight={true}
                     className={`${bannerFrameClass} rounded-2xl overflow-hidden shadow-sm group home-banner-swiper`}
                 >
                     {banner.slides.map((slide, index) => (
                         <SwiperSlide key={index}>
                             <div
-                                className="relative w-full h-full bg-gray-100 cursor-pointer"
+                                className="relative w-full bg-white cursor-pointer"
                                 onClick={() => handleSlideClick(slide)}
                             >
                                 <img
-                                    src={slide.imageUrl}
+                                    src={getSlideImage(slide)}
                                     className={bannerImageClass}
                                     alt={`Slide ${index + 1}`}
                                 />
