@@ -7,7 +7,7 @@ import LazySection from '../components/common/LazySection';
 const DealGrid = lazy(() => import('../components/home/DealGrid'));
 const ProductSection = lazy(() => import('../components/home/ProductSection'));
 const HomeBanner = lazy(() => import('../components/home/HomeBanner'));
-const FIXED_BANNER_HEIGHT_CLASS = 'aspect-[16/8] sm:aspect-[16/7] md:aspect-[16/4]';
+const FIXED_BANNER_HEIGHT_CLASS = 'h-[180px] sm:h-[240px] md:h-[300px] lg:h-[400px] xl:h-[460px]';
 
 // Skeletons
 const BannerSkeleton = () => (

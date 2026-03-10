@@ -109,9 +109,27 @@
   height: 100% !important;
 }
 
+@media (min-width: 640px) {
+  .home-banner-swiper {
+    height: 240px !important;
+  }
+}
+
 @media (min-width: 768px) {
   .home-banner-swiper {
-    height: 360px !important;
+    height: 300px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-banner-swiper {
+    height: 400px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .home-banner-swiper {
+    height: 460px !important;
   }
 }
 

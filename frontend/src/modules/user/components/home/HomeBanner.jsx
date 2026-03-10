@@ -9,8 +9,8 @@ import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 
 const HomeBanner = ({ banner }) => {
     const navigate = useNavigate();
-    const bannerFrameClass = 'w-full aspect-[16/8] sm:aspect-[16/7] md:aspect-[16/4]';
-    const bannerImageClass = 'w-full h-full object-contain object-center block';
+    const bannerFrameClass = 'w-full h-[180px] sm:h-[240px] md:h-[300px] lg:h-[400px] xl:h-[460px]';
+    const bannerImageClass = 'w-full h-full object-cover object-center block';
 
     // Debugging Banner Data
     if (banner?.active && banner?.type === 'hero') {
