@@ -306,6 +306,12 @@ export const InvoiceDisplay = React.forwardRef(
             <div className="addr-block">
               <span className="addr-title">Billing Address</span>
               <div className="font-bold">{order.shippingAddress?.name || order.address?.name || order.user?.name || 'Customer'}</div>
+              {order.retailerDetails?.isRetailer && (
+                <>
+                  <div><b>Shop:</b> {order.retailerDetails?.shopName || 'N/A'}</div>
+                  <div><b>GSTIN:</b> {order.retailerDetails?.gstNumber || 'N/A'}</div>
+                </>
+              )}
               <div>{order.address?.line || order.shippingAddress?.address || order.shippingAddress?.street || 'N/A'}</div>
               <div>{order.address?.city || order.shippingAddress?.city || 'N/A'}, {order.address?.state || order.shippingAddress?.state || 'N/A'} - {order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || ''}</div>
             </div>
@@ -494,7 +500,7 @@ export const BulkInvoiceGenerator = ({ orders, settings, customTrigger, includeS
     <>
       <div style={{ display: "none" }}>
         <div ref={componentRef}>
-          {orders.map((order, index) => (
+          {orders.map((order) => (
             <div key={order.id || order._id} style={{ pageBreakAfter: "always" }}>
               <InvoiceDisplay
                 order={order}

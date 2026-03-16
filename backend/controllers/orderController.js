@@ -12,6 +12,7 @@ export const addOrderItems = async (req, res) => {
         const {
             orderItems,
             shippingAddress,
+            retailerDetails,
             paymentMethod,
             itemsPrice,
             taxPrice,
@@ -33,6 +34,21 @@ export const addOrderItems = async (req, res) => {
             }
         } else {
             return res.status(400).json({ message: 'Shipping pincode is required' });
+        }
+
+        const isRetailer = Boolean(retailerDetails?.isRetailer);
+        const normalizedShopName = isRetailer ? String(retailerDetails?.shopName || '').trim() : '';
+        const normalizedGstNumber = isRetailer
+            ? String(retailerDetails?.gstNumber || '').replace(/\s+/g, '').toUpperCase()
+            : '';
+
+        if (isRetailer) {
+            if (!normalizedShopName || !normalizedGstNumber) {
+                return res.status(400).json({ message: 'Shop name and GST number are required for retailer orders' });
+            }
+            if (normalizedGstNumber.length !== 15) {
+                return res.status(400).json({ message: 'Invalid GST number' });
+            }
         }
 
         // Generate Unique Human-Readable Order ID
@@ -100,6 +116,11 @@ export const addOrderItems = async (req, res) => {
             })),
             user: req.user._id,
             shippingAddress,
+            retailerDetails: {
+                isRetailer,
+                shopName: normalizedShopName,
+                gstNumber: normalizedGstNumber
+            },
             paymentMethod,
             itemsPrice,
             taxPrice,

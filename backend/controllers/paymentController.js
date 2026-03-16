@@ -4,8 +4,8 @@ import Setting from '../models/Setting.js';
 
 const getRazorpayCredentials = async () => {
     const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
-    const keyId = settings?.razorpayKeyId?.trim() || process.env.RAZORPAY_KEY_ID?.trim() || '';
-    const keySecret = settings?.razorpayKeySecret?.trim() || process.env.RAZORPAY_KEY_SECRET?.trim() || '';
+    const keyId = settings?.razorpayKeyId?.trim() || '';
+    const keySecret = settings?.razorpayKeySecret?.trim() || '';
     return { keyId, keySecret };
 };
 
@@ -22,7 +22,7 @@ export const createRazorpayOrder = async (req, res) => {
         console.log('Razorpay Config Check:', {
             keyIdPresent: !!keyId,
             keySecretPresent: !!keySecret,
-            source: keyId && keySecret ? 'settings_or_env' : 'missing'
+            source: keyId && keySecret ? 'admin_settings' : 'missing'
         });
 
         if (!keyId || !keySecret) {
@@ -131,7 +131,7 @@ export const testRazorpayCredentials = async (req, res) => {
                 success: false,
                 message: 'Razorpay credentials are missing',
                 keyId: keyId || '',
-                hint: 'Save Razorpay Key ID and Key Secret in Admin Settings or .env'
+                hint: 'Save Razorpay Key ID and Key Secret in Admin > Razorpay Credentials'
             });
         }
 
@@ -168,7 +168,7 @@ export const testRazorpayCredentials = async (req, res) => {
             message: "Razorpay credentials are invalid or there's an API issue",
             error: error.message,
             keyId,
-            hint: 'Please check your Razorpay keys in Admin Settings or .env'
+            hint: 'Please check your Razorpay keys in Admin > Razorpay Credentials'
         });
     }
 };

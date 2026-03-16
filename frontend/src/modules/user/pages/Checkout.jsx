@@ -79,7 +79,6 @@ const Checkout = () => {
     const [isAddingAddress, setIsAddingAddress] = useState(false);
     const { 
         suggestions, 
-        loading: autocompleteLoading, 
         fetchSuggestions, 
         fetchPlaceDetails,
         setSuggestions 
@@ -89,6 +88,11 @@ const Checkout = () => {
     const [isCODServiceable, setIsCODServiceable] = useState(true);
     const [isPincodeChecking, setIsPincodeChecking] = useState(false);
     const [estimatedDeliveryText, setEstimatedDeliveryText] = useState('');
+    const [retailerInfo, setRetailerInfo] = useState({
+        isRetailer: null,
+        shopName: '',
+        gstNumber: ''
+    });
     const [shippingConfig, setShippingConfig] = useState({
         shippingCharge: 40,
         minShippingOrderAmount: 0,
@@ -309,6 +313,25 @@ const Checkout = () => {
             return;
         }
 
+        const normalizedShopName = retailerInfo.shopName.trim();
+        const normalizedGstNumber = retailerInfo.gstNumber.replace(/\s+/g, '').toUpperCase();
+        const gstRegex = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+        if (retailerInfo.isRetailer) {
+            if (!normalizedShopName) {
+                toast.error('Please enter your shop name');
+                return;
+            }
+            if (!normalizedGstNumber) {
+                toast.error('Please enter your GST number');
+                return;
+            }
+            if (!gstRegex.test(normalizedGstNumber)) {
+                toast.error('Please enter a valid GST number');
+                return;
+            }
+        }
+
         setIsPlacingOrder(true);
         
         
@@ -335,6 +358,11 @@ const Checkout = () => {
             taxPrice: 0,
             shippingPrice: delivery,
             totalPrice: finalAmount,
+            retailerDetails: {
+                isRetailer: Boolean(retailerInfo.isRetailer),
+                shopName: retailerInfo.isRetailer ? normalizedShopName : '',
+                gstNumber: retailerInfo.isRetailer ? normalizedGstNumber : ''
+            },
             coupon: appliedCoupon
                 ? {
                     code: appliedCoupon.code,
@@ -652,6 +680,61 @@ const Checkout = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Retailer Details */}
+                            <div className="bg-white p-4 md:rounded-sm md:shadow-sm border border-gray-100">
+                                <h3 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-3">Business Details</h3>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Are you a retailer?</label>
+                                    <select
+                                        value={retailerInfo.isRetailer === null ? '' : retailerInfo.isRetailer ? 'yes' : 'no'}
+                                        onChange={(e) => {
+                                            const isRetailer = e.target.value === 'yes';
+                                            setRetailerInfo((prev) => ({
+                                                ...prev,
+                                                isRetailer: e.target.value === '' ? null : isRetailer,
+                                                shopName: isRetailer ? prev.shopName : '',
+                                                gstNumber: isRetailer ? prev.gstNumber : ''
+                                            }));
+                                        }}
+                                        className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white text-gray-900"
+                                    >
+                                        <option value="" disabled>Select business type</option>
+                                        <option value="no">No, I am a customer</option>
+                                        <option value="yes">Yes, I am a retailer</option>
+                                    </select>
+                                </div>
+
+                                {retailerInfo.isRetailer && (
+                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Shop Name</label>
+                                            <input
+                                                type="text"
+                                                value={retailerInfo.shopName}
+                                                onChange={(e) => setRetailerInfo((prev) => ({ ...prev, shopName: e.target.value }))}
+                                                placeholder="Enter shop name"
+                                                className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">GST Number</label>
+                                            <input
+                                                type="text"
+                                                value={retailerInfo.gstNumber}
+                                                onChange={(e) =>
+                                                    setRetailerInfo((prev) => ({
+                                                        ...prev,
+                                                        gstNumber: e.target.value.toUpperCase()
+                                                    }))
+                                                }
+                                                placeholder="15-character GSTIN"
+                                                className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white uppercase"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Order Items */}
                             <div className="bg-white md:rounded-sm md:shadow-sm">

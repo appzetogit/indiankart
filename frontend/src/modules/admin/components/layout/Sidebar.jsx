@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
     MdDashboard,
     MdInventory,
@@ -60,6 +60,7 @@ const Sidebar = () => {
         { name: 'Footer Settings', icon: MdViewCompact, path: '/admin/footer-settings' },
         { name: 'Header Settings', icon: MdViewCompact, path: '/admin/header-settings' },
         { name: 'Notifications', icon: MdNotifications, path: '/admin/notifications' },
+        { name: 'Razorpay Credentials', icon: MdSettings, path: '/admin/razorpay-credentials' },
         { name: 'Settings', icon: MdSettings, path: '/admin/settings' },
     ];
 

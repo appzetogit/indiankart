@@ -32,6 +32,11 @@ const orderSchema = mongoose.Schema({
         postalCode: { type: String, required: true },
         country: { type: String, required: true },
     },
+    retailerDetails: {
+        isRetailer: { type: Boolean, default: false },
+        shopName: { type: String, default: '' },
+        gstNumber: { type: String, default: '' },
+    },
     paymentMethod: {
         type: String,
         required: true,
