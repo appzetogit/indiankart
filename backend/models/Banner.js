@@ -8,6 +8,7 @@ const bannerSchema = mongoose.Schema({
     // For 'slides' type
     slides: [{
         imageUrl: { type: String },
+        mobileImageUrl: { type: String },
         link: { type: String },
         linkedProduct: { type: mongoose.Schema.Types.Mixed }, // Store minimal product info or ID
         linkedOffer: { type: mongoose.Schema.Types.ObjectId, ref: 'Offer' }, // Link to offer
@@ -27,6 +28,7 @@ const bannerSchema = mongoose.Schema({
         offerBank: String,
         backgroundColor: String, // Optional gradient/color class
         backgroundImageUrl: String, 
+        mobileBackgroundImageUrl: String,
         textColor: String,
         textAlign: { type: String, enum: ['left', 'center', 'right'], default: 'left' },
         verticalAlign: { type: String, enum: ['top', 'center', 'bottom'], default: 'center' },

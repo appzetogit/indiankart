@@ -32,7 +32,7 @@ const PageManager = () => {
 
     // Grouping Logic
     const { footerMappedPages, otherPages, systemPages } = useMemo(() => {
-        const systemKeys = ['privacyPolicy', 'aboutUs', 'seoContent', 'copyright', 'help-center'];
+        const systemKeys = ['privacyPolicy', 'aboutUs', 'seoContent', 'copyright'];
         const footerLinks = [];
 
         // 1. Get all pageKeys defined in footer
@@ -59,11 +59,6 @@ const PageManager = () => {
         footerLinks.push({ 
             pageKey: footerConfig?.giftCardsPageKey || 'gift-cards', 
             label: 'Gift Cards', 
-            section: 'Bottom Bar' 
-        });
-        footerLinks.push({ 
-            pageKey: footerConfig?.helpCenterPageKey || 'help-center', 
-            label: 'Help Center', 
             section: 'Bottom Bar' 
         });
 
@@ -124,8 +119,6 @@ const PageManager = () => {
             } else if (selectedPageKey === 'copyright') {
                 const copyrightFromStore = useContentStore.getState().pages.find(p => p.pageKey === 'copyright')?.content;
                 setEditorContent(copyrightFromStore || footerConfig?.copyrightText || '');
-            } else if (selectedPageKey === 'help-center') {
-                setEditorContent('<h1>Help Center</h1>\n<p>Add help center content here.</p>');
             }
         }
         setIsSaved(false);
@@ -157,7 +150,6 @@ const PageManager = () => {
         if (key === 'aboutUs') return 'About Us';
         if (key === 'seoContent') return 'SEO Footer Text';
         if (key === 'copyright') return 'Copyright Text';
-        if (key === 'help-center') return 'Help Center';
         return key.replace(/-/g, ' ').replace(/(?:^|\s)\S/g, a => a.toUpperCase());
     }
 

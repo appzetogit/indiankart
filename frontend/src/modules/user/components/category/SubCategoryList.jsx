@@ -18,6 +18,8 @@ const SubCategoryList = ({
 }) => {
     if (!categoryName) return null;
     const bannerRailRef = useRef(null);
+    const largeBannerFrameClass = 'w-full rounded-2xl bg-gray-100 overflow-hidden';
+    const largeBannerImageClass = 'block w-full h-auto';
 
     const normalizedSubCategories = Array.isArray(subCategories)
         ? subCategories.filter((sub) => sub?.name)
@@ -182,15 +184,17 @@ const SubCategoryList = ({
                                                 {banner.title}
                                             </div>
                                         )}
-                                        <img
-                                            src={banner.image}
-                                            alt={banner.title}
-                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
-                                            onError={(e) => {
-                                                e.currentTarget.onerror = null;
-                                                e.currentTarget.src = '';
-                                            }}
-                                        />
+                                        <div className={largeBannerFrameClass}>
+                                            <img
+                                                src={banner.image}
+                                                alt={banner.title}
+                                                className={largeBannerImageClass}
+                                                onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = '';
+                                                }}
+                                            />
+                                        </div>
                                     </a>
                                 ) : (
                                     <div
@@ -202,15 +206,17 @@ const SubCategoryList = ({
                                                 {banner.title}
                                             </div>
                                         )}
-                                        <img
-                                            src={banner.image}
-                                            alt={banner.title}
-                                            className="w-full h-[180px] md:h-[360px] object-cover rounded-2xl"
-                                            onError={(e) => {
-                                                e.currentTarget.onerror = null;
-                                                e.currentTarget.src = '';
-                                            }}
-                                        />
+                                        <div className={largeBannerFrameClass}>
+                                            <img
+                                                src={banner.image}
+                                                alt={banner.title}
+                                                className={largeBannerImageClass}
+                                                onError={(e) => {
+                                                    e.currentTarget.onerror = null;
+                                                    e.currentTarget.src = '';
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 )
                             ))}

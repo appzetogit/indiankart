@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack } from 'react-icons/md';
 import { useContentStore } from '../../admin/store/contentStore';
 import API from '../../../services/api';
+import HelpCenter from './HelpCenter';
 
 const InfoPage = () => {
     const [searchParams] = useSearchParams();
@@ -51,12 +52,17 @@ const InfoPage = () => {
         } else if (type === 'about') {
             setTitle('About Us');
             setContent(aboutUs);
-        } else if (type === 'dynamic' && pageKey) {
+        } else if (type === 'dynamic' && pageKey && pageKey !== 'help-center') {
             fetchDynamicContent(pageKey);
         } else {
             renderError();
         }
     }, [type, pageKey, privacyPolicy, aboutUs]);
+
+    // Directly render the rich HelpCenter component for this key
+    if (type === 'dynamic' && pageKey === 'help-center') {
+        return <HelpCenter embeddedInInfo />;
+    }
 
     return (
         <div className="bg-white min-h-screen text-gray-900">
@@ -75,7 +81,7 @@ const InfoPage = () => {
                         <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">Loading Content...</p>
                     </div>
                 ) : (
-                    <div 
+                    <div
                         className="prose prose-blue max-w-none 
                             prose-headings:font-black prose-headings:text-gray-900 prose-headings:tracking-tight
                             prose-p:text-gray-600 prose-p:leading-relaxed prose-p:text-lg
@@ -89,7 +95,7 @@ const InfoPage = () => {
                             [&_h3]:text-xl [&_h3]:font-black [&_h3]:mt-8 [&_h3]:mb-2
                             [&_p]:text-gray-600 [&_p]:leading-relaxed [&_p]:text-lg [&_p]:mb-4
                             [&_li]:text-gray-600 [&_li]:text-lg [&_li]:mb-1 [&_ul]:list-disc [&_ul]:ml-6 [&_ul]:mb-6"
-                        dangerouslySetInnerHTML={{ __html: content || '<p class="text-gray-400 italic">This page has no content yet.</p>' }} 
+                        dangerouslySetInnerHTML={{ __html: content || '<p class="text-gray-400 italic">This page has no content yet.</p>' }}
                     />
                 )}
             </div>

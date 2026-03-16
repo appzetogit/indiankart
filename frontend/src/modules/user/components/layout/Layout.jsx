@@ -8,6 +8,7 @@ const Layout = () => {
     const location = useLocation();
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
+    const isInfoPage = location.pathname.includes('/info');
     const isCheckout = location.pathname.includes('/checkout');
     const isAccountSectionPage = [
         '/account',
@@ -50,10 +51,11 @@ const Layout = () => {
                     <Header />
                 </div>
             )}
-            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 bg-white
+            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 ${isInfoPage ? 'bg-[#f1f3f6]' : 'bg-white'}
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
+                            isInfoPage ? 'pt-[76px] md:pt-[108px]' :
                             isCheckout ? 'pt-0 md:pt-[96px]' :
                             isHome ? 'pt-[260px] md:pt-[210px]' :
                                 isAccountSectionPage ? accountSectionTopPadding :

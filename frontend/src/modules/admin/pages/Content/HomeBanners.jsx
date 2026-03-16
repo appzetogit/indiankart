@@ -46,6 +46,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 // Sortable Slide Item Component
 const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick }) => {
+    const mobileFileInputRef = useRef(null);
     const {
         attributes,
         listeners,
@@ -97,6 +98,32 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
 
             {/* Slide Config */}
             <div className="p-3 space-y-2">
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase">Mobile Image</label>
+                    <button
+                        type="button"
+                        onClick={() => mobileFileInputRef.current?.click()}
+                        className="w-full rounded-lg border border-dashed border-gray-200 bg-gray-50 px-2 py-1.5 text-left text-[10px] font-medium text-gray-600 hover:border-blue-300 hover:bg-blue-50/40 transition"
+                    >
+                        {slide.mobilePreview || slide.mobileImageUrl ? 'Change mobile image' : 'Upload mobile image'}
+                    </button>
+                    <input
+                        ref={mobileFileInputRef}
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            onUpdate(index, {
+                                mobileImageUrl: `SLIDE_MOBILE_IMG_INDEX::${index}`,
+                                mobilePreview: URL.createObjectURL(file),
+                                mobileFile: file
+                            });
+                            e.target.value = '';
+                        }}
+                    />
+                </div>
                 <label className="text-[9px] font-bold text-gray-400 uppercase">Click Action</label>
                 <div className="flex gap-1">
                     {['product', 'offer', 'url'].map(type => (
@@ -272,7 +299,11 @@ const HomeBanners = () => {
                 console.log('Editing Banner:', banner); // DEBUG LOG
                 setFormData({
                     ...banner,
-                    slides: (banner.slides || []).map((s, i) => ({ ...s, id: s.id || `slide-${i}-${Date.now()}` })),
+                    slides: (banner.slides || []).map((s, i) => ({
+                        ...s,
+                        id: s.id || `slide-${i}-${Date.now()}`,
+                        mobileImageUrl: s.mobileImageUrl || ''
+                    })),
                     content: {
                         // Preserve ALL content fields
                         brand: banner.content?.brand || '',
@@ -282,6 +313,7 @@ const HomeBanners = () => {
                         description: banner.content?.description || '',
                         imageUrl: banner.content?.imageUrl || '',
                         backgroundImageUrl: banner.content?.backgroundImageUrl || banner.content?.imageUrl || '',
+                        mobileBackgroundImageUrl: banner.content?.mobileBackgroundImageUrl || '',
                         badgeText: banner.content?.badgeText || '',
                         offerText: banner.content?.offerText || '',
                         offerBank: banner.content?.offerBank || '',
@@ -304,13 +336,14 @@ const HomeBanners = () => {
                 });
                 setHeroImagePreview(banner.content?.imageUrl || '');
                 setBackgroundImagePreview(banner.content?.backgroundImageUrl || banner.content?.imageUrl || '');
+                setBackgroundMobileImagePreview(banner.content?.mobileBackgroundImageUrl || '');
             }
         } else if (view === 'new') {
             setFormData({ 
                 section: 'HomeHero', type: 'slides', active: true, slides: [],
                 content: {
                     brand: '', brandTag: '', title: '', subtitle: '', description: '',
-                    imageUrl: '', backgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '',
+                    imageUrl: '', backgroundImageUrl: '', mobileBackgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '',
                     backgroundColor: '', textColor: '', textAlign: 'left', verticalAlign: 'center',
                     imageAlign: 'right', buttonText: '', link: '', linkedProduct: null, linkedOffer: null,
                     targetType: 'product', useCustomPosition: false,
@@ -319,6 +352,10 @@ const HomeBanners = () => {
             });
             setHeroImageFile(null);
             setHeroImagePreview('');
+            setBackgroundImageFile(null);
+            setBackgroundImagePreview('');
+            setBackgroundMobileImageFile(null);
+            setBackgroundMobileImagePreview('');
         }
     }, [searchParams, banners]);
 
@@ -332,7 +369,7 @@ const HomeBanners = () => {
         slides: [],
         content: {
             brand: '', brandTag: '', title: '', subtitle: '', description: '',
-            imageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: '',
+            imageUrl: '', backgroundImageUrl: '', mobileBackgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: '',
             buttonText: '',
             useCustomPosition: true,
             textPosition: { x: 10, y: 50 },
@@ -345,6 +382,8 @@ const HomeBanners = () => {
     const [heroImagePreview, setHeroImagePreview] = useState('');
     const [backgroundImageFile, setBackgroundImageFile] = useState(null);
     const [backgroundImagePreview, setBackgroundImagePreview] = useState('');
+    const [backgroundMobileImageFile, setBackgroundMobileImageFile] = useState(null);
+    const [backgroundMobileImagePreview, setBackgroundMobileImagePreview] = useState('');
     const [showProductPicker, setShowProductPicker] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -405,6 +444,13 @@ const HomeBanners = () => {
         setBackgroundImagePreview(URL.createObjectURL(file));
     };
 
+    const handleMobileBgImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setBackgroundMobileImageFile(file);
+        setBackgroundMobileImagePreview(URL.createObjectURL(file));
+    };
+
     const removeSlide = (index) => {
         setFormData(prev => ({ ...prev, slides: prev.slides.filter((_, i) => i !== index) }));
     };
@@ -428,19 +474,35 @@ const HomeBanners = () => {
             data.append('active', String(formData.active));
 
             if (formData.type === 'slides') {
-                const slidesMetadata = formData.slides.map((s, i) => {
+                let uploadedFileIndex = 0;
+                let uploadedMobileFileIndex = 0;
+                const slidesMetadata = formData.slides.map((s) => {
                     if (s.file) {
-                        return { 
+                        const currentFileIndex = uploadedFileIndex;
+                        uploadedFileIndex += 1;
+                        const metadata = {
                             ...s, 
-                            imageUrl: `SLIDE_IMG_INDEX::${i}`, 
+                            imageUrl: `SLIDE_IMG_INDEX::${currentFileIndex}`, 
                             targetType: s.targetType || 'product',
                             linkedOffer: s.linkedOffer || null,
                             linkedUrl: s.linkedUrl || '',
                             file: undefined, 
-                            preview: undefined 
-                        }; 
+                            preview: undefined,
+                            mobileFile: undefined,
+                            mobilePreview: undefined
+                        };
+                        if (s.mobileFile) {
+                            metadata.mobileImageUrl = `SLIDE_MOBILE_IMG_INDEX::${uploadedMobileFileIndex}`;
+                            uploadedMobileFileIndex += 1;
+                        }
+                        return metadata; 
                     }
-                    return { ...s, file: undefined, preview: undefined };
+                    const metadata = { ...s, file: undefined, preview: undefined, mobileFile: undefined, mobilePreview: undefined };
+                    if (s.mobileFile) {
+                        metadata.mobileImageUrl = `SLIDE_MOBILE_IMG_INDEX::${uploadedMobileFileIndex}`;
+                        uploadedMobileFileIndex += 1;
+                    }
+                    return metadata;
                 });
 
                 data.append('slides', JSON.stringify(slidesMetadata));
@@ -448,6 +510,9 @@ const HomeBanners = () => {
                 formData.slides.forEach((s) => {
                     if (s.file) {
                         data.append('slide_images', s.file);
+                    }
+                    if (s.mobileFile) {
+                        data.append('slide_mobile_images', s.mobileFile);
                     }
                 });
             } else {
@@ -463,6 +528,12 @@ const HomeBanners = () => {
                 } else if (formData.content.backgroundImageUrl) {
                     data.append('background_image_url', formData.content.backgroundImageUrl);
                 }
+
+                if (backgroundMobileImageFile) {
+                    data.append('background_mobile_image', backgroundMobileImageFile);
+                } else if (formData.content.mobileBackgroundImageUrl) {
+                    data.append('background_mobile_image_url', formData.content.mobileBackgroundImageUrl);
+                }
             }
 
             if (selectedBannerId && selectedBannerId !== 'new') {
@@ -473,6 +544,7 @@ const HomeBanners = () => {
             
             await fetchBanners();
             toast.success('Banner saved successfully!', { id: loadingToast });
+            navigate('/admin/content/banners');
             
         } catch (error) {
             console.error(error);
@@ -485,26 +557,29 @@ const HomeBanners = () => {
     const openNewBannerForm = () => {
         setFormData({ 
             section: 'HomeHero', type: 'slides', active: true, slides: [],
-            content: { brand: '', brandTag: '', title: '', subtitle: '', description: '', imageUrl: '', backgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: '' } 
+            content: { brand: '', brandTag: '', title: '', subtitle: '', description: '', imageUrl: '', backgroundImageUrl: '', mobileBackgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: '' } 
         }); 
         setHeroImageFile(null);
         setHeroImagePreview('');
         setBackgroundImageFile(null);
         setBackgroundImagePreview('');
+        setBackgroundMobileImageFile(null);
+        setBackgroundMobileImagePreview('');
         setSearchParams({ view: 'new' });
     };
 
     const handleEdit = (banner) => {
         setFormData({
             ...banner,
-            slides: (banner.slides || []).map((s, i) => ({ ...s, id: s.id || `slide-${i}-${Date.now()}` })),
+            slides: (banner.slides || []).map((s, i) => ({ ...s, id: s.id || `slide-${i}-${Date.now()}`, mobileImageUrl: s.mobileImageUrl || '' })),
             content: banner.content || {
                 brand: '', brandTag: '', title: '', subtitle: '', description: '',
-                imageUrl: '', backgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: ''
+                imageUrl: '', backgroundImageUrl: '', mobileBackgroundImageUrl: '', badgeText: '', offerText: '', offerBank: '', backgroundColor: ''
             }
         });
         setHeroImagePreview(banner.content?.imageUrl || '');
         setBackgroundImagePreview(banner.content?.backgroundImageUrl || banner.content?.imageUrl || '');
+        setBackgroundMobileImagePreview(banner.content?.mobileBackgroundImageUrl || '');
         setSearchParams({ view: 'edit', id: banner.id || banner._id });
     };
 
@@ -747,27 +822,50 @@ const HomeBanners = () => {
                         {/* Image Upload & Click Action */}
                         <div className="space-y-4">
                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Left Column: Image Upload */}
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase">Banner Image</label>
+                                {/* Left Column: Image Uploads */}
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Web Banner Image</label>
+                                        <label className="block w-full aspect-video rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-400 hover:bg-purple-50/50 transition cursor-pointer relative overflow-hidden group">
+                                            {backgroundImagePreview ? (
+                                                <img src={backgroundImagePreview} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300">
+                                                    <MdCloudUpload size={32} />
+                                                    <span className="text-[10px] font-bold mt-1">Upload Image</span>
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold text-xs transition">Change</div>
+                                            <input type="file" ref={bgFileInputRef} hidden onChange={handleBgImageUpload} accept="image/*" />
+                                        </label>
+                                        {backgroundImagePreview && (
+                                            <button 
+                                                onClick={(e) => { e.preventDefault(); setBackgroundImageFile(null); setBackgroundImagePreview(''); setFormData({...formData, content: {...formData.content, backgroundImageUrl: ''}})}}
+                                                className="w-full py-1 text-[10px] text-red-500 font-bold hover:bg-red-50 rounded transition"
+                                            >
+                                                REMOVE WEB IMAGE
+                                            </button>
+                                        )}
+                                    </div>
+
                                     <label className="block w-full aspect-video rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-400 hover:bg-purple-50/50 transition cursor-pointer relative overflow-hidden group">
-                                        {backgroundImagePreview ? (
-                                            <img src={backgroundImagePreview} className="w-full h-full object-cover" alt="" />
+                                        {backgroundMobileImagePreview ? (
+                                            <img src={backgroundMobileImagePreview} className="w-full h-full object-cover" alt="" />
                                         ) : (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-300">
                                                 <MdCloudUpload size={32} />
-                                                <span className="text-[10px] font-bold mt-1">Upload Image</span>
+                                                <span className="text-[10px] font-bold mt-1">Upload Mobile Image</span>
                                             </div>
                                         )}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white font-bold text-xs transition">Change</div>
-                                        <input type="file" ref={bgFileInputRef} hidden onChange={handleBgImageUpload} accept="image/*" />
+                                        <input type="file" hidden onChange={handleMobileBgImageUpload} accept="image/*" />
                                     </label>
-                                    {backgroundImagePreview && (
+                                    {backgroundMobileImagePreview && (
                                         <button 
-                                            onClick={(e) => { e.preventDefault(); setBackgroundImageFile(null); setBackgroundImagePreview(''); setFormData({...formData, content: {...formData.content, backgroundImageUrl: ''}})}}
+                                            onClick={(e) => { e.preventDefault(); setBackgroundMobileImageFile(null); setBackgroundMobileImagePreview(''); setFormData({...formData, content: {...formData.content, mobileBackgroundImageUrl: ''}})}}
                                             className="w-full py-1 text-[10px] text-red-500 font-bold hover:bg-red-50 rounded transition"
                                         >
-                                            REMOVE IMAGE
+                                            REMOVE MOBILE IMAGE
                                         </button>
                                     )}
                                 </div>

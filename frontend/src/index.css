@@ -101,18 +101,12 @@
 
 /* Swiper Custom Styling for Modern Look */
 .home-banner-swiper {
-  height: 180px !important;
+  height: auto !important;
 }
 
 .home-banner-swiper .swiper-wrapper,
 .home-banner-swiper .swiper-slide {
-  height: 100% !important;
-}
-
-@media (min-width: 768px) {
-  .home-banner-swiper {
-    height: 360px !important;
-  }
+  height: auto !important;
 }
 
 .home-banner-swiper .swiper-button-next,
