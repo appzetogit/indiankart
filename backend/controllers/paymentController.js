@@ -1,46 +1,55 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import Order from '../models/Order.js';
+import Setting from '../models/Setting.js';
+
+const getRazorpayCredentials = async () => {
+    const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
+    const keyId = settings?.razorpayKeyId?.trim() || process.env.RAZORPAY_KEY_ID?.trim() || '';
+    const keySecret = settings?.razorpayKeySecret?.trim() || process.env.RAZORPAY_KEY_SECRET?.trim() || '';
+    return { keyId, keySecret };
+};
 
 // @desc    Create Razorpay order
 // @route   POST /api/payments/order
 // @access  Private
 export const createRazorpayOrder = async (req, res) => {
     const { amount } = req.body;
-    console.log(`Processing Razorpay order request - Amount: ₹${amount}`);
-    
-    // Debug Logging
-    console.log('Razorpay Config Check:', {
-        keyIdPresent: !!process.env.RAZORPAY_KEY_ID,
-        keySecretPresent: !!process.env.RAZORPAY_KEY_SECRET
-    });
+    console.log(`Processing Razorpay order request - Amount: Rs ${amount}`);
 
     try {
-        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-            throw new Error("Razorpay credentials missing in backend environment");
+        const { keyId, keySecret } = await getRazorpayCredentials();
+
+        console.log('Razorpay Config Check:', {
+            keyIdPresent: !!keyId,
+            keySecretPresent: !!keySecret,
+            source: keyId && keySecret ? 'settings_or_env' : 'missing'
+        });
+
+        if (!keyId || !keySecret) {
+            throw new Error('Razorpay credentials are not configured');
         }
 
         const instance = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID.trim(),
-            key_secret: process.env.RAZORPAY_KEY_SECRET.trim(),
+            key_id: keyId,
+            key_secret: keySecret,
         });
 
         const options = {
-            amount: Math.round(amount * 100), // Ensure integer paise
-            currency: "INR",
+            amount: Math.round(amount * 100),
+            currency: 'INR',
             receipt: `receipt_${Date.now()}`,
         };
 
         const order = await instance.orders.create(options);
 
         if (!order) {
-            return res.status(500).send("Some error occured");
+            return res.status(500).send('Some error occured');
         }
 
-        res.json(order);
+        return res.json(order);
     } catch (error) {
         console.error('Razorpay Order Creation Error:', error);
-        res.status(500).json({ message: error.message, details: error.error });
+        return res.status(500).json({ message: error.message, details: error.error });
     }
 };
 
@@ -49,49 +58,65 @@ export const createRazorpayOrder = async (req, res) => {
 // @access  Private
 export const verifyPayment = async (req, res) => {
     try {
+        const { keyId, keySecret } = await getRazorpayCredentials();
+        if (!keyId || !keySecret) {
+            return res.status(500).json({ message: 'Razorpay credentials are not configured' });
+        }
+
         const {
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature
         } = req.body;
 
-        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const body = `${razorpay_order_id}|${razorpay_payment_id}`;
 
         const expectedSignature = crypto
-            .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+            .createHmac('sha256', keySecret)
             .update(body.toString())
-            .digest("hex");
+            .digest('hex');
 
         const isAuthentic = expectedSignature === razorpay_signature;
 
-        if (isAuthentic) {
-            // Success - Fetch full payment details from Razorpay to get card info
-            const instance = new Razorpay({
-                key_id: process.env.RAZORPAY_KEY_ID,
-                key_secret: process.env.RAZORPAY_KEY_SECRET,
-            });
-
-            const payment = await instance.payments.fetch(razorpay_payment_id);
-            
-            let cardInfo = null;
-            if (payment.method === 'card' && payment.card) {
-                cardInfo = {
-                    network: payment.card.network,
-                    last4: payment.card.last4,
-                    type: payment.card.type
-                };
-            }
-
-            res.json({
-                message: "Payment verified successfully",
-                paymentId: razorpay_payment_id,
-                cardInfo
-            });
-        } else {
-            res.status(400).json({ message: "Invalid signature" });
+        if (!isAuthentic) {
+            return res.status(400).json({ message: 'Invalid signature' });
         }
+
+        const instance = new Razorpay({
+            key_id: keyId,
+            key_secret: keySecret,
+        });
+
+        const payment = await instance.payments.fetch(razorpay_payment_id);
+
+        let cardInfo = null;
+        if (payment.method === 'card' && payment.card) {
+            cardInfo = {
+                network: payment.card.network,
+                last4: payment.card.last4,
+                type: payment.card.type
+            };
+        }
+
+        return res.json({
+            message: 'Payment verified successfully',
+            paymentId: razorpay_payment_id,
+            cardInfo
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get Razorpay public config
+// @route   GET /api/payments/config
+// @access  Private
+export const getRazorpayConfig = async (req, res) => {
+    try {
+        const { keyId } = await getRazorpayCredentials();
+        return res.json({ keyId: keyId || '' });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
 
@@ -100,35 +125,50 @@ export const verifyPayment = async (req, res) => {
 // @access  Private/Admin
 export const testRazorpayCredentials = async (req, res) => {
     try {
+        const { keyId, keySecret } = await getRazorpayCredentials();
+        if (!keyId || !keySecret) {
+            return res.status(500).json({
+                success: false,
+                message: 'Razorpay credentials are missing',
+                keyId: keyId || '',
+                hint: 'Save Razorpay Key ID and Key Secret in Admin Settings or .env'
+            });
+        }
+
         const instance = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID,
-            key_secret: process.env.RAZORPAY_KEY_SECRET,
+            key_id: keyId,
+            key_secret: keySecret,
         });
 
-        // Try to fetch a small test order to verify credentials
         const options = {
-            amount: 100, // ₹1 in paise
-            currency: "INR",
+            amount: 100,
+            currency: 'INR',
             receipt: `test_receipt_${Date.now()}`,
         };
 
         const order = await instance.orders.create(options);
 
-        if (order) {
-            res.json({ 
-                success: true, 
-                message: "Razorpay credentials are valid!",
-                testOrderId: order.id,
-                keyId: process.env.RAZORPAY_KEY_ID
+        if (!order) {
+            return res.status(500).json({
+                success: false,
+                message: 'Unable to validate Razorpay credentials right now'
             });
         }
+
+        return res.json({
+            success: true,
+            message: 'Razorpay credentials are valid!',
+            testOrderId: order.id,
+            keyId
+        });
     } catch (error) {
-        res.status(500).json({ 
+        const { keyId } = await getRazorpayCredentials();
+        return res.status(500).json({
             success: false,
             message: "Razorpay credentials are invalid or there's an API issue",
             error: error.message,
-            keyId: process.env.RAZORPAY_KEY_ID,
-            hint: "Please check your RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env file"
+            keyId,
+            hint: 'Please check your Razorpay keys in Admin Settings or .env'
         });
     }
 };

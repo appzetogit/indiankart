@@ -11,7 +11,9 @@ const SettingsPage = () => {
         logoUrl: '',
         signatureUrl: '',
         contactEmail: '',
-        contactPhone: ''
+        contactPhone: '',
+        razorpayKeyId: '',
+        razorpayKeySecret: ''
     });
 
     // States for locally selected files and their previews
@@ -35,7 +37,9 @@ const SettingsPage = () => {
                         logoUrl: data.logoUrl || '',
                         signatureUrl: data.signatureUrl || '',
                         contactEmail: data.contactEmail || '',
-                        contactPhone: data.contactPhone || ''
+                        contactPhone: data.contactPhone || '',
+                        razorpayKeyId: data.razorpayKeyId || '',
+                        razorpayKeySecret: ''
                     });
                     setLogoPreview(data.logoUrl || '');
                     setSignaturePreview(data.signatureUrl || '');
@@ -81,6 +85,8 @@ const SettingsPage = () => {
         formData.append('panNumber', settings.panNumber);
         formData.append('contactEmail', settings.contactEmail);
         formData.append('contactPhone', settings.contactPhone);
+        formData.append('razorpayKeyId', settings.razorpayKeyId);
+        formData.append('razorpayKeySecret', settings.razorpayKeySecret);
         
         // Append existing URLs to handle cases where no new file is uploaded
         formData.append('logoUrl', settings.logoUrl);
@@ -98,7 +104,7 @@ const SettingsPage = () => {
             const { data } = await API.put('/settings', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
-            setSettings(data);
+            setSettings({ ...data, razorpayKeySecret: '' });
             setLogoPreview(data.logoUrl);
             setSignaturePreview(data.signatureUrl);
             setLogoFile(null);
@@ -186,6 +192,31 @@ const SettingsPage = () => {
                                 className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none placeholder:text-gray-500 caret-black font-medium text-gray-900 bg-gray-50/50 transition-all"
                                 placeholder="support@yourstore.com"
                             />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">Razorpay Key ID</label>
+                            <input
+                                type="text"
+                                name="razorpayKeyId"
+                                value={settings.razorpayKeyId}
+                                onChange={handleChange}
+                                className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none placeholder:text-gray-500 caret-black font-medium text-gray-900 bg-gray-50/50 transition-all"
+                                placeholder="rzp_live_xxxxx / rzp_test_xxxxx"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">Razorpay Key Secret</label>
+                            <input
+                                type="password"
+                                name="razorpayKeySecret"
+                                value={settings.razorpayKeySecret}
+                                onChange={handleChange}
+                                className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none placeholder:text-gray-500 caret-black font-medium text-gray-900 bg-gray-50/50 transition-all"
+                                placeholder="Leave blank to keep existing secret"
+                            />
+                            <p className="mt-1.5 text-[10px] text-gray-400 font-bold uppercase tracking-tight">Stored securely in DB and never returned in API responses</p>
                         </div>
 
                         {/* Logo Upload */}

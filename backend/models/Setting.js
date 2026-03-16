@@ -14,6 +14,8 @@ const settingSchema = mongoose.Schema({
     freeShippingThreshold: { type: Number, default: 500 },
     minShippingOrderAmount: { type: Number, default: 0 },
     maxShippingOrderAmount: { type: Number, default: 499 },
+    razorpayKeyId: { type: String, default: '' },
+    razorpayKeySecret: { type: String, default: '', select: false },
 }, {
     timestamps: true,
 });

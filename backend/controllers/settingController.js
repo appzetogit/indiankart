@@ -37,6 +37,8 @@ const updateSettings = async (req, res) => {
             contactEmail,
             contactPhone,
             fssai,
+            razorpayKeyId,
+            razorpayKeySecret,
             shippingCharge,
             freeShippingThreshold,
             minShippingOrderAmount,
@@ -76,6 +78,10 @@ const updateSettings = async (req, res) => {
             settings.contactEmail = contactEmail || settings.contactEmail;
             settings.contactPhone = contactPhone || settings.contactPhone;
             settings.fssai = fssai || settings.fssai;
+            settings.razorpayKeyId = razorpayKeyId || settings.razorpayKeyId;
+            if (typeof razorpayKeySecret === 'string' && razorpayKeySecret.trim()) {
+                settings.razorpayKeySecret = razorpayKeySecret.trim();
+            }
             if (shippingCharge !== undefined) {
                 const parsed = Number(shippingCharge);
                 if (Number.isFinite(parsed) && parsed >= 0) settings.shippingCharge = parsed;
@@ -107,6 +113,8 @@ const updateSettings = async (req, res) => {
                 contactEmail,
                 contactPhone,
                 fssai,
+                razorpayKeyId: razorpayKeyId || '',
+                razorpayKeySecret: (typeof razorpayKeySecret === 'string' ? razorpayKeySecret.trim() : '') || '',
                 shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
                 freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
                 minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,
