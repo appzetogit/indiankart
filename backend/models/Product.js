@@ -79,6 +79,12 @@ const productSchema = mongoose.Schema({
     timestamps: true,
 });
 
+// Query-path indexes for category listing pages.
+productSchema.index({ categoryId: 1, createdAt: -1 });
+productSchema.index({ category: 1, createdAt: -1 });
+productSchema.index({ subCategories: 1, createdAt: -1 });
+productSchema.index({ tags: 1 });
+
 const Product = mongoose.model('Product', productSchema);
 
 export default Product;

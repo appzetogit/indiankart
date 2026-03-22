@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useCartStore } from '../../store/cartStore';
 import { useLanguageStore } from '../../../../store/languageStore';
-import { useCategories } from '../../../../hooks/useData';
 import { useHeaderStore } from '../../../admin/store/headerStore';
 import API from '../../../../services/api';
 import { IoSearch } from 'react-icons/io5';
@@ -36,13 +35,25 @@ import {
 } from 'react-icons/md';
 import logo from '../../../../assets/indiankart-logo.png';
 
+const CategoryNavSkeleton = () => (
+    <div className="max-w-[1200px] mx-auto relative px-2">
+        <div className="flex overflow-x-auto no-scrollbar gap-6 md:gap-10 pt-2 pb-2 border-t border-gray-100">
+            {[1, 2, 3, 4, 5, 6].map((item) => (
+                <div key={item} className="flex shrink-0 flex-col items-center gap-2 min-w-[60px]">
+                    <div className="w-10 h-10 md:w-16 md:h-16 rounded-full shimmer" />
+                    <div className="h-2.5 w-12 md:w-16 rounded shimmer" />
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 const Header = () => {
     const totalItems = useCartStore((state) => state.getTotalItems());
     const addresses = useCartStore((state) => state.addresses);
     const primaryAddress = addresses && addresses.length > 0 ? addresses[0] : null;
     const navigate = useNavigate();
     const location = useLocation();
-    const { categories, loading: categoriesLoading } = useCategories();
     const { headerCategories, fetchHeaderConfig, isLoading: headerLoading } = useHeaderStore();
     const [headerLogo, setHeaderLogo] = useState(logo);
 
@@ -65,16 +76,11 @@ const Header = () => {
         fetchHeaderLogo();
     }, []);
 
-    // Always hide inactive categories on homepage, including admin-pinned header categories.
-    const activeCategoryIds = new Set(
-        categories
-            .filter((cat) => cat.active !== false)
-            .map((cat) => String(cat._id || cat.id))
-    );
+    // Show only active admin-configured header categories.
     const activeHeaderCategories = (headerCategories || []).filter((cat) =>
         cat &&
         cat.active !== false &&
-        activeCategoryIds.has(String(cat._id || cat.id))
+        String(cat?.name || '').trim().length > 0
     );
     // Keep "For You" at first position, but prefer admin-configured category/icon when present.
     const configuredForYouCategory = activeHeaderCategories.find(
@@ -475,10 +481,13 @@ const Header = () => {
             </div>
 
             {/* Category Navigation - Only on Homepage */}
-            {location.pathname === '/' && !categoriesLoading && !headerLoading && displayCategories.length > 0 && (
-                <div className="max-w-[1200px] mx-auto relative px-2">
-                    <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-6 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 touch-pan-x overscroll-x-contain snap-x snap-mandatory scroll-smooth [scrollbar-gutter:stable] ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
-                        {displayCategories.map((cat, index) => {
+            {location.pathname === '/' && (
+                <>
+                    {headerLoading && displayCategories.length === 0 && <CategoryNavSkeleton />}
+                    {displayCategories.length > 0 && (
+                        <div className="max-w-[1200px] mx-auto relative px-2">
+                            <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-6 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 touch-pan-x overscroll-x-contain snap-x snap-mandatory scroll-smooth [scrollbar-gutter:stable] ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
+                                {displayCategories.map((cat, index) => {
                             const active = isActiveCategory(cat.name);
                             const IconComponent = iconMap[cat.icon] || MdGridView;
                             const categoryImage = cat.icon || cat.image || '';
@@ -658,10 +667,12 @@ const Header = () => {
                                         </div>
                                     )}
                                 </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </header>
     );

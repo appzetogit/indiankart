@@ -1,17 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack } from 'react-icons/md';
-import { useProducts, useCategories } from '../../../hooks/useData';
+import API from '../../../services/api';
+import { useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
 import SubCategoryList from '../components/category/SubCategoryList';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
 
+const CategoryPageSkeleton = () => (
+    <div className="bg-white min-h-screen pb-36 md:pb-10 animate-pulse">
+        <div className="bg-white shadow-sm border-b border-gray-200">
+            <div className="max-w-[1440px] mx-auto px-4 py-3">
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-gray-200" />
+                    <div className="h-7 w-44 rounded bg-gray-200" />
+                </div>
+            </div>
+        </div>
+        <div className="max-w-[1440px] mx-auto md:px-4 pt-2 pb-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 p-3 md:p-6">
+                {Array.from({ length: 8 }).map((_, index) => (
+                    <div key={index} className="space-y-2">
+                        <div className="aspect-square rounded-xl bg-gray-200" />
+                        <div className="h-3 rounded bg-gray-200 w-4/5" />
+                        <div className="h-3 rounded bg-gray-200 w-2/3" />
+                    </div>
+                ))}
+            </div>
+        </div>
+    </div>
+);
+
 const CategoryPage = () => {
+    const PAGE_SIZE = 12;
     const navigate = useNavigate();
     const { categoryName, "*": subPath } = useParams();
-    const { products, loading: productsLoading } = useProducts();
-    const { categories, loading: categoriesLoading } = useCategories({ forceRefresh: true });
+    const { categories, loading: categoriesLoading } = useCategories();
+    const [products, setProducts] = useState([]);
+    const [productsLoading, setProductsLoading] = useState(true);
 
     const [categoryData, setCategoryData] = useState(null);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
@@ -32,6 +59,8 @@ const CategoryPage = () => {
     const [showAllRam, setShowAllRam] = useState(false);
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
+    const [fetchError, setFetchError] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const parseAmount = (value, fallback = 0) => {
@@ -63,21 +92,85 @@ const CategoryPage = () => {
     };
 
     useEffect(() => {
+        let active = true;
+
+        const fetchCategoryProducts = async () => {
+            setProductsLoading(true);
+            setFetchError('');
+
+            try {
+                const params = new URLSearchParams();
+                if (categoryName) {
+                    params.set('category', decodeURIComponent(categoryName));
+                }
+
+                const segments = String(subPath || '').split('/').filter(Boolean);
+                const leafSubCategory = segments.length > 0 ? decodeURIComponent(segments[segments.length - 1]) : '';
+                if (leafSubCategory) {
+                    params.set('subcategory', leafSubCategory);
+                }
+
+                params.set('lite', 'true');
+                const { data } = await API.get(`/products?${params.toString()}`);
+                if (!active) return;
+
+                setProducts(Array.isArray(data) ? data : (data?.products || []));
+            } catch (error) {
+                if (!active) return;
+                setProducts([]);
+                setFetchError(error?.response?.data?.message || 'Failed to load products');
+            } finally {
+                if (active) setProductsLoading(false);
+            }
+        };
+
+        fetchCategoryProducts();
+
+        return () => {
+            active = false;
+        };
+    }, [categoryName, subPath]);
+
+    useEffect(() => {
+        // Reset transient filters on route change so previous category filters
+        // don't hide results on a new category/subcategory page.
+        setSortBy('popularity');
+        setSelectedBrands([]);
+        setSelectedRam([]);
+        setSelectedCategories([]);
+        setSelectedDiscount(null);
+        setBrandSearch('');
+        setShowAllBrands(false);
+        setShowAllRam(false);
+        setShowAllCategories(false);
+        setCollapsedSections({});
+        setFilterRange([0, 1000000]);
+        setPriceRange({ min: 0, max: 1000000 });
+    }, [categoryName, subPath]);
+
+    useEffect(() => {
         window.scrollTo(0, 0);
 
         if (productsLoading || categoriesLoading) return;
 
         const result = resolveCategoryPath(categories, products, categoryName, subPath);
+        const explicitSubPath = String(subPath || '').split('/').filter(Boolean).length > 0;
 
         if (result && result.data) {
             setCategoryData(result.data);
             setBreadcrumbs(result.breadcrumbs || []);
-            setCategoryProducts(result.products);
-            setSortedProducts(result.products);
+
+            // For explicit sub-path routes like /category/Mobiles/VIVO, products are
+            // already filtered by backend query. Avoid re-filtering through resolver
+            // (which can be stricter for mixed legacy product shapes).
+            const routeProducts = explicitSubPath ? products : result.products;
+
+            setCategoryProducts(routeProducts);
+            setSortedProducts(routeProducts);
 
             // Calculate price range from products
-            if (result.products.length > 0) {
-                const prices = result.products.map((p) => getEffectivePricing(p).price);
+            if (routeProducts.length > 0) {
+                const prices = routeProducts.map((p) => getEffectivePricing(p).price);
                 const min = Math.min(...prices);
                 const max = Math.max(...prices);
                 setPriceRange({ min, max });
@@ -141,6 +234,10 @@ const CategoryPage = () => {
         setSortedProducts(updated);
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, categoryProducts]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [categoryName, subPath, sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, categoryProducts]);
+
     // Unique Brands, RAM, and Subcategories from tags
     const availableBrands = [...new Set(categoryProducts.map(p => String(p.brand || '').trim()).filter(Boolean))];
     const availableRam = [...new Set(categoryProducts.map(p => String(p.ram || '').trim()).filter(Boolean))];
@@ -194,16 +291,29 @@ const CategoryPage = () => {
     const displayedBrands = showAllBrands ? filteredBrands : filteredBrands.slice(0, 6);
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
+    const hasExplicitSubPath = String(subPath || '').split('/').filter(Boolean).length > 0;
+    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
+    const safeCurrentPage = Math.min(currentPage, totalPages);
+    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+    const endIndex = startIndex + PAGE_SIZE;
+    const currentPageProducts = sortedProducts.slice(startIndex, endIndex);
+
+    const pageStartLabel = sortedProducts.length > 0 ? startIndex + 1 : 0;
+    const pageEndLabel = Math.min(endIndex, sortedProducts.length);
 
     if (productsLoading || categoriesLoading) {
-        return <div className="p-10 text-center">Loading products...</div>;
+        return <CategoryPageSkeleton />;
+    }
+
+    if (fetchError) {
+        return <div className="p-10 text-center text-red-500">{fetchError}</div>;
     }
 
     if (!categoryData) {
         return <div className="p-10 text-center">Category not found</div>;
     }
 
-    const isSubCategoryLandingView = breadcrumbs.length === 1;
+    const isSubCategoryLandingView = !hasExplicitSubPath && breadcrumbs.length === 1;
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
             {/* Header / Breadcrumbs Section */}
@@ -410,8 +520,9 @@ const CategoryPage = () => {
                             </div>
 
                             {sortedProducts.length > 0 ? (
+                                <>
                                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                                    {sortedProducts.map((product) => {
+                                    {currentPageProducts.map((product) => {
                                         const pricing = getEffectivePricing(product);
                                         return (
                                             <div key={product.id || product._id} className="h-full">
@@ -429,6 +540,33 @@ const CategoryPage = () => {
                                         );
                                     })}
                                 </div>
+                                {totalPages > 1 && (
+                                    <div className="mt-8 flex flex-col items-center gap-3">
+                                        <p className="text-xs text-gray-500 font-semibold">
+                                            Showing {pageStartLabel}-{pageEndLabel} of {sortedProducts.length} products
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                                                disabled={safeCurrentPage === 1}
+                                                className="px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                                            >
+                                                Prev
+                                            </button>
+                                            <span className="px-3 py-2 text-xs font-black bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
+                                                {safeCurrentPage} / {totalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                                                disabled={safeCurrentPage === totalPages}
+                                                className="px-3 py-2 text-xs font-bold rounded-lg border border-gray-200 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                </>
                             ) : (
                                 <div className="flex flex-col items-center justify-center py-24 text-center">
                                     <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6">

@@ -1,46 +1,151 @@
 import Product from '../models/Product.js';
+import Category from '../models/Category.js';
+import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+
+const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
+let activeVisibilityCache = {
+    fetchedAt: 0,
+    categories: [],
+    subCategories: []
+};
+
+const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const getActiveVisibilityData = async () => {
+    const now = Date.now();
+    if (
+        activeVisibilityCache.fetchedAt > 0 &&
+        (now - activeVisibilityCache.fetchedAt) < ACTIVE_CACHE_TTL_MS
+    ) {
+        return activeVisibilityCache;
+    }
+
+    const [categories, subCategories] = await Promise.all([
+        Category.find({ active: true }).select('_id id name').lean(),
+        SubCategory.find({ isActive: true }).select('_id name category').lean()
+    ]);
+
+    activeVisibilityCache = {
+        fetchedAt: now,
+        categories,
+        subCategories
+    };
+
+    return activeVisibilityCache;
+};
+
+const getListProjection = (lite = false) => {
+    if (!lite) return null;
+    // Exclude heavy PDP-only fields for category/listing pages.
+    return 'id name brand price originalPrice discount rating image images category categoryId tags ram skus stock createdAt';
+};
 
 // @desc    Fetch all products
 // @route   GET /api/products
 // @access  Public
 export const getProducts = async (req, res) => {
     try {
-        const { category, subcategory, all, pageNumber, limit, search, keyword } = req.query;
+        const { category, subcategory, all, pageNumber, limit, search, keyword, lite } = req.query;
         let filter = {};
         const searchTerm = String(search || keyword || '').trim();
+        const categoryTerm = decodeURIComponent(String(category || '').trim());
+        const subCategoryTerm = decodeURIComponent(String(subcategory || '').trim());
+        const isLite = lite === 'true' || lite === '1';
+        const projection = getListProjection(isLite);
 
         if (all !== 'true') {
-            // Always filter by active categories and subcategories for public requests
-            const Category = (await import('../models/Category.js')).default;
-            const SubCategory = (await import('../models/SubCategory.js')).default;
-
-            const activeCategories = await Category.find({ active: true }).select('id');
+            // Always filter by active categories and subcategories for public requests.
+            const { categories: activeCategories, subCategories: activeSubCategories } = await getActiveVisibilityData();
             const activeCategoryIds = activeCategories.map(c => c.id);
+            const activeSubCategoryIds = activeSubCategories.map(s => s._id);
+            let matchedCategory = null;
 
             filter.categoryId = { $in: activeCategoryIds };
 
-            if (subcategory) {
-                const subCat = await SubCategory.findOne({ name: subcategory, isActive: true });
-                if (subCat) {
-                    filter.subCategories = subCat._id;
+            if (categoryTerm) {
+                const normalizedCategory = categoryTerm.toLowerCase();
+                matchedCategory = activeCategories.find(
+                    (cat) => String(cat?.name || '').trim().toLowerCase() === normalizedCategory
+                );
+
+                if (matchedCategory) {
+                    // Support legacy products that may have category name but missing/incorrect categoryId.
+                    const categoryRegex = new RegExp(`^${escapeRegex(categoryTerm)}$`, 'i');
+                    filter.$and = [
+                        ...(filter.$and || []),
+                        {
+                            $or: [
+                                { categoryId: matchedCategory.id },
+                                { category: categoryRegex }
+                            ]
+                        }
+                    ];
+                    delete filter.categoryId;
                 } else {
-                    return res.json([]);
+                    filter.category = new RegExp(`^${escapeRegex(categoryTerm)}$`, 'i');
+                }
+            }
+
+            if (subCategoryTerm) {
+                const normalizedSubcategory = subCategoryTerm.toLowerCase();
+                const subRegex = new RegExp(`^${escapeRegex(subCategoryTerm)}$`, 'i');
+                const nameRegex = new RegExp(escapeRegex(subCategoryTerm), 'i');
+                const scopedSubCategories = matchedCategory
+                    ? activeSubCategories.filter((sub) => String(sub.category) === String(matchedCategory._id))
+                    : activeSubCategories;
+
+                let subCat = scopedSubCategories.find(
+                    (sub) => String(sub?.name || '').trim().toLowerCase() === normalizedSubcategory
+                );
+
+                if (!subCat && !matchedCategory) {
+                    subCat = activeSubCategories.find(
+                        (sub) => String(sub?.name || '').trim().toLowerCase() === normalizedSubcategory
+                    );
+                }
+
+                if (subCat) {
+                    // Keep strict subCategory match when available, but also allow
+                    // legacy product mappings where VIVO-like values are in brand/tags/name.
+                    filter.$and = [
+                        ...(filter.$and || []),
+                        {
+                            $or: [
+                                { subCategories: subCat._id },
+                                { subCategories: String(subCat._id) },
+                                { subCategory: subCat._id },
+                                { 'subCategory._id': subCat._id },
+                                { tags: subRegex },
+                                { brand: subRegex },
+                                { name: nameRegex }
+                            ]
+                        }
+                    ];
+                } else {
+                    // Fallback for data where brand names are encoded in tags/name instead of subCategories.
+                    filter.$and = [
+                        ...(filter.$and || []),
+                        {
+                            $or: [
+                                { tags: subRegex },
+                                { brand: subRegex },
+                                { name: nameRegex }
+                            ]
+                        }
+                    ];
                 }
             } else {
-                 const activeSubCategories = await SubCategory.find({ isActive: true }).select('_id');
-                 const activeSubCategoryIds = activeSubCategories.map(s => s._id);
-                 
-                 filter.$or = [
-                     { subCategories: { $exists: false } },
-                     { subCategories: { $size: 0 } },
-                     { subCategories: { $in: activeSubCategoryIds } }
-                 ];
+                filter.$or = [
+                    { subCategories: { $exists: false } },
+                    { subCategories: { $size: 0 } },
+                    { subCategories: { $in: activeSubCategoryIds } }
+                ];
             }
         }
 
-        if (category) {
-            filter.category = category;
+        if (all === 'true' && categoryTerm) {
+            filter.category = new RegExp(`^${escapeRegex(categoryTerm)}$`, 'i');
         }
 
         if (searchTerm) {
@@ -63,8 +168,15 @@ export const getProducts = async (req, res) => {
             const page = Number(pageNumber) || 1;
 
             const count = await Product.countDocuments(filter);
-            const products = await Product.find(filter)
-                .populate('subCategories', 'name isActive')
+            let productQuery = Product.find(filter);
+            if (projection) productQuery = productQuery.select(projection);
+            if (!isLite) {
+                productQuery = productQuery.populate('subCategories', 'name isActive');
+            } else {
+                productQuery = productQuery.lean();
+            }
+
+            const products = await productQuery
                 .sort({ createdAt: -1 })
                 .limit(pageSize)
                 .skip(pageSize * (page - 1));
@@ -78,9 +190,15 @@ export const getProducts = async (req, res) => {
         } 
 
         // Default behavior (No pagination) - Backward Compatibility
-        const products = await Product.find(filter)
-            .populate('subCategories', 'name isActive')
-            .sort({ createdAt: -1 });
+        let productQuery = Product.find(filter);
+        if (projection) productQuery = productQuery.select(projection);
+        if (!isLite) {
+            productQuery = productQuery.populate('subCategories', 'name isActive');
+        } else {
+            productQuery = productQuery.lean();
+        }
+
+        const products = await productQuery.sort({ createdAt: -1 });
             
         res.json(products);
     } catch (error) {

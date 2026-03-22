@@ -8,6 +8,7 @@ const Layout = () => {
     const location = useLocation();
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
+    const isAllCategories = location.pathname === '/categories';
     const isInfoPage = location.pathname.includes('/info');
     const isCheckout = location.pathname.includes('/checkout');
     const isAccountSectionPage = [
@@ -42,7 +43,7 @@ const Layout = () => {
         !location.pathname.includes('/track-order') &&
         !location.pathname.includes('/category/') &&
         !location.pathname.includes('/play');
-    const showFooter = !isCategory;
+    const showFooter = !isCategory && !isAllCategories;
 
     return (
         <div className="w-full min-h-screen flex flex-col relative bg-background-light">

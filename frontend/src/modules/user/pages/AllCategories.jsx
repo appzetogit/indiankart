@@ -15,6 +15,35 @@ import {
     MdBolt // For 'For You' equivalent icon
 } from 'react-icons/md';
 
+const AllCategoriesSkeleton = () => (
+    <div className="bg-white min-h-screen flex flex-col pb-24">
+        <div className="bg-white sticky top-0 z-10 px-3 py-3 border-b border-gray-100">
+            <div className="h-6 w-40 rounded shimmer" />
+        </div>
+        <div className="flex flex-1 min-h-0">
+            <div className="w-1/4 max-w-[100px] bg-gray-50 border-r border-gray-200 px-2 py-3 space-y-3">
+                {Array.from({ length: 7 }).map((_, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-2">
+                        <div className="w-12 h-12 rounded-full shimmer" />
+                        <div className="h-2.5 w-12 rounded shimmer" />
+                    </div>
+                ))}
+            </div>
+            <div className="flex-1 p-4">
+                <div className="h-5 w-36 rounded shimmer mb-4" />
+                <div className="grid grid-cols-3 gap-3">
+                    {Array.from({ length: 9 }).map((_, idx) => (
+                        <div key={idx} className="flex flex-col items-center gap-2">
+                            <div className="w-16 h-16 rounded-full shimmer" />
+                            <div className="h-2.5 w-14 rounded shimmer" />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
 const AllCategories = () => {
     const navigate = useNavigate();
     const { categories, loading: categoriesLoading } = useCategories();
@@ -64,7 +93,7 @@ const AllCategories = () => {
     const isImageSource = (value = '') => /^(https?:\/\/|\/|data:|blob:)/i.test(String(value || '').trim());
 
     if (categoriesLoading) {
-        return <div className="p-10 text-center">Loading categories...</div>;
+        return <AllCategoriesSkeleton />;
     }
 
     return (
