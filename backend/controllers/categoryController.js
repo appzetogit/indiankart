@@ -45,11 +45,24 @@ const normalizeSmallBanners = (rawValue, fallbackAlt = '') => {
 export const getCategories = async (req, res) => {
     try {
         const query = req.query.all === 'true' ? {} : { active: true };
-        
-        // Populate virtual 'subCategories'
-        const categories = await Category.find(query)
-            .populate('subCategories')
-            .lean({ virtuals: true }); // Ensure virtuals are included in lean result
+        const lite = req.query.lite === 'true' || req.query.lite === '1';
+
+        let categories = [];
+        if (lite) {
+            categories = await Category.find(query)
+                .select('id name icon active')
+                .populate({
+                    path: 'subCategories',
+                    select: 'name image isActive category',
+                    options: { sort: { name: 1 } }
+                })
+                .lean({ virtuals: true });
+        } else {
+            // Populate virtual 'subCategories' with full payload.
+            categories = await Category.find(query)
+                .populate('subCategories')
+                .lean({ virtuals: true }); // Ensure virtuals are included in lean result
+        }
 
         const response = categories.map(cat => ({
             ...cat,

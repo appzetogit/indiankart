@@ -36,6 +36,8 @@ const CategoryPage = () => {
     const PAGE_SIZE = 12;
     const navigate = useNavigate();
     const { categoryName, "*": subPath } = useParams();
+    const routeSegments = String(subPath || '').split('/').filter(Boolean);
+    const routeHasExplicitSubPath = routeSegments.length > 0;
     const { categories, loading: categoriesLoading } = useCategories();
     const [products, setProducts] = useState([]);
     const [productsLoading, setProductsLoading] = useState(true);
@@ -95,6 +97,15 @@ const CategoryPage = () => {
         let active = true;
 
         const fetchCategoryProducts = async () => {
+            if (!routeHasExplicitSubPath) {
+                // For main category landing pages, avoid fetching full product lists.
+                // This route primarily renders subcategory/banners and can load instantly.
+                setProducts([]);
+                setProductsLoading(false);
+                setFetchError('');
+                return;
+            }
+
             setProductsLoading(true);
             setFetchError('');
 
@@ -104,8 +115,7 @@ const CategoryPage = () => {
                     params.set('category', decodeURIComponent(categoryName));
                 }
 
-                const segments = String(subPath || '').split('/').filter(Boolean);
-                const leafSubCategory = segments.length > 0 ? decodeURIComponent(segments[segments.length - 1]) : '';
+                const leafSubCategory = routeSegments.length > 0 ? decodeURIComponent(routeSegments[routeSegments.length - 1]) : '';
                 if (leafSubCategory) {
                     params.set('subcategory', leafSubCategory);
                 }
@@ -129,7 +139,7 @@ const CategoryPage = () => {
         return () => {
             active = false;
         };
-    }, [categoryName, subPath]);
+    }, [categoryName, subPath, routeHasExplicitSubPath]);
 
     useEffect(() => {
         // Reset transient filters on route change so previous category filters
@@ -291,7 +301,7 @@ const CategoryPage = () => {
     const displayedBrands = showAllBrands ? filteredBrands : filteredBrands.slice(0, 6);
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
-    const hasExplicitSubPath = String(subPath || '').split('/').filter(Boolean).length > 0;
+    const hasExplicitSubPath = routeHasExplicitSubPath;
     const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
     const safeCurrentPage = Math.min(currentPage, totalPages);
     const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;

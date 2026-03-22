@@ -205,25 +205,27 @@ export const useProduct = (id) => {
 };
 
 export const useCategories = (options = {}) => {
-    const { forceRefresh = false } = options;
-    const initialCategories = forceRefresh ? [] : (readCache('categories') || []);
+    const { forceRefresh = false, lite = false } = options;
+    const cacheKey = lite ? 'categories-lite' : 'categories';
+    const initialCategories = forceRefresh ? [] : (readCache(cacheKey) || []);
     const [categories, setCategories] = useState(initialCategories);
     const [loading, setLoading] = useState(initialCategories.length === 0);
     const [error, setError] = useState(null);
 
     useEffect(() => {
         let active = true;
+        const endpoint = lite ? '/categories?lite=true' : '/categories';
 
         const fetchCategories = async () => {
             try {
                 const data = forceRefresh
                     ? await (async () => {
-                        const { data } = await API.get('/categories');
-                        writeCache('categories', data);
+                        const { data } = await API.get(endpoint);
+                        writeCache(cacheKey, data);
                         return data;
                     })()
-                    : await getOrFetch('categories', async () => {
-                        const { data } = await API.get('/categories');
+                    : await getOrFetch(cacheKey, async () => {
+                        const { data } = await API.get(endpoint);
                         return data;
                     });
 
@@ -243,7 +245,7 @@ export const useCategories = (options = {}) => {
         return () => {
             active = false;
         };
-    }, [forceRefresh]);
+    }, [forceRefresh, lite]);
 
     return { categories, loading, error };
 };

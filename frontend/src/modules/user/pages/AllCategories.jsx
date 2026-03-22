@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCategories } from '../../../hooks/useData';
 import { useHeaderStore } from '../../admin/store/headerStore';
-import { IoSearch } from 'react-icons/io5';
 import {
     MdGridView,
     MdCheckroom,
@@ -11,9 +10,57 @@ import {
     MdLaptop,
     MdHome,
     MdShoppingBasket,
-    MdOutlineQrCodeScanner,
-    MdBolt // For 'For You' equivalent icon
+    MdBolt
 } from 'react-icons/md';
+
+const toThumbnailSrc = (url = '', size = 120) => {
+    const src = String(url || '').trim();
+    if (!src) return '';
+
+    // Cloudinary transformation for faster thumbnail delivery.
+    if (src.includes('res.cloudinary.com') && src.includes('/upload/')) {
+        return src.replace('/upload/', `/upload/f_auto,q_auto,w_${size},h_${size},c_fill/`);
+    }
+
+    return src;
+};
+
+const prefetchedThumbs = new Set();
+const prefetchThumbnail = (url, size = 140) => {
+    const thumb = toThumbnailSrc(url, size);
+    if (!thumb || prefetchedThumbs.has(thumb)) return;
+    prefetchedThumbs.add(thumb);
+    const img = new Image();
+    img.decoding = 'async';
+    img.loading = 'eager';
+    img.src = thumb;
+};
+
+const CircleImage = ({ src, alt, sizeClass = 'w-16 h-16', fallback = null, priority = false }) => {
+    const [loaded, setLoaded] = useState(false);
+    const [errored, setErrored] = useState(false);
+    const optimizedSrc = useMemo(() => toThumbnailSrc(src, 140), [src]);
+
+    if (!optimizedSrc || errored) {
+        return fallback;
+    }
+
+    return (
+        <div className={`relative ${sizeClass} rounded-full overflow-hidden`}>
+            {!loaded && <div className="absolute inset-0 shimmer rounded-full" />}
+            <img
+                src={optimizedSrc}
+                alt={alt}
+                className={`w-full h-full object-cover rounded-full transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+                loading={priority ? 'eager' : 'lazy'}
+                decoding="async"
+                fetchPriority={priority ? 'high' : 'auto'}
+                onLoad={() => setLoaded(true)}
+                onError={() => setErrored(true)}
+            />
+        </div>
+    );
+};
 
 const AllCategoriesSkeleton = () => (
     <div className="bg-white min-h-screen flex flex-col pb-24">
@@ -46,28 +93,43 @@ const AllCategoriesSkeleton = () => (
 
 const AllCategories = () => {
     const navigate = useNavigate();
-    const { categories, loading: categoriesLoading } = useCategories();
+    const { categories, loading: categoriesLoading } = useCategories({ lite: true });
     const { headerCategories, fetchHeaderConfig, isLoading: headerLoading } = useHeaderStore();
 
     useEffect(() => {
         fetchHeaderConfig();
     }, []);
     
+    const normalizedHeaderCategories = useMemo(() => {
+        return (headerCategories || [])
+            .filter((cat) => cat && cat.active !== false && cat.name !== 'For You')
+            .map((cat) => ({
+                ...cat,
+                subCategories: Array.isArray(cat.subCategories) ? cat.subCategories : []
+            }));
+    }, [headerCategories]);
+
+    // Prefer full categories when available; otherwise use the same source as homepage header.
+    const sourceCategories = useMemo(() => {
+        const activeFromCategories = (categories || []).filter(
+            (cat) => cat && cat.active !== false && cat.name !== 'For You'
+        );
+        return activeFromCategories.length > 0 ? activeFromCategories : normalizedHeaderCategories;
+    }, [categories, normalizedHeaderCategories]);
+
     // Reorder categories to match header pinned items first
     const displayCategories = useMemo(() => {
-        if (categoriesLoading) return [];
-        
-        // Keep active categories, but exclude "For You" on this page.
-        const allActive = categories.filter(cat => cat.active !== false && cat.name !== 'For You');
-        const pinned = headerCategories.filter(cat => cat.active !== false && cat.name !== 'For You');
-        
-        const pinnedIds = new Set(pinned.map(cat => cat.id || cat._id));
-        const remaining = allActive.filter(cat => !pinnedIds.has(cat.id || cat._id));
-        
+        const allActive = sourceCategories;
+        const pinned = normalizedHeaderCategories;
+
+        const pinnedIds = new Set(pinned.map(cat => String(cat.id || cat._id)));
+        const remaining = allActive.filter(cat => !pinnedIds.has(String(cat.id || cat._id)));
+
         return [...pinned, ...remaining];
-    }, [categories, headerCategories, categoriesLoading]);
+    }, [sourceCategories, normalizedHeaderCategories]);
 
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const [subCategoryBatchLoaded, setSubCategoryBatchLoaded] = useState(false);
 
     // Update selected category when categories load
     useEffect(() => {
@@ -78,8 +140,93 @@ const AllCategories = () => {
 
     // Filter categories to show content based on selection
     const activeData = useMemo(() => {
-        return categories.find(cat => (cat.id || cat._id) === selectedCategory);
-    }, [categories, selectedCategory]);
+        return sourceCategories.find(cat => String(cat.id || cat._id) === String(selectedCategory));
+    }, [sourceCategories, selectedCategory]);
+    const activeSubCategoryThumbs = useMemo(() => {
+        return (activeData?.subCategories || []).map((sub, index) => ({
+            key: sub._id || sub.id || `${sub.name}-${index}`,
+            src: toThumbnailSrc(sub?.image, 140)
+        }));
+    }, [activeData]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const thumbs = activeSubCategoryThumbs.filter((item) => item.src);
+
+        if (thumbs.length === 0) {
+            setSubCategoryBatchLoaded(true);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        setSubCategoryBatchLoaded(false);
+
+        Promise.all(
+            thumbs.map((item) => new Promise((resolve) => {
+                const img = new Image();
+                img.decoding = 'async';
+                img.loading = 'eager';
+                img.fetchPriority = 'high';
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+                img.src = item.src;
+            }))
+        ).then(() => {
+            if (!cancelled) setSubCategoryBatchLoaded(true);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedCategory, activeSubCategoryThumbs]);
+
+    useEffect(() => {
+        if (displayCategories.length === 0) return;
+
+        const schedule = (work) => {
+            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+                return window.requestIdleCallback(work, { timeout: 1200 });
+            }
+            return setTimeout(work, 120);
+        };
+
+        const cancel = (id) => {
+            if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+                window.cancelIdleCallback(id);
+                return;
+            }
+            clearTimeout(id);
+        };
+
+        const taskId = schedule(() => {
+            // Prefetch all sidebar category icons first.
+            displayCategories.forEach((cat) => {
+                const categoryImage = cat?.image || cat?.icon || '';
+                if (isImageSource(categoryImage)) {
+                    prefetchThumbnail(categoryImage, 96);
+                }
+            });
+
+            // Prefetch selected category subcategory thumbnails.
+            (activeData?.subCategories || []).slice(0, 18).forEach((sub) => {
+                if (sub?.image) {
+                    prefetchThumbnail(sub.image, 140);
+                }
+            });
+
+            // Warm likely-next subcategory thumbnails from remaining categories.
+            displayCategories.slice(0, 8).forEach((cat) => {
+                (cat?.subCategories || []).slice(0, 8).forEach((sub) => {
+                    if (sub?.image) {
+                        prefetchThumbnail(sub.image, 140);
+                    }
+                });
+            });
+        });
+
+        return () => cancel(taskId);
+    }, [displayCategories, activeData]);
 
     const iconMap = {
         'grid_view': MdGridView,
@@ -92,7 +239,7 @@ const AllCategories = () => {
     };
     const isImageSource = (value = '') => /^(https?:\/\/|\/|data:|blob:)/i.test(String(value || '').trim());
 
-    if (categoriesLoading) {
+    if (displayCategories.length === 0 && (categoriesLoading || headerLoading)) {
         return <AllCategoriesSkeleton />;
     }
 
@@ -127,21 +274,16 @@ const AllCategories = () => {
 
                                 <div className={`relative w-12 h-12 rounded-full flex items-center justify-center mb-1 border transition-all ${isSelected && !isForYou ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                                     {hasCategoryImage ? (
-                                        <img
+                                        <CircleImage
                                             src={categoryImage}
                                             alt={cat.name}
-                                            className="w-full h-full object-cover rounded-full"
-                                            onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                                const fallbackIcon = e.currentTarget.nextElementSibling;
-                                                if (fallbackIcon) fallbackIcon.style.display = 'block';
-                                            }}
+                                            sizeClass="w-12 h-12"
+                                            priority={isSelected}
+                                            fallback={<IconComponent className="text-2xl" />}
                                         />
-                                    ) : null}
-                                    <IconComponent
-                                        className="text-2xl"
-                                        style={{ display: hasCategoryImage ? 'none' : 'block' }}
-                                    />
+                                    ) : (
+                                        <IconComponent className="text-2xl" />
+                                    )}
                                 </div>
                                 <span className={`text-[10px] text-center font-medium leading-tight ${isSelected && !isForYou ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
                                     {cat.name}
@@ -170,11 +312,17 @@ const AllCategories = () => {
                                         className="flex flex-col items-center gap-2 cursor-pointer group"
                                     >
                                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 p-1 group-hover:border-blue-300 transition-all">
-                                            <img
-                                                src={sub.image || 'https://via.placeholder.com/150'}
-                                                alt={sub.name}
-                                                className="w-full h-full object-cover rounded-full"
-                                            />
+                                            {subCategoryBatchLoaded ? (
+                                                <CircleImage
+                                                    src={sub.image}
+                                                    alt={sub.name}
+                                                    sizeClass="w-full h-full"
+                                                    priority={index < 9}
+                                                    fallback={<div className="w-full h-full rounded-full bg-gray-200" />}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full rounded-full shimmer" />
+                                            )}
                                         </div>
                                         <span className="text-[10px] font-medium text-center text-gray-700 leading-tight group-hover:text-blue-600">
                                             {sub.name}
