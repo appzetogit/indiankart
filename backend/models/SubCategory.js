@@ -12,6 +12,7 @@ const subCategorySchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Category',
         required: true,
+        index: true,
     },
     parentSubCategory: {
         type: mongoose.Schema.Types.ObjectId,
@@ -20,7 +21,8 @@ const subCategorySchema = mongoose.Schema({
     },
     isActive: {
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     }
 }, {
     timestamps: true,

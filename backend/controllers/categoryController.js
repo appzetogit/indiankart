@@ -53,15 +53,19 @@ export const getCategories = async (req, res) => {
                 .select('id name icon active')
                 .populate({
                     path: 'subCategories',
-                    select: 'name image isActive category',
-                    options: { sort: { name: 1 } }
+                    match: { isActive: true },
+                    select: 'name isActive category' // No image here
                 })
-                .lean({ virtuals: true });
+                .lean();
         } else {
-            // Populate virtual 'subCategories' with full payload.
+            // Populate virtual 'subCategories' with minimal payload.
             categories = await Category.find(query)
-                .populate('subCategories')
-                .lean({ virtuals: true }); // Ensure virtuals are included in lean result
+                .populate({
+                    path: 'subCategories',
+                    match: { isActive: true },
+                    select: 'name isActive category' // Exclude image field
+                })
+                .lean();
         }
 
         const response = categories.map(cat => ({

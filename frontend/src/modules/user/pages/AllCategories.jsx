@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useCategories } from '../../../hooks/useData';
+import { useCategories, useSubCategoriesByCategory } from '../../../hooks/useData';
 import { useHeaderStore } from '../../admin/store/headerStore';
 import {
     MdGridView,
@@ -12,6 +12,7 @@ import {
     MdShoppingBasket,
     MdBolt
 } from 'react-icons/md';
+import API from '../../../services/api';
 
 const toThumbnailSrc = (url = '', size = 120) => {
     const src = String(url || '').trim();
@@ -36,22 +37,32 @@ const prefetchThumbnail = (url, size = 140) => {
     img.src = thumb;
 };
 
-const CircleImage = ({ src, alt, sizeClass = 'w-16 h-16', fallback = null, priority = false }) => {
+const CircleImage = ({ src, alt, sizeClass = 'w-16 h-16', fallback = null, priority = false, thumbSize = 128 }) => {
     const [loaded, setLoaded] = useState(false);
     const [errored, setErrored] = useState(false);
-    const optimizedSrc = useMemo(() => toThumbnailSrc(src, 140), [src]);
+    const imgRef = React.useRef(null);
+    const optimizedSrc = useMemo(() => toThumbnailSrc(src, thumbSize), [src, thumbSize]);
+
+    // Handle cached images that are already complete when they mount.
+    useEffect(() => {
+        if (imgRef.current?.complete && imgRef.current?.naturalWidth > 0) {
+            setLoaded(true);
+        }
+    }, [optimizedSrc]);
 
     if (!optimizedSrc || errored) {
         return fallback;
     }
 
     return (
-        <div className={`relative ${sizeClass} rounded-full overflow-hidden`}>
+        <div className={`relative ${sizeClass} rounded-full overflow-hidden bg-gray-50`}>
             {!loaded && <div className="absolute inset-0 shimmer rounded-full" />}
             <img
+                ref={imgRef}
+                key={optimizedSrc}
                 src={optimizedSrc}
                 alt={alt}
-                className={`w-full h-full object-cover rounded-full transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`w-full h-full object-cover rounded-full transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
                 loading={priority ? 'eager' : 'lazy'}
                 decoding="async"
                 fetchPriority={priority ? 'high' : 'auto'}
@@ -109,7 +120,6 @@ const AllCategories = () => {
             }));
     }, [headerCategories]);
 
-    // Prefer full categories when available; otherwise use the same source as homepage header.
     const sourceCategories = useMemo(() => {
         const activeFromCategories = (categories || []).filter(
             (cat) => cat && cat.active !== false && cat.name !== 'For You'
@@ -117,7 +127,6 @@ const AllCategories = () => {
         return activeFromCategories.length > 0 ? activeFromCategories : normalizedHeaderCategories;
     }, [categories, normalizedHeaderCategories]);
 
-    // Reorder categories to match header pinned items first
     const displayCategories = useMemo(() => {
         const allActive = sourceCategories;
         const pinned = normalizedHeaderCategories;
@@ -129,57 +138,20 @@ const AllCategories = () => {
     }, [sourceCategories, normalizedHeaderCategories]);
 
     const [selectedCategory, setSelectedCategory] = useState(null);
-    const [subCategoryBatchLoaded, setSubCategoryBatchLoaded] = useState(false);
 
-    // Update selected category when categories load
+    const activeData = useMemo(() => {
+        return sourceCategories.find(cat => String(cat.id || cat._id) === String(selectedCategory));
+    }, [sourceCategories, selectedCategory]);
+
+    // Use cached subcategories hook
+    const dbId = activeData?._id || activeData?.id;
+    const { subCategories, loading: subLoading } = useSubCategoriesByCategory(dbId);
+
     useEffect(() => {
         if (displayCategories.length > 0 && !selectedCategory) {
             setSelectedCategory(displayCategories[0]?.id || displayCategories[0]?._id);
         }
     }, [displayCategories, selectedCategory]);
-
-    // Filter categories to show content based on selection
-    const activeData = useMemo(() => {
-        return sourceCategories.find(cat => String(cat.id || cat._id) === String(selectedCategory));
-    }, [sourceCategories, selectedCategory]);
-    const activeSubCategoryThumbs = useMemo(() => {
-        return (activeData?.subCategories || []).map((sub, index) => ({
-            key: sub._id || sub.id || `${sub.name}-${index}`,
-            src: toThumbnailSrc(sub?.image, 140)
-        }));
-    }, [activeData]);
-
-    useEffect(() => {
-        let cancelled = false;
-        const thumbs = activeSubCategoryThumbs.filter((item) => item.src);
-
-        if (thumbs.length === 0) {
-            setSubCategoryBatchLoaded(true);
-            return () => {
-                cancelled = true;
-            };
-        }
-
-        setSubCategoryBatchLoaded(false);
-
-        Promise.all(
-            thumbs.map((item) => new Promise((resolve) => {
-                const img = new Image();
-                img.decoding = 'async';
-                img.loading = 'eager';
-                img.fetchPriority = 'high';
-                img.onload = () => resolve(true);
-                img.onerror = () => resolve(false);
-                img.src = item.src;
-            }))
-        ).then(() => {
-            if (!cancelled) setSubCategoryBatchLoaded(true);
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [selectedCategory, activeSubCategoryThumbs]);
 
     useEffect(() => {
         if (displayCategories.length === 0) return;
@@ -191,42 +163,29 @@ const AllCategories = () => {
             return setTimeout(work, 120);
         };
 
-        const cancel = (id) => {
-            if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-                window.cancelIdleCallback(id);
-                return;
-            }
-            clearTimeout(id);
-        };
-
         const taskId = schedule(() => {
-            // Prefetch all sidebar category icons first.
-            displayCategories.forEach((cat) => {
+            displayCategories.slice(0, 12).forEach((cat) => {
                 const categoryImage = cat?.image || cat?.icon || '';
                 if (isImageSource(categoryImage)) {
                     prefetchThumbnail(categoryImage, 96);
                 }
             });
 
-            // Prefetch selected category subcategory thumbnails.
-            (activeData?.subCategories || []).slice(0, 18).forEach((sub) => {
+            (subCategories || []).slice(0, 12).forEach((sub) => {
                 if (sub?.image) {
-                    prefetchThumbnail(sub.image, 140);
+                    prefetchThumbnail(sub.image, 128);
                 }
-            });
-
-            // Warm likely-next subcategory thumbnails from remaining categories.
-            displayCategories.slice(0, 8).forEach((cat) => {
-                (cat?.subCategories || []).slice(0, 8).forEach((sub) => {
-                    if (sub?.image) {
-                        prefetchThumbnail(sub.image, 140);
-                    }
-                });
             });
         });
 
-        return () => cancel(taskId);
-    }, [displayCategories, activeData]);
+        return () => {
+            if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+                window.cancelIdleCallback(taskId);
+            } else {
+                clearTimeout(taskId);
+            }
+        };
+    }, [displayCategories, activeData, selectedCategory, subCategories]);
 
     const iconMap = {
         'grid_view': MdGridView,
@@ -245,7 +204,6 @@ const AllCategories = () => {
 
     return (
         <div className="bg-white min-h-screen flex flex-col md:pb-0">
-            {/* Header for All Categories Page - Similar to screenshot */}
             <div className="bg-white sticky top-0 z-10 px-3 py-3 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <h1 className="text-lg font-bold text-gray-800">All Categories</h1>
@@ -253,7 +211,6 @@ const AllCategories = () => {
             </div>
 
             <div className="flex flex-1">
-                {/* Left Sidebar - Categories List */}
                 <div className="w-1/4 max-w-[100px] bg-gray-50 border-r border-gray-200 no-scrollbar">
                     {displayCategories.map((cat) => {
                         const IconComponent = iconMap[cat.icon] || MdGridView;
@@ -267,17 +224,17 @@ const AllCategories = () => {
                                 onClick={() => setSelectedCategory(cat.id || cat._id)}
                                 className={`flex flex-col items-center justify-center py-4 px-1 cursor-pointer relative ${isSelected ? 'bg-white' : ''}`}
                             >
-                                {/* Active Indicator Strip */}
                                 {isSelected && !isForYou && (
                                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 rounded-r-full"></div>
                                 )}
 
-                                <div className={`relative w-12 h-12 rounded-full flex items-center justify-center mb-1 border transition-all ${isSelected && !isForYou ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                                <div className={`relative w-12 h-12 rounded-full flex items-center justify-center mb-1 border transition-all ${isSelected && !isForYou ? 'bg-blue-50 text-blue-600 border-blue-200 scale-105 shadow-sm' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                                     {hasCategoryImage ? (
                                         <CircleImage
                                             src={categoryImage}
                                             alt={cat.name}
-                                            sizeClass="w-12 h-12"
+                                            sizeClass="w-full h-full"
+                                            thumbSize={96}
                                             priority={isSelected}
                                             fallback={<IconComponent className="text-2xl" />}
                                         />
@@ -285,7 +242,7 @@ const AllCategories = () => {
                                         <IconComponent className="text-2xl" />
                                     )}
                                 </div>
-                                <span className={`text-[10px] text-center font-medium leading-tight ${isSelected && !isForYou ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
+                                <span className={`text-[10px] text-center font-medium leading-tight px-1 ${isSelected && !isForYou ? 'text-blue-600 font-bold' : 'text-gray-500'}`}>
                                     {cat.name}
                                 </span>
                             </div>
@@ -293,42 +250,49 @@ const AllCategories = () => {
                     })}
                 </div>
 
-                {/* Right Content Area - Subcategories ONLY */}
                 <div className="flex-1 bg-white p-4">
                     <div className="animate-in slide-in-from-bottom-2 duration-300">
-                        {/* Subcategories Grid */}
                         <h3 className="font-bold text-gray-800 mb-3 text-sm">Shop by Category</h3>
 
-                        {activeData?.subCategories && activeData.subCategories.length > 0 ? (
+                        {subLoading && (!subCategories || subCategories.length === 0) ? (
                             <div className="grid grid-cols-3 gap-3">
-                                {activeData.subCategories.map((sub, index) => (
-                                    <div
-                                        key={index}
-                                        onClick={() =>
-                                            navigate(
-                                                `/category/${encodeURIComponent(activeData.name)}/${encodeURIComponent(sub.name)}`
-                                            )
-                                        }
-                                        className="flex flex-col items-center gap-2 cursor-pointer group"
-                                    >
-                                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 p-1 group-hover:border-blue-300 transition-all">
-                                            {subCategoryBatchLoaded ? (
+                                {Array.from({ length: 9 }).map((_, idx) => (
+                                    <div key={idx} className="flex flex-col items-center gap-2">
+                                        <div className="w-16 h-16 rounded-full shimmer" />
+                                        <div className="h-2.5 w-14 rounded shimmer" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : subCategories && subCategories.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-3">
+                                {subCategories.map((sub, index) => {
+                                    const subKey = sub._id || sub.id || `${sub.name}-${index}`;
+                                    return (
+                                        <div
+                                            key={subKey}
+                                            onClick={() =>
+                                                navigate(
+                                                    `/category/${encodeURIComponent(activeData?.name || '')}/${encodeURIComponent(sub.name)}`
+                                                )
+                                            }
+                                            className="flex flex-col items-center gap-2 cursor-pointer group animate-in fade-in zoom-in-95 duration-200"
+                                        >
+                                            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 p-1 group-hover:border-blue-300 transition-all shadow-sm">
                                                 <CircleImage
                                                     src={sub.image}
                                                     alt={sub.name}
                                                     sizeClass="w-full h-full"
+                                                    thumbSize={128}
                                                     priority={index < 9}
                                                     fallback={<div className="w-full h-full rounded-full bg-gray-200" />}
                                                 />
-                                            ) : (
-                                                <div className="w-full h-full rounded-full shimmer" />
-                                            )}
+                                            </div>
+                                            <span className="text-[10px] font-medium text-center text-gray-700 leading-tight group-hover:text-blue-600">
+                                                {sub.name}
+                                            </span>
                                         </div>
-                                        <span className="text-[10px] font-medium text-center text-gray-700 leading-tight group-hover:text-blue-600">
-                                            {sub.name}
-                                        </span>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="text-center py-10 text-gray-400 text-sm">

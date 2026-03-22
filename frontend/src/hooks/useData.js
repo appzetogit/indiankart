@@ -365,3 +365,38 @@ export const useHomeLayout = () => {
 
     return { layout, loading, error };
 };
+export const useSubCategoriesByCategory = (categoryId) => {
+    const cacheKey = `sub-categories:${categoryId}`;
+    const initialData = readCache(cacheKey) || [];
+    const [subCategories, setSubCategories] = useState(initialData);
+    const [loading, setLoading] = useState(initialData.length === 0);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        if (!categoryId) return;
+        let active = true;
+
+        const fetchSubs = async () => {
+            try {
+                const data = await getOrFetch(cacheKey, async () => {
+                    const { data } = await API.get(`/subcategories/category/${categoryId}`);
+                    return data;
+                });
+
+                if (!active) return;
+                setSubCategories(data);
+                setError(null);
+            } catch (err) {
+                if (!active) return;
+                setError(err.message);
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+
+        fetchSubs();
+        return () => { active = false; };
+    }, [categoryId]);
+
+    return { subCategories, loading, error };
+};
