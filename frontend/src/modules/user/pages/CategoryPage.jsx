@@ -39,7 +39,7 @@ const CategoryPage = () => {
     const routeSegments = String(subPath || '').split('/').filter(Boolean);
     const routeHasExplicitSubPath = routeSegments.length > 0;
     
-    const { categories, loading: categoriesLoading } = useCategories({ lite: true });
+    const { categories, loading: categoriesLoading } = useCategories({ lite: true, forceRefresh: true });
     
     const [products, setProducts] = useState([]);
     const [productsLoading, setProductsLoading] = useState(true);
@@ -291,9 +291,6 @@ const CategoryPage = () => {
                     <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
                         {isSubCategoryLandingView ? (
                             <div className="md:rounded-lg overflow-hidden relative">
-                                {subsLoading && (!detailedSubCategories || detailedSubCategories.length === 0) && (
-                                    <div className="absolute inset-x-0 top-0 h-1 bg-blue-100 overflow-hidden z-50"><div className="h-full bg-blue-600 animate-progress"></div></div>
-                                )}
                                 <SubCategoryList
                                     subCategories={gridSubCategories}
                                     categoryName={breadcrumbs[0]?.name}

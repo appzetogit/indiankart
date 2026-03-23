@@ -51,15 +51,21 @@ const CategoryList = () => {
                     <h1 className="text-xl md:text-3xl font-bold text-gray-800">
                         {isCategoryBannersPage ? 'Category Banner Management' : 'Category Management'}
                     </h1>
-                    <p className="text-xs md:text-base text-gray-500 mt-1">Only root categories are shown here.</p>
+                    <p className="text-xs md:text-base text-gray-500 mt-1">
+                        {isCategoryBannersPage
+                            ? 'Edit an existing root category to manage the banners shown on its user page.'
+                            : 'Only root categories are shown here.'}
+                    </p>
                 </div>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition text-xs md:text-base font-bold"
-                >
-                    <MdAdd size={16} className="md:w-5 md:h-5" />
-                    {isCategoryBannersPage ? 'Create Banner' : 'Add Category'}
-                </button>
+                {!isCategoryBannersPage && (
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="flex items-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition text-xs md:text-base font-bold"
+                    >
+                        <MdAdd size={16} className="md:w-5 md:h-5" />
+                        Add Category
+                    </button>
+                )}
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -72,7 +78,7 @@ const CategoryList = () => {
                     <div className="p-12 text-center text-gray-500">
                         <p>
                             {isCategoryBannersPage
-                                ? 'No banners found. Create your first banner.'
+                                ? 'No categories found. Create a category first, then edit it here to manage its banners.'
                                 : 'No categories found. Create your first category.'}
                         </p>
                     </div>

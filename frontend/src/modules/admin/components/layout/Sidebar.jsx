@@ -26,7 +26,8 @@ import {
     MdLayers,
     MdHelpCenter,
     MdViewCompact,
-    MdNotifications
+    MdNotifications,
+    MdBusinessCenter
 } from 'react-icons/md';
 
 import logo from '../../../../assets/indiankart-logo.png';
@@ -39,6 +40,7 @@ const Sidebar = () => {
         { name: 'Orders', icon: MdShoppingCart, path: '/admin/orders' },
         { name: 'Manage PIN Codes', icon: MdLocationOn, path: '/admin/pincodes' },
         { name: 'Products', icon: MdInventory, path: '/admin/products' },
+        { name: 'B2B', icon: MdBusinessCenter, path: '/admin/b2b' },
         { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
         { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
         { name: 'Category Banners', icon: MdViewCarousel, path: '/admin/category-banners' },

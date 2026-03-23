@@ -69,7 +69,7 @@ const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
                 file: null,
                 smallBanners: existingSmallBanners,
                 newSmallBannerUploads: [],
-                secondaryBannerTitle: '',
+                secondaryBannerTitle: category.secondaryBannerTitle || '',
                 secondaryBanners: Array.isArray(category.secondaryBanners)
                     ? category.secondaryBanners.map(normalizeSecondaryBannerItem).filter(Boolean)
                     : [],
@@ -92,6 +92,11 @@ const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (isBannerMode && !isEditMode) {
+            toast.error('Please edit an existing category to manage its banners');
+            return;
+        }
 
         const data = new FormData();
         const normalizedName = isBannerMode

@@ -37,6 +37,7 @@ import HeaderManager from '../pages/Settings/HeaderManager';
 import NotificationManager from '../pages/Notifications/NotificationManager';
 import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
+import B2BManager from '../pages/B2B/B2BManager';
 
 const AdminRoutes = () => {
     return (
@@ -56,6 +57,7 @@ const AdminRoutes = () => {
 
                 {/* Modules */}
                 <Route path="products" element={<ProductManager />} />
+                <Route path="b2b" element={<B2BManager />} />
                 <Route path="products/new" element={<ProductForm />} />
                 <Route path="products/edit/:id" element={<ProductForm />} />
                 <Route path="stock" element={<StockManagement />} />

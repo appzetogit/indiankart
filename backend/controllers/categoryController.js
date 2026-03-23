@@ -50,7 +50,7 @@ export const getCategories = async (req, res) => {
         let categories = [];
         if (lite) {
             categories = await Category.find(query)
-                .select('id name icon active')
+                .select('id name icon active bannerImage bannerAlt smallBanners secondaryBannerTitle secondaryBanners')
                 .populate({
                     path: 'subCategories',
                     match: { isActive: true },
@@ -196,6 +196,7 @@ export const createCategory = async (req, res) => {
             smallBanners: smallBanners.slice(0, 20),
             secondaryBannerTitle,
             secondaryBanners: secondaryBanners.slice(0, 30),
+            b2bEnabled: req.body.b2bEnabled !== undefined ? String(req.body.b2bEnabled).toLowerCase() === 'true' : false,
             active: req.body.active !== undefined ? req.body.active : true
         });
 
@@ -320,6 +321,9 @@ export const updateCategory = async (req, res) => {
             category.secondaryBannerTitle = secondaryBannerTitle;
             if (req.body.secondaryBanners !== undefined || req.files?.secondaryBanners) {
                 category.secondaryBanners = secondaryBanners.slice(0, 30);
+            }
+            if (req.body.b2bEnabled !== undefined) {
+                category.b2bEnabled = String(req.body.b2bEnabled).toLowerCase() === 'true';
             }
             if (req.body.active !== undefined) category.active = req.body.active;
 

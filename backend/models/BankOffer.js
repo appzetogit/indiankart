@@ -15,6 +15,21 @@ const bankOfferSchema = mongoose.Schema({
         required: true,
         trim: true
     },
+    partnerName: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    paymentPlatform: {
+        type: String,
+        enum: ['bank', 'phonepe', 'googlepay', 'paytm', 'upi', 'card', 'netbanking', 'wallet', 'custom'],
+        default: 'bank'
+    },
+    integrationProvider: {
+        type: String,
+        enum: ['custom', 'razorpay'],
+        default: 'custom'
+    },
     discountType: {
         type: String,
         enum: ['percentage', 'flat'],

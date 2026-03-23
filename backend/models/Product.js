@@ -72,6 +72,7 @@ const productSchema = mongoose.Schema({
     }],
     
     // Legacy fields if needed
+    b2bEnabled: { type: Boolean, default: false, index: true },
     colors: [{ type: String }], 
     sizes: [{ type: String }]
 

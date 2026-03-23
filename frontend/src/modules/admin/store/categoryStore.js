@@ -54,10 +54,8 @@ const useCategoryStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.post('/categories', categoryData);
-            set((state) => ({
-                categories: get().sortByNewestFirst([data, ...state.categories]),
-                isLoading: false
-            }));
+            await get().fetchCategories();
+            return data;
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,
@@ -71,10 +69,8 @@ const useCategoryStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.put(`/categories/${id}`, updatedData);
-            set((state) => ({
-                categories: get().sortByNewestFirst(state.categories.map((c) => (c.id === id ? data : c))),
-                isLoading: false
-            }));
+            await get().fetchCategories();
+            return data;
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,

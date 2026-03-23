@@ -120,6 +120,18 @@ export const getRazorpayConfig = async (req, res) => {
     }
 };
 
+// @desc    Get Razorpay availability for public pages
+// @route   GET /api/payments/status
+// @access  Public
+export const getRazorpayStatus = async (req, res) => {
+    try {
+        const { keyId, keySecret } = await getRazorpayCredentials();
+        return res.json({ enabled: Boolean(keyId && keySecret) });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Test Razorpay credentials
 // @route   GET /api/payments/test-credentials
 // @access  Private/Admin
