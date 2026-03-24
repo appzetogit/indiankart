@@ -114,6 +114,7 @@ const SubCategoryList = ({
                                 <img
                                     src={banner.image}
                                     alt={banner.title}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
                                         e.currentTarget.onerror = null;
@@ -130,6 +131,7 @@ const SubCategoryList = ({
                                 <img
                                     src={banner.image}
                                     alt={banner.title}
+                                    loading="lazy"
                                     className="w-full h-full object-cover"
                                     onError={(e) => {
                                         e.currentTarget.onerror = null;
@@ -153,7 +155,7 @@ const SubCategoryList = ({
                             >
                                 <div className="w-[62px] h-[62px] md:w-[108px] md:h-[108px] overflow-hidden mb-1.5">
                                     {sub.image ? (
-                                        <img src={sub.image} alt={sub.name} className="w-full h-full object-cover rounded-md" />
+                                        <img src={sub.image} alt={sub.name} loading="lazy" className="w-full h-full object-cover rounded-md" />
                                     ) : (
                                         <div className="w-full h-full bg-gray-200 rounded-md"></div>
                                     )}
@@ -188,6 +190,7 @@ const SubCategoryList = ({
                                             <img
                                                 src={banner.image}
                                                 alt={banner.title}
+                                                loading="lazy"
                                                 className={largeBannerImageClass}
                                                 onError={(e) => {
                                                     e.currentTarget.onerror = null;
@@ -210,6 +213,7 @@ const SubCategoryList = ({
                                             <img
                                                 src={banner.image}
                                                 alt={banner.title}
+                                                loading="lazy"
                                                 className={largeBannerImageClass}
                                                 onError={(e) => {
                                                     e.currentTarget.onerror = null;

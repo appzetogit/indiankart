@@ -61,6 +61,12 @@ const orderSchema = mongoose.Schema({
         discount: { type: Number, default: 0 },
         type: { type: String },
     },
+    bankOffer: {
+        offerName: { type: String },
+        bankName: { type: String },
+        discount: { type: Number, default: 0 },
+        razorpayOfferId: { type: String },
+    },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
     isDelivered: { type: Boolean, required: true, default: false },

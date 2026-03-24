@@ -38,7 +38,8 @@ const getActiveVisibilityData = async () => {
 const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
-    return 'id name brand price originalPrice discount rating image images category categoryId tags ram skus stock createdAt';
+    // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
+    return 'id name brand price originalPrice discount rating image category categoryId tags ram skus stock createdAt';
 };
 
 // @desc    Fetch all products

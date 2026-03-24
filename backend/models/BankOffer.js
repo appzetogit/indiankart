@@ -52,6 +52,10 @@ const bankOfferSchema = mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    razorpayOfferId: {
+        type: String,
+        trim: true
     }
 }, {
     timestamps: true

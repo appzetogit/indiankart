@@ -98,6 +98,8 @@ const Checkout = () => {
         minShippingOrderAmount: 0,
         maxShippingOrderAmount: 499
     });
+    const [bankOffers, setBankOffers] = useState([]);
+
 
     useEffect(() => {
         const fetchShippingSettings = async () => {
@@ -113,7 +115,17 @@ const Checkout = () => {
                 console.error('Failed to fetch shipping settings:', error);
             }
         };
+        const fetchBankOffers = async () => {
+            try {
+                const { data } = await API.get('/bank-offers/active');
+                setBankOffers((data || []).filter(o => o.isActive && o.razorpayOfferId));
+            } catch (error) {
+                console.error('Failed to fetch bank offers:', error);
+            }
+        };
+
         fetchShippingSettings();
+        fetchBankOffers();
     }, []);
 
     useEffect(() => {
@@ -392,7 +404,15 @@ const Checkout = () => {
             // Razorpay flow
             try {
                 const { data: config } = await API.get('/payments/config');
-                const { data: order } = await API.post('/payments/order', { amount: finalAmount });
+                
+                // Find the best applicable bank offer with a Razorpay ID to pass to order creation
+                const activeRazorpayOffer = bankOffers.find(o => o.razorpayOfferId);
+                const orderPayload = { amount: finalAmount };
+                if (activeRazorpayOffer) {
+                    orderPayload.offer_id = activeRazorpayOffer.razorpayOfferId;
+                }
+                
+                const { data: order } = await API.post('/payments/order', orderPayload);
                 
                 const options = {
                     key: config.keyId,
@@ -440,6 +460,7 @@ const Checkout = () => {
                     theme: {
                         color: "#2874f0"
                     },
+                    offers: bankOffers.map(o => o.razorpayOfferId),
                     modal: {
                         ondismiss: () => {
                             setIsPlacingOrder(false);
@@ -1120,6 +1141,33 @@ const Checkout = () => {
                                 </div>
                             )}
                         </div>
+
+                            {/* Bank Offers Sidebar */}
+                            {bankOffers.length > 0 && (
+                                <div className="bg-white p-4 rounded-sm shadow-sm border border-gray-100 animate-in fade-in transition-all mb-4">
+                                    <h3 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <span className="material-icons text-[16px]">account_balance</span>
+                                        Available Bank Offers
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {bankOffers.map((offer) => (
+                                            <div key={offer._id} className="group relative">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="mt-1 w-2 h-2 rounded-full bg-green-500 shrink-0 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                                                    <div className="flex-1">
+                                                        <p className="text-[12px] font-black text-gray-900 leading-tight mb-1 group-hover:text-indigo-600 transition-colors">{offer.offerName}</p>
+                                                        <p className="text-[10px] text-gray-500 line-clamp-2 leading-relaxed">{offer.description}</p>
+                                                        <div className="mt-2 inline-flex items-center gap-1 bg-indigo-50 px-2 py-0.5 rounded text-[9px] font-black text-indigo-600 uppercase tracking-tighter">
+                                                            <span className="material-icons text-[10px]">bolt</span>
+                                                            Auto-applied at checkout
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                         {/* Safe Payment Badge */}
                         <div className="flex items-center gap-3 p-4 text-xs text-gray-500 font-medium">
