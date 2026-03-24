@@ -39,7 +39,7 @@ const CategoryPage = () => {
     const routeSegments = String(subPath || '').split('/').filter(Boolean);
     const routeHasExplicitSubPath = routeSegments.length > 0;
     
-    const { categories, loading: categoriesLoading } = useCategories({ lite: true, forceRefresh: true });
+    const { categories, loading: categoriesLoading } = useCategories({ lite: true });
     
     const [products, setProducts] = useState([]);
     const [productsLoading, setProductsLoading] = useState(true);

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { optimizeImage } from '../../../../utils/imageUtils';
 
 const buildSubCategoryRoute = (categoryName, subCategoryName) => {
     const categorySegment = encodeURIComponent(String(categoryName || '').trim());
@@ -112,7 +113,7 @@ const SubCategoryList = ({
                                 className="relative overflow-hidden rounded-2xl border border-gray-200 h-[180px] md:h-[266px] min-w-[78%] md:min-w-[calc(44%-8px)] snap-start shrink-0 block"
                             >
                                 <img
-                                    src={banner.image}
+                                    src={optimizeImage(banner.image, { width: 800, quality: 'auto' })}
                                     alt={banner.title}
                                     loading="lazy"
                                     className="w-full h-full object-cover"
@@ -129,7 +130,7 @@ const SubCategoryList = ({
                                 className="relative overflow-hidden rounded-2xl border border-gray-200 h-[180px] md:h-[266px] min-w-[78%] md:min-w-[calc(44%-8px)] snap-start shrink-0"
                             >
                                 <img
-                                    src={banner.image}
+                                    src={optimizeImage(banner.image, { width: 800, quality: 'auto' })}
                                     alt={banner.title}
                                     loading="lazy"
                                     className="w-full h-full object-cover"
@@ -153,9 +154,9 @@ const SubCategoryList = ({
                                 to={buildSubCategoryRoute(categoryName, sub.targetName)}
                                 className="flex flex-col items-center text-center"
                             >
-                                <div className="w-[62px] h-[62px] md:w-[108px] md:h-[108px] overflow-hidden mb-1.5">
+                                <div className="w-[62px] h-[62px] md:w-[108px] md:h-[108px] overflow-hidden mb-1.5 transition-transform duration-300 group-hover:scale-105">
                                     {sub.image ? (
-                                        <img src={sub.image} alt={sub.name} loading="lazy" className="w-full h-full object-cover rounded-md" />
+                                        <img src={optimizeImage(sub.image, { width: 200, quality: '80' })} alt={sub.name} loading="lazy" className="w-full h-full object-cover rounded-md" />
                                     ) : (
                                         <div className="w-full h-full bg-gray-200 rounded-md"></div>
                                     )}
@@ -188,7 +189,7 @@ const SubCategoryList = ({
                                         )}
                                         <div className={largeBannerFrameClass}>
                                             <img
-                                                src={banner.image}
+                                                src={optimizeImage(banner.image, { width: 1200, quality: 'auto' })}
                                                 alt={banner.title}
                                                 loading="lazy"
                                                 className={largeBannerImageClass}
@@ -211,7 +212,7 @@ const SubCategoryList = ({
                                         )}
                                         <div className={largeBannerFrameClass}>
                                             <img
-                                                src={banner.image}
+                                                src={optimizeImage(banner.image, { width: 1200, quality: 'auto' })}
                                                 alt={banner.title}
                                                 loading="lazy"
                                                 className={largeBannerImageClass}

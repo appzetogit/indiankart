@@ -54,7 +54,7 @@ export const getCategories = async (req, res) => {
                 .populate({
                     path: 'subCategories',
                     match: { isActive: true },
-                    select: 'name isActive category' // No image here
+                    select: 'name isActive category image' // Include image for instant landing views
                 })
                 .lean();
         } else {
@@ -63,7 +63,7 @@ export const getCategories = async (req, res) => {
                 .populate({
                     path: 'subCategories',
                     match: { isActive: true },
-                    select: 'name isActive category' // Exclude image field
+                    select: 'name isActive category image' // Consistent population
                 })
                 .lean();
         }
