@@ -8,7 +8,7 @@ const getId = (item) => String(item?._id || item?.id || '');
 const getCategoryId = (sub) => String(sub?.category?._id || sub?.category || '');
 
 const SubCategoryForm = ({ subCategory, onClose }) => {
-    const { addSubCategory, updateSubCategory, isLoading, fetchSubCategories } = useSubCategoryStore();
+    const { addSubCategory, updateSubCategory, isLoading } = useSubCategoryStore();
     const { categories, fetchCategories, isLoading: isCategoriesLoading } = useCategoryStore();
 
     const [formData, setFormData] = useState({
@@ -70,15 +70,11 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setFormData((prev) => ({
-                ...prev,
-                file,
-                image: reader.result || ''
-            }));
-        };
-        reader.readAsDataURL(file);
+        setFormData((prev) => ({
+            ...prev,
+            file,
+            image: URL.createObjectURL(file)
+        }));
     };
 
     const handleSubmit = async (e) => {
@@ -89,12 +85,16 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
             return;
         }
 
-        const data = {
-            name: formData.name,
-            category: formData.category,
-            isActive: formData.isActive,
-            image: formData.image
-        };
+        const data = new FormData();
+        data.append('name', formData.name);
+        data.append('category', formData.category);
+        data.append('isActive', formData.isActive);
+
+        if (formData.file) {
+            data.append('image', formData.file);
+        } else if (formData.image && !formData.image.startsWith('blob:')) {
+            data.append('image', formData.image);
+        }
 
         try {
             const ok = subCategory?._id || subCategory?.id

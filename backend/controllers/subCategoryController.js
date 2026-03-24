@@ -1,5 +1,6 @@
 import SubCategory from '../models/SubCategory.js';
 import Category from '../models/Category.js';
+import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
@@ -10,7 +11,9 @@ const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
 export const getSubCategories = async (req, res) => {
     try {
         const subCategories = await SubCategory.find({})
-            .populate('category', 'name');
+            .populate('category', 'name')
+            .select('name category isActive createdAt')
+            .lean();
         res.json(subCategories);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -23,7 +26,9 @@ export const getSubCategories = async (req, res) => {
 export const getSubCategoriesByCategory = async (req, res) => {
     try {
         const subCategories = await SubCategory.find({ category: req.params.categoryId })
-            .populate('category', 'name');
+            .populate('category', 'name')
+            .select('name image category isActive createdAt')
+            .lean();
         res.json(subCategories);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -35,8 +40,9 @@ export const getSubCategoriesByCategory = async (req, res) => {
 // @access  Private/Admin
 export const createSubCategory = async (req, res) => {
     try {
-        const { name, category, image } = req.body;
+        const { name, category } = req.body;
         const normalizedName = name?.trim();
+        let image = req.body.image;
 
         if (!normalizedName) {
             return res.status(400).json({ message: 'Subcategory name is required' });
@@ -56,6 +62,13 @@ export const createSubCategory = async (req, res) => {
         const categoryExists = await Category.findById(category);
         if (!categoryExists) {
             return res.status(404).json({ message: 'Parent category not found' });
+        }
+
+        if (req.file) {
+            const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+                folder: 'ecom_uploads/subcategories'
+            });
+            image = uploaded.secure_url;
         }
 
         const subCategory = new SubCategory({
@@ -121,8 +134,16 @@ export const updateSubCategory = async (req, res) => {
 
             const resolvedCategory = category ?? subCategory.category;
 
+            if (req.file) {
+                const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+                    folder: 'ecom_uploads/subcategories'
+                });
+                subCategory.image = uploaded.secure_url;
+            } else if (image !== undefined) {
+                subCategory.image = image;
+            }
+
             subCategory.name = requestedName || subCategory.name;
-            subCategory.image = image || subCategory.image;
             if (isActive !== undefined) subCategory.isActive = isActive;
             if (resolvedCategory !== undefined) subCategory.category = resolvedCategory;
             subCategory.parentSubCategory = null;

@@ -13,8 +13,8 @@ const getRazorpayCredentials = async () => {
 // @route   POST /api/payments/order
 // @access  Private
 export const createRazorpayOrder = async (req, res) => {
-    const { amount } = req.body;
-    console.log(`Processing Razorpay order request - Amount: Rs ${amount}`);
+    const { amount, offer_id } = req.body;
+    console.log(`Processing Razorpay order request - Amount: Rs ${amount}, Offer ID: ${offer_id || 'none'}`);
 
     try {
         const { keyId, keySecret } = await getRazorpayCredentials();
@@ -39,6 +39,12 @@ export const createRazorpayOrder = async (req, res) => {
             currency: 'INR',
             receipt: `receipt_${Date.now()}`,
         };
+
+        // If a Razorpay offer_id is provided, attach it to the order
+        // Razorpay will validate the offer and auto-apply the discount during checkout
+        if (offer_id && typeof offer_id === 'string' && offer_id.startsWith('offer_')) {
+            options.offer_id = offer_id;
+        }
 
         const order = await instance.orders.create(options);
 

@@ -50,6 +50,21 @@ const useCategoryStore = create((set, get) => ({
         }
     },
 
+    fetchCategoryById: async (id) => {
+        set({ isLoading: true });
+        try {
+            const { data } = await API.get(`/categories/${id}`);
+            set({ isLoading: false });
+            return data;
+        } catch (error) {
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
+            });
+            throw error;
+        }
+    },
+
     addCategory: async (categoryData) => {
         set({ isLoading: true });
         try {

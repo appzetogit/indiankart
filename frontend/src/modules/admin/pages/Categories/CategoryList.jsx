@@ -10,7 +10,14 @@ const CategoryList = () => {
     const location = useLocation();
     const isCategoryBannersPage = location.pathname === '/admin/category-banners';
     const entityLabel = isCategoryBannersPage ? 'Banner' : 'Category';
-    const { categories, deleteCategory, toggleCategoryStatus, fetchCategories } = useCategoryStore();
+    
+    const categories = useCategoryStore((state) => state.categories);
+    const fetchCategories = useCategoryStore((state) => state.fetchCategories);
+    const deleteCategory = useCategoryStore((state) => state.deleteCategory);
+    const toggleCategoryStatus = useCategoryStore((state) => state.toggleCategoryStatus);
+    const isLoading = useCategoryStore((state) => state.isLoading);
+    const error = useCategoryStore((state) => state.error);
+
     const [showForm, setShowForm] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -74,7 +81,23 @@ const CategoryList = () => {
                     <p className="text-xs text-gray-500 mt-1">Newest categories appear at the top.</p>
                 </div>
 
-                {categories.length === 0 ? (
+                {isLoading ? (
+                    <div className="p-12 text-center">
+                        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-gray-500 font-medium">Loading categories...</p>
+                    </div>
+                ) : error ? (
+                    <div className="p-12 text-center text-red-500">
+                        <p className="font-bold">Error loading categories</p>
+                        <p className="text-sm mt-1">{error}</p>
+                        <button 
+                            onClick={() => fetchCategories()}
+                            className="mt-4 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition text-sm font-semibold"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                ) : categories.length === 0 ? (
                     <div className="p-12 text-center text-gray-500">
                         <p>
                             {isCategoryBannersPage

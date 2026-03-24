@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useProducts } from '../../../hooks/useData';
+import { useProducts, useCategories } from '../../../hooks/useData';
 import ProductCard from '../components/product/ProductCard';
 import { MdArrowBack, MdFilterList, MdSort, MdClose, MdExpandMore } from 'react-icons/md';
 
@@ -10,7 +10,7 @@ const ProductListingPage = () => {
     const category = searchParams.get('category');
     const subcategory = searchParams.get('subcategory');
     const title = searchParams.get('title'); // Support Custom Title via Query Param
-    const { products, loading: productsLoading } = useProducts();
+    const { products, loading: productsLoading } = useProducts({ lite: true });
     const [filteredProducts, setFilteredProducts] = useState([]);
     const [sortedProducts, setSortedProducts] = useState([]);
     const [showSortModal, setShowSortModal] = useState(false);
@@ -21,6 +21,23 @@ const ProductListingPage = () => {
     const [selectedRam, setSelectedRam] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+    const { categories } = useCategories({ lite: true });
+
+    useEffect(() => {
+        if (!subcategory || category || !categories.length) return;
+
+        // Attempt to find which root category this subcategory belongs to
+        for (const cat of categories) {
+            const hasSub = cat.children?.some(
+                sub => (sub.name || '').toLowerCase() === subcategory.toLowerCase()
+            );
+            if (hasSub) {
+                // Redirect to the richer category page
+                navigate(`/category/${encodeURIComponent(cat.name)}/${encodeURIComponent(subcategory)}`, { replace: true });
+                return;
+            }
+        }
+    }, [subcategory, category, categories, navigate]);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -184,7 +201,7 @@ const ProductListingPage = () => {
                     </div>
                 ) : sortedProducts.length > 0 ? (
                     sortedProducts.map(product => (
-                        <ProductCard key={product.id} product={product} />
+                        <ProductCard key={product.id || product._id} product={product} />
                     ))
                 ) : (
                     <div className="col-span-full text-center py-20">

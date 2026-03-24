@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 import { prefetchProductById } from '../../../../hooks/useData';
+import { optimizeImage } from '../../../../utils/imageUtils';
 
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
@@ -25,11 +26,11 @@ const ProductCard = ({ product, footerText }) => {
     const adText = useGoogleTranslation('AD');
 
     const handleNavigate = () => {
-        navigate(`/product/${product.id}`);
+        navigate(`/product/${product.id || product._id}`);
     };
 
     const prefetchDetails = () => {
-        prefetchProductById(product.id);
+        prefetchProductById(product.id || product._id);
     };
 
     // Variant Price Logic: Use first variant's price if available
@@ -61,7 +62,7 @@ const ProductCard = ({ product, footerText }) => {
                     alt={product.name}
                     loading="lazy"
                     className="w-full h-full object-contain p-2 group-hover/card:scale-105 transition-transform duration-500"
-                    src={product.image}
+                    src={optimizeImage(product.image, { width: 400, quality: 'auto' })}
                     onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';

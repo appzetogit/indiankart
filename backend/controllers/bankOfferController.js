@@ -21,7 +21,8 @@ const createBankOffer = async (req, res) => {
         isUniversal,
         applicableCategories,
         applicableSubCategories,
-        applicableProducts
+        applicableProducts,
+        razorpayOfferId
     } = req.body;
 
     if (!offerName || !bankName || !discountValue) {
@@ -42,7 +43,8 @@ const createBankOffer = async (req, res) => {
         isUniversal: isUniversal || false,
         applicableCategories: applicableCategories || [],
         applicableSubCategories: applicableSubCategories || [],
-        applicableProducts: applicableProducts || []
+        applicableProducts: applicableProducts || [],
+        razorpayOfferId: razorpayOfferId || ''
     });
 
     if (bankOffer) {
@@ -86,6 +88,21 @@ const updateBankOfferStatus = async (req, res) => {
         res.json(updatedOffer);
     } else {
         res.status(404).json({ message: 'Offer not found' });
+    }
+};
+
+// @desc    Get all active bank offers (public, for checkout/product display)
+// @route   GET /api/bank-offers/active
+// @access  Public
+const getActiveBankOffers = async (req, res) => {
+    try {
+        const offers = await BankOffer.find({ isActive: true })
+            .select('offerName description bankName discountType discountValue razorpayOfferId isUniversal applicableCategories applicableSubCategories applicableProducts')
+            .sort({ createdAt: -1 });
+        res.json(offers);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
     }
 };
 
@@ -159,6 +176,7 @@ const getBankOffersForProduct = async (req, res) => {
 export {
     createBankOffer,
     getBankOffers,
+    getActiveBankOffers,
     deleteBankOffer,
     updateBankOfferStatus,
     getBankOffersForProduct

@@ -8,10 +8,15 @@ const getCategoryId = (sub) => String(sub?.category?._id || sub?.category || 'un
 const getCategoryName = (sub) => sub?.category?.name || 'Unassigned';
 
 const SubCategoryList = () => {
-    const { subCategories, deleteSubCategory, fetchSubCategories, isLoading } = useSubCategoryStore();
+    const subCategories = useSubCategoryStore((state) => state.subCategories);
+    const deleteSubCategory = useSubCategoryStore((state) => state.deleteSubCategory);
+    const fetchSubCategories = useSubCategoryStore((state) => state.fetchSubCategories);
+    const isLoading = useSubCategoryStore((state) => state.isLoading);
+
     const [showForm, setShowForm] = useState(false);
     const [editingSubCategory, setEditingSubCategory] = useState(null);
     const [expandedCategoryId, setExpandedCategoryId] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetchSubCategories();
@@ -42,9 +47,17 @@ const SubCategoryList = () => {
     };
 
     const categoryGroups = useMemo(() => {
+        const filtered = (subCategories || []).filter(sub => {
+            const search = searchTerm.toLowerCase();
+            return (
+                sub.name?.toLowerCase().includes(search) || 
+                getCategoryName(sub).toLowerCase().includes(search)
+            );
+        });
+
         const byCategory = new Map();
 
-        for (const sub of subCategories || []) {
+        for (const sub of filtered) {
             const categoryId = getCategoryId(sub);
             const categoryName = getCategoryName(sub);
             if (!byCategory.has(categoryId)) {
@@ -59,7 +72,7 @@ const SubCategoryList = () => {
                 ...group,
                 items: [...group.items].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
             }));
-    }, [subCategories]);
+    }, [subCategories, searchTerm]);
 
     return (
         <div className="space-y-6">
@@ -68,13 +81,24 @@ const SubCategoryList = () => {
                     <h1 className="text-3xl font-bold text-gray-800">SubCategories</h1>
                     <p className="text-gray-500 mt-1">Each subcategory belongs directly to one category (no nested hierarchy).</p>
                 </div>
-                <button
-                    onClick={() => setShowForm(true)}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-                >
-                    <MdAdd size={20} />
-                    Add SubCategory
-                </button>
+                <div className="flex items-center gap-4">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Search subcategories..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 text-sm"
+                        />
+                    </div>
+                    <button
+                        onClick={() => setShowForm(true)}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                    >
+                        <MdAdd size={20} />
+                        Add SubCategory
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

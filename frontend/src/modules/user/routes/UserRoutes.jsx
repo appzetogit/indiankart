@@ -33,6 +33,7 @@ const UserRoutes = () => {
             <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="products" element={<ProductListingPage />} />
+                <Route path="search" element={<ProductListingPage />} />
                 <Route path="play" element={<Play />} />
                 <Route path="account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                 <Route path="settings" element={<ProtectedRoute><ProfileSettings /></ProtectedRoute>} />
