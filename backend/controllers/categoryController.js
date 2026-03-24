@@ -48,22 +48,25 @@ export const getCategories = async (req, res) => {
         const lite = req.query.lite === 'true' || req.query.lite === '1';
 
         let categories = [];
+        const baseProjection = 'id name icon bannerImage bannerAlt smallBanners secondaryBannerTitle secondaryBanners active createdAt';
+        
         if (lite) {
             categories = await Category.find(query)
-                .select('id name icon active bannerImage bannerAlt smallBanners secondaryBannerTitle secondaryBanners')
+                .select(baseProjection)
                 .populate({
                     path: 'subCategories',
                     match: { isActive: true },
-                    select: 'name isActive category image' // Include image for instant landing views
+                    select: 'id name isActive category'
                 })
                 .lean();
         } else {
-            // Populate virtual 'subCategories' with minimal payload.
+            // For admin/others, we still want subcategories but maybe not the full banner arrays if they're huge
             categories = await Category.find(query)
+                .select(`${baseProjection} b2bEnabled`)
                 .populate({
                     path: 'subCategories',
                     match: { isActive: true },
-                    select: 'name isActive category image' // Consistent population
+                    select: 'name isActive category' // Exclude image from subcaps to keep list lite
                 })
                 .lean();
         }
@@ -78,6 +81,24 @@ export const getCategories = async (req, res) => {
         }));
 
         res.json(response);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get single category by ID
+// @route   GET /api/categories/:id
+// @access  Public
+export const getCategoryById = async (req, res) => {
+    try {
+        const category = await Category.findOne({ id: req.params.id })
+            .populate('subCategories')
+            .lean();
+            
+        if (!category) {
+            return res.status(404).json({ message: 'Category not found' });
+        }
+        res.json(category);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

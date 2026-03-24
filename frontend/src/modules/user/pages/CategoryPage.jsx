@@ -255,6 +255,7 @@ const CategoryPage = () => {
 
     const isSubCategoryLandingView = !routeHasExplicitSubPath && breadcrumbs.length === 1;
     const gridSubCategories = detailedSubCategories.length > 0 ? detailedSubCategories : categoryData.subCategories || [];
+    const rootCategory = breadcrumbs[0] || categoryData;
 
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
@@ -289,17 +290,20 @@ const CategoryPage = () => {
                     )}
 
                     <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
-                        {isSubCategoryLandingView ? (
-                            <div className="md:rounded-lg overflow-hidden relative">
+                        {/* Always show banners at the top of the category/subcategory view */}
+                        {(rootCategory?.smallBanners?.length > 0 || rootCategory?.secondaryBanners?.length > 0) && (
+                            <div className="md:rounded-lg overflow-hidden relative mb-4">
                                 <SubCategoryList
-                                    subCategories={gridSubCategories}
-                                    categoryName={breadcrumbs[0]?.name}
-                                    smallBanners={breadcrumbs[0]?.smallBanners || categoryData.smallBanners || []}
-                                    secondaryBannerTitle={breadcrumbs[0]?.secondaryBannerTitle || categoryData.secondaryBannerTitle || ''}
-                                    secondaryBanners={breadcrumbs[0]?.secondaryBanners || categoryData.secondaryBanners || []}
+                                    subCategories={isSubCategoryLandingView ? gridSubCategories : []}
+                                    categoryName={rootCategory.name}
+                                    smallBanners={rootCategory.smallBanners || []}
+                                    secondaryBannerTitle={rootCategory.secondaryBannerTitle || ''}
+                                    secondaryBanners={rootCategory.secondaryBanners || []}
                                 />
                             </div>
-                        ) : (
+                        )}
+
+                        {!isSubCategoryLandingView && (
                             <div className="bg-white md:rounded-lg md:shadow-sm border border-gray-100 p-3 md:p-6 min-h-[600px]">
                                 <div className="flex items-center justify-between mb-6">
                                     <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">Product List<div className="h-1.5 w-1.5 rounded-full bg-blue-600"></div></h2>

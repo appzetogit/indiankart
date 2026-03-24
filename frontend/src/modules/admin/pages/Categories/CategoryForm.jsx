@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 
 const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
-    const { addCategory, updateCategory, isLoading } = useCategoryStore();
+    const { addCategory, updateCategory, isLoading, fetchCategoryById } = useCategoryStore();
     const isEditMode = Boolean(category?.id);
     const canManageBanners = isEditMode || isBannerMode;
 
@@ -19,12 +19,6 @@ const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
         secondaryBanners: [],
         newSecondaryBannerUploads: []
     });
-
-    const extractBannerImage = (banner) => {
-        if (!banner) return '';
-        if (typeof banner === 'string') return banner;
-        return banner.image || '';
-    };
 
     const normalizeSmallBannerItem = (banner) => {
         if (!banner) return null;
@@ -57,38 +51,48 @@ const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
     };
 
     useEffect(() => {
-        if (category?.id) {
-            const existingSmallBanners = Array.isArray(category.smallBanners)
-                ? category.smallBanners.map(normalizeSmallBannerItem).filter(Boolean)
-                : [];
+        const loadCategory = async () => {
+            if (category?.id) {
+                try {
+                    const fullCategory = await fetchCategoryById(category.id);
+                    const existingSmallBanners = Array.isArray(fullCategory.smallBanners)
+                        ? fullCategory.smallBanners.map(normalizeSmallBannerItem).filter(Boolean)
+                        : [];
 
-            setFormData({
-                name: category.name,
-                image: category.icon || category.image || '',
-                active: category.active,
-                file: null,
-                smallBanners: existingSmallBanners,
-                newSmallBannerUploads: [],
-                secondaryBannerTitle: category.secondaryBannerTitle || '',
-                secondaryBanners: Array.isArray(category.secondaryBanners)
-                    ? category.secondaryBanners.map(normalizeSecondaryBannerItem).filter(Boolean)
-                    : [],
-                newSecondaryBannerUploads: []
-            });
-        } else {
-            setFormData({
-                name: '',
-                image: '',
-                active: true,
-                file: null,
-                smallBanners: [],
-                newSmallBannerUploads: [],
-                secondaryBannerTitle: '',
-                secondaryBanners: [],
-                newSecondaryBannerUploads: []
-            });
-        }
-    }, [category]);
+                    setFormData({
+                        name: fullCategory.name,
+                        image: fullCategory.icon || fullCategory.image || '',
+                        active: fullCategory.active,
+                        file: null,
+                        smallBanners: existingSmallBanners,
+                        newSmallBannerUploads: [],
+                        secondaryBannerTitle: fullCategory.secondaryBannerTitle || '',
+                        secondaryBanners: Array.isArray(fullCategory.secondaryBanners)
+                            ? fullCategory.secondaryBanners.map(normalizeSecondaryBannerItem).filter(Boolean)
+                            : [],
+                        newSecondaryBannerUploads: []
+                    });
+                } catch (err) {
+                    console.error('Failed to fetch full category:', err);
+                    toast.error('Failed to load full category details');
+                }
+            } else {
+                setFormData({
+                    name: '',
+                    image: '',
+                    active: true,
+                    file: null,
+                    smallBanners: [],
+                    newSmallBannerUploads: [],
+                    secondaryBannerTitle: '',
+                    secondaryBanners: [],
+                    newSecondaryBannerUploads: []
+                });
+            }
+        };
+
+        loadCategory();
+    }, [category, fetchCategoryById]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -104,7 +108,7 @@ const CategoryForm = ({ category, onClose, isBannerMode = false }) => {
             : formData.name;
         data.append('name', normalizedName);
         data.append('active', formData.active);
-        if (isBannerMode) {
+        if (canManageBanners) {
             data.append('allowBannerData', 'true');
         }
 

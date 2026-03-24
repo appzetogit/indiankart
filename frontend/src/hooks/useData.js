@@ -115,8 +115,9 @@ export const prefetchProductById = async (id) => {
 };
 
 export const useProducts = (options = {}) => {
-    const { enabled = true } = options;
-    const initialProducts = readCache('products') || [];
+    const { enabled = true, lite = false } = options;
+    const cacheKey = lite ? 'products-lite' : 'products';
+    const initialProducts = readCache(cacheKey) || [];
     const [products, setProducts] = useState(initialProducts);
     const [loading, setLoading] = useState(enabled && initialProducts.length === 0);
     const [error, setError] = useState(null);
@@ -128,11 +129,12 @@ export const useProducts = (options = {}) => {
         }
 
         let active = true;
+        const liteQuery = lite ? '?lite=true' : '';
 
         const fetchProducts = async () => {
             try {
-                const data = await getOrFetch('products', async () => {
-                    const { data } = await API.get('/products');
+                const data = await getOrFetch(cacheKey, async () => {
+                    const { data } = await API.get(`/products${liteQuery}`);
                     return Array.isArray(data) ? data.map(normalizeProduct) : data;
                 });
 
@@ -154,7 +156,7 @@ export const useProducts = (options = {}) => {
         return () => {
             active = false;
         };
-    }, [enabled]);
+    }, [enabled, lite]);
 
     return { products, loading, error };
 };

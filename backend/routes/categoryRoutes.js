@@ -2,6 +2,7 @@ import express from 'express';
 const router = express.Router();
 import { 
     getCategories, 
+    getCategoryById,
     createCategory, 
     updateCategory, 
     deleteCategory 
@@ -24,6 +25,7 @@ router.route('/')
     );
 
 router.route('/:id')
+    .get(getCategoryById)
     .put(
         protect,
         admin,

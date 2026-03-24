@@ -26,11 +26,11 @@ const ProductCard = ({ product, footerText }) => {
     const adText = useGoogleTranslation('AD');
 
     const handleNavigate = () => {
-        navigate(`/product/${product.id}`);
+        navigate(`/product/${product.id || product._id}`);
     };
 
     const prefetchDetails = () => {
-        prefetchProductById(product.id);
+        prefetchProductById(product.id || product._id);
     };
 
     // Variant Price Logic: Use first variant's price if available
