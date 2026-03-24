@@ -428,6 +428,7 @@ const ProductDetails = () => {
     const [showFullDescription, setShowFullDescription] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [bankOffers, setBankOffers] = useState([]);
+    const [razorpayEnabled, setRazorpayEnabled] = useState(false);
 
     useEffect(() => {
         setCurrentImageIndex(0);
@@ -458,6 +459,69 @@ const ProductDetails = () => {
             clearTimeout(timer);
         };
     }, [id, product]);
+
+    useEffect(() => {
+        let active = true;
+
+        const fetchRazorpayStatus = async () => {
+            try {
+                const { data } = await API.get('/payments/status');
+                if (active) setRazorpayEnabled(Boolean(data?.enabled));
+            } catch (error) {
+                console.error('Error fetching Razorpay status', error);
+                if (active) setRazorpayEnabled(false);
+            }
+        };
+
+        fetchRazorpayStatus();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const formatOfferCurrency = (amount) => `₹${Math.round(Number(amount) || 0).toLocaleString('en-IN')}`;
+
+    const displayOffers = React.useMemo(() => (
+        bankOffers
+            .map((offer) => {
+                const currentAmount = Number(selectedPrice) || 0;
+                const minOrderValue = Number(offer?.minOrderValue) || 0;
+                const discountValue = Number(offer?.discountValue) || 0;
+                const maxDiscount = Number(offer?.maxDiscount) || 0;
+                const eligible = currentAmount >= minOrderValue;
+
+                let savings = offer?.discountType === 'flat'
+                    ? discountValue
+                    : (currentAmount * discountValue) / 100;
+
+                if (maxDiscount > 0) savings = Math.min(savings, maxDiscount);
+
+                savings = Math.max(0, Math.min(savings, currentAmount));
+                const payable = Math.max(0, currentAmount - savings);
+                const discountLabel = offer?.discountType === 'flat'
+                    ? `Flat ${formatOfferCurrency(discountValue)} off`
+                    : `${discountValue}% off${maxDiscount > 0 ? ` up to ${formatOfferCurrency(maxDiscount)}` : ''}`;
+
+                const detailParts = [
+                    offer?.offerName || '',
+                    discountLabel,
+                    eligible
+                        ? `Save ${formatOfferCurrency(savings)} on this variant`
+                        : `Valid on orders above ${formatOfferCurrency(minOrderValue)}`,
+                    eligible && savings > 0 ? `Pay only ${formatOfferCurrency(payable)}` : '',
+                    offer?.integrationProvider === 'razorpay' ? 'Applicable on Razorpay online payments' : '',
+                    offer?.description || ''
+                ].filter(Boolean);
+
+                return {
+                    type: `${offer?.partnerName || offer?.bankName || 'Bank'} ${offer?.integrationProvider === 'razorpay' ? 'Razorpay Offer' : 'Offer'}`,
+                    text: detailParts.join(' • '),
+                    eligible
+                };
+            })
+            .sort((a, b) => Number(b.eligible) - Number(a.eligible))
+    ), [bankOffers, razorpayEnabled, selectedPrice]);
 
     const offers = [
         ...bankOffers.map(offer => ({
@@ -681,7 +745,7 @@ const ProductDetails = () => {
                         {/* Offers - Desktop */}
                         <div className="mb-6 space-y-2">
                             <p className="text-sm font-bold text-gray-900 mb-2">{availableOffersText}</p>
-                            {offers.map((offer, idx) => (
+                            {displayOffers.map((offer, idx) => (
                                 <div key={idx} className="flex items-start gap-2 text-sm text-gray-700">
                                     <span className="material-icons text-[#388e3c] text-[16px] mt-0.5">local_offer</span>
                                     <div>
@@ -1124,7 +1188,7 @@ const ProductDetails = () => {
                 <div className="bg-white border-t-8 border-gray-100 px-4 py-4">
                     <h3 className="text-sm font-semibold text-gray-900 mb-3">{availableOffersText}</h3>
                     <div className="space-y-2">
-                        {offers.slice(0, 4).map((offer, idx) => (
+                        {displayOffers.slice(0, 4).map((offer, idx) => (
                             <div key={idx} className="flex gap-2 items-start text-xs text-gray-700">
                                 <span className="material-icons text-green-600 text-[16px] mt-0.5 shrink-0">local_offer</span>
                                 <div className="flex-1">

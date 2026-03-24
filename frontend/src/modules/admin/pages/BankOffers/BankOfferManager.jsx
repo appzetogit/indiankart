@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MdLocalOffer, MdDelete, MdAdd, MdCheckCircle, MdCancel } from 'react-icons/md';
 import useBankOfferStore from '../../store/bankOfferStore';
 import useCategoryStore from '../../store/categoryStore';
@@ -17,9 +17,14 @@ const BankOfferManager = () => {
         offerName: '',
         description: '',
         bankName: '',
+        partnerName: '',
+        paymentPlatform: 'bank',
+        integrationProvider: 'custom',
         discountType: 'percentage',
         discountValue: '',
-        isUniversal: true,
+        minOrderValue: '',
+        maxDiscount: '',
+        isUniversal: false,
         applicableCategories: [],
         applicableSubCategories: [],
         applicableProducts: [],
@@ -93,9 +98,14 @@ const BankOfferManager = () => {
                 offerName: '',
                 description: '',
                 bankName: '',
+                partnerName: '',
+                paymentPlatform: 'bank',
+                integrationProvider: 'custom',
                 discountType: 'percentage',
                 discountValue: '',
-                isUniversal: true,
+                minOrderValue: '',
+                maxDiscount: '',
+                isUniversal: false,
                 applicableCategories: [],
                 applicableSubCategories: [],
                 applicableProducts: [],
@@ -109,6 +119,35 @@ const BankOfferManager = () => {
         const item = list.find(i => (i._id === id || i.id === id));
         return item ? item.name : id;
     };
+
+    const platformLabelMap = {
+        bank: 'Bank',
+        phonepe: 'PhonePe',
+        googlepay: 'Google Pay',
+        paytm: 'Paytm',
+        upi: 'UPI',
+        card: 'Card',
+        netbanking: 'Net Banking',
+        wallet: 'Wallet',
+        custom: 'Custom'
+    };
+
+    const normalizedSubCategoryOptions = useMemo(() => (
+        (Array.isArray(subCategories) ? subCategories : [])
+            .map((subCategory) => {
+                const optionId = subCategory?._id || subCategory?.id;
+                const categoryName = subCategory?.category?.name || '';
+                const subCategoryName = subCategory?.name || '';
+
+                if (!optionId || !subCategoryName) return null;
+
+                return {
+                    id: optionId,
+                    label: categoryName ? `${subCategoryName} (${categoryName})` : subCategoryName
+                };
+            })
+            .filter(Boolean)
+    ), [subCategories]);
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-10">
@@ -158,6 +197,33 @@ const BankOfferManager = () => {
                             <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Offer Name</label>
                             <input type="text" name="offerName" value={formData.offerName} onChange={handleChange} required placeholder="e.g. 10% Off on HDFC" className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl outline-none text-gray-900 font-bold transition-all" />
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase">Payment Platform</label>
+                                <select name="paymentPlatform" value={formData.paymentPlatform} onChange={handleChange} className="w-full px-4 py-2 bg-gray-50 border rounded-lg outline-none text-gray-900 caret-black">
+                                    <option value="bank">Bank</option>
+                                    <option value="phonepe">PhonePe</option>
+                                    <option value="googlepay">Google Pay</option>
+                                    <option value="paytm">Paytm</option>
+                                    <option value="upi">UPI</option>
+                                    <option value="card">Card</option>
+                                    <option value="netbanking">Net Banking</option>
+                                    <option value="wallet">Wallet</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase">Integration</label>
+                                <select name="integrationProvider" value={formData.integrationProvider} onChange={handleChange} className="w-full px-4 py-2 bg-gray-50 border rounded-lg outline-none text-gray-900 caret-black">
+                                    <option value="custom">Custom / Manual</option>
+                                    <option value="razorpay">Razorpay</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase">Partner Display Name</label>
+                                <input type="text" name="partnerName" value={formData.partnerName} onChange={handleChange} placeholder="e.g. PhonePe" className="w-full px-4 py-2 bg-gray-50 border rounded-lg focus:border-purple-500 outline-none text-gray-900 caret-black placeholder:text-gray-500" />
+                            </div>
+                        </div>
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Bank Business Name</label>
                             <input type="text" name="bankName" value={formData.bankName} onChange={handleChange} required placeholder="e.g. HDFC Bank" className="w-full px-5 py-3 bg-gray-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-2xl outline-none text-gray-900 font-bold transition-all" />
@@ -199,6 +265,16 @@ const BankOfferManager = () => {
                                     <p className="text-[11px] font-black text-gray-800 mb-0.5">Auto-Applied at Checkout</p>
                                     <p className="text-[10px] text-gray-500 leading-relaxed">Razorpay's engine will validate & apply the discount in real-time when the customer pays using the eligible method.</p>
                                 </div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase">Min Order Value</label>
+                                <input type="number" name="minOrderValue" value={formData.minOrderValue} onChange={handleChange} placeholder="e.g. 5000" className="w-full px-4 py-2 bg-gray-50 border rounded-lg outline-none text-gray-900 caret-black placeholder:text-gray-500" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-gray-400 uppercase">Max Discount</label>
+                                <input type="number" name="maxDiscount" value={formData.maxDiscount} onChange={handleChange} placeholder="Optional cap" className="w-full px-4 py-2 bg-gray-50 border rounded-lg outline-none text-gray-900 caret-black placeholder:text-gray-500" />
                             </div>
                         </div>
                     </div>
@@ -320,11 +396,11 @@ const BankOfferManager = () => {
                                             className="w-full px-4 py-2.5 bg-gray-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl outline-none text-xs font-bold text-gray-900 appearance-none cursor-pointer"
                                         >
                                             <option value="">+ Add Subcategory</option>
-                                            {subCategories
-                                                .filter(s => s.name.toLowerCase().includes(subCatSearch.toLowerCase()))
-                                                .filter(s => !formData.applicableSubCategories.includes(s._id))
+                                            {normalizedSubCategoryOptions
+                                                .filter(s => s.label.toLowerCase().includes(subCatSearch.toLowerCase()))
+                                                .filter(s => !formData.applicableSubCategories.includes(s.id))
                                                 .map(s => (
-                                                    <option key={s._id} value={s._id}>{s.name}</option>
+                                                    <option key={s.id} value={s.id}>{s.label}</option>
                                                 ))
                                             }
                                         </select>
@@ -333,7 +409,7 @@ const BankOfferManager = () => {
                                     <div className="flex flex-wrap gap-2 min-h-[40px] pt-2">
                                         {formData.applicableSubCategories.map(id => (
                                             <div key={id} className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-100 rounded-full animate-in zoom-in duration-200">
-                                                <span className="text-[11px] font-black text-purple-700">{getName(subCategories, id)}</span>
+                                                <span className="text-[11px] font-black text-purple-700">{normalizedSubCategoryOptions.find(s => s.id === id)?.label || getName(subCategories, id)}</span>
                                                 <button type="button" onClick={() => handleRemoveId('applicableSubCategories', id)} className="text-purple-400 hover:text-red-500 transition-colors"><MdCancel size={16} /></button>
                                             </div>
                                         ))}
@@ -413,8 +489,10 @@ const BankOfferManager = () => {
                     <div key={offer._id} className="group bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm relative hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
                         <div className="flex justify-between items-start mb-5">
                             <div className="flex flex-col gap-1">
-                                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full uppercase tracking-widest w-fit border border-indigo-100">{offer.bankName}</span>
-                                {offer.razorpayOfferId && (
+                                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black rounded-full uppercase tracking-widest w-fit border border-indigo-100">
+                                    {offer.partnerName || platformLabelMap[offer.paymentPlatform] || offer.bankName}
+                                </span>
+                                {offer.integrationProvider === 'razorpay' && offer.razorpayOfferId && (
                                     <span className="text-[9px] font-black text-green-600 uppercase mt-1 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-full border border-green-100 w-fit">
                                         <MdCheckCircle /> Razorpay Synced
                                     </span>
@@ -433,12 +511,28 @@ const BankOfferManager = () => {
                         <h3 className="text-xl font-black text-gray-900 leading-tight mb-2 group-hover:text-indigo-600 transition-colors">{offer.offerName}</h3>
                         <p className="text-sm text-gray-500 mb-6 font-medium line-clamp-2 leading-relaxed">{offer.description || 'No description provided.'}</p>
                         
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            <span className="px-2 py-1 bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-full uppercase tracking-tight">
+                                {platformLabelMap[offer.paymentPlatform] || 'Bank'}
+                            </span>
+                            <span className="px-2 py-1 bg-blue-50 text-blue-700 text-[11px] font-semibold rounded-full uppercase tracking-tight">
+                                {offer.integrationProvider === 'razorpay' ? 'Razorpay' : 'Custom / Manual'}
+                            </span>
+                        </div>
+                        
                         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
                             <div>
                                 <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-0.5">Discount</p>
                                 <p className="font-black text-gray-900 text-lg italic">
                                     {offer.discountType === 'flat' ? '₹' + offer.discountValue : offer.discountValue + '%'} <span className="text-indigo-600 text-sm">OFF</span>
                                 </p>
+                                {(offer.minOrderValue || offer.maxDiscount) ? (
+                                    <p className="text-[11px] text-gray-500 mt-1">
+                                        {offer.minOrderValue ? `Min ₹${offer.minOrderValue}` : ''}
+                                        {offer.minOrderValue && offer.maxDiscount ? ' • ' : ''}
+                                        {offer.maxDiscount ? `Max ₹${offer.maxDiscount}` : ''}
+                                    </p>
+                                ) : null}
                             </div>
                             <div className="text-right">
                                 <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-0.5">Scope</p>

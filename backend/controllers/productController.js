@@ -392,7 +392,8 @@ export const createProduct = async (req, res) => {
             deliveryDays: Number(body.deliveryDays),
             specifications: parseJSON(body.specifications) || [],
             warranty: parseJSON(body.warranty),
-            returnPolicy: parseJSON(body.returnPolicy)
+            returnPolicy: parseJSON(body.returnPolicy),
+            b2bEnabled: body.b2bEnabled !== undefined ? String(body.b2bEnabled).toLowerCase() === 'true' : false
         });
 
 
@@ -585,6 +586,9 @@ export const updateProduct = async (req, res) => {
             if (updateData.originalPrice !== undefined) updateData.originalPrice = safeNum(updateData.originalPrice, product.originalPrice);
             if (updateData.stock !== undefined) updateData.stock = safeNum(updateData.stock, product.stock);
             if (updateData.deliveryDays !== undefined) updateData.deliveryDays = safeNum(updateData.deliveryDays, product.deliveryDays);
+            if (updateData.b2bEnabled !== undefined) {
+                updateData.b2bEnabled = String(updateData.b2bEnabled).toLowerCase() === 'true';
+            }
 
             // Fix: Cast categoryId to Number safely
             if (updateData.categoryId !== undefined) {

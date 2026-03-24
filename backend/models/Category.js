@@ -23,6 +23,7 @@ const categorySchema = mongoose.Schema({
             redirectLink: { type: String, default: '' }
         }
     ],
+    b2bEnabled: { type: Boolean, default: false, index: true },
     active: { type: Boolean, default: true, index: true },
     // subCategories removed - now using separate SubCategory model
 }, {

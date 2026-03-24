@@ -93,6 +93,7 @@ const Checkout = () => {
         shopName: '',
         gstNumber: ''
     });
+    const [retailerTypeError, setRetailerTypeError] = useState('');
     const [shippingConfig, setShippingConfig] = useState({
         shippingCharge: 40,
         minShippingOrderAmount: 0,
@@ -324,6 +325,14 @@ const Checkout = () => {
             toast.error('Please ensure a mobile number is added to your delivery address');
             return;
         }
+
+        if (retailerInfo.isRetailer === null) {
+            setRetailerTypeError('Please choose whether you are a customer or a retailer');
+            toast.error('Please choose customer or retailer before placing the order');
+            return;
+        }
+
+        setRetailerTypeError('');
 
         const normalizedShopName = retailerInfo.shopName.trim();
         const normalizedGstNumber = retailerInfo.gstNumber.replace(/\s+/g, '').toUpperCase();
@@ -711,6 +720,7 @@ const Checkout = () => {
                                         value={retailerInfo.isRetailer === null ? '' : retailerInfo.isRetailer ? 'yes' : 'no'}
                                         onChange={(e) => {
                                             const isRetailer = e.target.value === 'yes';
+                                            setRetailerTypeError('');
                                             setRetailerInfo((prev) => ({
                                                 ...prev,
                                                 isRetailer: e.target.value === '' ? null : isRetailer,
@@ -718,12 +728,19 @@ const Checkout = () => {
                                                 gstNumber: isRetailer ? prev.gstNumber : ''
                                             }));
                                         }}
-                                        className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white text-gray-900"
+                                        className={`w-full rounded-lg p-3 text-sm outline-none focus:ring-2 bg-white text-gray-900 ${
+                                            retailerTypeError
+                                                ? 'border border-red-400 focus:border-red-500 focus:ring-red-100'
+                                                : 'border border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                                        }`}
                                     >
                                         <option value="" disabled>Select business type</option>
                                         <option value="no">No, I am a customer</option>
                                         <option value="yes">Yes, I am a retailer</option>
                                     </select>
+                                    {retailerTypeError && (
+                                        <p className="mt-2 text-xs font-medium text-red-500">{retailerTypeError}</p>
+                                    )}
                                 </div>
 
                                 {retailerInfo.isRetailer && (
