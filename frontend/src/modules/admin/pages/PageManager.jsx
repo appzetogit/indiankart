@@ -1,369 +1,397 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useContentStore } from '../store/contentStore';
-import { useFooterStore } from '../store/footerStore';
-import { 
-    MdSave, 
-    MdDescription, 
-    MdAdd, 
-    MdLink, 
-    MdInsertDriveFile,
-    MdSettings
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    MdAdd,
+    MdArrowBack,
+    MdDelete,
+    MdDescription,
+    MdEdit,
+    MdLink,
+    MdOpenInNew,
+    MdSave
 } from 'react-icons/md';
+import toast from 'react-hot-toast';
 import RichTextEditor from '../components/RichTextEditor';
+import { useContentStore } from '../store/contentStore';
+
+const RESERVED_PAGE_KEYS = new Set([
+    'privacyPolicy',
+    'aboutUs',
+    'seoContent',
+    'copyright',
+    'help-center-config'
+]);
+
+const createEmptyDraft = () => ({
+    title: '',
+    pageKey: '',
+    content: '<p></p>',
+    showInMobileProfile: false
+});
+
+const sanitizePageKey = (value) => (
+    String(value || '')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+);
+
+const formatTitle = (page) => (
+    page?.title?.trim()
+        || String(page?.pageKey || '')
+            .replace(/-/g, ' ')
+            .replace(/(?:^|\s)\S/g, (char) => char.toUpperCase())
+);
+
+const buildPageHref = (pageKey) => `/info?type=dynamic&key=${pageKey}`;
 
 const PageManager = () => {
-    const { pages, updateContent, fetchPages, isLoading: isContentLoading } = useContentStore();
-    const { footerConfig, fetchFooterConfig, isLoading: isFooterLoading } = useFooterStore();
+    const { pages, fetchPages, upsertPage, deletePage, isLoading } = useContentStore();
     const [selectedPageKey, setSelectedPageKey] = useState(null);
-    const [editorContent, setEditorContent] = useState('');
-    const [isSaved, setIsSaved] = useState(false);
-    
-    const isLoading = isContentLoading || isFooterLoading;
-
-    // Modal State
-    const [showModal, setShowModal] = useState(false);
-    const [newPageTitle, setNewPageTitle] = useState('');
-    const [newPageKey, setNewPageKey] = useState('');
+    const [draft, setDraft] = useState(createEmptyDraft);
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchPages();
-        fetchFooterConfig();
-    }, [fetchPages, fetchFooterConfig]);
+    }, [fetchPages]);
 
-    // Grouping Logic
-    const { footerMappedPages, otherPages, systemPages } = useMemo(() => {
-        const systemKeys = ['privacyPolicy', 'aboutUs', 'seoContent', 'copyright'];
-        const footerLinks = [];
+    const customPages = useMemo(
+        () => pages
+            .filter((page) => !RESERVED_PAGE_KEYS.has(page.pageKey))
+            .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0)),
+        [pages]
+    );
 
-        // 1. Get all pageKeys defined in footer
-        if (footerConfig?.sections?.length) {
-            footerConfig.sections.forEach(section => {
-                (section.links || []).forEach(link => {
-                    if (link.pageKey) {
-                        footerLinks.push({
-                            pageKey: link.pageKey,
-                            label: link.label,
-                            section: section.title
-                        });
-                    }
-                });
-            });
+    const selectedPage = useMemo(
+        () => customPages.find((page) => page.pageKey === selectedPageKey) || null,
+        [customPages, selectedPageKey]
+    );
+
+    useEffect(() => {
+        if (!selectedPageKey || !selectedPage) return;
+
+        setDraft({
+            title: selectedPage.title || formatTitle(selectedPage),
+            pageKey: selectedPage.pageKey,
+            content: selectedPage.content || '<p></p>',
+            showInMobileProfile: Boolean(selectedPage.showInMobileProfile)
+        });
+    }, [selectedPage, selectedPageKey]);
+
+    useEffect(() => {
+        if (selectedPageKey && !selectedPage) {
+            setSelectedPageKey(null);
+            setDraft(createEmptyDraft());
+        }
+    }, [selectedPageKey, selectedPage]);
+
+    const startCreatingPage = () => {
+        setSelectedPageKey(null);
+        setDraft(createEmptyDraft());
+        setIsEditorOpen(true);
+    };
+
+    const startEditingPage = (page) => {
+        setSelectedPageKey(page.pageKey);
+        setDraft({
+            title: page.title || formatTitle(page),
+            pageKey: page.pageKey,
+            content: page.content || '<p></p>',
+            showInMobileProfile: Boolean(page.showInMobileProfile)
+        });
+        setIsEditorOpen(true);
+    };
+
+    const closeEditor = () => {
+        setIsEditorOpen(false);
+        setSelectedPageKey(null);
+        setDraft(createEmptyDraft());
+    };
+
+    const handleDraftChange = (field, value) => {
+        if (field === 'pageKey') {
+            setDraft((prev) => ({ ...prev, pageKey: sanitizePageKey(value) }));
+            return;
         }
 
-        // Add special bottom bar links
-        footerLinks.push({ 
-            pageKey: footerConfig?.advertisePageKey || 'advertise', 
-            label: 'Advertise', 
-            section: 'Bottom Bar' 
-        });
-        footerLinks.push({ 
-            pageKey: footerConfig?.giftCardsPageKey || 'gift-cards', 
-            label: 'Gift Cards', 
-            section: 'Bottom Bar' 
-        });
+        if (field === 'title') {
+            setDraft((prev) => {
+                const nextTitle = value;
+                const shouldSyncSlug = !selectedPageKey && (prev.pageKey.trim() === '' || prev.pageKey === sanitizePageKey(prev.title));
 
-        // Deduplicate footer links by pageKey
-        const uniqueFooterLinks = footerLinks.filter(
-            (link, index, arr) => index === arr.findIndex((l) => l.pageKey === link.pageKey)
+                return {
+                    ...prev,
+                    title: nextTitle,
+                    pageKey: shouldSyncSlug ? sanitizePageKey(nextTitle) : prev.pageKey
+                };
+            });
+            return;
+        }
+
+        setDraft((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSave = async () => {
+        const title = draft.title.trim();
+        const pageKey = sanitizePageKey(draft.pageKey);
+        const content = draft.content || '<p></p>';
+        const showInMobileProfile = Boolean(draft.showInMobileProfile);
+
+        if (!title) {
+            toast.error('Page name is required');
+            return;
+        }
+
+        if (!pageKey) {
+            toast.error('Page link is required');
+            return;
+        }
+
+        if (RESERVED_PAGE_KEYS.has(pageKey)) {
+            toast.error('This page link is reserved');
+            return;
+        }
+
+        const duplicate = customPages.find(
+            (page) => page.pageKey === pageKey && page.pageKey !== selectedPageKey
         );
 
-        // 2. Map pages to footer links
-        const mapped = uniqueFooterLinks.map(link => {
-            const pageData = pages.find(p => p.pageKey === link.pageKey);
-            return {
-                ...link,
-                exists: !!pageData,
-                _id: pageData?._id
-            };
-        });
-
-        // 3. Find other pages NOT in footer and NOT system
-        const footerKeys = uniqueFooterLinks.map(l => l.pageKey);
-        const others = pages.filter(p => !footerKeys.includes(p.pageKey) && !systemKeys.includes(p.pageKey));
-
-        // 4. System Pages
-        const systems = systemKeys.map(key => ({
-            pageKey: key,
-            label: getTitle(key),
-            exists: !!pages.find(p => p.pageKey === key)
-        }));
-
-        return { 
-            footerMappedPages: mapped, 
-            otherPages: others,
-            systemPages: systems 
-        };
-    }, [pages, footerConfig]);
-
-    useEffect(() => {
-        if (selectedPageKey === null && systemPages.length > 0) {
-            setSelectedPageKey(systemPages[0].pageKey);
+        if (duplicate) {
+            toast.error('A page with this link already exists');
+            return;
         }
-    }, [systemPages, selectedPageKey]);
 
-    useEffect(() => {
-        const page = pages.find(p => p.pageKey === selectedPageKey);
-        if (page) {
-            setEditorContent(page.content || '');
-        } else {
-            // Check if it's a footer link that doesn't exist yet
-            const footerPage = footerMappedPages.find(p => p.pageKey === selectedPageKey);
-            if (footerPage && !footerPage.exists) {
-                setEditorContent(`<h1>${footerPage.label}</h1>\n<p>Content for ${footerPage.label} goes here...</p>`);
-            } else if (selectedPageKey === 'privacyPolicy') {
-                setEditorContent(useContentStore.getState().privacyPolicy || '');
-            } else if (selectedPageKey === 'aboutUs') {
-                setEditorContent(useContentStore.getState().aboutUs || '');
-            } else if (selectedPageKey === 'seoContent') {
-                setEditorContent(useContentStore.getState().seoContent || '');
-            } else if (selectedPageKey === 'copyright') {
-                const copyrightFromStore = useContentStore.getState().pages.find(p => p.pageKey === 'copyright')?.content;
-                setEditorContent(copyrightFromStore || footerConfig?.copyrightText || '');
+        setIsSaving(true);
+
+        try {
+            await upsertPage({ pageKey, title, content, showInMobileProfile });
+
+            if (selectedPageKey && selectedPageKey !== pageKey) {
+                await deletePage(selectedPageKey);
             }
-        }
-        setIsSaved(false);
-    }, [selectedPageKey, pages, footerMappedPages]);
 
-    const handleSave = () => {
-        if (selectedPageKey) {
-            updateContent(selectedPageKey, editorContent);
-            setIsSaved(true);
-            setTimeout(() => setIsSaved(false), 2000);
+            setSelectedPageKey(pageKey);
+            setDraft({ title, pageKey, content, showInMobileProfile });
+            setIsEditorOpen(false);
+            toast.success('Page saved successfully');
+            await fetchPages();
+        } catch (error) {
+            toast.error('Failed to save page');
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleCreatePage = async (e) => {
-        e.preventDefault();
-        if (!newPageKey || !newPageTitle) return;
-        
-        const finalKey = newPageKey.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        await updateContent(finalKey, `<h1>${newPageTitle}</h1>\n<p>Start writing content for ${newPageTitle}...</p>`);
-        await fetchPages();
-        setSelectedPageKey(finalKey);
-        setShowModal(false);
-        setNewPageTitle('');
-        setNewPageKey('');
+    const handleDelete = async (page) => {
+        const confirmed = window.confirm(`Delete "${formatTitle(page)}"?`);
+        if (!confirmed) return;
+
+        setIsDeleting(true);
+
+        try {
+            await deletePage(page.pageKey);
+            if (selectedPageKey === page.pageKey) {
+                setSelectedPageKey(null);
+                setDraft(createEmptyDraft());
+            }
+            toast.success('Page deleted successfully');
+            await fetchPages();
+        } catch (error) {
+            toast.error('Failed to delete page');
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
-    function getTitle(key) {
-        if (key === 'privacyPolicy') return 'Privacy Policy';
-        if (key === 'aboutUs') return 'About Us';
-        if (key === 'seoContent') return 'SEO Footer Text';
-        if (key === 'copyright') return 'Copyright Text';
-        return key.replace(/-/g, ' ').replace(/(?:^|\s)\S/g, a => a.toUpperCase());
-    }
+    const pageHref = draft.pageKey ? buildPageHref(draft.pageKey) : '';
 
     return (
-        <div className="p-6 h-[calc(100vh-80px)] overflow-hidden flex flex-col bg-gray-50/50">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Content Management</h1>
-                    <p className="text-gray-500 text-sm font-medium">Manage text for legal pages, footer links, and SEO.</p>
-                </div>
-                <button 
-                    onClick={() => setShowModal(true)}
-                    className="bg-white text-gray-900 border border-gray-200 px-5 py-2.5 rounded-2xl font-black flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-                >
-                    <MdAdd size={20} className="text-blue-600" />
-                    Create Custom Page
-                </button>
-            </div>
+        <div className="p-6 h-full bg-gray-50/60">
+            {!isEditorOpen ? (
+                <>
+                    <div className="flex items-center justify-between gap-4 mb-6">
+                        <div>
+                            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Pages</h1>
+                            <p className="text-sm text-gray-500">See all pages here and create a new one when needed.</p>
+                        </div>
+                        <button
+                            onClick={startCreatingPage}
+                            className="px-4 py-2.5 rounded-2xl bg-blue-600 text-white font-black text-sm flex items-center gap-2 hover:bg-blue-700 transition-colors"
+                        >
+                            <MdAdd size={18} />
+                            Add Page
+                        </button>
+                    </div>
 
-            <div className="flex-1 flex gap-6 overflow-hidden">
-                {/* Sidebar List */}
-                <div className="w-80 bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-3 space-y-6">
-                        
-                        {/* System Pages */}
-                        <div className="space-y-1">
-                            <h3 className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <MdSettings /> Core Pages
-                            </h3>
-                            {systemPages.map(page => (
-                                <button
-                                    key={page.pageKey}
-                                    onClick={() => setSelectedPageKey(page.pageKey)}
-                                    className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all border ${
-                                        selectedPageKey === page.pageKey 
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' 
-                                        : 'text-gray-600 border-transparent hover:bg-gray-50'
-                                    }`}
-                                >
-                                    {page.label}
-                                </button>
-                            ))}
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900">Saved Pages</h2>
+                                <p className="text-xs text-gray-400 font-semibold mt-1">{customPages.length} page{customPages.length === 1 ? '' : 's'}</p>
+                            </div>
                         </div>
 
-                        {/* Footer Mapped Links */}
-                        <div className="space-y-1">
-                            <h3 className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                <MdLink /> Footer Links
-                            </h3>
-                            {footerMappedPages.map(page => (
-                                <button
-                                    key={page.pageKey}
-                                    onClick={() => setSelectedPageKey(page.pageKey)}
-                                    className={`w-full text-left px-4 py-3 rounded-2xl transition-all border group ${
-                                        selectedPageKey === page.pageKey 
-                                        ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' 
-                                        : 'text-gray-600 border-transparent hover:bg-gray-50'
-                                    }`}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-bold">{page.label}</span>
-                                        <span className={`text-[10px] uppercase font-bold ${selectedPageKey === page.pageKey ? 'text-blue-100' : 'text-gray-400'}`}>
-                                            Section: {page.section}
-                                        </span>
+                        <div className="p-4 space-y-3">
+                            {customPages.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-10 text-center">
+                                    <div className="w-14 h-14 rounded-full bg-white border border-gray-100 flex items-center justify-center mx-auto mb-4">
+                                        <MdDescription size={28} className="text-gray-300" />
                                     </div>
-                                </button>
-                            ))}
-                            {footerMappedPages.length === 0 && !isFooterLoading && (
-                                <p className="px-3 text-[10px] text-gray-400 italic">No dynamic links in footer.</p>
+                                    <p className="text-sm font-bold text-gray-600">No pages created yet</p>
+                                    <p className="text-xs text-gray-400 mt-1">Use Add Page to create your first custom page.</p>
+                                </div>
+                            ) : (
+                                customPages.map((page) => (
+                                    <div
+                                        key={page.pageKey}
+                                        className="rounded-2xl border border-gray-100 bg-white p-4"
+                                    >
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-black text-gray-900 truncate">
+                                                        {formatTitle(page)}
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-500 mt-1 break-all">{buildPageHref(page.pageKey)}</p>
+                                                    {page.showInMobileProfile && (
+                                                        <p className="text-[10px] font-bold text-blue-600 mt-2 uppercase tracking-wider">
+                                                            Show in mobile profile
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                    onClick={() => startEditingPage(page)}
+                                                    className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center"
+                                                    aria-label={`Edit ${formatTitle(page)}`}
+                                                >
+                                                    <MdEdit size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(page)}
+                                                    disabled={isDeleting}
+                                                    className="w-9 h-9 rounded-xl border border-red-100 text-red-500 hover:bg-red-50 flex items-center justify-center disabled:opacity-50"
+                                                    aria-label={`Delete ${formatTitle(page)}`}
+                                                >
+                                                    <MdDelete size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
                             )}
                         </div>
-
-                        {/* Other Custom Pages */}
-                        {otherPages.length > 0 && (
-                            <div className="space-y-1">
-                                <h3 className="px-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                                    <MdInsertDriveFile /> Custom Pages
-                                </h3>
-                                {otherPages.map(page => (
-                                    <button
-                                        key={page.pageKey}
-                                        onClick={() => setSelectedPageKey(page.pageKey)}
-                                        className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all border ${
-                                            selectedPageKey === page.pageKey 
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' 
-                                            : 'text-gray-600 border-transparent hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        {getTitle(page.pageKey)}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     </div>
-                </div>
-
-                {/* Editor Area */}
-                <div className="flex-1 bg-white rounded-3xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                    {selectedPageKey ? (
-                        <>
-                            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/30">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h2 className="font-black text-gray-900 text-lg">{getTitle(selectedPageKey)}</h2>
-                                        {!pages.find(p => p.pageKey === selectedPageKey) && (
-                                            <span className="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded-full ring-1 ring-amber-200">UNINITIALIZED</span>
-                                        )}
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Key: {selectedPageKey}</p>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    {isSaved && (
-                                        <span className="text-green-600 text-xs font-black flex items-center gap-1.5 animate-in fade-in slide-in-from-right-2">
-                                            <span className="material-icons text-[16px]">check_circle</span>
-                                            CHANGES SAVED
-                                        </span>
-                                    )}
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={isLoading}
-                                        className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2 shadow-xl shadow-blue-100 disabled:opacity-50"
-                                    >
-                                        <MdSave size={20} />
-                                        {isLoading ? 'SAVING...' : 'SAVE CONTENT'}
-                                    </button>
-                                </div>
+                </>
+            ) : (
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                            <button
+                                onClick={closeEditor}
+                                className="mt-0.5 w-10 h-10 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center"
+                                aria-label="Back to pages list"
+                            >
+                                <MdArrowBack size={18} />
+                            </button>
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900">
+                                    {selectedPageKey ? 'Edit Page' : 'Create Page'}
+                                </h2>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Set the page name, choose the link, and write the content below.
+                                </p>
                             </div>
-                            
-                            <div className="flex-1 p-0 relative group border-t border-gray-100">
-                                <RichTextEditor 
-                                    key={selectedPageKey}
-                                    value={editorContent}
-                                    onChange={(html) => {
-                                        setEditorContent(html);
-                                        setIsSaved(false);
-                                    }}
-                                    placeholder="Enter page content here..."
-                                />
-                                <div className="absolute bottom-6 right-6 text-[10px] font-black text-gray-300 bg-white/80 backdrop-blur-sm border border-gray-100 px-3 py-1.5 rounded-full z-10 uppercase tracking-widest pointer-events-none">
-                                    {editorContent.replace(/<[^>]*>/g, '').length} characters
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-400 flex-col gap-4">
-                            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center">
-                                <MdDescription size={40} className="text-gray-200" />
-                            </div>
-                            <p className="font-bold text-gray-400">Select a page from the list to start editing</p>
                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Create Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-[#212121]/40 z-50 flex items-center justify-center p-4 backdrop-blur-md">
-                    <form onSubmit={handleCreatePage} className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300">
-                        <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                            <h3 className="font-black text-gray-900 uppercase tracking-tight text-xl">Create Custom Page</h3>
-                            <button type="button" onClick={() => setShowModal(false)} className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all">
-                                <span className="material-icons">close</span>
+                        <div className="flex items-center gap-3">
+                            {pageHref && (
+                                <button
+                                    onClick={() => window.open(pageHref, '_blank')}
+                                    type="button"
+                                    className="px-3 py-2 rounded-xl border border-gray-200 text-gray-700 text-sm font-bold flex items-center gap-2 hover:bg-gray-50"
+                                >
+                                    <MdOpenInNew size={16} />
+                                    Open Page
+                                </button>
+                            )}
+                            <button
+                                onClick={handleSave}
+                                disabled={isSaving || isLoading}
+                                className="px-4 py-2.5 rounded-2xl bg-blue-600 text-white font-black text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-60"
+                            >
+                                <MdSave size={18} />
+                                {isSaving || isLoading ? 'Saving...' : 'Save Page'}
                             </button>
                         </div>
-                        <div className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Page Title</label>
-                                <input 
-                                    type="text" 
-                                    required
-                                    autoFocus
-                                    placeholder="e.g. Careers" 
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 outline-none focus:ring-4 focus:ring-blue-100 focus:border-blue-500 font-bold text-gray-900 transition-all translate-y-0"
-                                    value={newPageTitle}
-                                    onChange={e => {
-                                        setNewPageTitle(e.target.value);
-                                        if(!newPageKey) {
-                                            setNewPageKey(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-                                        }
-                                    }}
+                    </div>
+
+                    <div className="p-5 space-y-5">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                                    Page Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={draft.title}
+                                    onChange={(e) => handleDraftChange('title', e.target.value)}
+                                    placeholder="e.g. Careers"
+                                    className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:border-blue-500"
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Page Key (URL Segment)</label>
-                                <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-4 group focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 transition-all">
-                                    <span className="text-gray-400 text-sm font-black italic">/info?key=</span>
-                                    <input 
-                                        type="text" 
-                                        required
-                                        placeholder="careers" 
-                                        className="flex-1 bg-transparent border-none outline-none text-sm font-black text-gray-900"
-                                        value={newPageKey}
-                                        onChange={e => setNewPageKey(e.target.value)}
+                            <div>
+                                <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">
+                                    Page Link
+                                </label>
+                                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 focus-within:border-blue-500">
+                                    <MdLink size={18} className="text-gray-400 shrink-0" />
+                                    <span className="text-xs font-bold text-gray-400 shrink-0">/info?type=dynamic&key=</span>
+                                    <input
+                                        type="text"
+                                        value={draft.pageKey}
+                                        onChange={(e) => handleDraftChange('pageKey', e.target.value)}
+                                        placeholder="careers"
+                                        className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-gray-900 outline-none"
                                     />
                                 </div>
-                                <p className="text-[10px] text-gray-400 font-bold ml-1 italic">This will be the permanent ID used for development.</p>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-4">
-                            <button 
-                                type="button" 
-                                onClick={() => setShowModal(false)}
-                                className="px-6 py-3 text-sm font-black text-gray-500 hover:bg-gray-200 rounded-2xl transition-all"
-                            >
-                                CANCEL
-                            </button>
-                            <button 
-                                type="submit" 
-                                className="px-10 py-3 text-sm font-black text-white bg-blue-600 rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 active:scale-95 transition-all"
-                            >
-                                CREATE PAGE
-                            </button>
+
+                        <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-1">Open Link</p>
+                            <p className="text-sm font-semibold text-gray-700 break-all">
+                                {pageHref || 'Enter a page link to generate the page URL'}
+                            </p>
                         </div>
-                    </form>
+
+                        <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={draft.showInMobileProfile}
+                                onChange={(e) => handleDraftChange('showInMobileProfile', e.target.checked)}
+                                className="w-4 h-4 accent-blue-600"
+                            />
+                            <div>
+                                <p className="text-sm font-semibold text-gray-900">Show in mobile profile page</p>
+                                <p className="text-xs text-gray-500">This page will appear in the user mobile profile menu.</p>
+                            </div>
+                        </label>
+
+                        <div className="border border-gray-100 rounded-3xl overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                                <p className="text-sm font-black text-gray-800">Page Content</p>
+                            </div>
+                            <div className="min-h-[420px] relative">
+                                <RichTextEditor
+                                    key={selectedPageKey || 'new-page'}
+                                    value={draft.content}
+                                    onChange={(html) => handleDraftChange('content', html)}
+                                    placeholder="Write your page content here..."
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -371,4 +399,3 @@ const PageManager = () => {
 };
 
 export default PageManager;
-

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { MdAdd, MdDelete, MdContentCopy, MdRestore } from 'react-icons/md';
+import { MdAdd, MdDelete } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import { useContentStore } from '../../store/contentStore';
 
@@ -146,20 +146,16 @@ const defaultConfig = {
 const normalizeConfig = (value) => {
     if (!value || typeof value !== 'object') return defaultConfig;
 
-    const categories = Array.isArray(value.categories) ? value.categories : defaultConfig.categories;
-    const categoryMap = new Map(categories.map((cat) => [cat?.id, cat]));
-    const mergedCategories = defaultConfig.categories.map((baseCat) => categoryMap.get(baseCat.id) || baseCat);
-    const customCategories = categories.filter(
-        (cat) => cat?.id && !defaultConfig.categories.some((baseCat) => baseCat.id === cat.id)
-    );
-    const finalCategories = [...mergedCategories, ...customCategories];
+    const categories = Array.isArray(value.categories) && value.categories.length > 0
+        ? value.categories
+        : defaultConfig.categories;
 
     return {
         pageTitle: value.pageTitle || defaultConfig.pageTitle,
         pageSubtitle: value.pageSubtitle || defaultConfig.pageSubtitle,
         searchPlaceholderDesktop: value.searchPlaceholderDesktop || value.searchPlaceholder || defaultConfig.searchPlaceholderDesktop,
         searchPlaceholderMobile: value.searchPlaceholderMobile || defaultConfig.searchPlaceholderMobile,
-        categories: finalCategories.map((cat, catIdx) => ({
+        categories: categories.map((cat, catIdx) => ({
             id: cat?.id || `cat-${catIdx + 1}`,
             title: cat?.title || `Category ${catIdx + 1}`,
             icon: cat?.icon || 'help',
@@ -281,47 +277,19 @@ const HelpCenterContentManager = () => {
         }
     };
 
-    const resetDraft = () => {
-        setConfig(defaultConfig);
-        setSelectedCategoryId(defaultConfig.categories[0]?.id || '');
-        toast.success('Reset to default template');
-    };
-
-    const copyJson = async () => {
-        try {
-            await navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-            toast.success('JSON copied');
-        } catch (error) {
-            toast.error('Failed to copy JSON');
-        }
-    };
-
     return (
         <div className="space-y-6">
             <div className="flex items-start justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Help Center Content</h1>
-                    <p className="text-sm text-gray-500">Manage DB-backed config for `/info?type=dynamic&key=help-center`.</p>
                 </div>
                 <div className="flex gap-2">
-                    <button
-                        onClick={copyJson}
-                        className="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
-                    >
-                        <MdContentCopy /> Copy JSON
-                    </button>
-                    <button
-                        onClick={resetDraft}
-                        className="px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm flex items-center gap-1.5"
-                    >
-                        <MdRestore /> Reset
-                    </button>
                     <button
                         onClick={saveDraft}
                         disabled={isLoading}
                         className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold disabled:opacity-60"
                     >
-                        {isLoading ? 'Saving...' : 'Save to DB'}
+                        {isLoading ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -332,7 +300,7 @@ const HelpCenterContentManager = () => {
                     <input
                         value={config.pageTitle}
                         onChange={(e) => updateConfigField('pageTitle', e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
                     />
                 </div>
                 <div>
@@ -340,7 +308,7 @@ const HelpCenterContentManager = () => {
                     <input
                         value={config.pageSubtitle}
                         onChange={(e) => updateConfigField('pageSubtitle', e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
                     />
                 </div>
                 <div>
@@ -348,7 +316,7 @@ const HelpCenterContentManager = () => {
                     <input
                         value={config.searchPlaceholderDesktop}
                         onChange={(e) => updateConfigField('searchPlaceholderDesktop', e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
                     />
                 </div>
                 <div>
@@ -356,12 +324,12 @@ const HelpCenterContentManager = () => {
                     <input
                         value={config.searchPlaceholderMobile}
                         onChange={(e) => updateConfigField('searchPlaceholderMobile', e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
                     />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-9 gap-4">
                 <div className="lg:col-span-3 bg-white rounded-xl border border-gray-100 p-3 h-fit">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-sm font-bold text-gray-800">Categories</h2>
@@ -408,7 +376,7 @@ const HelpCenterContentManager = () => {
                                     <input
                                         value={selectedCategory.title}
                                         onChange={(e) => updateCategoryField(selectedCategory.id, 'title', e.target.value)}
-                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 placeholder:text-gray-400"
                                     />
                                 </div>
                                 <div>
@@ -417,7 +385,7 @@ const HelpCenterContentManager = () => {
                                         <select
                                             value={selectedCategory.icon}
                                             onChange={(e) => updateCategoryField(selectedCategory.id, 'icon', e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900"
                                         >
                                             {ICON_OPTIONS.map((icon) => (
                                                 <option key={icon.value} value={icon.value}>
@@ -463,14 +431,14 @@ const HelpCenterContentManager = () => {
                                                 value={faq.question}
                                                 onChange={(e) => updateFaq(selectedCategory.id, faq.id, 'question', e.target.value)}
                                                 placeholder="Question"
-                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2"
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2 bg-white text-gray-900 placeholder:text-gray-400"
                                             />
                                             <textarea
                                                 value={faq.answer}
                                                 onChange={(e) => updateFaq(selectedCategory.id, faq.id, 'answer', e.target.value)}
                                                 placeholder="Answer"
                                                 rows={4}
-                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y"
+                                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-y bg-white text-gray-900 placeholder:text-gray-400"
                                             />
                                         </div>
                                     ))}
@@ -480,25 +448,10 @@ const HelpCenterContentManager = () => {
                     )}
                 </div>
 
-                <div className="lg:col-span-3 bg-white rounded-xl border border-gray-100 p-4 h-fit">
-                    <h2 className="text-sm font-bold text-gray-800 mb-3">Preview</h2>
-                    <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                        <h3 className="text-lg font-bold text-gray-900">{config.pageTitle}</h3>
-                        <p className="text-xs text-gray-600 mt-1">{config.pageSubtitle}</p>
-                        <div className="mt-3 space-y-2">
-                            {config.categories.slice(0, 5).map((cat) => (
-                                <div key={cat.id} className="rounded-md bg-white border border-gray-200 p-2">
-                                    <p className="text-xs font-semibold text-gray-800">{cat.title}</p>
-                                    <p className="text-[10px] text-gray-500">{cat.faqs.length} FAQs</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <p className="text-[11px] text-gray-500 mt-3">
-                        Saving writes JSON to Content Pages table with key `help-center-config`.
-                    </p>
-                </div>
             </div>
+            <p className="text-[11px] text-gray-500">
+                Saving writes JSON to Content Pages table with key `help-center-config`.
+            </p>
         </div>
     );
 };

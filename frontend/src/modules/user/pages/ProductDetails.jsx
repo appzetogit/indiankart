@@ -96,7 +96,6 @@ const ProductDetails = () => {
     // Translation Hooks
     const translatedName = useGoogleTranslation(product?.name);
     // Static Text Translations
-    const homeText = useGoogleTranslation('Home');
     const addToCartText = useGoogleTranslation('Add to Cart');
     const outOfStockText = useGoogleTranslation('Out of Stock');
     const buyNowText = useGoogleTranslation('Buy Now');
@@ -573,25 +572,14 @@ const ProductDetails = () => {
             {/* DESKTOP VIEW (Visible only on md+)                           */}
             {/* ============================================================== */}
             <div className="hidden md:block max-w-[1600px] mx-auto p-6 animate-in fade-in duration-500">
-                {/* Breadcrumbs */}
-                <div className="flex items-center gap-2 text-xs text-gray-500 mb-6 font-medium">
-                    <span className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => navigate('/')}>
-                        <TranslatedText text={homeText} />
-                    </span>
-                    <span className="material-icons text-[12px] text-gray-400">chevron_right</span>
-                    <span className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => navigate(`/search?category=${product.category}`)}>
-                        <TranslatedText text={product.category} />
-                    </span>
-                    {product.subCategories && product.subCategories.length > 0 && (
-                        <>
-                            <span className="material-icons text-[12px] text-gray-400">chevron_right</span>
-                            <span className="hover:text-blue-600 cursor-pointer transition-colors" onClick={() => navigate(`/search?subcategory=${product.subCategories[0].name}`)}>
-                                <TranslatedText text={product.subCategories[0].name} />
-                            </span>
-                        </>
-                    )}
-                    <span className="material-icons text-[12px] text-gray-400">chevron_right</span>
-                    <span className="text-gray-800 font-bold truncate max-w-[600px]">{translatedName}</span>
+                <div className="flex items-center gap-3 mb-6">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="inline-flex items-center gap-2 text-sm font-bold text-gray-700 hover:text-blue-600 transition-colors"
+                    >
+                        <span className="material-icons text-[20px]">arrow_back</span>
+                        <span>Back</span>
+                    </button>
                 </div>
 
                 <div className="flex gap-10 items-start">

@@ -1,6 +1,6 @@
 import express from 'express';
 const router = express.Router();
-import { getPages, getPageByKey, updatePageContent } from '../controllers/contentPageController.js';
+import { deletePageByKey, getPages, getPageByKey, updatePageContent } from '../controllers/contentPageController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 router.route('/')
@@ -8,6 +8,7 @@ router.route('/')
     .post(protect, admin, updatePageContent); // Upsert
 
 router.route('/:key')
-    .get(getPageByKey);
+    .get(getPageByKey)
+    .delete(protect, admin, deletePageByKey);
 
 export default router;

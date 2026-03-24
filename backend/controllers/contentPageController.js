@@ -33,23 +33,49 @@ export const getPageByKey = async (req, res) => {
 // @access  Private/Admin
 export const updatePageContent = async (req, res) => {
     try {
-        const { pageKey, content } = req.body;
+        const { pageKey, title, content, showInMobileProfile } = req.body;
         
         let page = await ContentPage.findOne({ pageKey });
 
         if (page) {
+            if (typeof title === 'string') {
+                page.title = title;
+            }
+            if (typeof showInMobileProfile === 'boolean') {
+                page.showInMobileProfile = showInMobileProfile;
+            }
             page.content = content;
-            page.updatedAt = Date.now();
+            page.lastUpdated = Date.now();
             await page.save();
         } else {
             page = await ContentPage.create({
                 pageKey,
+                title: title || '',
                 content,
+                showInMobileProfile: Boolean(showInMobileProfile),
                 lastUpdated: Date.now()
             });
         }
         res.json(page);
     } catch (error) {
         res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Delete page by key
+// @route   DELETE /api/pages/:key
+// @access  Private/Admin
+export const deletePageByKey = async (req, res) => {
+    try {
+        const page = await ContentPage.findOne({ pageKey: req.params.key });
+
+        if (!page) {
+            return res.status(404).json({ message: 'Page not found' });
+        }
+
+        await page.deleteOne();
+        res.json({ message: 'Page deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };

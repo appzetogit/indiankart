@@ -48,6 +48,12 @@
   html {
     caret-color: black !important;
   }
+
+  /* Keep the admin panel in a light color scheme so browser auto-dark mode
+     does not repaint native form controls like inputs, selects, and textareas. */
+  .admin-layout {
+    color-scheme: light;
+  }
 }
 
 @utility no-scrollbar {

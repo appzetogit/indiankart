@@ -36,40 +36,60 @@ export const updateFooterConfig = async (req, res) => {
     try {
         const { 
             sections, 
+            quickLinks,
             mailAddress, 
             officeAddress, 
             cinNumber, 
             copyrightText, 
             socialLinks,
+            becomeSellerPageKey,
+            becomeSellerUrl,
             advertisePageKey,
+            advertiseUrl,
             giftCardsPageKey,
+            giftCardsUrl,
             helpCenterPageKey
+            ,
+            helpCenterUrl
         } = req.body;
 
         let config = await FooterConfig.findOne();
 
         if (config) {
             config.sections = sections;
+            config.quickLinks = quickLinks;
             config.mailAddress = mailAddress;
             config.officeAddress = officeAddress;
             config.cinNumber = cinNumber;
             config.copyrightText = copyrightText;
             config.socialLinks = socialLinks;
+            config.becomeSellerPageKey = becomeSellerPageKey;
+            config.becomeSellerUrl = becomeSellerUrl;
             config.advertisePageKey = advertisePageKey;
+            config.advertiseUrl = advertiseUrl;
             config.giftCardsPageKey = giftCardsPageKey;
+            config.giftCardsUrl = giftCardsUrl;
             config.helpCenterPageKey = helpCenterPageKey;
+            config.helpCenterUrl = helpCenterUrl;
             await config.save();
         } else {
             config = await FooterConfig.create({
                 sections,
+                quickLinks,
                 mailAddress,
                 officeAddress,
                 cinNumber,
                 copyrightText,
                 socialLinks,
+                becomeSellerPageKey,
+                becomeSellerUrl,
                 advertisePageKey,
+                advertiseUrl,
                 giftCardsPageKey,
+                giftCardsUrl,
                 helpCenterPageKey
+                ,
+                helpCenterUrl
             });
         }
 

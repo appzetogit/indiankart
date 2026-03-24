@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import {
     MdPerson, MdInventory2, MdLocationOn,
     MdFavoriteBorder,
-    MdHelpOutline, MdPolicy,
+    MdDescription, MdSupportAgent,
     MdPowerSettingsNew, MdChevronRight, MdArrowBack
 } from 'react-icons/md';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
+import { useContentStore } from '../../admin/store/contentStore';
 import toast from 'react-hot-toast';
 
 const Account = () => {
     const navigate = useNavigate();
     const { user, updateProfile, logout } = useAuthStore();
+    const { pages, fetchPages } = useContentStore();
     const [isEditing, setIsEditing] = useState(false);
 
     const currentUser = user;
@@ -49,6 +51,10 @@ const Account = () => {
             setFormData(mapProfileToFormData(currentUser));
         }
     }, [currentUser]);
+
+    useEffect(() => {
+        fetchPages();
+    }, [fetchPages]);
 
     const handleSave = async () => {
         if (passwordData.newPassword || passwordData.confirmPassword) {
@@ -94,7 +100,20 @@ const Account = () => {
         { icon: <MdPerson size={24} />, label: 'Profile Settings', sublabel: 'Update your password, profile details and more', path: '/settings', color: '#2874f0' },
         { icon: <MdLocationOn size={24} />, label: 'Addresses', sublabel: 'Add, edit, or manage your address easily', path: '/addresses', color: '#2874f0' },
         { icon: <MdFavoriteBorder size={24} />, label: 'Wishlist', sublabel: 'Shop your specially saved items from here', path: '/wishlist', color: '#2874f0' },
+        { icon: <MdSupportAgent size={24} />, label: 'Help Center', sublabel: 'Get help for orders, payments and more', path: '/info?type=dynamic&key=help-center', color: '#2874f0' },
     ];
+
+    const mobileProfilePages = (pages || [])
+        .filter((page) => page?.showInMobileProfile && page?.pageKey)
+        .map((page) => ({
+            icon: <MdDescription size={24} />,
+            label: page.title || String(page.pageKey).replace(/-/g, ' ').replace(/(?:^|\s)\S/g, (char) => char.toUpperCase()),
+            sublabel: '',
+            path: `/info?type=dynamic&key=${page.pageKey}`,
+            color: '#2874f0'
+        }));
+
+    const mobileMenuItems = [...menuItems, ...mobileProfilePages];
 
     // Filter menu items based on actual routes we have or keep existing functionality. 
     // The user asked to keep "our data".
@@ -133,6 +152,12 @@ const Account = () => {
             label: 'Wishlist',
             sublabel: 'Shop your specially saved items from here',
             path: '/wishlist'
+        },
+        {
+            icon: <MdSupportAgent className="text-[#2874f0]" size={32} />,
+            label: 'Help Center',
+            sublabel: 'Get help for orders, payments and more',
+            path: '/info?type=dynamic&key=help-center'
         }
     ];
 
@@ -141,7 +166,7 @@ const Account = () => {
             {/* Mobile View (Restored Original Layout) */}
             <div className="md:hidden max-w-3xl mx-auto pb-20">
                 {/* Profile Card */}
-                <div className="bg-white rounded-lg shadow-sm mb-4">
+                <div className="bg-white rounded-lg shadow-sm -mt-4 mb-4">
                     {/* Profile Header */}
                     <div className="p-4 border-b border-gray-100">
                         <button onClick={() => navigate('/')} className="mb-4 text-gray-600 hover:text-[#2874f0] block">
@@ -244,7 +269,7 @@ const Account = () => {
 
                     {/* Menu Items (Mobile) */}
                     <div className="divide-y divide-gray-100">
-                        {menuItems.map((item, index) => (
+                        {mobileMenuItems.map((item, index) => (
                             <div
                                 key={index}
                                 onClick={() => {
@@ -253,15 +278,11 @@ const Account = () => {
                                 }}
                                 className="flex items-center gap-4 px-4 py-4 hover:bg-gray-50 cursor-pointer transition-colors"
                             >
-                                <div
-                                    className="w-10 h-10 rounded-full flex items-center justify-center"
-                                    style={{ backgroundColor: `${item.color}15`, color: item.color }}
-                                >
-                                    {item.icon}
-                                </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                                    <p className="text-xs text-gray-500">{item.sublabel}</p>
+                                    {item.sublabel ? (
+                                        <p className="text-xs text-gray-500">{item.sublabel}</p>
+                                    ) : null}
                                 </div>
                                 <MdChevronRight size={22} className="text-gray-400" />
                             </div>

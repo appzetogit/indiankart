@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../../services/api';
 import { useAuthStore } from '../store/authStore';
-import { MdStore, MdEmail, MdPhone, MdLocationOn, MdDescription, MdBusiness, MdAssignment } from 'react-icons/md';
+import { MdStore, MdEmail, MdPhone, MdLocationOn, MdDescription, MdBusiness, MdAssignment, MdKeyboardArrowDown } from 'react-icons/md';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_REGEX = /^[6-9]\d{9}$/;
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const BUSINESS_TYPES = ['Individual', 'Partnership', 'Private Limited', 'Public Limited', 'Other'];
 
 const BecomeSeller = () => {
     const navigate = useNavigate();
@@ -49,16 +54,56 @@ const BecomeSeller = () => {
     }, [isAuthenticated, navigate]);
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        let nextValue = value;
+
+        if (name === 'businessEmail') {
+            nextValue = value.trim().toLowerCase();
+        }
+
+        if (name === 'phoneNumber') {
+            nextValue = value.replace(/\D/g, '').slice(0, 10);
+        }
+
+        if (name === 'taxId') {
+            nextValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+        }
+
+        setFormData({ ...formData, [name]: nextValue });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitting(true);
         setError(null);
 
+        const trimmedEmail = formData.businessEmail.trim().toLowerCase();
+        const normalizedPhone = formData.phoneNumber.replace(/\D/g, '');
+        const normalizedTaxId = formData.taxId.trim().toUpperCase();
+
+        if (!EMAIL_REGEX.test(trimmedEmail)) {
+            setError('Please enter a valid business email address.');
+            return;
+        }
+
+        if (!PHONE_REGEX.test(normalizedPhone)) {
+            setError('Please enter a valid 10-digit Indian mobile number.');
+            return;
+        }
+
+        if (!GSTIN_REGEX.test(normalizedTaxId)) {
+            setError('Please enter a valid 15-character GSTIN / Tax ID.');
+            return;
+        }
+
+        setSubmitting(true);
+
         try {
-            await API.post('/seller-requests', formData);
+            await API.post('/seller-requests', {
+                ...formData,
+                businessEmail: trimmedEmail,
+                phoneNumber: normalizedPhone,
+                taxId: normalizedTaxId
+            });
             setSuccess(true);
             setStatus('Pending');
         } catch (err) {
@@ -78,7 +123,7 @@ const BecomeSeller = () => {
 
     if (status === 'Pending' || success) {
         return (
-            <div className="min-h-screen pt-4 pb-12 px-4 bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen pt-2 md:pt-4 pb-12 px-4 bg-gray-50 flex items-start justify-center">
                 <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-blue-50">
                     <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <MdAssignment className="text-4xl text-blue-600" />
@@ -100,7 +145,7 @@ const BecomeSeller = () => {
 
     if (status === 'Approved') {
         return (
-            <div className="min-h-screen pt-4 pb-12 px-4 bg-gray-50 flex items-center justify-center">
+            <div className="min-h-screen pt-2 md:pt-4 pb-12 px-4 bg-gray-50 flex items-start justify-center">
                 <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-green-50">
                     <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <MdStore className="text-4xl text-green-600" />
@@ -171,6 +216,8 @@ const BecomeSeller = () => {
                                     onChange={handleChange}
                                     placeholder="e.g. contact@myshop.com"
                                     className={fieldClass}
+                                    inputMode="email"
+                                    autoComplete="email"
                                 />
                             </div>
 
@@ -185,8 +232,11 @@ const BecomeSeller = () => {
                                     name="phoneNumber"
                                     value={formData.phoneNumber}
                                     onChange={handleChange}
-                                    placeholder="e.g. +91 9876543210"
+                                    placeholder="e.g. 9876543210"
                                     className={fieldClass}
+                                    inputMode="numeric"
+                                    autoComplete="tel"
+                                    maxLength="10"
                                 />
                             </div>
 
@@ -201,8 +251,10 @@ const BecomeSeller = () => {
                                     name="taxId"
                                     value={formData.taxId}
                                     onChange={handleChange}
-                                    placeholder="Your Business Tax ID"
+                                    placeholder="e.g. 22AAAAA0000A1Z5"
                                     className={fieldClass}
+                                    autoCapitalize="characters"
+                                    maxLength="15"
                                 />
                             </div>
                         </div>
@@ -212,18 +264,19 @@ const BecomeSeller = () => {
                             <label className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
                                 <MdBusiness className="text-blue-600" /> Business Type
                             </label>
-                            <select
-                                name="businessType"
-                                value={formData.businessType}
-                                onChange={handleChange}
-                                className={`${fieldClass} appearance-none cursor-pointer`}
-                            >
-                                <option value="Individual">Individual</option>
-                                <option value="Partnership">Partnership</option>
-                                <option value="Private Limited">Private Limited</option>
-                                <option value="Public Limited">Public Limited</option>
-                                <option value="Other">Other</option>
-                            </select>
+                            <div className="relative">
+                                <select
+                                    name="businessType"
+                                    value={formData.businessType}
+                                    onChange={handleChange}
+                                    className={`${fieldClass} appearance-none cursor-pointer pr-12`}
+                                >
+                                    {BUSINESS_TYPES.map((type) => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                                <MdKeyboardArrowDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-2xl text-gray-500" />
+                            </div>
                         </div>
 
                         {/* Business Address */}

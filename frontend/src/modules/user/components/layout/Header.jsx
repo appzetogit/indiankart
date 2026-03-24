@@ -200,6 +200,7 @@ const Header = () => {
 
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
+    const isInfoPage = location.pathname.includes('/info');
     const isSpecialPage = isPDP || isCategory;
 
     const handleBackNavigation = () => {
@@ -226,7 +227,7 @@ const Header = () => {
     };
 
     return (
-        <header className={`${isPDP ? 'bg-gradient-to-b from-blue-100 to-blue-200' : 'bg-gradient-to-b from-blue-200 via-blue-100 to-blue-50'} px-3 fixed top-0 w-full left-0 right-0 z-50 shadow-[0_4px_25px_rgba(0,0,0,0.1)] border-b border-blue-200 transition-all duration-300 ${isPDP ? 'md:border-blue-100 py-1.5' : isCategory ? 'py-2 border-blue-200/50 md:border-gray-100' : 'py-0.5 md:py-0 border-blue-200/50 md:border-gray-100'}`}>
+        <header className={`${isPDP ? 'bg-gradient-to-b from-blue-100 to-blue-200' : 'bg-gradient-to-b from-blue-200 via-blue-100 to-blue-50'} px-3 fixed top-0 w-full left-0 right-0 z-50 transition-all duration-300 shadow-none ${isInfoPage ? 'border-b-0' : 'border-b border-blue-200'} ${isPDP ? 'py-1.5' : isCategory ? 'py-2' : 'py-0.5 md:py-0'} ${!isInfoPage && (isPDP ? 'md:border-blue-100' : 'border-blue-200/50 md:border-gray-100')}`}>
             <div className={`max-w-[1440px] mx-auto flex ${isPDP ? 'flex-row items-center gap-2' : 'flex-col'} md:flex-row md:items-center md:gap-8`}>
 
                 {/* Mobile Top Row: Logo (Left) + Seller Button (Right) - Hidden on mobile PDP to match single row design */}

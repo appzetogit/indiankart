@@ -14,8 +14,33 @@ const footerSectionSchema = new mongoose.Schema({
     }]
 });
 
+const footerQuickLinkSchema = new mongoose.Schema({
+    label: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    icon: {
+        type: String,
+        default: 'help'
+    },
+    pageKey: {
+        type: String,
+        default: ''
+    },
+    url: {
+        type: String,
+        default: ''
+    },
+    isExternal: {
+        type: Boolean,
+        default: false
+    }
+}, { _id: false });
+
 const footerConfigSchema = new mongoose.Schema({
     sections: [footerSectionSchema],
+    quickLinks: [footerQuickLinkSchema],
     mailAddress: {
         type: String,
         default: ''
@@ -38,9 +63,15 @@ const footerConfigSchema = new mongoose.Schema({
         youtube: String,
         instagram: String
     },
+    becomeSellerPageKey: String,
+    becomeSellerUrl: String,
     advertisePageKey: String,
+    advertiseUrl: String,
     giftCardsPageKey: String,
+    giftCardsUrl: String,
     helpCenterPageKey: String
+    ,
+    helpCenterUrl: String
 }, {
     timestamps: true
 });

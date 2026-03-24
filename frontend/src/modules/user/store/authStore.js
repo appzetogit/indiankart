@@ -127,7 +127,7 @@ export const useAuthStore = create(
     
     // Update Profile
     updateProfile: async (profileData) => {
-        set({ loading: true, error: null });
+        set({ error: null });
         try {
             const currentUser = get().user;
             const isAdmin = currentUser?.isAdmin || currentUser?.role;
@@ -136,11 +136,14 @@ export const useAuthStore = create(
             const endpoint = isAdmin ? '/admin/profile' : '/auth/profile';
             const { data } = await API.put(endpoint, profileData);
             
-            set({ user: data, loading: false });
-            return data;
+            const mergedUser = currentUser?.token
+                ? { ...data, token: currentUser.token }
+                : data;
+
+            set({ user: mergedUser, isAuthenticated: true });
+            return mergedUser;
         } catch (error) {
             set({ 
-                loading: false, 
                 error: error.response?.data?.message || 'Update failed' 
             });
             throw error;

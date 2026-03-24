@@ -244,41 +244,42 @@ const defaultHelpCenterConfig = {
     pageSubtitle: 'Hum aapki madad ke liye hamesha taiyaar hain',
     searchPlaceholderDesktop: 'Kisi bhi topic ke baare mein search karein...',
     searchPlaceholderMobile: 'Apni problem type karein...',
-    categories: defaultCategories
+    categories: []
 };
 
 const normalizeConfig = (value) => {
     if (!value || typeof value !== 'object') return defaultHelpCenterConfig;
-    const categories = Array.isArray(value.categories) ? value.categories : defaultHelpCenterConfig.categories;
-    const categoryMap = new Map(categories.map((cat) => [cat?.id, cat]));
-    const mergedCategories = defaultHelpCenterConfig.categories.map((baseCat) => categoryMap.get(baseCat.id) || baseCat);
-    const customCategories = categories.filter(
-        (cat) => cat?.id && !defaultHelpCenterConfig.categories.some((baseCat) => baseCat.id === cat.id)
-    );
-    const finalCategories = [...mergedCategories, ...customCategories];
+
+    const rawCategories = Array.isArray(value.categories) ? value.categories : [];
+    const normalizedCategories = rawCategories
+        .map((cat, catIdx) => ({
+            id: cat?.id || `cat-${catIdx + 1}`,
+            title: cat?.title || `Category ${catIdx + 1}`,
+            icon: cat?.icon || 'help',
+            desc: cat?.desc || '',
+            faqs: (Array.isArray(cat?.faqs) ? cat.faqs : [])
+                .map((faq, faqIdx) => ({
+                    question: String(faq?.question || '').trim(),
+                    answer: String(faq?.answer || '').trim(),
+                    id: faq?.id || `${cat?.id || `cat-${catIdx + 1}`}-faq-${faqIdx + 1}`
+                }))
+                .filter((faq) => faq.question || faq.answer)
+        }))
+        .filter((cat) => cat.title || cat.faqs.length > 0);
 
     return {
         pageTitle: value.pageTitle || defaultHelpCenterConfig.pageTitle,
         pageSubtitle: value.pageSubtitle || defaultHelpCenterConfig.pageSubtitle,
         searchPlaceholderDesktop: value.searchPlaceholderDesktop || value.searchPlaceholder || defaultHelpCenterConfig.searchPlaceholderDesktop,
         searchPlaceholderMobile: value.searchPlaceholderMobile || defaultHelpCenterConfig.searchPlaceholderMobile,
-        categories: finalCategories.map((cat, catIdx) => ({
-            id: cat?.id || `cat-${catIdx + 1}`,
-            title: cat?.title || `Category ${catIdx + 1}`,
-            icon: cat?.icon || 'help',
-            desc: cat?.desc || '',
-            faqs: (Array.isArray(cat?.faqs) ? cat.faqs : []).map((faq, faqIdx) => ({
-                question: faq?.question || '',
-                answer: faq?.answer || '',
-                id: faq?.id || `${cat?.id || `cat-${catIdx + 1}`}-faq-${faqIdx + 1}`
-            }))
-        }))
+        categories: normalizedCategories
     };
 };
 
 const HelpCenter = ({ embeddedInInfo = false }) => {
     const navigate = useNavigate();
     const [config, setConfig] = useState(defaultHelpCenterConfig);
+    const [isConfigLoading, setIsConfigLoading] = useState(true);
     const helpData = config.categories;
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState('all');
@@ -296,7 +297,9 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
                     setConfig(normalizeConfig(parsed));
                 }
             } catch (error) {
-                // Fallback to bundled default config when DB entry does not exist yet.
+                // Keep empty state if config is unavailable.
+            } finally {
+                setIsConfigLoading(false);
             }
         };
 
@@ -351,7 +354,7 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
         });
 
         return result;
-    }, [searchQuery, activeCategory]);
+    }, [searchQuery, activeCategory, helpData]);
 
     const getCategoryCount = (catId) => {
         const category = helpData.find(c => c.id === catId);
@@ -505,7 +508,12 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
                             </div>
 
                             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden md:rounded-md shadow-sm">
-                                {filteredFaqs.length === 0 ? (
+                                {isConfigLoading ? (
+                                    <div className="py-12 text-center">
+                                        <div className="w-8 h-8 mx-auto border-2 border-blue-100 border-t-[#2874f0] rounded-full animate-spin"></div>
+                                        <p className="text-sm text-gray-500 mt-3">Topics load ho rahe hain...</p>
+                                    </div>
+                                ) : filteredFaqs.length === 0 ? (
                                     <div className="py-12 text-center">
                                         <span className="material-icons text-4xl text-gray-300 mb-2">search_off</span>
                                         <p className="text-sm text-gray-500">Koi result nahi mila</p>
@@ -541,11 +549,6 @@ const HelpCenter = ({ embeddedInInfo = false }) => {
 
                                             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${expandedFaq === faq.id ? 'max-h-[300px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                                 <div className={`px-4 pb-4 md:px-5 md:pb-5 ${(activeCategory === 'all' || searchQuery) ? 'pl-12 md:pl-14' : ''}`}>
-                                                    {(activeCategory === 'all' || searchQuery) && (
-                                                        <span className="inline-block text-[9px] font-bold uppercase tracking-widest text-[#2874f0] bg-blue-50 px-2 py-0.5 rounded mb-2">
-                                                            {faq.categoryTitle}
-                                                        </span>
-                                                    )}
                                                     <p className="text-xs text-gray-500 leading-relaxed md:text-sm">{faq.answer}</p>
                                                 </div>
                                             </div>

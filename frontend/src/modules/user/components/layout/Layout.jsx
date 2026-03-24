@@ -52,7 +52,7 @@ const Layout = () => {
                     <Header />
                 </div>
             )}
-            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 ${isInfoPage ? 'bg-[#f1f3f6]' : 'bg-white'}
+            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 ${isInfoPage ? 'bg-white' : 'bg-white'}
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
@@ -68,7 +68,7 @@ const Layout = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.15 }}
-                        className="flex-1 flex flex-col"
+                        className={`${isInfoPage ? '' : 'flex-1'} flex flex-col`}
                     >
                         <Outlet />
                     </motion.div>

@@ -1,290 +1,694 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { FaBullhorn, FaGift, FaInfoCircle, FaLink, FaQuestionCircle, FaStar, FaStore } from 'react-icons/fa';
+import { MdAdd, MdBusiness, MdChevronLeft, MdChevronRight, MdCopyright, MdDelete, MdEdit, MdLink, MdSave, MdShare, MdSupportAgent } from 'react-icons/md';
 import { useFooterStore } from '../../store/footerStore';
 import { useContentStore } from '../../store/contentStore';
-import { MdSave, MdAdd, MdDelete, MdDragIndicator, MdLink, MdBusiness, MdCopyright } from 'react-icons/md';
-import toast from 'react-hot-toast';
+
+const RESERVED_PAGE_KEYS = new Set([
+    'privacyPolicy',
+    'aboutUs',
+    'seoContent',
+    'copyright',
+    'help-center-config'
+]);
+
+const createEmptyLink = () => ({
+    label: '',
+    pageKey: '',
+    url: '',
+    isExternal: false
+});
+
+const createEmptySection = () => ({
+    title: '',
+    links: [createEmptyLink()]
+});
+
+const createEmptyQuickLink = () => ({
+    label: '',
+    icon: 'help',
+    pageKey: '',
+    url: '',
+    isExternal: false
+});
+
+const EXTERNAL_LINK_OPTION = '__external_link__';
+const QUICK_LINK_ICONS = [
+    { value: 'seller', label: 'Seller' },
+    { value: 'advertise', label: 'Advertise' },
+    { value: 'gift', label: 'Gift' },
+    { value: 'help', label: 'Help' },
+    { value: 'support', label: 'Support' },
+    { value: 'info', label: 'Info' },
+    { value: 'star', label: 'Star' },
+    { value: 'link', label: 'Link' }
+];
+
+const QUICK_LINK_ICON_COMPONENTS = {
+    seller: FaStore,
+    advertise: FaBullhorn,
+    gift: FaGift,
+    help: FaQuestionCircle,
+    support: MdSupportAgent,
+    info: FaInfoCircle,
+    star: FaStar,
+    link: FaLink
+};
+
+const isGenericColumnTitle = (value) => /^column\s+\d+$/i.test(String(value || '').trim());
 
 const FooterManager = () => {
     const { footerConfig, fetchFooterConfig, updateFooterConfig, isLoading } = useFooterStore();
     const { pages, fetchPages } = useContentStore();
     const [config, setConfig] = useState(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [expandedQuickLinks, setExpandedQuickLinks] = useState([]);
+    const [expandedSections, setExpandedSections] = useState([]);
+    const [expandedSectionLinks, setExpandedSectionLinks] = useState([]);
 
     useEffect(() => {
         fetchFooterConfig();
-        fetchPages(); // To ensure we have page keys if needed for selection
-    }, []);
+        fetchPages();
+    }, [fetchFooterConfig, fetchPages]);
 
     useEffect(() => {
-        if (footerConfig) {
-            setConfig(JSON.parse(JSON.stringify(footerConfig)));
+        if (!footerConfig) return;
+
+        const nextConfig = JSON.parse(JSON.stringify(footerConfig));
+        nextConfig.sections = Array.isArray(nextConfig.sections) ? nextConfig.sections.slice(0, 3) : [];
+
+        while (nextConfig.sections.length < 3) {
+            nextConfig.sections.push(createEmptySection());
         }
+
+        nextConfig.sections = nextConfig.sections.map((section) => ({
+            ...section,
+            title: isGenericColumnTitle(section.title) ? '' : (section.title || '')
+        }));
+
+        nextConfig.socialLinks = {
+            facebook: '',
+            twitter: '',
+            youtube: '',
+            instagram: '',
+            ...nextConfig.socialLinks
+        };
+
+        const legacyQuickLinks = [
+            {
+                label: 'Become a Seller',
+                icon: 'seller',
+                pageKey: nextConfig.becomeSellerPageKey || '',
+                url: nextConfig.becomeSellerUrl || '',
+                isExternal: Boolean(nextConfig.becomeSellerUrl)
+            },
+            {
+                label: 'Advertise',
+                icon: 'advertise',
+                pageKey: nextConfig.advertisePageKey || '',
+                url: nextConfig.advertiseUrl || '',
+                isExternal: Boolean(nextConfig.advertiseUrl)
+            },
+            {
+                label: 'Gift Cards',
+                icon: 'gift',
+                pageKey: nextConfig.giftCardsPageKey || '',
+                url: nextConfig.giftCardsUrl || '',
+                isExternal: Boolean(nextConfig.giftCardsUrl)
+            },
+            {
+                label: 'Help Center',
+                icon: 'help',
+                pageKey: nextConfig.helpCenterPageKey || '',
+                url: nextConfig.helpCenterUrl || '',
+                isExternal: Boolean(nextConfig.helpCenterUrl)
+            }
+        ].filter((link) => link.label && (link.pageKey || link.url));
+
+        nextConfig.quickLinks = Array.isArray(nextConfig.quickLinks) && nextConfig.quickLinks.length
+            ? nextConfig.quickLinks
+            : legacyQuickLinks;
+        nextConfig.quickLinks = nextConfig.quickLinks.map((link) => ({
+            ...link,
+            isExternal: Boolean(link.isExternal || link.url)
+        }));
+        nextConfig.sections = nextConfig.sections.map((section) => ({
+            ...section,
+            links: (section.links || []).map((link) => ({
+                ...link,
+                isExternal: Boolean(link.isExternal || link.url)
+            }))
+        }));
+
+        setConfig(nextConfig);
+        setIsEditing(false);
+        setExpandedQuickLinks([]);
+        setExpandedSections([]);
+        setExpandedSectionLinks([]);
     }, [footerConfig]);
 
     const handleSave = async () => {
         try {
-            await updateFooterConfig(config);
-            toast.success('Footer configuration updated successfully');
+            const payload = {
+                ...config,
+                sections: (config.sections || []).map((section, index) => ({
+                    title: section.title?.trim() || '',
+                    links: (section.links || [])
+                        .map((link) => ({
+                            label: link.label?.trim() || '',
+                            pageKey: link.pageKey || '',
+                            url: link.url?.trim() || '',
+                            isExternal: Boolean(link.isExternal || link.url)
+                        }))
+                        .filter((link) => link.label && (link.pageKey || link.url))
+                })).filter((section) => section.title || section.links.length),
+                quickLinks: (config.quickLinks || [])
+                    .map((link) => ({
+                        label: link.label?.trim() || '',
+                        icon: link.icon || 'help',
+                        pageKey: link.pageKey || '',
+                        url: link.url?.trim() || '',
+                        isExternal: Boolean(link.isExternal || link.url)
+                    }))
+                    .filter((link) => link.label && (link.pageKey || link.url))
+            };
+
+            await updateFooterConfig(payload);
+            toast.success('Footer settings updated');
+            setIsEditing(false);
         } catch (error) {
-            toast.error('Failed to update footer');
+            toast.error('Failed to update footer settings');
         }
     };
 
-    const addSection = () => {
-        const newConfig = { ...config };
-        newConfig.sections.push({ title: 'New Section', links: [] });
-        setConfig(newConfig);
-    };
-
-    const removeSection = (index) => {
-        const newConfig = { ...config };
-        newConfig.sections.splice(index, 1);
-        setConfig(newConfig);
-    };
-
-    const addLink = (sectionIndex) => {
-        const newConfig = { ...config };
-        newConfig.sections[sectionIndex].links.push({ label: 'New Link', pageKey: '', url: '', isExternal: false });
-        setConfig(newConfig);
-    };
-
-    const removeLink = (sectionIndex, linkIndex) => {
-        const newConfig = { ...config };
-        newConfig.sections[sectionIndex].links.splice(linkIndex, 1);
-        setConfig(newConfig);
-    };
-
     const handleConfigChange = (field, value) => {
-        setConfig({ ...config, [field]: value });
+        setConfig((current) => ({ ...current, [field]: value }));
     };
 
     const handleSectionTitleChange = (index, value) => {
-        const newConfig = { ...config };
-        newConfig.sections[index].title = value;
-        setConfig(newConfig);
+        setConfig((current) => ({
+            ...current,
+            sections: current.sections.map((section, sectionIndex) =>
+                sectionIndex === index ? { ...section, title: value } : section
+            )
+        }));
     };
 
     const handleLinkChange = (sectionIndex, linkIndex, field, value) => {
-        const newConfig = { ...config };
-        newConfig.sections[sectionIndex].links[linkIndex][field] = value;
-        setConfig(newConfig);
+        setConfig((current) => ({
+            ...current,
+            sections: current.sections.map((section, currentSectionIndex) => {
+                if (currentSectionIndex !== sectionIndex) return section;
+
+                return {
+                    ...section,
+                    links: section.links.map((link, currentLinkIndex) =>
+                        currentLinkIndex === linkIndex
+                            ? {
+                                ...link,
+                                ...(
+                                    field === 'pageKey'
+                                        ? { pageKey: value, url: value ? '' : link.url, isExternal: false }
+                                        : field === 'url'
+                                            ? { url: value, pageKey: value ? '' : link.pageKey, isExternal: true }
+                                            : { [field]: value }
+                                )
+                            }
+                            : link
+                    )
+                };
+            })
+        }));
+    };
+
+    const addLink = (sectionIndex) => {
+        setConfig((current) => ({
+            ...current,
+            sections: current.sections.map((section, currentSectionIndex) =>
+                currentSectionIndex === sectionIndex
+                    ? { ...section, links: [...section.links, createEmptyLink()] }
+                    : section
+            )
+        }));
+        setExpandedSections((current) =>
+            current.includes(sectionIndex) ? current : [...current, sectionIndex]
+        );
+        setExpandedSectionLinks((current) => [
+            ...current,
+            `${sectionIndex}-${config?.sections?.[sectionIndex]?.links?.length || 0}`
+        ]);
+    };
+
+    const removeLink = (sectionIndex, linkIndex) => {
+        setConfig((current) => ({
+            ...current,
+            sections: current.sections.map((section, currentSectionIndex) => {
+                if (currentSectionIndex !== sectionIndex) return section;
+
+                const nextLinks = section.links.filter((_, currentLinkIndex) => currentLinkIndex !== linkIndex);
+                return { ...section, links: nextLinks.length ? nextLinks : [createEmptyLink()] };
+            })
+        }));
+        setExpandedSectionLinks((current) =>
+            current.filter((key) => key !== `${sectionIndex}-${linkIndex}`)
+        );
+    };
+
+    const addQuickLink = () => {
+        setConfig((current) => ({
+            ...current,
+            quickLinks: [...(current.quickLinks || []), createEmptyQuickLink()]
+        }));
+        setExpandedQuickLinks((current) => [...current, (config?.quickLinks || []).length]);
+    };
+
+    const handleQuickLinkChange = (index, field, value) => {
+        setConfig((current) => ({
+            ...current,
+            quickLinks: (current.quickLinks || []).map((link, linkIndex) =>
+                linkIndex === index
+                    ? {
+                        ...link,
+                        ...(
+                            field === 'pageKey'
+                                ? { pageKey: value, url: value ? '' : link.url, isExternal: false }
+                                : field === 'url'
+                                    ? { url: value, pageKey: value ? '' : link.pageKey, isExternal: true }
+                                    : { [field]: value }
+                        )
+                    }
+                    : link
+            )
+        }));
+    };
+
+    const removeQuickLink = (index) => {
+        setConfig((current) => ({
+            ...current,
+            quickLinks: (current.quickLinks || []).filter((_, linkIndex) => linkIndex !== index)
+        }));
+        setExpandedQuickLinks((current) =>
+            current
+                .filter((item) => item !== index)
+                .map((item) => (item > index ? item - 1 : item))
+        );
+    };
+
+    const toggleSectionExpanded = (index) => {
+        setExpandedSections((current) =>
+            current.includes(index)
+                ? current.filter((item) => item !== index)
+                : [...current, index]
+        );
+    };
+
+    const toggleSectionLinkExpanded = (sectionIndex, linkIndex) => {
+        const key = `${sectionIndex}-${linkIndex}`;
+        setExpandedSectionLinks((current) =>
+            current.includes(key)
+                ? current.filter((item) => item !== key)
+                : [...current, key]
+        );
+    };
+
+    const toggleQuickLinkExpanded = (index) => {
+        setExpandedQuickLinks((current) =>
+            current.includes(index)
+                ? current.filter((item) => item !== index)
+                : [...current, index]
+        );
     };
 
     const availablePages = Array.from(
-        new Map((pages || []).map((p) => [p.pageKey, p])).values()
+        new Map(
+            (pages || [])
+                .filter((page) => !RESERVED_PAGE_KEYS.has(page.pageKey))
+                .map((page) => [page.pageKey, page])
+        ).values()
     ).sort((a, b) => a.pageKey.localeCompare(b.pageKey));
 
-    if (!config) return <div className="p-8 text-center text-gray-500 font-bold">Loading Footer Settings...</div>;
+    if (!config) {
+        return <div className="p-8 text-center text-sm font-medium text-gray-500">Loading footer settings...</div>;
+    }
 
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-8 pb-32">
-            <div className="flex items-center justify-between sticky top-0 bg-gray-50/80 backdrop-blur-md py-4 z-10">
+        <div className="mx-auto max-w-7xl space-y-8 px-6 py-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <h1 className="text-2xl font-black text-gray-900">Footer Settings</h1>
-                    <p className="text-gray-500 font-medium italic">Manage links, addresses, and copyright info</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Footer Settings</h1>
+                    <p className="text-sm text-gray-500">
+                        Keep the footer simple: 3 columns, quick links, address, CIN, copyright, and social links.
+                    </p>
                 </div>
-                <button 
-                    onClick={handleSave}
-                    disabled={isLoading}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-100"
-                >
-                    <MdSave /> {isLoading ? 'Saving...' : 'Save Configuration'}
-                </button>
+                {isEditing ? (
+                    <button
+                        onClick={handleSave}
+                        disabled={isLoading}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                    >
+                        <MdSave />
+                        {isLoading ? 'Saving...' : 'Save Changes'}
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => setIsEditing(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                    >
+                        <MdEdit />
+                        Edit
+                    </button>
+                )}
             </div>
 
-            {/* Sections Management */}
-            <div className="space-y-6">
-                <div className="flex items-center justify-between border-b pb-4">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <MdLink className="text-blue-600" /> Link Sections
+            <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
+                <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-5">
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                        <MdBusiness className="text-blue-600" />
+                        Address
                     </h2>
-                    <button 
-                        onClick={addSection}
-                        className="text-blue-600 font-black text-sm flex items-center gap-1 hover:bg-blue-50 px-3 py-1.5 rounded-xl transition-all"
-                    >
-                        <MdAdd /> Add Section
-                    </button>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Mail Us Address</label>
+                        <textarea
+                            value={config.mailAddress || ''}
+                            onChange={(e) => handleConfigChange('mailAddress', e.target.value)}
+                            rows="4"
+                            disabled={!isEditing}
+                            placeholder="Enter mail us address"
+                            className="w-full resize-none rounded-xl border border-gray-200 p-4 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Address</label>
+                        <textarea
+                            value={config.officeAddress || ''}
+                            onChange={(e) => handleConfigChange('officeAddress', e.target.value)}
+                            rows="4"
+                            disabled={!isEditing}
+                            placeholder="Enter address"
+                            className="w-full resize-none rounded-xl border border-gray-200 p-4 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                        />
+                    </div>
+                </section>
+
+                <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-5">
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                        <MdCopyright className="text-blue-600" />
+                        Copyright, CIN And Social Links
+                    </h2>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Copyright Text</label>
+                        <input
+                            value={config.copyrightText || ''}
+                            onChange={(e) => handleConfigChange('copyrightText', e.target.value)}
+                            disabled={!isEditing}
+                            placeholder="Enter copyright text"
+                            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">CIN</label>
+                        <input
+                            value={config.cinNumber || ''}
+                            onChange={(e) => handleConfigChange('cinNumber', e.target.value)}
+                            disabled={!isEditing}
+                            placeholder="Enter CIN number"
+                            className="w-full rounded-xl border border-gray-200 p-3 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        {['facebook', 'twitter', 'youtube', 'instagram'].map((platform) => (
+                            <div key={platform} className="space-y-1">
+                                <label className="text-sm font-medium capitalize text-gray-700">{platform}</label>
+                                <input
+                                    value={config.socialLinks?.[platform] || ''}
+                                    onChange={(e) =>
+                                        handleConfigChange('socialLinks', {
+                                            ...config.socialLinks,
+                                            [platform]: e.target.value
+                                        })
+                                    }
+                                    disabled={!isEditing}
+                                    placeholder={`https://${platform}.com/...`}
+                                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-5">
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                        <MdLink className="text-blue-600" />
+                        Bottom Quick Links
+                    </h2>
+
+                    <div className="space-y-4">
+                        {(config.quickLinks || []).map((link, index) => (
+                            <div key={index} className="rounded-xl border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => toggleQuickLinkExpanded(index)}
+                                    className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                                >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {React.createElement(QUICK_LINK_ICON_COMPONENTS[link.icon || 'help'] || FaQuestionCircle, {
+                                            className: 'shrink-0 text-base text-blue-600'
+                                        })}
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-gray-900">
+                                                {link.label || `Quick Link ${index + 1}`}
+                                            </p>
+                                            <p className="truncate text-xs text-gray-500">
+                                                {link.pageKey || link.url || 'No target selected'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {expandedQuickLinks.includes(index) ? (
+                                        <MdChevronLeft className="shrink-0 text-xl text-gray-400" />
+                                    ) : (
+                                        <MdChevronRight className="shrink-0 text-xl text-gray-400" />
+                                    )}
+                                </button>
+
+                                {expandedQuickLinks.includes(index) ? (
+                                    <div className="space-y-3 border-t border-gray-200 p-4">
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            <input
+                                                value={link.label}
+                                                onChange={(e) => handleQuickLinkChange(index, 'label', e.target.value)}
+                                                disabled={!isEditing}
+                                                placeholder="Name"
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                            />
+                                            <select
+                                                value={link.icon || 'help'}
+                                                onChange={(e) => handleQuickLinkChange(index, 'icon', e.target.value)}
+                                                disabled={!isEditing}
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                            >
+                                                {QUICK_LINK_ICONS.map((icon) => (
+                                                    <option key={icon.value} value={icon.value}>
+                                                        {icon.label} icon
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            <select
+                                                value={link.isExternal ? EXTERNAL_LINK_OPTION : (link.pageKey || '')}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    if (value === EXTERNAL_LINK_OPTION) {
+                                                        handleQuickLinkChange(index, 'url', link.url || '');
+                                                        return;
+                                                    }
+                                                    handleQuickLinkChange(index, 'pageKey', value);
+                                                }}
+                                                disabled={!isEditing}
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                            >
+                                                <option value="">Select page</option>
+                                                {availablePages.map((page) => (
+                                                    <option key={page.pageKey} value={page.pageKey}>
+                                                        {page.pageKey}
+                                                    </option>
+                                                ))}
+                                                <option value={EXTERNAL_LINK_OPTION}>External link</option>
+                                            </select>
+                                        </div>
+                                        {link.isExternal ? (
+                                            <input
+                                                value={link.url || ''}
+                                                onChange={(e) => handleQuickLinkChange(index, 'url', e.target.value)}
+                                                disabled={!isEditing}
+                                                placeholder="Enter external URL"
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                            />
+                                        ) : null}
+                                        {isEditing ? (
+                                            <button
+                                                onClick={() => removeQuickLink(index)}
+                                                className="inline-flex items-center gap-1 text-sm font-medium text-red-600 hover:text-red-700"
+                                            >
+                                                <MdDelete />
+                                                Remove link
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+
+                        {isEditing ? (
+                            <button
+                                onClick={addQuickLink}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-blue-400 hover:text-blue-600"
+                            >
+                                <MdAdd />
+                                Add Link
+                            </button>
+                        ) : null}
+                    </div>
+                </section>
+            </div>
+
+            <section className="rounded-2xl border border-gray-200 bg-white p-6">
+                <div className="mb-6 flex items-center justify-between">
+                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                        <MdLink className="text-blue-600" />
+                        Footer Columns
+                    </h2>
+                    <span className="text-sm text-gray-500">3 fixed columns with page links or external URLs</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {config.sections.map((section, sIdx) => (
-                        <div key={sIdx} className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex flex-col group">
-                            <div className="flex items-center gap-4 mb-4">
-                                <MdDragIndicator className="text-gray-300" />
-                                <input 
-                                    value={section.title}
-                                    onChange={(e) => handleSectionTitleChange(sIdx, e.target.value)}
-                                    className="bg-gray-50 border-none focus:ring-2 focus:ring-blue-100 rounded-xl px-4 py-2 font-black text-gray-950 uppercase tracking-widest flex-1"
-                                />
-                                <button onClick={() => removeSection(sIdx)} className="text-red-400 p-2 hover:bg-red-50 rounded-xl">
-                                    <MdDelete />
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                    {config.sections.map((section, sectionIndex) => (
+                        <div key={sectionIndex} className="rounded-2xl border border-gray-200">
+                            <div className="flex items-center justify-between gap-3 p-5">
+                                <div className="min-w-0 flex-1">
+                                    <input
+                                        value={section.title}
+                                        onChange={(e) => handleSectionTitleChange(sectionIndex, e.target.value)}
+                                        placeholder={`Column ${sectionIndex + 1} heading`}
+                                        disabled={!isEditing}
+                                        className="w-full rounded-lg border border-transparent px-0 py-0 text-sm font-semibold text-gray-900 outline-none focus:border-gray-200 focus:px-3 focus:py-2 disabled:bg-transparent disabled:text-gray-900"
+                                    />
+                                    <p className="text-xs text-gray-500">
+                                        {(section.links || []).filter((link) => link.label || link.pageKey || link.url).length} links
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => toggleSectionExpanded(sectionIndex)}
+                                    className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-50"
+                                >
+                                    {expandedSections.includes(sectionIndex) ? (
+                                        <MdChevronLeft className="text-xl" />
+                                    ) : (
+                                        <MdChevronRight className="text-xl" />
+                                    )}
                                 </button>
                             </div>
 
-                            <div className="space-y-3 flex-1">
-                                {section.links.map((link, lIdx) => (
-                                    <div key={lIdx} className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 flex items-center gap-3">
-                                        <div className="grid grid-cols-2 gap-3 flex-1">
-                                            <input 
-                                                placeholder="Label (e.g. About Us)"
-                                                value={link.label}
-                                                onChange={(e) => handleLinkChange(sIdx, lIdx, 'label', e.target.value)}
-                                                className="bg-white border-none focus:ring-2 focus:ring-blue-100 rounded-xl px-3 py-2 text-sm font-bold placeholder:text-gray-500 text-gray-900"
-                                            />
-                                            <div className="relative">
-                                                <select
-                                                    value={link.pageKey || ''}
-                                                    onChange={(e) => {
-                                                        const val = e.target.value;
-                                                        if (val === 'external_url_custom') {
-                                                            handleLinkChange(sIdx, lIdx, 'url', 'https://');
-                                                            handleLinkChange(sIdx, lIdx, 'pageKey', '');
-                                                        } else {
-                                                            handleLinkChange(sIdx, lIdx, 'pageKey', val);
-                                                            handleLinkChange(sIdx, lIdx, 'url', '');
-                                                        }
-                                                    }}
-                                                    className="w-full bg-white border-none focus:ring-2 focus:ring-blue-100 rounded-xl px-3 py-2 text-sm font-mono text-gray-900 appearance-none cursor-pointer"
-                                                >
-                                                    <option value="" disabled>Select Page / Action</option>
-                                                    <optgroup label="Dynamic Pages">
-                                                        {availablePages.map(p => (
-                                                            <option key={p.pageKey} value={p.pageKey}>{p.pageKey}</option>
-                                                        ))}
-                                                    </optgroup>
-                                                    <optgroup label="Custom">
-                                                        <option value="external_url_custom">External URL</option>
-                                                    </optgroup>
-                                                </select>
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                    <MdLink />
+                            {expandedSections.includes(sectionIndex) ? (
+                                <div className="space-y-4 border-t border-gray-200 p-5">
+                                    <div className="space-y-3">
+                                        {section.links.map((link, linkIndex) => (
+                                            <div key={linkIndex} className="rounded-xl border border-gray-200">
+                                                <div className="flex items-center justify-between gap-3 p-4">
+                                                    <div className="min-w-0 flex-1">
+                                                        <input
+                                                            value={link.label}
+                                                            onChange={(e) => handleLinkChange(sectionIndex, linkIndex, 'label', e.target.value)}
+                                                            disabled={!isEditing}
+                                                            placeholder={`Link ${linkIndex + 1}`}
+                                                            className="w-full rounded-lg border border-transparent px-0 py-0 text-sm font-semibold text-gray-900 outline-none focus:border-gray-200 focus:px-3 focus:py-2 disabled:bg-transparent disabled:text-gray-900"
+                                                        />
+                                                        <p className="truncate text-xs text-gray-500">
+                                                            {link.pageKey || link.url || 'No target selected'}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => toggleSectionLinkExpanded(sectionIndex, linkIndex)}
+                                                        className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-50"
+                                                    >
+                                                        {expandedSectionLinks.includes(`${sectionIndex}-${linkIndex}`) ? (
+                                                            <MdChevronLeft className="text-xl" />
+                                                        ) : (
+                                                            <MdChevronRight className="text-xl" />
+                                                        )}
+                                                    </button>
                                                 </div>
+
+                                                {expandedSectionLinks.includes(`${sectionIndex}-${linkIndex}`) ? (
+                                                    <div className="space-y-3 border-t border-gray-200 p-4">
+                                                        <select
+                                                    value={link.isExternal ? EXTERNAL_LINK_OPTION : (link.pageKey || '')}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        if (value === EXTERNAL_LINK_OPTION) {
+                                                                    handleLinkChange(sectionIndex, linkIndex, 'url', link.url || '');
+                                                                    return;
+                                                                }
+                                                                handleLinkChange(sectionIndex, linkIndex, 'pageKey', value);
+                                                            }}
+                                                            disabled={!isEditing}
+                                                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                                        >
+                                                            <option value="">Select page</option>
+                                                            {availablePages.map((page) => (
+                                                                <option key={page.pageKey} value={page.pageKey}>
+                                                                    {page.pageKey}
+                                                                </option>
+                                                            ))}
+                                                            <option value={EXTERNAL_LINK_OPTION}>External link</option>
+                                                        </select>
+                                                        {link.isExternal ? (
+                                                            <input
+                                                                value={link.url || ''}
+                                                                onChange={(e) => handleLinkChange(sectionIndex, linkIndex, 'url', e.target.value)}
+                                                                disabled={!isEditing}
+                                                                placeholder="Enter external URL"
+                                                                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                                            />
+                                                        ) : null}
+                                                        {isEditing ? (
+                                                            <button
+                                                                onClick={() => removeLink(sectionIndex, linkIndex)}
+                                                                className="inline-flex items-center gap-1 text-sm font-medium text-red-600 hover:text-red-700"
+                                                            >
+                                                                <MdDelete />
+                                                                Remove link
+                                                            </button>
+                                                        ) : null}
+                                                    </div>
+                                                ) : null}
                                             </div>
-                                            {(link.url || (!link.pageKey && link.label)) && (
-                                                 <input 
-                                                    placeholder="External URL (https://...)"
-                                                    value={link.url}
-                                                    onChange={(e) => handleLinkChange(sIdx, lIdx, 'url', e.target.value)}
-                                                    className="col-span-2 bg-white border-none focus:ring-2 focus:ring-blue-100 rounded-xl px-3 py-2 text-xs font-mono placeholder:text-gray-500 text-gray-600"
-                                                />
-                                            )}
-                                        </div>
-                                        <button onClick={() => removeLink(sIdx, lIdx)} className="text-red-400 p-2 hover:bg-red-50 rounded-xl">
-                                            <MdDelete size={18} />
-                                        </button>
+                                        ))}
+
+                                        {isEditing ? (
+                                            <button
+                                                onClick={() => addLink(sectionIndex)}
+                                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-blue-400 hover:text-blue-600"
+                                            >
+                                                <MdAdd />
+                                                Add Link
+                                            </button>
+                                        ) : null}
                                     </div>
-                                ))}
-                                <button 
-                                    onClick={() => addLink(sIdx)}
-                                    className="w-full py-3 border-2 border-dashed border-gray-200 rounded-2xl text-gray-400 font-bold text-sm hover:border-blue-200 hover:text-blue-400 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <MdAdd /> Add Link
-                                </button>
-                            </div>
+                                </div>
+                            ) : null}
                         </div>
                     ))}
                 </div>
-            </div>
-
-            {/* Corporate Info */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t">
-                <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <MdBusiness className="text-blue-600" /> Addresses
-                    </h2>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mail Us Address</label>
-                            <textarea 
-                                value={config.mailAddress}
-                                onChange={(e) => handleConfigChange('mailAddress', e.target.value)}
-                                rows="4"
-                                placeholder="Enter mailing address..."
-                                className="w-full bg-white border border-gray-100 rounded-3xl p-4 focus:ring-4 focus:ring-blue-100 outline-none font-medium text-gray-900 resize-none shadow-sm placeholder:text-gray-500"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Registered Office Address</label>
-                            <textarea 
-                                value={config.officeAddress}
-                                onChange={(e) => handleConfigChange('officeAddress', e.target.value)}
-                                rows="4"
-                                placeholder="Enter registered office address..."
-                                className="w-full bg-white border border-gray-100 rounded-3xl p-4 focus:ring-4 focus:ring-blue-100 outline-none font-medium text-gray-900 resize-none shadow-sm placeholder:text-gray-500"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">CIN Number</label>
-                            <input 
-                                value={config.cinNumber || ''}
-                                onChange={(e) => handleConfigChange('cinNumber', e.target.value)}
-                                placeholder="Enter CIN number..."
-                                className="w-full bg-white border border-gray-100 rounded-2xl p-4 focus:ring-4 focus:ring-blue-100 outline-none font-black text-gray-900 shadow-sm placeholder:text-gray-500"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <MdCopyright className="text-blue-600" /> Footer Meta
-                    </h2>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Copyright Text</label>
-                            <input 
-                                value={config.copyrightText}
-                                onChange={(e) => handleConfigChange('copyrightText', e.target.value)}
-                                className="w-full bg-white border border-gray-100 rounded-2xl p-4 focus:ring-4 focus:ring-blue-100 outline-none font-black text-gray-900 shadow-sm"
-                            />
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t">
-                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest ml-1">Special Page Links</h3>
-                            <div className="grid grid-cols-1 gap-4">
-                                {[
-                                    { label: 'Advertise', field: 'advertisePageKey' },
-                                    { label: 'Gift Cards', field: 'giftCardsPageKey' },
-                                    { label: 'Help Center', field: 'helpCenterPageKey' }
-                                ].map(item => (
-                                    <div key={item.field} className="space-y-1">
-                                        <label className="text-[10px] font-bold text-gray-400 ml-1">{item.label} Page Mapping</label>
-                                        <select
-                                            value={config[item.field] || ''}
-                                            onChange={(e) => handleConfigChange(item.field, e.target.value)}
-                                            className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-100 outline-none text-gray-900 appearance-none cursor-pointer"
-                                        >
-                                            <option value="">Select Page</option>
-                                            {availablePages.map(p => (
-                                                <option key={p.pageKey} value={p.pageKey}>{p.pageKey}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t">
-                            <h3 className="text-sm font-black text-gray-400 uppercase tracking-widest ml-1">Social Media Links</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                {['facebook', 'twitter', 'youtube', 'instagram'].map(platform => (
-                                    <div key={platform} className="space-y-1">
-                                        <label className="text-[10px] font-bold text-gray-400 capitalize ml-1">{platform}</label>
-                                        <input 
-                                            value={config.socialLinks?.[platform] || ''}
-                                            onChange={(e) => {
-                                                const newSocial = { ...config.socialLinks, [platform]: e.target.value };
-                                                handleConfigChange('socialLinks', newSocial);
-                                            }}
-                                            placeholder={`https://${platform}.com/...`}
-                                            className="w-full bg-white border border-gray-100 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-blue-100 outline-none placeholder:text-gray-500 text-gray-900"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
     );
 };

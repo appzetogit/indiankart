@@ -171,26 +171,63 @@ export const useContentStore = create((set, get) => ({
         });
 
         try {
-            const { data } = await API.post('/pages', { pageKey: key, content });
+            const existingPage = get().pages.find((p) => p.pageKey === key);
+            const { data } = await API.post('/pages', {
+                pageKey: key,
+                title: existingPage?.title || '',
+                content,
+                showInMobileProfile: existingPage?.showInMobileProfile || false
+            });
             // Update with real data from server
              set(state => ({
-                pages: state.pages.map(p => p.pageKey === key ? data : p)
+                pages: state.pages.some((p) => p.pageKey === key)
+                    ? state.pages.map(p => p.pageKey === key ? data : p)
+                    : [...state.pages, data]
             }));
         } catch (error) { console.error(error); }
     },
 
+    upsertPage: async ({ pageKey, title, content, showInMobileProfile }) => {
+        set((state) => {
+            const existing = state.pages.find((p) => p.pageKey === pageKey);
+            const nextPage = {
+                ...existing,
+                pageKey,
+                title,
+                content,
+                showInMobileProfile
+            };
+
+            return {
+                pages: existing
+                    ? state.pages.map((p) => (p.pageKey === pageKey ? nextPage : p))
+                    : [...state.pages, nextPage]
+            };
+        });
+
+        try {
+            const { data } = await API.post('/pages', { pageKey, title, content, showInMobileProfile });
+            set((state) => ({
+                pages: state.pages.some((p) => p.pageKey === pageKey)
+                    ? state.pages.map((p) => (p.pageKey === pageKey ? data : p))
+                    : [...state.pages, data]
+            }));
+            return data;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    },
+
     deletePage: async (key) => {
         try {
-            // Check if backend supports delete, if not we might just clear content
-            // Assuming we added DELETE endpoint or reuse generalized logic
-            // For now, let's assume we just remove it from list if backend had DELETE /api/pages/:key
-            // But we don't have that yet, so let's stick to just updateContent(key, null)?
-            // Actually, let's add delete support to backend later if needed. 
-            // For now, we will just filter it out locally to simulate
+            await API.delete(`/pages/${key}`);
              set(state => ({
                 pages: state.pages.filter(p => p.pageKey !== key)
             }));
-            // TODO: Implement backend delete
-        } catch (error) { console.error(error); }
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
     }
 }));
