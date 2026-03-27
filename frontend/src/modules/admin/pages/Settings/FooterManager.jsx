@@ -441,87 +441,87 @@ const FooterManager = () => {
                         ))}
                     </div>
                 </section>
+            </div>
 
-                <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-5">
-                    <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-                        <MdLink className="text-blue-600" />
-                        Bottom Quick Links
-                    </h2>
+            <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-5">
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+                    <MdLink className="text-blue-600" />
+                    Bottom Quick Links
+                </h2>
 
-                    <div className="space-y-4">
-                        {(config.quickLinks || []).map((link, index) => (
-                            <div key={index} className="rounded-xl border border-gray-200">
-                                <button
-                                    type="button"
-                                    onClick={() => toggleQuickLinkExpanded(index)}
-                                    className="flex w-full items-center justify-between gap-3 p-4 text-left"
-                                >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        {React.createElement(QUICK_LINK_ICON_COMPONENTS[link.icon || 'help'] || FaQuestionCircle, {
-                                            className: 'shrink-0 text-base text-blue-600'
-                                        })}
-                                        <div className="min-w-0">
-                                            <p className="truncate text-sm font-semibold text-gray-900">
-                                                {link.label || `Quick Link ${index + 1}`}
-                                            </p>
-                                            <p className="truncate text-xs text-gray-500">
-                                                {link.pageKey || link.url || 'No target selected'}
-                                            </p>
-                                        </div>
+                <div className="space-y-4">
+                    {(config.quickLinks || []).map((link, index) => (
+                        <div key={index} className="rounded-xl border border-gray-200">
+                            <button
+                                type="button"
+                                onClick={() => toggleQuickLinkExpanded(index)}
+                                className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                            >
+                                <div className="flex items-center gap-3 min-w-0">
+                                    {React.createElement(QUICK_LINK_ICON_COMPONENTS[link.icon || 'help'] || FaQuestionCircle, {
+                                        className: 'shrink-0 text-base text-blue-600'
+                                    })}
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-gray-900">
+                                            {link.label || `Quick Link ${index + 1}`}
+                                        </p>
+                                        <p className="truncate text-xs text-gray-500">
+                                            {link.pageKey || link.url || 'No target selected'}
+                                        </p>
                                     </div>
-                                    {expandedQuickLinks.includes(index) ? (
-                                        <MdChevronLeft className="shrink-0 text-xl text-gray-400" />
-                                    ) : (
-                                        <MdChevronRight className="shrink-0 text-xl text-gray-400" />
-                                    )}
-                                </button>
-
+                                </div>
                                 {expandedQuickLinks.includes(index) ? (
-                                    <div className="space-y-3 border-t border-gray-200 p-4">
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                            <input
-                                                value={link.label}
-                                                onChange={(e) => handleQuickLinkChange(index, 'label', e.target.value)}
-                                                disabled={!isEditing}
-                                                placeholder="Name"
-                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            />
-                                            <select
-                                                value={link.icon || 'help'}
-                                                onChange={(e) => handleQuickLinkChange(index, 'icon', e.target.value)}
-                                                disabled={!isEditing}
-                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            >
-                                                {QUICK_LINK_ICONS.map((icon) => (
-                                                    <option key={icon.value} value={icon.value}>
-                                                        {icon.label} icon
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                            <select
-                                                value={link.isExternal ? EXTERNAL_LINK_OPTION : (link.pageKey || '')}
-                                                onChange={(e) => {
-                                                    const value = e.target.value;
-                                                    if (value === EXTERNAL_LINK_OPTION) {
-                                                        handleQuickLinkChange(index, 'url', link.url || '');
-                                                        return;
-                                                    }
-                                                    handleQuickLinkChange(index, 'pageKey', value);
-                                                }}
-                                                disabled={!isEditing}
-                                                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                                            >
-                                                <option value="">Select page</option>
-                                                {availablePages.map((page) => (
-                                                    <option key={page.pageKey} value={page.pageKey}>
-                                                        {page.pageKey}
-                                                    </option>
-                                                ))}
-                                                <option value={EXTERNAL_LINK_OPTION}>External link</option>
-                                            </select>
-                                        </div>
+                                    <MdChevronLeft className="shrink-0 text-xl text-gray-400" />
+                                ) : (
+                                    <MdChevronRight className="shrink-0 text-xl text-gray-400" />
+                                )}
+                            </button>
+
+                            {expandedQuickLinks.includes(index) ? (
+                                <div className="space-y-3 border-t border-gray-200 p-4">
+                                    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_minmax(220px,1.2fr)]">
+                                        <input
+                                            value={link.label}
+                                            onChange={(e) => handleQuickLinkChange(index, 'label', e.target.value)}
+                                            disabled={!isEditing}
+                                            placeholder="Name"
+                                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                        />
+                                        <select
+                                            value={link.icon || 'help'}
+                                            onChange={(e) => handleQuickLinkChange(index, 'icon', e.target.value)}
+                                            disabled={!isEditing}
+                                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                        >
+                                            {QUICK_LINK_ICONS.map((icon) => (
+                                                <option key={icon.value} value={icon.value}>
+                                                    {icon.label} icon
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className={`grid grid-cols-1 gap-3 ${link.isExternal ? 'xl:grid-cols-[minmax(220px,1fr)_minmax(320px,1.5fr)]' : 'xl:grid-cols-[minmax(220px,1fr)]'}`}>
+                                        <select
+                                            value={link.isExternal ? EXTERNAL_LINK_OPTION : (link.pageKey || '')}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (value === EXTERNAL_LINK_OPTION) {
+                                                    handleQuickLinkChange(index, 'url', link.url || '');
+                                                    return;
+                                                }
+                                                handleQuickLinkChange(index, 'pageKey', value);
+                                            }}
+                                            disabled={!isEditing}
+                                            className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                                        >
+                                            <option value="">Select page</option>
+                                            {availablePages.map((page) => (
+                                                <option key={page.pageKey} value={page.pageKey}>
+                                                    {page.pageKey}
+                                                </option>
+                                            ))}
+                                            <option value={EXTERNAL_LINK_OPTION}>External link</option>
+                                        </select>
                                         {link.isExternal ? (
                                             <input
                                                 value={link.url || ''}
@@ -531,32 +531,32 @@ const FooterManager = () => {
                                                 className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
                                             />
                                         ) : null}
-                                        {isEditing ? (
-                                            <button
-                                                onClick={() => removeQuickLink(index)}
-                                                className="inline-flex items-center gap-1 text-sm font-medium text-red-600 hover:text-red-700"
-                                            >
-                                                <MdDelete />
-                                                Remove link
-                                            </button>
-                                        ) : null}
                                     </div>
-                                ) : null}
-                            </div>
-                        ))}
+                                    {isEditing ? (
+                                        <button
+                                            onClick={() => removeQuickLink(index)}
+                                            className="inline-flex items-center gap-1 text-sm font-medium text-red-600 hover:text-red-700"
+                                        >
+                                            <MdDelete />
+                                            Remove link
+                                        </button>
+                                    ) : null}
+                                </div>
+                            ) : null}
+                        </div>
+                    ))}
 
-                        {isEditing ? (
-                            <button
-                                onClick={addQuickLink}
-                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-blue-400 hover:text-blue-600"
-                            >
-                                <MdAdd />
-                                Add Link
-                            </button>
-                        ) : null}
-                    </div>
-                </section>
-            </div>
+                    {isEditing ? (
+                        <button
+                            onClick={addQuickLink}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-blue-400 hover:text-blue-600"
+                        >
+                            <MdAdd />
+                            Add Link
+                        </button>
+                    ) : null}
+                </div>
+            </section>
 
             <section className="rounded-2xl border border-gray-200 bg-white p-6">
                 <div className="mb-6 flex items-center justify-between">

@@ -65,6 +65,9 @@ export const createReturnRequest = async (req, res) => {
                 if (!parsedBankDetails.accountHolderName || !parsedBankDetails.accountNumber || !parsedBankDetails.ifscCode) {
                     return res.status(400).json({ message: 'Please provide complete bank details (name, account number, IFSC).' });
                 }
+                if (/\d/.test(parsedBankDetails.accountHolderName)) {
+                    return res.status(400).json({ message: 'Account holder name should not contain numbers.' });
+                }
                 if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(parsedBankDetails.ifscCode)) {
                     return res.status(400).json({ message: 'Invalid IFSC code format.' });
                 }
@@ -286,6 +289,13 @@ export const getUserReturnRequests = async (req, res) => {
 // @access  Private/Admin
 export const updateReturnStatus = async (req, res) => {
     try {
+        const nextStatus = String(req.body.status || '').trim();
+        const note = String(req.body.note || '').trim();
+
+        if (nextStatus === 'Rejected' && !note) {
+            return res.status(400).json({ message: 'Reject reason is required.' });
+        }
+
         let returnRequest;
         if (mongoose.Types.ObjectId.isValid(req.params.id)) {
             returnRequest = await Return.findById(req.params.id);
@@ -297,12 +307,12 @@ export const updateReturnStatus = async (req, res) => {
 
         if (returnRequest) {
             const oldStatus = returnRequest.status;
-            returnRequest.status = req.body.status || returnRequest.status;
+            returnRequest.status = nextStatus || returnRequest.status;
             
             // Push to timeline
             returnRequest.timeline.push({
-                status: req.body.status,
-                note: req.body.note || `Status updated to ${req.body.status}`
+                status: nextStatus,
+                note: note || `Status updated to ${nextStatus}`
             });
             
             const updatedReturn = await returnRequest.save();
@@ -312,7 +322,7 @@ export const updateReturnStatus = async (req, res) => {
             if (order) {
                 if (returnRequest.type === 'Cancellation') {
                     // CANCELLATION ACTION
-                    if (req.body.status === 'Approved' || req.body.status === 'Completed') {
+                    if (nextStatus === 'Approved' || nextStatus === 'Completed') {
                         // Restore Stock and Set Order to Cancelled
                         if (order.status !== 'Cancelled') {
                             order.status = 'Cancelled';
@@ -343,7 +353,7 @@ export const updateReturnStatus = async (req, res) => {
                             }
                             await order.save();
                         }
-                    } else if (req.body.status === 'Rejected') {
+                    } else if (nextStatus === 'Rejected') {
                         // Revert order status back to Pending/Confirmed (we'll guess Pending or just use a fixed logic)
                         // Ideally we'd store the original status, but for now we'll set back to 'Pending' or leave as is.
                         order.status = 'Pending'; 
@@ -357,12 +367,12 @@ export const updateReturnStatus = async (req, res) => {
                     
                     if (itemToUpdate) {
                         let newItemStatus = itemToUpdate.status;
-                        if (req.body.status === 'Rejected') {
-                            newItemStatus = 'Delivered';
-                        } else if (req.body.status === 'Completed') {
+                        if (nextStatus === 'Rejected') {
+                            newItemStatus = 'Return Rejected';
+                        } else if (nextStatus === 'Completed') {
                             newItemStatus = returnRequest.type === 'Return' ? 'Returned' : 'Replaced';
                         } else {
-                            newItemStatus = req.body.status;
+                            newItemStatus = nextStatus;
                         }
                         itemToUpdate.status = newItemStatus;
                         await order.save();

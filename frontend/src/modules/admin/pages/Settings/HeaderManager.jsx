@@ -55,8 +55,8 @@ const SortableItem = ({ id, category, onRemove }) => {
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center justify-between p-3 rounded-xl border border-gray-100 mb-2 bg-white shadow-sm group ${
-                isDragging ? 'shadow-lg ring-2 ring-blue-100 opacity-50 z-50' : 'hover:shadow-md transition-all'
+            className={`mb-2 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-3 ${
+                isDragging ? 'ring-2 ring-blue-100 opacity-50 z-50' : 'hover:bg-gray-50 transition-colors'
             }`}
         >
             <div className="flex items-center gap-3">
@@ -197,25 +197,24 @@ const HeaderManager = () => {
     };
 
     return (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto min-h-screen bg-gray-50/50">
-            {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 sticky top-0 bg-gray-50/90 backdrop-blur-md z-30 py-4 -mx-4 px-4 border-b border-gray-200/60">
-                <div className="mb-4 md:mb-0">
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Navigation Menu</h1>
-                    <p className="text-gray-500 text-sm font-medium">Reorder the header categories by dragging the handles.</p>
+        <div className="mx-auto max-w-7xl space-y-6 px-6 py-6">
+            <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Header Settings</h1>
+                    <p className="text-sm text-gray-500">Choose which categories appear in the top user strip and reorder them.</p>
                 </div>
                 <div className="flex gap-3">
                     <button 
                         onClick={handleSave}
                         disabled={isLoading || !hasChanges}
-                        className={`px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-xl active:scale-95 ${
+                        className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition ${
                             hasChanges 
-                                ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' 
-                                : 'bg-white border border-gray-200 text-gray-300 cursor-not-allowed shadow-none'
+                                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                                : 'border border-gray-200 bg-white text-gray-300 cursor-not-allowed'
                         }`}
                     >
                         <MdSave size={20} />
-                        {isLoading ? 'SAVING...' : 'SAVE CHANGES'}
+                        {isLoading ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </div>
@@ -224,23 +223,23 @@ const HeaderManager = () => {
                 {/* Left Column: Preview & Reorder */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            PREVIEW: TOP NAVIGATION MENU ({selectedList.length})
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-2">
+                            Selected Categories ({selectedList.length})
                         </span>
                         {hasChanges && (
-                            <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ring-amber-200">
-                                UNSAVED CHANGES
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                Unsaved Changes
                             </span>
                         )}
                     </div>
 
-                    <div className="min-h-[600px] rounded-[32px] bg-white border border-gray-100 p-6 shadow-sm">
+                    <div className="min-h-[560px] rounded-2xl border border-gray-200 bg-white p-5">
                         {selectedList.length === 0 ? (
                             <div className="h-full flex flex-col items-center justify-center text-center p-12 py-24">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50">
                                     <MdInfo size={32} className="text-gray-200" />
                                 </div>
-                                <h3 className="text-gray-800 font-bold mb-1">Menu is empty</h3>
+                                <h3 className="mb-1 font-semibold text-gray-800">No categories added yet</h3>
                                 <p className="text-gray-400 text-sm max-w-[200px]">Add categories from the list on the right to start building your menu.</p>
                             </div>
                         ) : (
@@ -266,7 +265,7 @@ const HeaderManager = () => {
                                 </SortableContext>
                             </DndContext>
                         )}
-                        <p className="mt-8 text-[10px] text-center text-gray-300 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
+                        <p className="mt-6 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-gray-300">
                             <MdInfo size={14} /> Only active categories will show on front-end
                         </p>
                     </div>
@@ -274,28 +273,28 @@ const HeaderManager = () => {
 
                 {/* Right Column: Available Categories */}
                 <div className="space-y-4">
-                    <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest block px-1">
-                        AVAILABLE CATEGORIES ({availableList.length})
+                    <span className="block px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Available Categories ({availableList.length})
                     </span>
 
-                    <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 p-6 max-h-[700px] overflow-y-auto custom-scrollbar">
+                    <div className="max-h-[700px] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 custom-scrollbar">
                         <div className="grid grid-cols-1 gap-2">
                             {availableList.map(category => (
                                 <div 
                                     key={String(category?._id || category?.id)}
                                     onClick={() => addToHeader(category?._id || category?.id)}
-                                    className="flex items-center justify-between p-4 rounded-xl border border-gray-50 hover:bg-blue-50/40 hover:border-blue-100 cursor-pointer transition-all group"
+                                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-gray-200 p-4 transition hover:bg-gray-50"
                                 >
                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center text-gray-400 group-hover:bg-white group-hover:text-blue-500 transition-colors">
+                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50 text-gray-400 transition-colors group-hover:text-blue-500">
                                             <MdFolder size={20} />
                                         </div>
                                         <div className="flex flex-col">
-                                            <span className="font-bold text-gray-700 group-hover:text-blue-700 leading-none">{category?.name || 'Unnamed'}</span>
-                                            <span className="text-[10px] text-gray-400 mt-1 font-bold">{category?.active ? 'Active' : 'Disabled'}</span>
+                                            <span className="leading-none font-semibold text-gray-700 group-hover:text-blue-700">{category?.name || 'Unnamed'}</span>
+                                            <span className="mt-1 text-[10px] font-semibold text-gray-400">{category?.active ? 'Active' : 'Disabled'}</span>
                                         </div>
                                     </div>
-                                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-50 text-gray-300 transition group-hover:bg-blue-600 group-hover:text-white">
                                         <MdAdd size={20} />
                                     </div>
                                 </div>

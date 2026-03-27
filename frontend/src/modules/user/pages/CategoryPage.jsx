@@ -291,7 +291,7 @@ const CategoryPage = () => {
 
                     <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
                         {/* Always show banners at the top of the category/subcategory view */}
-                        {(rootCategory?.smallBanners?.length > 0 || rootCategory?.secondaryBanners?.length > 0) && (
+                        {(isSubCategoryLandingView || rootCategory?.smallBanners?.length > 0 || rootCategory?.secondaryBanners?.length > 0) && (
                             <div className="md:rounded-lg overflow-hidden relative mb-4">
                                 <SubCategoryList
                                     subCategories={isSubCategoryLandingView ? gridSubCategories : []}

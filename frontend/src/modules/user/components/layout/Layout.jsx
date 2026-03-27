@@ -9,6 +9,7 @@ const Layout = () => {
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
     const isAllCategories = location.pathname === '/categories';
+    const isBecomeSeller = location.pathname.includes('/become-seller');
     const isInfoPage = location.pathname.includes('/info');
     const isCheckout = location.pathname.includes('/checkout');
     const isAccountSectionPage = [
@@ -56,6 +57,7 @@ const Layout = () => {
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
+                            isBecomeSeller ? 'pt-[84px] md:pt-[112px]' :
                             isInfoPage ? 'pt-[76px] md:pt-[108px]' :
                             isCheckout ? 'pt-0 md:pt-[96px]' :
                             isHome ? 'pt-[260px] md:pt-[210px]' :
@@ -76,7 +78,9 @@ const Layout = () => {
             </main>
             {showBottomNav && <BottomNav />}
             {showFooter && (
-                <Footer />
+                <div className="hidden md:block">
+                    <Footer />
+                </div>
             )}
         </div >
     );

@@ -187,8 +187,16 @@ export const updateUserProfile = async (req, res) => {
         const user = await User.findById(req.user._id);
 
         if (user) {
+            const nextEmail = String(req.body.email || '').trim().toLowerCase();
+            if (nextEmail) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+                if (!emailRegex.test(nextEmail)) {
+                    return res.status(400).json({ message: 'Please enter a valid email format' });
+                }
+            }
+
             user.name = req.body.name || user.name;
-            user.email = req.body.email || user.email;
+            user.email = nextEmail || user.email;
             user.phone = req.body.mobile || req.body.phone || user.phone; // Use mobile or phone
             // Ensure gender is valid enum value
             if (req.body.gender) {

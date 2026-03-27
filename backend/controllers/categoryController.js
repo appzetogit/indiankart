@@ -1,5 +1,6 @@
 import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
+import Product from '../models/Product.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -366,8 +367,36 @@ export const deleteCategory = async (req, res) => {
         const category = await Category.findOne({ id: req.params.id });
 
         if (category) {
+            const subCategories = await SubCategory.find({ category: category._id }).select('_id').lean();
+            const subCategoryIds = subCategories.map((subCategory) => subCategory._id);
+            const categoryName = String(category.name || '').trim();
+            const productDeleteFilters = [];
+
+            if (subCategoryIds.length > 0) {
+                productDeleteFilters.push({ subCategories: { $in: subCategoryIds } });
+            }
+
+            if (category.id !== undefined && category.id !== null) {
+                productDeleteFilters.push({ categoryId: category.id });
+            }
+
+            if (categoryName) {
+                productDeleteFilters.push({ category: exactNameRegex(categoryName) });
+            }
+
+            if (productDeleteFilters.length > 0) {
+                await Product.deleteMany({ $or: productDeleteFilters });
+            }
+
+            if (subCategoryIds.length > 0) {
+                await SubCategory.deleteMany({ category: category._id });
+            }
+
             await category.deleteOne();
-            res.json({ message: 'Category removed' });
+            res.json({
+                message: 'Category removed',
+                deletedSubCategories: subCategoryIds.length
+            });
         } else {
             res.status(404).json({ message: 'Category not found' });
         }

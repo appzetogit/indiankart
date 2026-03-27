@@ -13,15 +13,18 @@ const ReturnRequests = () => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [selectedReturn, setSelectedReturn] = useState(null);
     const [selectedProof, setSelectedProof] = useState(null);
-    const [actionNote, setActionNote] = useState('');
     const [nextStatus, setNextStatus] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
+    const normalizeSearchValue = (value) => String(value || '').toLowerCase().replace(/\s+/g, '');
 
     const filteredReturns = returns.filter(ret => {
-        const matchesSearch = ret.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            ret.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            ret.id.toLowerCase().includes(searchTerm.toLowerCase());
+        const normalizedSearch = normalizeSearchValue(searchTerm);
+        const matchesSearch =
+            !normalizedSearch ||
+            normalizeSearchValue(ret.orderId).includes(normalizedSearch) ||
+            normalizeSearchValue(ret.customer).includes(normalizedSearch) ||
+            normalizeSearchValue(ret.id).includes(normalizedSearch);
         const matchesType = typeFilter === 'All' || ret.type === typeFilter;
         const matchesStatus = statusFilter === 'All' || ret.status === statusFilter;
         return matchesSearch && matchesType && matchesStatus;
@@ -52,10 +55,20 @@ const ReturnRequests = () => {
         }
     };
 
-    const handleStatusUpdate = async (id, newStatus) => {
-        await updateReturnStatus(id, newStatus, actionNote);
+    const handleStatusUpdate = async (id, newStatus, note = '') => {
+        await updateReturnStatus(id, newStatus, note);
         setSelectedReturn((prev) => prev ? { ...prev, status: newStatus } : prev);
-        setActionNote('');
+    };
+
+    const handleRejectWithReason = async (id) => {
+        const reason = window.prompt('Enter reject reason');
+        if (reason === null) return;
+        const trimmedReason = String(reason || '').trim();
+        if (!trimmedReason) {
+            window.alert('Reject reason is required.');
+            return;
+        }
+        await handleStatusUpdate(id, 'Rejected', trimmedReason);
     };
 
     const isVideoUrl = (url = '') => /\.(mp4|mov|webm|mkv|avi)(\?|$)/i.test(url);
@@ -232,7 +245,7 @@ const ReturnRequests = () => {
                                                     ? ret.timeline[ret.timeline.length - 1].status
                                                     : 'Initialized'}
                                             </p>
-                                            <p className="text-[9px] text-gray-400">
+                                            <p className="text-[9px] text-gray-900">
                                                 {ret.timeline && ret.timeline.length > 0
                                                     ? new Date(ret.timeline[ret.timeline.length - 1].time).toLocaleString()
                                                     : new Date(ret.date).toLocaleString()}
@@ -448,15 +461,10 @@ const ReturnRequests = () => {
                                                         <div className={`flex-1 bg-white p-4 rounded-2xl shadow-sm border transition-all ${isCurrent ? 'border-blue-200' : 'border-gray-100'}`}>
                                                             <div className="flex items-center justify-between mb-1">
                                                                 <span className="text-xs font-black text-gray-900 uppercase tracking-widest">{step}</span>
-                                                                <span className="text-[9px] text-gray-400 font-bold">
+                                                                <span className="text-[9px] text-gray-900 font-bold">
                                                                     {event?.time ? formatLifecycleTime(event.time) : '--'}
                                                                 </span>
                                                             </div>
-                                                            {event?.note ? (
-                                                                <p className="text-[11px] text-gray-500 font-medium italic">"{event.note}"</p>
-                                                            ) : (
-                                                                <p className="text-[11px] text-gray-400 font-medium italic">No update yet</p>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 );
@@ -469,12 +477,6 @@ const ReturnRequests = () => {
                             {/* Action Footer */}
                             {selectedReturn.status !== 'Completed' && selectedReturn.status !== 'Rejected' && (
                                 <div className="p-6 bg-white border-t border-gray-200 space-y-4">
-                                    <textarea
-                                        placeholder="Add a status update note..."
-                                        className="w-full bg-gray-50 border-2 border-transparent focus:border-blue-500 rounded-2xl p-4 outline-none text-xs font-black text-gray-900 placeholder:text-gray-900 transition-all h-20 resize-none"
-                                        value={actionNote}
-                                        onChange={(e) => setActionNote(e.target.value)}
-                                    />
                                     {selectedReturn.status === 'Pending' ? (
                                         <div className="grid grid-cols-2 gap-3">
                                             <button
@@ -484,7 +486,7 @@ const ReturnRequests = () => {
                                                 {selectedReturn.type === 'Cancellation' ? 'Approve Cancellation' : 'Accept Request'}
                                             </button>
                                             <button
-                                                onClick={() => handleStatusUpdate(selectedReturn._id, 'Rejected')}
+                                                onClick={() => handleRejectWithReason(selectedReturn._id)}
                                                 className="py-3 bg-red-50 text-red-600 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-600 hover:text-white transition"
                                             >
                                                 {selectedReturn.type === 'Cancellation' ? 'Reject Cancellation' : 'Reject Request'}

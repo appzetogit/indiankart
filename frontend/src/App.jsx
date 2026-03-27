@@ -24,7 +24,7 @@ function App() {
       if (!payload?.notification) return;
 
       toast.success(`${payload.notification.title}: ${payload.notification.body}`, {
-        duration: 5000,
+        duration: 2200,
         position: 'top-right'
       });
       console.log('Received foreground message: ', payload);
@@ -39,10 +39,10 @@ function App() {
           position="top-right"
           reverseOrder={false}
           toastOptions={{
-            duration: 1600,
+            duration: 1100,
             removeDelay: 0,
-            success: { duration: 1400, removeDelay: 0 },
-            error: { duration: 1800, removeDelay: 0 }
+            success: { duration: 1000, removeDelay: 0 },
+            error: { duration: 1200, removeDelay: 0 }
           }}
         />
         <Suspense fallback={<Loader fullPage message="Loading page..." variant="shimmer" />}>

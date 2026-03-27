@@ -28,7 +28,7 @@ const BecomeSeller = () => {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
-    const fieldClass = "w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all font-medium outline-none text-gray-900 placeholder:text-gray-400 caret-blue-600";
+    const fieldClass = "w-full px-4 py-2.5 rounded-lg bg-white border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all font-medium outline-none text-gray-900 placeholder:text-gray-400 caret-blue-600";
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -123,7 +123,7 @@ const BecomeSeller = () => {
 
     if (status === 'Pending' || success) {
         return (
-            <div className="min-h-screen pt-2 md:pt-4 pb-12 px-4 bg-gray-50 flex items-start justify-center">
+            <div className="min-h-screen px-4 pt-6 md:pt-10 pb-8 bg-white flex items-start justify-center">
                 <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-blue-50">
                     <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <MdAssignment className="text-4xl text-blue-600" />
@@ -145,7 +145,7 @@ const BecomeSeller = () => {
 
     if (status === 'Approved') {
         return (
-            <div className="min-h-screen pt-2 md:pt-4 pb-12 px-4 bg-gray-50 flex items-start justify-center">
+            <div className="min-h-screen px-4 pt-6 md:pt-10 pb-8 bg-white flex items-start justify-center">
                 <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-green-50">
                     <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <MdStore className="text-4xl text-green-600" />
@@ -166,27 +166,27 @@ const BecomeSeller = () => {
     }
 
     return (
-        <div className="min-h-screen pt-4 pb-12 px-4 bg-gradient-to-b from-blue-50/50 to-white">
+        <div className="min-h-screen pt-0 pb-6 px-3 md:px-4 bg-white">
             <div className="max-w-3xl mx-auto">
-                <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                     {/* Header */}
-                    <div className="bg-blue-600 p-8 text-white relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <MdStore size={120} />
+                    <div className="bg-blue-600 p-4 md:p-5 text-white relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-3 opacity-10">
+                            <MdStore size={88} />
                         </div>
-                        <h1 className="text-3xl font-black mb-2">Become a Seller</h1>
-                        <p className="text-blue-100 font-medium opacity-90">Fill in the details below to start your selling journey on IndianKart.</p>
+                        <h1 className="text-xl md:text-2xl font-black mb-1">Become a Seller</h1>
+                        <p className="text-blue-100 text-sm font-medium opacity-90">Fill in the details below to start your selling journey on IndianKart.</p>
                     </div>
 
                     {/* Form */}
-                    <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                    <form onSubmit={handleSubmit} className="p-4 md:p-5 space-y-4">
                         {error && (
                             <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-bold border border-red-100 animate-pulse">
                                 {error}
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {/* Store Name */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
@@ -290,7 +290,7 @@ const BecomeSeller = () => {
                                 value={formData.businessAddress}
                                 onChange={handleChange}
                                 placeholder="Complete business address..."
-                                rows="3"
+                                rows="2"
                                 className={`${fieldClass} resize-none`}
                             ></textarea>
                         </div>
@@ -306,7 +306,7 @@ const BecomeSeller = () => {
                                 value={formData.description}
                                 onChange={handleChange}
                                 placeholder="Tell us about the products you plan to sell..."
-                                rows="4"
+                                rows="3"
                                 className={`${fieldClass} resize-none`}
                             ></textarea>
                         </div>
@@ -314,7 +314,7 @@ const BecomeSeller = () => {
                         <button
                             disabled={submitting}
                             type="submit"
-                            className="w-full bg-blue-600 text-white font-black py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2 group disabled:opacity-70"
+                            className="w-full bg-blue-600 text-white font-black py-3 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-100 flex items-center justify-center gap-2 group disabled:opacity-70"
                         >
                             {submitting ? (
                                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

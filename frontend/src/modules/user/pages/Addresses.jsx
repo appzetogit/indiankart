@@ -68,8 +68,20 @@ const Addresses = () => {
         e.preventDefault();
         // Validate Indian mobile number
         const mobileRegex = /^[6-9]\d{9}$/;
+        const pincodeRegex = /^\d{6}$/;
         if (!mobileRegex.test(newAddr.mobile)) {
             return toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
+        }
+        if (!pincodeRegex.test(String(newAddr.pincode || '').trim())) {
+            return toast.error('Please enter a valid 6-digit pincode');
+        }
+
+        if (/\d/.test(String(newAddr.city || '').trim())) {
+            return toast.error('City should not contain numbers');
+        }
+
+        if (/\d/.test(String(newAddr.state || '').trim())) {
+            return toast.error('State should not contain numbers');
         }
 
         if (editingId) {
@@ -334,7 +346,18 @@ const Addresses = () => {
                                         </div>
                                         <div className="col-span-2 md:col-span-1 space-y-1">
                                             <label className="text-[10px] font-bold text-gray-400 uppercase">{pincodeText}</label>
-                                            <input required type="number" className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900" value={newAddr.pincode} onChange={e => setNewAddr({ ...newAddr, pincode: e.target.value })} />
+                                            <input
+                                                required
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength="6"
+                                                className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900"
+                                                value={newAddr.pincode}
+                                                onChange={e => {
+                                                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                    setNewAddr({ ...newAddr, pincode: value });
+                                                }}
+                                            />
                                         </div>
                                         <div className="col-span-2 space-y-1 relative">
                                             <label className="text-[10px] font-bold text-gray-400 uppercase">{addressAreaText}</label>
@@ -381,11 +404,31 @@ const Addresses = () => {
                                         </div>
                                         <div className="col-span-2 md:col-span-1 space-y-1">
                                             <label className="text-[10px] font-bold text-gray-400 uppercase">{cityText}</label>
-                                            <input required type="text" className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900" value={newAddr.city} onChange={e => setNewAddr({ ...newAddr, city: e.target.value })} />
+                                            <input
+                                                required
+                                                type="text"
+                                                className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900"
+                                                value={newAddr.city}
+                                                onChange={e => {
+                                                    const value = e.target.value;
+                                                    if (/\d/.test(value)) return;
+                                                    setNewAddr({ ...newAddr, city: value });
+                                                }}
+                                            />
                                         </div>
                                         <div className="col-span-2 md:col-span-1 space-y-1">
                                             <label className="text-[10px] font-bold text-gray-400 uppercase">{stateText}</label>
-                                            <input required type="text" className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900" value={newAddr.state} onChange={e => setNewAddr({ ...newAddr, state: e.target.value })} />
+                                            <input
+                                                required
+                                                type="text"
+                                                className="w-full border border-gray-200 p-3 rounded-sm text-sm outline-none focus:border-blue-500 text-gray-900"
+                                                value={newAddr.state}
+                                                onChange={e => {
+                                                    const value = e.target.value;
+                                                    if (/\d/.test(value)) return;
+                                                    setNewAddr({ ...newAddr, state: value });
+                                                }}
+                                            />
                                         </div>
                                     </div>
 

@@ -9,6 +9,7 @@ const ProfileSettings = () => {
     const user = useAuthStore((state) => state.user);
     const updateProfile = useAuthStore((state) => state.updateProfile);
     const currentUser = user;
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     const [formData, setFormData] = useState({
         name: '',
@@ -35,8 +36,23 @@ const ProfileSettings = () => {
     }, [currentUser]);
 
     const handleSave = async () => {
+        const trimmedName = String(formData.name || '').trim();
+        const trimmedEmail = String(formData.email || '').trim().toLowerCase();
+        if (!trimmedName) {
+            toast.error('Full name is required');
+            return;
+        }
+        if (/\d/.test(trimmedName)) {
+            toast.error('Full name should not contain numbers');
+            return;
+        }
+        if (trimmedEmail && !EMAIL_REGEX.test(trimmedEmail)) {
+            toast.error('Please enter a valid email format');
+            return;
+        }
+
         try {
-            const promise = updateProfile(formData);
+            const promise = updateProfile({ ...formData, name: trimmedName, email: trimmedEmail });
             await toast.promise(promise, {
                 loading: 'Updating profile...',
                 success: 'Profile updated successfully!',
@@ -78,7 +94,11 @@ const ProfileSettings = () => {
                                         <input
                                             type="text"
                                             value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            onChange={(e) => {
+                                                const value = e.target.value;
+                                                if (/\d/.test(value)) return;
+                                                setFormData({ ...formData, name: value });
+                                            }}
                                             className="w-full border border-gray-300 rounded-xl pl-11 pr-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500 bg-white"
                                             placeholder="Enter your full name"
                                         />
@@ -106,7 +126,7 @@ const ProfileSettings = () => {
                                     <input
                                         type="email"
                                         value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
                                         className="w-full border border-gray-300 rounded-xl pl-11 pr-4 py-3 text-sm text-gray-900 outline-none focus:border-blue-500 bg-white"
                                         placeholder="Enter your email"
                                     />

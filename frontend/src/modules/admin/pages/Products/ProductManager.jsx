@@ -7,6 +7,28 @@ import API from '../../../../services/api'; import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
+const getCategoryLabel = (product) => {
+    const rawCategory = product?.category;
+    if (!rawCategory) return 'Uncategorized';
+    if (typeof rawCategory === 'string') return rawCategory;
+    return rawCategory.name || 'Uncategorized';
+};
+
+const getSubCategoryLabel = (product) => {
+    const multi = product?.subCategories;
+    if (Array.isArray(multi) && multi.length > 0) {
+        const names = multi
+            .map((item) => (typeof item === 'string' ? item : item?.name))
+            .filter(Boolean);
+        if (names.length > 0) return names.join(', ');
+    }
+
+    const single = product?.subCategory;
+    if (!single) return '';
+    if (typeof single === 'string') return single;
+    return single.name || '';
+};
+
 const ProductManager = () => {
     const navigate = useNavigate();
     const { deleteProduct } = useProductStore();
@@ -173,18 +195,19 @@ const ProductManager = () => {
                             <table className="w-full min-w-max text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-100">
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Details</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Category</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Stock Status</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Details</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Category</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Subcategory</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Stock Status</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {localProducts.map(product => (
                                         <tr key={product.id} className="hover:bg-blue-50/10 transition-colors group">
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
-                                                <div className="flex items-center gap-2 md:gap-4">
-                                                    <div className="w-8 h-8 md:w-12 md:h-12 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5">
+                                                <div className="flex items-center gap-2 md:gap-3">
+                                                    <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
                                                         {product.image ? (
                                                             <img src={product.image} className="w-full h-full object-contain p-1" alt="" />
                                                         ) : (
@@ -199,19 +222,23 @@ const ProductManager = () => {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
-                                                <div className="flex flex-col items-center gap-1">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-center">
+                                                <div className="flex flex-col items-center">
                                                     <span className="inline-block px-2.5 py-1 rounded-full bg-blue-50 text-[10px] font-black text-blue-600 uppercase">
-                                                        {product.category}
+                                                        {getCategoryLabel(product)}
                                                     </span>
-                                                    {product.subCategory && (
-                                                        <span className="inline-block px-2.5 py-1 rounded-full bg-gray-100 text-[9px] font-bold text-gray-500 uppercase flex items-center gap-1">
-                                                            <span className="text-gray-300">↳</span> {product.subCategory.name}
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-center">
+                                                {getSubCategoryLabel(product) ? (
+                                                    <span className="inline-block px-2.5 py-1 rounded-full bg-gray-100 text-[9px] font-bold text-gray-500 uppercase">
+                                                        {getSubCategoryLabel(product)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">N/A</span>
+                                                )}
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-center">
                                                 <div className="flex flex-col items-center">
                                                     <span className={`text-[11px] font-black uppercase tracking-widest ${(product.stock || 0) <= 5 ? 'text-amber-500 animate-pulse' : 'text-blue-600'}`}>
                                                         {product.stock || 0} Units
@@ -224,7 +251,7 @@ const ProductManager = () => {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-right">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1 md:gap-2">
                                                     <button
                                                         onClick={() => setSelectedProduct(product)}
@@ -301,8 +328,10 @@ const ProductManager = () => {
 
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                            <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Category</p>
-                                            <p className="text-xs font-bold text-gray-800">{selectedProduct.category}</p>
+                                            <p className="text-xs font-bold text-gray-800">Category: {getCategoryLabel(selectedProduct)}</p>
+                                            <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                                                Subcategory: {getSubCategoryLabel(selectedProduct) || 'N/A'}
+                                            </p>
                                         </div>
                                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                                             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Stock Level</p>

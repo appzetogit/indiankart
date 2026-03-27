@@ -74,10 +74,20 @@ const ProductForm = () => {
 
     // Detect if category is Electronics for conditional warranty display
     const selectedCategory = React.useMemo(() =>
-        categories.find(c => c._id === formData.categoryPath[0]),
+        categories.find(c => String(c.id || c._id) === String(formData.categoryPath[0] || '')),
         [categories, formData.categoryPath]
     );
     const isElectronics = selectedCategory?.name?.toLowerCase() === 'electronics';
+    const availableSubCategories = React.useMemo(() => {
+        if (!formData.categoryPath[0]) return [];
+        const primaryCat = categories.find(c => String(c.id) === String(formData.categoryPath[0]));
+        if (!primaryCat?._id) return [];
+
+        return subCategories.filter((sub) => {
+            const subCategoryId = sub.category?._id || sub.category;
+            return String(subCategoryId) === String(primaryCat._id);
+        });
+    }, [categories, subCategories, formData.categoryPath]);
 
     // Populate form if editing
     useEffect(() => {
@@ -463,6 +473,25 @@ const ProductForm = () => {
 
         if (normalizedSkus.some(sku => sku.stock < 0)) {
             toast.error('Stock cannot be negative');
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (!formData.categoryPath[0]) {
+            toast.error('Please select a primary category');
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (availableSubCategories.length === 0) {
+            toast.error('No subcategory exists for this category. Please create subcategory first.');
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (!formData.subCategories || formData.subCategories.length === 0) {
+            toast.error('Subcategory is mandatory. Please select a subcategory.');
+            setIsSubmitting(false);
             return;
         }
 
@@ -615,18 +644,14 @@ const ProductForm = () => {
         // ... (inside ProductForm component)
 
         try {
-            let savedProduct;
             if (isEdit) {
-                savedProduct = await updateProduct(parseInt(id), data);
+                await updateProduct(parseInt(id), data);
                 toast.success('Product updated successfully!');
-                navigate('/admin/products');
             } else {
-                savedProduct = await addProduct(data);
+                await addProduct(data);
                 toast.success('Product created successfully!');
             }
-            if (!isEdit && savedProduct?.id) {
-                navigate(`/admin/products/edit/${savedProduct.id}`, { replace: true });
-            }
+            navigate('/admin/products', { replace: true });
         } catch (error) {
             console.error("Failed to save product:", error);
             const message = error.response?.data?.message || "Failed to save product. Please try again.";
@@ -654,9 +679,9 @@ const ProductForm = () => {
 
     return (
         <>
-            <div className="max-w-7xl mx-auto px-2 md:px-4 sm:px-6 lg:px-8 py-2 md:py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 mb-2 md:mb-8 bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 md:mb-6 bg-white p-4 md:p-5 rounded-2xl border border-gray-200">
                     <div className="flex items-center gap-2 md:gap-4">
                         <button
                             onClick={() => navigate('/admin/products')}
@@ -680,7 +705,7 @@ const ProductForm = () => {
                         <button
                             onClick={handleSubmit}
                             disabled={isLoading || isSubmitting}
-                            className={`px-4 py-2 md:px-10 md:py-2.5 rounded-xl text-xs md:text-sm font-bold text-white transition-all shadow-lg shadow-blue-200 flex items-center gap-2 ${(isLoading || isSubmitting) ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                            className={`px-4 py-2 md:px-6 md:py-2.5 rounded-xl text-xs md:text-sm font-bold text-white transition flex items-center gap-2 ${(isLoading || isSubmitting) ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                                 }`}
                         >
                             {(isLoading || isSubmitting) ? (
@@ -700,7 +725,7 @@ const ProductForm = () => {
                     <div className="lg:col-span-8 space-y-3 md:space-y-8">
 
                         {/* Basic Info Card */}
-                        <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-3 md:space-y-6">
+                        <section className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 md:space-y-6">
                             <div className="flex items-center gap-2 md:gap-3 border-b border-gray-50 pb-2 md:pb-4">
                                 <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm md:text-base">1</span>
                                 <h2 className="text-base md:text-lg font-bold text-gray-800">Basic Information</h2>
@@ -886,7 +911,9 @@ const ProductForm = () => {
 
                                     {formData.categoryPath[0] && (
                                         <div className="mt-4">
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Sub Category</label>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+                                                Sub Category <span className="text-red-500">*</span>
+                                            </label>
                                             <select
                                                 value={formData.subCategories[0] || ''}
                                                 onChange={(e) => {
@@ -899,46 +926,15 @@ const ProductForm = () => {
                                                 className="w-full px-4 py-2.5 rounded-lg bg-white border border-gray-200 outline-none focus:ring-2 ring-blue-100 text-sm font-medium text-gray-900"
                                             >
                                                 <option value="">Select Sub Category</option>
-                                                {(function () {
-                                                    const primaryCat = categories.find(c => String(c.id) === String(formData.categoryPath[0]));
-                                                    if (!primaryCat) {
-                                                        console.log('ProductForm: No primary category found');
-                                                        return null;
-                                                    }
-
-                                                    console.log('Primary Category:', primaryCat.name, 'ID:', primaryCat.id, '_id:', primaryCat._id);
-                                                    console.log('Total SubCategories:', subCategories.length);
-
-                                                    // Debug: Show first 5 subcategories and their category IDs
-                                                    if (subCategories.length > 0) {
-                                                        console.log('Sample SubCategories (first 5):');
-                                                        subCategories.slice(0, 5).forEach(sub => {
-                                                            const catId = sub.category?._id || sub.category;
-                                                            console.log(`  - ${sub.name}: category=${catId}`);
-                                                        });
-                                                    }
-
-                                                    const filtered = subCategories.filter(sub => {
-                                                        // Handle both populated (object) and unpopulated (ObjectId) category field
-                                                        const subCategoryId = sub.category?._id || sub.category;
-                                                        const primaryCategoryId = primaryCat._id;
-
-                                                        const match = String(subCategoryId) === String(primaryCategoryId);
-
-                                                        if (match) {
-                                                            console.log('Matched SubCategory:', sub.name, 'for category', primaryCat.name);
-                                                        }
-
-                                                        return match;
-                                                    });
-
-                                                    console.log('Filtered SubCategories:', filtered.length);
-
-                                                    return filtered.map(sub => (
-                                                        <option key={sub._id} value={sub._id}>{sub.name}</option>
-                                                    ));
-                                                })()}
+                                                {availableSubCategories.map(sub => (
+                                                    <option key={sub._id} value={sub._id}>{sub.name}</option>
+                                                ))}
                                             </select>
+                                            {availableSubCategories.length === 0 && (
+                                                <p className="mt-2 text-xs font-semibold text-red-600">
+                                                    No subcategory found for selected category. Create one first.
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -946,16 +942,16 @@ const ProductForm = () => {
                         </section>
 
                         {/* Product Highlights (Dynamic Sections) */}
-                        <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-3 md:space-y-6">
+                        <section className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 md:space-y-6">
                             <div className="flex items-center justify-between border-b border-gray-50 pb-2 md:pb-4">
                                 <div className="flex items-center gap-2 md:gap-3">
-                                    <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold"><span className="material-icons text-sm md:text-[18px]">star</span></span>
+                                    <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold"><span className="material-icons text-sm md:text-[18px]">star</span></span>
                                     <h2 className="text-base md:text-lg font-bold text-gray-800">Product Highlights</h2>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setShowPasteModal(true)}
-                                    className="px-2 py-1 md:px-3 md:py-1.5 bg-amber-100 text-amber-700 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider hover:bg-amber-200 transition-colors flex items-center gap-1"
+                                    className="px-2 py-1 md:px-3 md:py-1.5 bg-blue-50 text-blue-700 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-wider hover:bg-blue-100 transition-colors flex items-center gap-1"
                                 >
                                     <span className="material-icons text-xs md:text-sm">content_paste</span>
                                     Paste & Parse
@@ -976,7 +972,7 @@ const ProductForm = () => {
                                                     setFormData(prev => ({ ...prev, highlights: newHighlights }));
                                                 }}
                                                 placeholder="Section Heading (e.g., Specifications)"
-                                                className="flex-1 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-white border border-gray-300 focus:border-amber-500 outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-500 text-xs md:text-base"
+                                                className="flex-1 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-white border border-gray-300 focus:border-blue-500 outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-500 text-xs md:text-base"
                                             />
                                             <button
                                                 type="button"
@@ -1004,7 +1000,7 @@ const ProductForm = () => {
                                                             setFormData(prev => ({ ...prev, highlights: newHighlights }));
                                                         }}
                                                         placeholder="Bullet point..."
-                                                        className="flex-1 px-4 py-2 rounded-lg bg-white border border-gray-200 focus:border-amber-500 outline-none transition-all text-sm text-gray-900 caret-black placeholder:text-gray-500"
+                                                        className="flex-1 px-4 py-2 rounded-lg bg-white border border-gray-200 focus:border-blue-500 outline-none transition-all text-sm text-gray-900 caret-black placeholder:text-gray-500"
                                                     />
                                                     <button
                                                         type="button"
@@ -1029,7 +1025,7 @@ const ProductForm = () => {
                                                     newHighlights[sectionIdx].points.push('');
                                                     setFormData(prev => ({ ...prev, highlights: newHighlights }));
                                                 }}
-                                                className="mt-2 px-4 py-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all text-sm font-bold"
+                                                className="mt-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all text-sm font-bold"
                                             >
                                                 + Add Bullet Point
                                             </button>
@@ -1043,7 +1039,7 @@ const ProductForm = () => {
                                         ...prev,
                                         highlights: [...prev.highlights, { heading: '', points: [''] }]
                                     }))}
-                                    className="w-full px-4 py-3 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl hover:shadow-lg transition-all font-bold"
+                                    className="w-full px-4 py-3 bg-[#1f2937] text-white rounded-xl hover:bg-[#111827] transition font-bold"
                                 >
                                     + Add Highlight Section
                                 </button>
@@ -1052,7 +1048,7 @@ const ProductForm = () => {
 
 
                         {/* Warranty & Returns Policy Card */}
-                        <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-3 md:space-y-6">
+                        <section className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-4 md:space-y-6">
                             <div className="flex items-center gap-2 md:gap-3 border-b border-gray-50 pb-2 md:pb-4">
                                 <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center font-bold text-sm md:text-base">2</span>
                                 <h2 className="text-base md:text-lg font-bold text-gray-800">Warranty & Returns Policy</h2>
@@ -1121,7 +1117,7 @@ const ProductForm = () => {
                         </section>
 
                         {/* Dynamic Variants Card */}
-                        <section className="bg-white p-3 md:p-8 rounded-3xl shadow-sm border border-gray-100 space-y-4 md:space-y-8">
+                        <section className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 space-y-5 md:space-y-6">
                             <div className="flex items-center justify-between border-b border-gray-50 pb-2 md:pb-4">
                                 <div className="flex items-center gap-2 md:gap-3">
                                     <span className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-sm md:text-base">4</span>
@@ -1250,7 +1246,7 @@ const ProductForm = () => {
                                 ))}
 
                                 {formData.variantHeadings.length === 0 && (
-                                    <div className="text-center py-12 border-2 border-dashed border-gray-100 rounded-3xl">
+                                    <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-2xl">
                                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
                                             <span className="material-icons text-gray-300 text-3xl">style</span>
                                         </div>
@@ -1261,10 +1257,10 @@ const ProductForm = () => {
 
                                 {/* Combinations Matrix */}
                                 {formData.variantHeadings.some(vh => vh.options.some(opt => opt.name)) && (
-                                    <div className="mt-6 md:mt-12 p-3 md:p-8 bg-gradient-to-br from-gray-50 to-white rounded-3xl border border-gray-200 shadow-inner">
+                                    <div className="mt-6 md:mt-8 p-4 md:p-6 bg-gray-50 rounded-2xl border border-gray-200">
                                         <div className="flex justify-between items-center mb-4 md:mb-8">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-200">
+                                                <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white">
                                                     <span className="material-icons text-2xl">grid_view</span>
                                                 </div>
                                                 <div>
@@ -1398,7 +1394,7 @@ const ProductForm = () => {
                         {/* Metadata Card - Simplified */}
                         <section className="space-y-4">
                             {/* Description (Headings with Points) */}
-                            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all">
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all">
                                 <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleSection('description')}>
                                     <div className="flex items-center gap-3">
                                         <span className="material-icons text-indigo-500">description</span>
@@ -1540,7 +1536,7 @@ const ProductForm = () => {
 
                             {/* Warranty - Only for Electronics */}
                             {isElectronics && (
-                                <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all">
+                                <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all">
                                     <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleSection('warranty')}>
                                         <div className="flex items-center gap-3">
                                             <span className="material-icons text-green-500">verified_user</span>
@@ -1584,7 +1580,7 @@ const ProductForm = () => {
                             )}
 
                             {/* Specifications - Optional */}
-                            <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all">
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden transition-all">
                                 <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50" onClick={() => toggleSection('specifications')}>
                                     <div className="flex items-center gap-3">
                                         <span className="material-icons text-purple-500">fact_check</span>
@@ -1667,8 +1663,8 @@ const ProductForm = () => {
 
             {/* Paste Highlights Modal */}
             {showPasteModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-4 md:p-6 space-y-4">
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-4 md:p-6 space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-bold text-gray-900">Paste Highlights</h3>
                             <button

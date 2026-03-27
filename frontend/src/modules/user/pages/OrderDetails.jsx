@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
@@ -35,6 +35,33 @@ const buildEstimatedDeliveryText = (deliveryTime, unit) => {
     return `Estimated delivery by ${dateLabel} (${timeValue} ${unitLabel})`;
 };
 
+const normalizeReturnTrackingStatus = (status) => {
+    const raw = String(status || '').trim();
+    if (raw === 'Return Requested' || raw === 'Replacement Requested') return 'Pending';
+    if (raw === 'Returned' || raw === 'Replaced') return 'Completed';
+    if (raw === 'Return Rejected') return 'Rejected';
+    return raw;
+};
+
+const getReturnLifecycleSteps = (type) => {
+    if (type === 'Cancellation') return ['Pending', 'Approved', 'Completed'];
+    if (type === 'Replacement') return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Replacement Dispatched', 'Completed'];
+    return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
+};
+
+const formatReturnTimelineDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
 const OrderDetails = () => {
     const { orderId } = useParams();
     const navigate = useNavigate();
@@ -42,6 +69,7 @@ const OrderDetails = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [settings, setSettings] = useState(null);
+    const [myReturns, setMyReturns] = useState([]);
     const [deliveryEstimate, setDeliveryEstimate] = useState({
         loading: false,
         isServiceable: null,
@@ -54,6 +82,24 @@ const OrderDetails = () => {
     }, [orderId]);
 
     useEffect(() => {
+        const fetchMyReturns = async () => {
+            try {
+                const { data } = await API.get('/returns/my-returns');
+                setMyReturns(Array.isArray(data) ? data : []);
+            } catch (err) {
+                setMyReturns([]);
+            }
+        };
+        fetchMyReturns();
+    }, []);
+
+    useEffect(() => {
+        const delivered = String(order?.status || '').trim() === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
+        if (delivered) {
+            setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
+            return;
+        }
+
         const shippingPincode = order?.shippingAddress?.postalCode || order?.shippingAddress?.pincode;
         if (!shippingPincode) {
             setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
@@ -166,6 +212,8 @@ const OrderDetails = () => {
             'Replacement Dispatched': 'bg-pink-100 text-pink-800 border-pink-200',
             'Returned': 'bg-gray-100 text-gray-800 border-gray-200',
             'Replaced': 'bg-green-100 text-green-800 border-green-200',
+            'Completed': 'bg-green-100 text-green-800 border-green-200',
+            'Rejected': 'bg-red-50 text-red-800 border-red-200',
             'Return Rejected': 'bg-red-50 text-red-800 border-red-200'
         };
         return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
@@ -190,6 +238,8 @@ const OrderDetails = () => {
             'Replacement Dispatched': 'local_shipping',
             'Returned': 'keyboard_return',
             'Replaced': 'published_with_changes',
+            'Completed': 'check_circle',
+            'Rejected': 'cancel',
             'Return Rejected': 'cancel'
         };
         return icons[status] || 'info';
@@ -199,6 +249,45 @@ const OrderDetails = () => {
         const steps = ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
         return steps.indexOf(currentStatus);
     };
+
+    const steps = [
+        { name: 'Order Placed', status: 'Pending', icon: 'shopping_cart' },
+        { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
+        { name: 'Packed', status: 'Packed', icon: 'inventory_2' },
+        { name: 'Dispatched', status: 'Dispatched', icon: 'local_shipping' },
+        { name: 'Out for Delivery', status: 'Out for Delivery', icon: 'delivery_dining' },
+        { name: 'Delivered', status: 'Delivered', icon: 'done_all' }
+    ];
+    const currentStep = getStatusStep(order?.status);
+    const orderProgress = steps.length > 1 && currentStep >= 0
+        ? (currentStep / (steps.length - 1)) * 100
+        : 0;
+    const normalizedOrderStatus = String(order?.status || '').trim();
+    const isDeliveredOrder = normalizedOrderStatus === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
+    const rejectedReasonByProduct = useMemo(() => {
+        const out = {};
+        const orderKey = String(order?._id || '');
+        myReturns
+            .filter((ret) => String(ret?.orderId || '') === orderKey && String(ret?.status || '').trim() === 'Rejected')
+            .forEach((ret) => {
+                const timeline = Array.isArray(ret.timeline) ? ret.timeline : [];
+                const latestRejected = [...timeline].reverse().find((entry) => String(entry?.status || '').trim() === 'Rejected');
+                const reason = String(latestRejected?.note || '').trim();
+                if (!reason) return;
+                const productName = String(ret?.product?.name || '').trim();
+                if (productName) out[productName] = reason;
+            });
+        return out;
+    }, [myReturns, order?._id]);
+    const orderReturnRequests = useMemo(() => {
+        const orderKey = String(order?._id || '');
+        return myReturns
+            .filter((ret) => String(ret?.orderId || '') === orderKey)
+            .sort((a, b) => new Date(b?.updatedAt || b?.createdAt || 0) - new Date(a?.updatedAt || a?.createdAt || 0));
+    }, [myReturns, order?._id]);
+    const paymentInfoStatus = order?.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
+        ? 'Confirmed'
+        : 'Pending';
 
     if (loading) {
         return (
@@ -226,22 +315,8 @@ const OrderDetails = () => {
         );
     }
 
-    const currentStep = getStatusStep(order.status);
-    const normalizedOrderStatus = String(order?.status || '').trim();
-    const paymentInfoStatus = order.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
-        ? 'Confirmed'
-        : 'Pending';
-    const steps = [
-        { name: 'Order Placed', status: 'Pending', icon: 'shopping_cart' },
-        { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
-        { name: 'Packed', status: 'Packed', icon: 'inventory_2' },
-        { name: 'Dispatched', status: 'Dispatched', icon: 'local_shipping' },
-        { name: 'Out for Delivery', status: 'Out for Delivery', icon: 'delivery_dining' },
-        { name: 'Delivered', status: 'Delivered', icon: 'done_all' }
-    ];
-
     return (
-        <div className="min-h-screen bg-white pb-20">
+        <div className="min-h-screen bg-gray-50 pb-20">
             {/* Header */}
             <div className="bg-white px-4 py-5 sticky top-[110px] md:top-[96px] z-30 shadow-sm border-b border-gray-200">
                 <div className="max-w-6xl mx-auto flex items-center gap-4">
@@ -269,34 +344,35 @@ const OrderDetails = () => {
                     <div className="lg:col-span-2 space-y-6">
                         {/* Order Status Timeline */}
                         {order.status !== 'Cancelled' && order.status !== 'Cancellation Requested' && (
-                            <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                                 <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    <span className="material-icons text-blue-600">local_shipping</span>
+                                    <span className="material-icons text-gray-700">local_shipping</span>
                                     Track Your Order
                                 </h2>
-                                <div className="relative">
-                                    {/* Progress Bar */}
-                                    <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 hidden md:block">
-                                        <div
-                                            className="h-full bg-blue-600 transition-all duration-500"
-                                            style={{ width: `${(currentStep / (steps.length - 1)) * 100}%` }}
-                                        ></div>
-                                    </div>
+                                <div className="pb-2">
+                                    <div className="relative w-full">
+                                        {/* Progress Bar */}
+                                        <div className="absolute left-[calc(100%/12)] right-[calc(100%/12)] top-5 h-1.5 -translate-y-1/2 rounded-full bg-blue-100">
+                                            <div
+                                                className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                                                style={{ width: `${orderProgress}%` }}
+                                            ></div>
+                                        </div>
 
-                                    {/* Steps */}
-                                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-0">
+                                        {/* Steps */}
+                                        <div className="grid grid-cols-6 gap-0">
                                         {steps.map((step, index) => {
                                             const isCompleted = index <= currentStep;
                                             const isCurrent = index === currentStep;
                                             return (
-                                                <div key={step.status} className="flex flex-col items-center relative z-10">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all ${isCompleted
-                                                            ? 'bg-blue-600 text-white shadow-lg'
-                                                            : 'bg-white border-2 border-gray-300 text-gray-400'
+                                                <div key={step.status} className="flex flex-col items-center relative z-10 px-1">
+                                                    <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isCompleted
+                                                            ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
+                                                            : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
                                                         } ${isCurrent ? 'ring-4 ring-blue-200 scale-110' : ''}`}>
-                                                        <span className="material-icons text-lg">{step.icon}</span>
+                                                        <span className="material-icons text-base md:text-lg">{step.icon}</span>
                                                     </div>
-                                                    <p className={`text-xs font-bold text-center ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                    <p className={`text-[10px] md:text-xs font-bold text-center leading-tight ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
                                                         {step.name}
                                                     </p>
                                                     {isCurrent && (
@@ -307,106 +383,112 @@ const OrderDetails = () => {
                                         })}
                                     </div>
                                 </div>
+                                </div>
                             </div>
                         )}
 
                         {/* Return Status Timeline */}
-                        {order.orderItems.some(item => ['Return Requested', 'Replacement Requested', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Returned', 'Replaced', 'Return Rejected'].includes(item.status)) && (
-                            <div className="bg-white p-6 rounded-xl shadow-md border-2 border-orange-100 mt-6">
+                        {orderReturnRequests.length > 0 && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mt-6">
                                 <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
-                                    <span className="material-icons text-orange-600">assignment_return</span>
-                                    Return / Replacement Status
+                                    <span className="material-icons text-gray-700">assignment_return</span>
+                                    Item-wise Return / Replacement Tracking
                                 </h2>
-                                
-                                {(() => {
-                                    // Determine the most advanced return status
-                                    const returnStatuses = order.orderItems.map(item => item.status).filter(s => s && ['Return Requested', 'Replacement Requested', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Returned', 'Replaced', 'Return Rejected'].includes(s));
-                                    
-                                    // Prioritize the "most active" status for the timeline
-                                    // Steps: Request -> Approved -> Pickup -> Warehouse -> Processed -> Completed
-                                    const steps = [
-                                        { name: 'Request Sent', status: ['Return Requested', 'Replacement Requested'], icon: 'assignment_return' },
-                                        { name: 'Approved', status: ['Approved'], icon: 'thumb_up' },
-                                        { name: 'Pickup', status: ['Pickup Scheduled'], icon: 'local_shipping' },
-                                        { name: 'In Warehouse', status: ['Received at Warehouse'], icon: 'warehouse' },
-                                        { name: 'Processing', status: ['Refund Initiated', 'Replacement Dispatched'], icon: 'cached' },
-                                        { name: 'Completed', status: ['Returned', 'Replaced'], icon: 'check_circle' }
-                                    ];
+                                <div className="space-y-4">
+                                    {orderReturnRequests.map((ret) => {
+                                        const timeline = Array.isArray(ret?.timeline) ? ret.timeline : [];
+                                        const latestEntry = timeline.length > 0 ? timeline[timeline.length - 1] : null;
+                                        const currentStatus = normalizeReturnTrackingStatus(latestEntry?.status || ret?.status || 'Pending');
+                                        const stepsForType = getReturnLifecycleSteps(ret?.type);
+                                        const currentStepIndex = stepsForType.indexOf(currentStatus);
+                                        const safeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
+                                        const returnProgress = stepsForType.length > 1
+                                            ? (safeStepIndex / (stepsForType.length - 1)) * 100
+                                            : 0;
+                                        const latestRejected = [...timeline].reverse().find((entry) => normalizeReturnTrackingStatus(entry?.status) === 'Rejected');
+                                        const rejectReason = String(latestRejected?.note || '').trim();
+                                        const productName = String(ret?.product?.name || 'Product').trim();
 
-                                    // Find current step index
-                                    // If multiple items, we pick the one that matches the "latest" stage found in the order items? 
-                                    // Or just pick the first one found for simplicity as usually 1 return per order or batch.
-                                    // Let's iterate backwards through steps to find the latest active one.
-                                    let currentStepIndex = 0;
-                                    for (let i = steps.length - 1; i >= 0; i--) {
-                                        if (returnStatuses.some(s => steps[i].status.includes(s))) {
-                                            currentStepIndex = i;
-                                            break;
-                                        }
-                                    }
-                                    
-                                    // Safety: If rejected, show red
-                                    const isRejected = returnStatuses.includes('Return Rejected');
-
-                                    if (isRejected) {
                                         return (
-                                            <div className="bg-red-50 border-2 border-red-200 p-4 rounded-xl flex items-center gap-3">
-                                                 <span className="material-icons text-red-600 text-3xl">cancel</span>
-                                                 <div>
-                                                     <p className="font-bold text-red-800">Return Request Rejected</p>
-                                                     <p className="text-xs text-red-600">Your return request has been reviewed and rejected.</p>
-                                                 </div>
-                                            </div>
-                                        )
-                                    }
+                                            <div key={ret?._id || ret?.id} className="border border-gray-200 rounded-xl p-4 bg-gray-50/40">
+                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-900">{productName}</p>
+                                                        <p className="text-xs text-gray-600">
+                                                            {ret?.type || 'Return'} Request
+                                                            {latestEntry?.time ? ` • ${formatReturnTimelineDate(latestEntry.time)}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(currentStatus)}`}>
+                                                        <span className="material-icons text-[14px]">{getStatusIcon(currentStatus)}</span>
+                                                        {currentStatus}
+                                                    </span>
+                                                </div>
 
-                                    return (
-                                        <div className="relative">
-                                            {/* Progress Bar */}
-                                            <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 hidden md:block">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500"
-                                                    style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
-                                                ></div>
-                                            </div>
+                                                {currentStatus === 'Rejected' && (
+                                                    <p className="text-xs font-semibold text-red-700 mb-3">
+                                                        Reject reason: {rejectReason || 'No reason shared'}
+                                                    </p>
+                                                )}
 
-                                            {/* Steps */}
-                                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 md:gap-0">
-                                                {steps.map((step, index) => {
-                                                    const isCompleted = index <= currentStepIndex;
-                                                    const isCurrent = index === currentStepIndex;
-                                                    return (
-                                                        <div key={step.name} className="flex flex-col items-center relative z-10">
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 transition-all ${isCompleted
-                                                                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
-                                                                    : 'bg-white border-2 border-gray-300 text-gray-400'
-                                                                } ${isCurrent ? 'ring-4 ring-orange-200 scale-110' : ''}`}>
-                                                                <span className="material-icons text-lg">{step.icon}</span>
-                                                            </div>
-                                                            <p className={`text-xs font-bold text-center ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
-                                                                {step.name}
-                                                            </p>
-                                                            {isCurrent && (
-                                                                <span className="text-[10px] text-orange-600 font-bold mt-1">Current</span>
-                                                            )}
+                                                <div className="pb-2">
+                                                    <div className="relative w-full">
+                                                        <div
+                                                            className="absolute left-[calc(100%/(var(--steps)*2))] right-[calc(100%/(var(--steps)*2))] top-5 h-1.5 -translate-y-1/2 rounded-full bg-blue-100"
+                                                            style={{ '--steps': stepsForType.length }}
+                                                        >
+                                                            <div
+                                                                className={`h-full rounded-full transition-all duration-300 ${
+                                                                    currentStatus === 'Rejected' ? 'bg-red-500' : 'bg-blue-600'
+                                                                }`}
+                                                                style={{
+                                                                    width: `${returnProgress}%`
+                                                                }}
+                                                            />
                                                         </div>
-                                                    );
-                                                })}
+
+                                                        <div
+                                                            className="grid gap-0"
+                                                            style={{ gridTemplateColumns: `repeat(${stepsForType.length}, minmax(0, 1fr))` }}
+                                                        >
+                                                            {stepsForType.map((stepName, idx) => {
+                                                                const done = idx <= safeStepIndex;
+                                                                const active = idx === safeStepIndex;
+                                                                return (
+                                                                    <div key={`${ret?._id || ret?.id}-${stepName}`} className="flex flex-col items-center relative z-10 px-1">
+                                                                        <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
+                                                                            done
+                                                                                ? currentStatus === 'Rejected'
+                                                                                    ? 'bg-red-500 text-white shadow-[0_10px_24px_rgba(239,68,68,0.22)]'
+                                                                                    : 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
+                                                                                : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
+                                                                        } ${active ? (currentStatus === 'Rejected' ? 'ring-4 ring-red-100 scale-110' : 'ring-4 ring-blue-100 scale-110') : ''}`}>
+                                                                            <span className="material-icons text-base md:text-lg">{getStatusIcon(stepName)}</span>
+                                                                        </div>
+                                                                        <p className={`text-[9px] md:text-[11px] font-semibold text-center leading-tight break-words ${done ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                                            {stepName}
+                                                                        </p>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })()}
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
 
                         {/* Cancellation Requested status */}
                         {order.status === 'Cancellation Requested' && (
-                            <div className="bg-orange-50 border-2 border-orange-200 p-6 rounded-xl">
+                            <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl">
                                 <div className="flex items-center gap-3">
-                                    <span className="material-icons text-orange-600 text-4xl animate-pulse">hourglass_empty</span>
+                                    <span className="material-icons text-amber-700 text-4xl animate-pulse">hourglass_empty</span>
                                     <div>
-                                        <h3 className="text-xl font-bold text-orange-800">Cancellation Requested</h3>
-                                        <p className="text-sm text-orange-600 mt-1">Your request is being reviewed by our team. You'll be notified once it's approved.</p>
+                                        <h3 className="text-xl font-bold text-amber-900">Cancellation Requested</h3>
+                                        <p className="text-sm text-amber-800 mt-1">Your request is being reviewed by our team. You'll be notified once it's approved.</p>
                                     </div>
                                 </div>
                             </div>
@@ -414,7 +496,7 @@ const OrderDetails = () => {
 
                         {/* Cancelled Status */}
                         {order.status === 'Cancelled' && (
-                            <div className="bg-red-50 border-2 border-red-200 p-6 rounded-xl">
+                            <div className="bg-red-50 border border-red-200 p-6 rounded-xl">
                                 <div className="flex items-center gap-3">
                                     <span className="material-icons text-red-600 text-4xl">cancel</span>
                                     <div>
@@ -426,15 +508,15 @@ const OrderDetails = () => {
                         )}
 
                         {/* Order Items */}
-                        <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <span className="material-icons text-blue-600">shopping_bag</span>
+                                <span className="material-icons text-gray-700">shopping_bag</span>
                                 Items in Order ({order.orderItems.length})
                             </h2>
                             <div className="space-y-4">
                                 {order.orderItems.map((item, index) => (
-                                    <div key={index} className="flex gap-4 p-4 bg-white rounded-lg border border-blue-100">
-                                        <div className="w-20 h-20 bg-white rounded-lg border-2 border-blue-100 p-2 flex-shrink-0">
+                                    <div key={index} className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200">
+                                        <div className="w-20 h-20 bg-white rounded-lg border border-gray-200 p-2 flex-shrink-0">
                                             <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
                                         </div>
                                         <div className="flex-1">
@@ -443,15 +525,15 @@ const OrderDetails = () => {
                                                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                                                             {Object.entries(item.variant).map(([key, value]) => (
                                                                 <span key={key} className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">
-                                                                    {key}: <span className="text-blue-600">{value}</span>
+                                                                    {key}: <span className="text-gray-700">{value}</span>
                                                                 </span>
                                                             ))}
                                                         </div>
                                                     )}
                                                     {(item.serialNumber && (order.status === 'Delivered' || order.isDelivered)) && (
                                                         <div className="mt-2">
-                                                            <span className="text-sm bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg font-bold font-mono border border-blue-200 shadow-sm flex items-center gap-2 w-max select-all">
-                                                    <span className="text-blue-400 select-none">{item.serialType === 'IMEI' ? 'IMEI:' : 'SN:'}</span> {item.serialNumber}
+                                                            <span className="text-sm bg-gray-100 text-gray-800 px-3 py-1.5 rounded-lg font-bold font-mono border border-gray-300 shadow-sm flex items-center gap-2 w-max select-all">
+                                                    <span className="text-gray-500 select-none">{item.serialType === 'IMEI' ? 'IMEI:' : 'SN:'}</span> {item.serialNumber}
                                                 </span>
                                                         </div>
                                                     )}
@@ -462,10 +544,17 @@ const OrderDetails = () => {
 
                                             {/* Item Status Badge */}
                                             {item.status && item.status !== order.status && (
-                                                <div className={`mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(item.status)}`}>
-                                                    <span className="material-icons text-[14px]">{getStatusIcon(item.status)}</span>
-                                                    {item.status}
-                                                </div>
+                                                <>
+                                                    <div className={`mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(item.status)}`}>
+                                                        <span className="material-icons text-[14px]">{getStatusIcon(item.status)}</span>
+                                                        {item.status}
+                                                    </div>
+                                                    {item.status === 'Return Rejected' && rejectedReasonByProduct[item.name] && (
+                                                        <p className="mt-2 text-xs text-red-700 font-semibold">
+                                                            Reject reason: {rejectedReasonByProduct[item.name]}
+                                                        </p>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -474,12 +563,12 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Delivery Address */}
-                        <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <span className="material-icons text-blue-600">location_on</span>
+                                <span className="material-icons text-gray-700">location_on</span>
                                 Delivery Address
                             </h2>
-                            <div className="bg-white p-4 rounded-lg border border-blue-100">
+                            <div className="bg-white p-4 rounded-lg border border-gray-200">
                                 <p className="font-bold text-gray-800">{order.shippingAddress.street}</p>
                                 <p className="text-sm text-gray-600 mt-1">
                                     {order.shippingAddress.city}, {order.shippingAddress.postalCode}
@@ -492,15 +581,15 @@ const OrderDetails = () => {
                     {/* Right Column */}
                     <div className="space-y-6">
                         {/* Price Summary */}
-                        <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <span className="material-icons text-blue-600">receipt</span>
+                                <span className="material-icons text-gray-700">receipt</span>
                                 Price Details
                             </h2>
                             <div className="space-y-3">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-gray-600">Items Price</span>
-                                    <span className="font-semibold">₹{order.itemsPrice.toLocaleString()}</span>
+                                    <span className="font-semibold text-gray-900">₹{order.itemsPrice.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-gray-600">Shipping</span>
@@ -508,17 +597,19 @@ const OrderDetails = () => {
                                         {order.shippingPrice > 0 ? `₹${order.shippingPrice}` : 'FREE'}
                                     </span>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Tax</span>
-                                    <span className="font-semibold">₹{order.taxPrice.toLocaleString()}</span>
-                                </div>
+                                {Number(order.taxPrice || 0) > 0 && (
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-gray-600">Tax</span>
+                                        <span className="font-semibold text-gray-900">₹{Number(order.taxPrice).toLocaleString()}</span>
+                                    </div>
+                                )}
                                 {order.coupon?.code && Number(order.coupon?.discount || 0) > 0 && (
                                     <div className="flex justify-between text-sm">
                                         <span className="text-gray-600">Coupon ({order.coupon.code})</span>
                                         <span className="font-semibold text-green-600">- ₹{Number(order.coupon.discount).toLocaleString()}</span>
                                     </div>
                                 )}
-                                <div className="border-t-2 border-dashed border-blue-200 pt-3 flex justify-between">
+                                <div className="border-t border-dashed border-gray-300 pt-3 flex justify-between">
                                     <span className="text-base font-bold text-gray-800">Total Amount</span>
                                     <span className="text-xl font-extrabold text-gray-900">
                                         ₹{order.totalPrice.toLocaleString()}
@@ -528,9 +619,9 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Payment Info */}
-                        <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <span className="material-icons text-blue-600">payment</span>
+                                <span className="material-icons text-gray-700">payment</span>
                                 Payment Info
                             </h2>
                             <div className="space-y-3">
@@ -541,13 +632,13 @@ const OrderDetails = () => {
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-600">Status</span>
                                     <div className={`flex items-center gap-1 px-3 py-1 rounded-full border ${paymentInfoStatus === 'Confirmed'
-                                            ? 'bg-blue-50 border-blue-200'
+                                            ? 'bg-green-50 border-green-200'
                                             : 'bg-amber-50 border-amber-200'
                                         }`}>
-                                        <span className={`material-icons text-sm ${paymentInfoStatus === 'Confirmed' ? 'text-blue-600' : 'text-amber-600'}`}>
+                                        <span className={`material-icons text-sm ${paymentInfoStatus === 'Confirmed' ? 'text-green-600' : 'text-amber-600'}`}>
                                             {paymentInfoStatus === 'Confirmed' ? 'check_circle' : 'pending'}
                                         </span>
-                                        <span className={`text-xs font-bold ${paymentInfoStatus === 'Confirmed' ? 'text-blue-700' : 'text-amber-700'}`}>
+                                        <span className={`text-xs font-bold ${paymentInfoStatus === 'Confirmed' ? 'text-green-700' : 'text-amber-700'}`}>
                                             {paymentInfoStatus}
                                         </span>
                                     </div>
@@ -565,9 +656,9 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Order Info */}
-                        <div className="bg-white p-6 rounded-xl shadow-md border-2 border-blue-100">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <span className="material-icons text-blue-600">info</span>
+                                <span className="material-icons text-gray-700">info</span>
                                 Order Info
                             </h2>
                             <div className="space-y-3 text-sm">
@@ -583,12 +674,14 @@ const OrderDetails = () => {
                                         })}
                                     </p>
                                 </div>
-                                <div>
-                                    <span className="text-gray-600">Estimated Delivery</span>
-                                    <p className={`font-semibold ${deliveryEstimate.isServiceable === false ? 'text-red-600' : 'text-blue-700'}`}>
-                                        {deliveryEstimate.loading ? 'Checking delivery estimate...' : (deliveryEstimate.text || 'Not available')}
-                                    </p>
-                                </div>
+                                {!isDeliveredOrder && (
+                                    <div>
+                                        <span className="text-gray-600">Estimated Delivery</span>
+                                        <p className={`font-semibold ${deliveryEstimate.isServiceable === false ? 'text-red-600' : 'text-gray-800'}`}>
+                                            {deliveryEstimate.loading ? 'Checking delivery estimate...' : (deliveryEstimate.text || 'Not available')}
+                                        </p>
+                                    </div>
+                                )}
                                 {order.deliveredAt && (
                                     <div>
                                         <span className="text-gray-600">Delivered On</span>
@@ -608,7 +701,7 @@ const OrderDetails = () => {
                         {(order.status === 'Delivered' || order.status === 'Partially Returned') && order.orderItems.some(item => !['Return Requested', 'Replacement Requested', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Returned', 'Replaced', 'Approved', 'Completed'].includes(item.status)) && (
                             <button
                                 onClick={() => navigate(`/my-orders/${order._id}/return`)}
-                                className="w-full bg-white border-2 border-orange-100 text-orange-600 px-6 py-4 rounded-xl font-bold hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
+                                className="w-full bg-white border border-blue-200 text-blue-700 px-6 py-4 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
                             >
                                 <span className="material-icons">assignment_return</span>
                                 Request Return / Replacement
@@ -619,7 +712,7 @@ const OrderDetails = () => {
                         {['Pending', 'Confirmed'].includes(order.status) && (
                             <button
                                 onClick={handleCancelOrder}
-                                className="w-full bg-red-50 border-2 border-red-100 text-red-600 px-6 py-4 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"
+                                className="w-full bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"
                             >
                                 <span className="material-icons">cancel</span>
                                 Request Cancellation
@@ -635,7 +728,7 @@ const OrderDetails = () => {
                                 includeShippingLabel={false}
                                 customTrigger={
                                     <button
-                                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-4 rounded-xl font-bold hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                                        className="w-full bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
                                     >
                                         <span className="material-icons">download</span>
                                         Download Invoice
@@ -647,7 +740,7 @@ const OrderDetails = () => {
                         {/* Help Button */}
                         <button
                             onClick={() => navigate('/help-center')}
-                            className="w-full bg-white border-2 border-blue-100 text-blue-600 px-6 py-4 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                            className="w-full bg-white border border-gray-300 text-gray-700 px-6 py-4 rounded-xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
                         >
                             <span className="material-icons">help_outline</span>
                             Need Help?

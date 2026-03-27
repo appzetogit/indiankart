@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import API from '../../../../services/api';
-import { MdStore, MdCheck, MdClose, MdEmail, MdPhone, MdLocationOn, MdInfo } from 'react-icons/md';
+import { MdStore, MdCheck, MdClose, MdLocationOn, MdInfo } from 'react-icons/md';
 import toast from 'react-hot-toast';
+import Pagination from '../../components/common/Pagination';
 
 const SellerRequests = () => {
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [adminNotes, setAdminNotes] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const isReviewLocked = selectedRequest && selectedRequest.status !== 'Pending';
+    const itemsPerPage = 8;
 
     useEffect(() => {
         fetchRequests();
@@ -23,6 +27,24 @@ const SellerRequests = () => {
             setLoading(false);
         }
     };
+
+    const sortedRequests = useMemo(
+        () => [...requests].sort((a, b) => new Date(b?.createdAt || 0) - new Date(a?.createdAt || 0)),
+        [requests]
+    );
+
+    const totalPages = Math.max(1, Math.ceil(sortedRequests.length / itemsPerPage));
+
+    const paginatedRequests = useMemo(() => {
+        const start = (currentPage - 1) * itemsPerPage;
+        return sortedRequests.slice(start, start + itemsPerPage);
+    }, [sortedRequests, currentPage]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     const handleUpdateStatus = async (id, status) => {
         try {
@@ -56,119 +78,163 @@ const SellerRequests = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-                {requests.map((request) => (
-                    <div
-                        key={request._id}
-                        className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 hover:shadow-md transition-shadow"
-                    >
-                        <div className="flex items-start gap-3 md:gap-4 flex-1">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-50 rounded-lg md:rounded-xl flex items-center justify-center shrink-0">
-                                <MdStore className="text-xl md:text-2xl text-gray-400" />
-                            </div>
-                            <div className="min-w-0">
-                                <h3 className="text-base md:text-lg font-bold text-gray-900 mb-0.5 truncate">{request.storeName}</h3>
-                                <div className="flex flex-col md:flex-row flex-wrap gap-y-1 gap-x-4 text-xs md:text-sm font-medium text-gray-500">
-                                    <span className="flex items-center gap-1"><MdEmail className="text-blue-500" /> {request.businessEmail}</span>
-                                    <span className="flex items-center gap-1"><MdPhone className="text-blue-500" /> {request.phoneNumber}</span>
-                                    <span className="text-blue-600 font-bold">GST: {request.taxId}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 md:gap-4 justify-between md:justify-start">
-                            <div className={`px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest ${request.status === 'Pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                                    request.status === 'Approved' ? 'bg-green-50 text-green-600 border border-green-100' :
-                                        'bg-red-50 text-red-600 border border-red-100'
-                                }`}>
-                                {request.status}
-                            </div>
-
-                            <button
-                                onClick={() => setSelectedRequest(request)}
-                                className="bg-gray-900 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl font-bold text-xs md:text-sm hover:bg-gray-800 transition-colors shadow-lg shadow-gray-100"
-                            >
-                                Review Application
-                            </button>
-                        </div>
-                    </div>
-                ))}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px]">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Store</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Email</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Phone</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">GST</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Status</th>
+                                <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-gray-500">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {paginatedRequests.map((request) => (
+                                <tr key={request._id} className="hover:bg-gray-50/70 transition-colors">
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                            <div className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                                                <MdStore className="text-lg text-gray-500" />
+                                            </div>
+                                            <span className="font-bold text-gray-900 truncate">{request.storeName}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-sm font-medium text-gray-700">{request.businessEmail}</td>
+                                    <td className="px-4 py-3 text-sm font-medium text-gray-700">{request.phoneNumber}</td>
+                                    <td className="px-4 py-3 text-sm font-bold text-blue-700">{request.taxId}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${request.status === 'Pending'
+                                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                : request.status === 'Approved'
+                                                    ? 'bg-green-50 text-green-700 border border-green-200'
+                                                    : 'bg-red-50 text-red-700 border border-red-200'
+                                            }`}>
+                                            {request.status}
+                                        </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedRequest(request);
+                                                setAdminNotes(request.adminNotes || '');
+                                            }}
+                                            className="bg-gray-900 text-white px-3 py-1.5 rounded-lg font-bold text-xs hover:bg-gray-800 transition-colors"
+                                        >
+                                            Review
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
 
                 {requests.length === 0 && (
-                    <div className="text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                        <MdStore className="text-5xl text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-500 italic">No seller requests yet</h3>
+                    <div className="text-center py-16 bg-gray-50 border-t border-gray-100">
+                        <MdStore className="text-4xl text-gray-300 mx-auto mb-3" />
+                        <h3 className="text-base font-bold text-gray-500 italic">No seller requests yet</h3>
                     </div>
+                )}
+
+                {requests.length > 0 && (
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                    />
                 )}
             </div>
 
             {/* Review Modal */}
             {selectedRequest && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedRequest(null)}></div>
-                    <div className="bg-white w-full max-w-2xl rounded-2xl md:rounded-3xl shadow-2xl relative overflow-hidden animate-in zoom-in-95">
-                        <div className="p-4 md:p-8 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                    <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setSelectedRequest(null)}></div>
+                    <div className="bg-white text-gray-900 w-full max-w-xl rounded-2xl shadow-2xl relative overflow-hidden animate-in zoom-in-95 border border-gray-200">
+                        <div className="p-4 md:p-5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
                             <div>
-                                <h2 className="text-xl md:text-2xl font-black text-gray-900">Review Application</h2>
+                                <h2 className="text-lg md:text-xl font-black text-gray-900">Review Application</h2>
                                 <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest mt-0.5">{selectedRequest.storeName}</p>
+                                {selectedRequest.status !== 'Pending' && (
+                                    <div className={`inline-flex mt-2 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${selectedRequest.status === 'Approved'
+                                            ? 'bg-green-50 text-green-700 border border-green-200'
+                                            : 'bg-red-50 text-red-700 border border-red-200'
+                                        }`}>
+                                        {selectedRequest.status}
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={() => setSelectedRequest(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                                <MdClose size={20} className="md:w-[24px] md:h-[24px]" />
+                            <button onClick={() => setSelectedRequest(null)} className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500">
+                                <MdClose size={20} className="md:w-[22px] md:h-[22px]" />
                             </button>
                         </div>
 
-                        <div className="p-4 md:p-8 space-y-4 md:space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                            <div className="grid grid-cols-2 gap-6">
+                        <div className="p-4 md:p-5 space-y-4 max-h-[68vh] overflow-y-auto custom-scrollbar">
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Business Type</h4>
+                                    <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Business Type</h4>
                                     <p className="font-bold text-gray-900 flex items-center gap-2"><MdInfo className="text-blue-600" /> {selectedRequest.businessType}</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Registration ID</h4>
+                                    <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Registration ID</h4>
                                     <p className="font-bold text-gray-900 flex items-center gap-2"><MdInfo className="text-blue-600" /> {selectedRequest.taxId}</p>
                                 </div>
                             </div>
 
                             <div>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Business Address</h4>
-                                <p className="font-medium text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-100 flex items-start gap-2">
-                                    <MdLocationOn className="text-blue-600 text-xl shrink-0 mt-0.5" />
+                                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Business Address</h4>
+                                <p className="font-medium text-gray-800 bg-gray-50 p-3 rounded-xl border border-gray-200 flex items-start gap-2">
+                                    <MdLocationOn className="text-blue-600 text-lg shrink-0 mt-0.5" />
                                     {selectedRequest.businessAddress}
                                 </p>
                             </div>
 
                             <div>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Business Description</h4>
-                                <div className="font-medium text-gray-700 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Business Description</h4>
+                                <div className="font-medium text-gray-800 bg-gray-50 p-3 rounded-xl border border-gray-200">
                                     {selectedRequest.description}
                                 </div>
                             </div>
 
                             <div>
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Admin Notes (Optional)</h4>
+                                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Admin Notes (Optional)</h4>
                                 <textarea
                                     value={adminNotes}
                                     onChange={(e) => setAdminNotes(e.target.value)}
-                                    placeholder="Add feedback for the seller..."
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:border-blue-500 outline-none font-medium text-gray-800 transition-all min-h-[100px] placeholder:text-gray-500"
+                                    readOnly={isReviewLocked}
+                                    placeholder={isReviewLocked ? 'No admin notes added.' : 'Add feedback for the seller...'}
+                                    className={`w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none font-medium text-gray-800 transition-all min-h-[90px] placeholder:text-gray-500 ${isReviewLocked ? 'cursor-default' : 'focus:border-blue-500'}`}
                                 ></textarea>
                             </div>
                         </div>
 
-                        <div className="p-4 md:p-8 bg-gray-50/50 border-t border-gray-100 flex items-center justify-end gap-2 md:gap-3">
-                            <button
-                                onClick={() => handleUpdateStatus(selectedRequest._id, 'Rejected')}
-                                className="px-4 py-2 md:px-6 md:py-3 rounded-xl border-2 border-red-100 text-red-600 font-black text-xs md:text-base hover:bg-red-50 transition-all flex items-center gap-2"
-                            >
-                                <MdClose /> Reject Request
-                            </button>
-                            <button
-                                onClick={() => handleUpdateStatus(selectedRequest._id, 'Approved')}
-                                className="px-4 py-2 md:px-6 md:py-3 rounded-xl bg-green-600 text-white font-black text-xs md:text-base hover:bg-green-700 transition-all shadow-lg shadow-green-100 flex items-center gap-2"
-                            >
-                                <MdCheck /> Approve Seller
-                            </button>
-                        </div>
+                        {selectedRequest.status === 'Pending' ? (
+                            <div className="p-4 md:p-5 bg-gray-50 border-t border-gray-200 flex items-center justify-end gap-2">
+                                <button
+                                    onClick={() => handleUpdateStatus(selectedRequest._id, 'Rejected')}
+                                    className="px-4 py-2 rounded-xl border border-red-200 text-red-700 font-black text-xs md:text-sm hover:bg-red-50 transition-all flex items-center gap-1.5"
+                                >
+                                    <MdClose /> Reject Request
+                                </button>
+                                <button
+                                    onClick={() => handleUpdateStatus(selectedRequest._id, 'Approved')}
+                                    className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-black text-xs md:text-sm hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/40 flex items-center gap-1.5"
+                                >
+                                    <MdCheck /> Approve Seller
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="p-4 md:p-5 bg-gray-50 border-t border-gray-200 flex items-center justify-end">
+                                <div className={`px-4 py-2 rounded-xl text-xs md:text-sm font-black uppercase tracking-wider ${selectedRequest.status === 'Approved'
+                                        ? 'bg-green-50 text-green-700 border border-green-200'
+                                        : 'bg-red-50 text-red-700 border border-red-200'
+                                    }`}>
+                                    Request {selectedRequest.status}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

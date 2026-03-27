@@ -4,6 +4,7 @@ import { useCartStore } from '../../store/cartStore';
 import { useAuthStore } from '../../store/authStore';
 import { MdClose } from 'react-icons/md';
 import { AnimatePresence, motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 
 // Import Page Components
 import MyOrders from '../../pages/MyOrders';
@@ -19,6 +20,7 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
     const [isEditing, setIsEditing] = useState(false);
     const drawerRef = useRef(null);
     const [activeView, setActiveView] = useState('MENU'); // 'MENU', 'ORDERS', 'WISHLIST', etc.
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
     // Initial form data
     const [formData, setFormData] = useState({
@@ -40,7 +42,22 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
     }, [user, userProfile]);
 
     const handleSave = () => {
-        updateUserProfile(formData);
+        const trimmedName = String(formData.name || '').trim();
+        const trimmedEmail = String(formData.email || '').trim().toLowerCase();
+        if (!trimmedName) {
+            toast.error('Full name is required');
+            return;
+        }
+        if (/\d/.test(trimmedName)) {
+            toast.error('Full name should not contain numbers');
+            return;
+        }
+        if (trimmedEmail && !EMAIL_REGEX.test(trimmedEmail)) {
+            toast.error('Please enter a valid email format');
+            return;
+        }
+
+        updateUserProfile({ ...formData, name: trimmedName, email: trimmedEmail });
         setIsEditing(false);
     };
 
@@ -133,7 +150,11 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
                             <input
                                 type="text"
                                 value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (/\d/.test(value)) return;
+                                    setFormData({ ...formData, name: value });
+                                }}
                                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-600 outline-none"
                             />
                         </div>
@@ -151,7 +172,7 @@ const ProfileDrawer = ({ isOpen, onClose }) => {
                             <input
                                 type="email"
                                 value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
                                 className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-blue-600 outline-none"
                             />
                         </div>

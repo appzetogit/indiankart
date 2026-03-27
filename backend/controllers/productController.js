@@ -42,6 +42,20 @@ const getListProjection = (lite = false) => {
     return 'id name brand price originalPrice discount rating image category categoryId tags ram skus stock createdAt';
 };
 
+const normalizeSubCategoryIds = (value) => {
+    const source = Array.isArray(value) ? value : [value];
+    return [...new Set(
+        source
+            .map((item) => {
+                if (!item) return '';
+                if (typeof item === 'string') return item;
+                return String(item._id || item.id || item);
+            })
+            .map((id) => String(id || '').trim())
+            .filter(Boolean)
+    )];
+};
+
 // @desc    Fetch all products
 // @route   GET /api/products
 // @access  Public
@@ -371,6 +385,34 @@ export const createProduct = async (req, res) => {
             }
         }
 
+        const resolvedCategoryId = body.categoryId ? Number(body.categoryId) : undefined;
+        const selectedCategory = Number.isFinite(resolvedCategoryId)
+            ? await Category.findOne({ id: resolvedCategoryId }).select('_id id name').lean()
+            : null;
+
+        if (!selectedCategory) {
+            return res.status(400).json({ message: 'Valid category is required.' });
+        }
+
+        const subCategoryCountForCategory = await SubCategory.countDocuments({ category: selectedCategory._id });
+        if (subCategoryCountForCategory === 0) {
+            return res.status(400).json({ message: 'No subcategory exists for selected category. Please create subcategory first.' });
+        }
+
+        const normalizedSubCategories = normalizeSubCategoryIds(parseJSON(body.subCategories));
+        if (normalizedSubCategories.length === 0) {
+            return res.status(400).json({ message: 'Subcategory is mandatory.' });
+        }
+
+        const validSubCategories = await SubCategory.find({
+            _id: { $in: normalizedSubCategories },
+            category: selectedCategory._id
+        }).select('_id').lean();
+
+        if (validSubCategories.length !== normalizedSubCategories.length) {
+            return res.status(400).json({ message: 'Selected subcategory does not belong to selected category.' });
+        }
+
         const product = new Product({
             id: body.id || Date.now(),
             name: body.name,
@@ -380,9 +422,9 @@ export const createProduct = async (req, res) => {
             discount: body.discount,
             image,
             images,
-            category: body.category || 'Uncategorized',
-            categoryId: body.categoryId ? Number(body.categoryId) : undefined,
-            subCategories: parseJSON(body.subCategories) || [], // Handle multiple subcategories
+            category: body.category || selectedCategory.name || 'Uncategorized',
+            categoryId: resolvedCategoryId,
+            subCategories: normalizedSubCategories,
             categoryPath: parseJSON(body.categoryPath),
             highlights: parseJSON(body.highlights),
             description,
@@ -602,6 +644,46 @@ export const updateProduct = async (req, res) => {
 
             if (updateData.specifications !== undefined) {
                 updateData.specifications = parseJSON(updateData.specifications) || [];
+            }
+
+            const resolvedCategoryId = updateData.categoryId !== undefined
+                ? Number(updateData.categoryId)
+                : Number(product.categoryId);
+
+            if (!Number.isFinite(resolvedCategoryId)) {
+                return res.status(400).json({ message: 'Valid category is required.' });
+            }
+
+            const selectedCategory = await Category.findOne({ id: resolvedCategoryId }).select('_id id name').lean();
+            if (!selectedCategory) {
+                return res.status(400).json({ message: 'Valid category is required.' });
+            }
+
+            const subCategoryCountForCategory = await SubCategory.countDocuments({ category: selectedCategory._id });
+            if (subCategoryCountForCategory === 0) {
+                return res.status(400).json({ message: 'No subcategory exists for selected category. Please create subcategory first.' });
+            }
+
+            const finalSubCategories = normalizeSubCategoryIds(
+                updateData.subCategories !== undefined ? updateData.subCategories : product.subCategories
+            );
+            if (finalSubCategories.length === 0) {
+                return res.status(400).json({ message: 'Subcategory is mandatory.' });
+            }
+
+            const validSubCategories = await SubCategory.find({
+                _id: { $in: finalSubCategories },
+                category: selectedCategory._id
+            }).select('_id').lean();
+
+            if (validSubCategories.length !== finalSubCategories.length) {
+                return res.status(400).json({ message: 'Selected subcategory does not belong to selected category.' });
+            }
+
+            updateData.categoryId = resolvedCategoryId;
+            updateData.subCategories = finalSubCategories;
+            if (!updateData.category) {
+                updateData.category = selectedCategory.name;
             }
 
             // Update thumbnail even when empty, if client explicitly sent the field.

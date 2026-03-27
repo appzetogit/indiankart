@@ -21,8 +21,7 @@ const SubCategoryForm = ({ subCategory, onClose }) => {
 
     useEffect(() => {
         fetchCategories();
-        fetchSubCategories();
-    }, [fetchCategories, fetchSubCategories]);
+    }, [fetchCategories]);
 
     const categoryOptions = useMemo(() => {
         const seen = new Set();

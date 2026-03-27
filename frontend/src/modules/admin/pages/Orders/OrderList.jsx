@@ -38,23 +38,32 @@ const OrderList = () => {
 
                 const { data } = await API.get('/orders', { params });
 
-                const transformOrder = (order) => ({
-                    ...order,
-                    id: order._id,
-                    date: order.createdAt,
-                    items: order.orderItems?.map(item => ({
-                        id: item.product,
-                        name: item.name,
-                        image: item.image,
-                        price: item.price,
-                        quantity: item.qty
-                    })) || [],
-                    total: order.totalPrice,
-                    payment: {
-                        method: order.paymentMethod,
-                        status: order.isPaid ? 'Paid' : 'Pending'
-                    }
-                });
+                const transformOrder = (order) => {
+                    const normalizedOrderStatus = String(order?.status || '').trim();
+                    const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
+                    const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
+                    const paymentStatus = normalizedOrderStatus === 'Delivered'
+                        ? 'Completed'
+                        : (order.isPaid || isPaymentSuccessByGateway ? 'Paid' : 'Pending');
+
+                    return {
+                        ...order,
+                        id: order._id,
+                        date: order.createdAt,
+                        items: order.orderItems?.map(item => ({
+                            id: item.product,
+                            name: item.name,
+                            image: item.image,
+                            price: item.price,
+                            quantity: item.qty
+                        })) || [],
+                        total: order.totalPrice,
+                        payment: {
+                            method: order.paymentMethod || 'COD',
+                            status: paymentStatus
+                        }
+                    };
+                };
 
                 if (data.orders) {
                     setLocalOrders(data.orders.map(transformOrder));
@@ -231,7 +240,7 @@ const OrderList = () => {
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
                                                     <div className="flex flex-col items-center gap-1">
                                                         <span className="text-[10px] font-black text-gray-500 uppercase">{order.payment?.method || 'N/A'}</span>
-                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${order.payment?.status === 'Paid' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${(order.payment?.status === 'Paid' || order.payment?.status === 'Completed') ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
                                                             {order.payment?.status || 'Pending'}
                                                         </span>
                                                     </div>

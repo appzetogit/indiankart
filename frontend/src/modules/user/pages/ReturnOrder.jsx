@@ -33,6 +33,9 @@ const ReturnOrder = () => {
     const [showAddressSelector, setShowAddressSelector] = useState(false);
     const [selectedPickupAddressId, setSelectedPickupAddressId] = useState(null);
     const [selectedPickupAddress, setSelectedPickupAddress] = useState(null);
+    const [selectedItemIds, setSelectedItemIds] = useState([]);
+    const ACCOUNT_NUMBER_REGEX = /^\d{9,18}$/;
+    const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -106,6 +109,18 @@ const ReturnOrder = () => {
         setShowAddressSelector(false);
     };
 
+    const handleItemSelectionChange = (itemId, checked) => {
+        const normalizedId = String(itemId);
+        setSelectedItemIds((prev) => {
+            const current = Array.isArray(prev) ? prev.map((id) => String(id)) : [];
+            if (checked) {
+                if (current.includes(normalizedId)) return current;
+                return [...current, normalizedId];
+            }
+            return current.filter((id) => id !== normalizedId);
+        });
+    };
+
     const reasons = [
         {
             title: "Quality of the product not as expected",
@@ -159,7 +174,22 @@ const ReturnOrder = () => {
         return itemsToCheck.filter((item) => isEligibleForReturn(item.status));
     }, [order, productId]);
 
-    const replacementItem = targetItems[0] || null;
+    useEffect(() => {
+        const targetIds = targetItems.map((item) => String(item.id));
+        setSelectedItemIds((prev) => {
+            if (productId) return targetIds;
+            if (!prev || prev.length === 0) return targetIds;
+            const filtered = prev.filter((id) => targetIds.includes(String(id)));
+            return filtered.length > 0 ? filtered : targetIds;
+        });
+    }, [targetItems, productId]);
+
+    const selectedItems = useMemo(
+        () => targetItems.filter((item) => selectedItemIds.includes(String(item.id))),
+        [targetItems, selectedItemIds]
+    );
+
+    const replacementItem = selectedItems[0] || null;
 
     useEffect(() => {
         let cancelled = false;
@@ -334,29 +364,58 @@ const ReturnOrder = () => {
     if (!order) return <div className="p-10 text-center">Order not found.</div>;
 
     const handleReturnSubmit = async () => {
+        const showError = (message) => {
+            toast.dismiss();
+            toast.error(message);
+        };
+
         if (targetItems.length === 0) {
-            toast.error('No eligible items found for return/replacement in this order.');
+            showError('No eligible items found for return/replacement in this order.');
+            return;
+        }
+        if (selectedItems.length === 0) {
+            showError('Please select at least one item.');
+            return;
+        }
+        if (returnMode === 'REPLACEMENT' && selectedItems.length > 1) {
+            showError('For replacement, please select only one item at a time.');
             return;
         }
 
         if (!googleDriveLink.trim() && proofFiles.length === 0) {
-            toast.error('Please add Google Drive link or upload proof files.');
+            showError('Please add Google Drive link or upload proof files.');
             return;
+        }
+
+        if (returnMode === 'REFUND') {
+            const accountHolderName = String(bankDetails.accountHolderName || '').trim();
+            const accountNumber = String(bankDetails.accountNumber || '').trim();
+            const ifscCode = String(bankDetails.ifscCode || '').trim().toUpperCase();
+            const hasAnyBankField = Boolean(accountHolderName || accountNumber || ifscCode);
+
+            if (hasAnyBankField) {
+                if (!accountHolderName || !accountNumber || !ifscCode) {
+                    showError('Please provide complete bank details (name, account number, IFSC).');
+                    return;
+                }
+                if (/\d/.test(accountHolderName)) {
+                    showError('Account Holder Name should not contain numbers');
+                    return;
+                }
+                if (!ACCOUNT_NUMBER_REGEX.test(accountNumber)) {
+                    showError('Account Number must be 9 to 18 digits');
+                    return;
+                }
+                if (!IFSC_REGEX.test(ifscCode)) {
+                    showError('IFSC must be in format: ABCD0123456');
+                    return;
+                }
+            }
         }
 
         setLoading(true);
         try {
-            // We need to submit a request for each item, or one request for multiple?
-            // The backend controller seems to handle one request per call, taking `productId`.
-            // The UI allows selecting multiple items implicitly if `targetItems` has more than one?
-            // The UI loop `targetItems.forEach` suggests multiple.
-            // But wait, the UI flow (Step 1, 2, 3) seems to focus on "Reasons" which applies to the return as a whole?
-            // If `targetItems` has multiple items, do they all share the same reason? Yes.
-            
-            // However, the backend expects `productId`.
-            // Let's loop through targetItems and send a request for each.
-            
-            for (const item of targetItems) {
+            for (const item of selectedItems) {
                 const payload = new FormData();
                 payload.append('orderId', order.id);
                 payload.append('productId', item.id);
@@ -385,11 +444,12 @@ const ReturnOrder = () => {
                 updateItemStatus(order.id, item.id, itemStatus);
             }
 
+            toast.dismiss();
             toast.success(`${returnMode === 'REFUND' ? 'Return' : 'Replacement'} request submitted successfully!`);
             navigate(`/my-orders/${order.id}`);
         } catch (error) {
             console.error(error);
-            toast.error(error.response?.data?.message || 'Failed to submit return request.');
+            showError(error.response?.data?.message || 'Failed to submit return request.');
         } finally {
             setLoading(false);
         }
@@ -432,10 +492,25 @@ const ReturnOrder = () => {
                 <div className="bg-white m-2 rounded-xl overflow-hidden shadow-sm border border-gray-100 md:m-0 md:rounded-none md:shadow-none md:border-0 md:border-b">
                     <div className="px-4 py-3 border-b bg-gray-50/50 md:bg-white md:border-0 md:pt-6">
                         <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Items being processed</h3>
+                        {!productId && targetItems.length > 0 && (
+                            <p className="text-[11px] text-gray-600 mt-1">
+                                Selected: <span className="font-bold text-gray-800">{selectedItems.length}</span> / {targetItems.length}
+                            </p>
+                        )}
                     </div>
                     <div className="divide-y divide-gray-50 md:divide-gray-100">
                         {targetItems.map((item, idx) => (
                             <div key={idx} className="flex gap-4 p-4 md:px-6">
+                                {!productId && (
+                                    <label className="mt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedItemIds.includes(String(item.id))}
+                                            onChange={(e) => handleItemSelectionChange(item.id, e.target.checked)}
+                                            className="w-4 h-4 accent-blue-600 cursor-pointer"
+                                        />
+                                    </label>
+                                )}
                                 <div className="w-16 h-16 flex-shrink-0 bg-white rounded-lg border border-gray-100 p-1 md:w-20 md:h-20">
                                     <img src={item.image} alt="" className="w-full h-full object-contain" />
                                 </div>
@@ -659,7 +734,11 @@ const ReturnOrder = () => {
                                             <input
                                                 type="text"
                                                 value={bankDetails.accountHolderName}
-                                                onChange={(e) => setBankDetails((prev) => ({ ...prev, accountHolderName: e.target.value }))}
+                                                onChange={(e) => {
+                                                    const value = e.target.value;
+                                                    if (/\d/.test(value)) return;
+                                                    setBankDetails((prev) => ({ ...prev, accountHolderName: value }));
+                                                }}
                                                 placeholder="Account Holder Name"
                                                 className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900"
                                             />
@@ -668,13 +747,15 @@ const ReturnOrder = () => {
                                                 value={bankDetails.accountNumber}
                                                 onChange={(e) => setBankDetails((prev) => ({ ...prev, accountNumber: e.target.value.replace(/\D/g, '') }))}
                                                 placeholder="Account Number"
+                                                inputMode="numeric"
+                                                maxLength={18}
                                                 className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900"
                                             />
                                         </div>
                                         <input
                                             type="text"
                                             value={bankDetails.ifscCode}
-                                            onChange={(e) => setBankDetails((prev) => ({ ...prev, ifscCode: e.target.value.toUpperCase() }))}
+                                            onChange={(e) => setBankDetails((prev) => ({ ...prev, ifscCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11) }))}
                                             placeholder="IFSC Code"
                                             className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600/20 outline-none transition-all text-gray-900 mt-3"
                                         />

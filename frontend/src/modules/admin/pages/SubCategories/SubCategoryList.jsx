@@ -88,7 +88,7 @@ const SubCategoryList = () => {
                             placeholder="Search subcategories..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-4 pr-10 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 text-sm"
+                            className="w-64 rounded-lg border border-gray-200 bg-white pl-4 pr-10 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                     <button
@@ -102,79 +102,79 @@ const SubCategoryList = () => {
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Name</th>
-                                <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Category</th>
-                                <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Status</th>
-                                <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {isLoading ? (
-                                <tr>
-                                    <td colSpan="4" className="p-8 text-center text-gray-500">Loading subcategories...</td>
-                                </tr>
-                            ) : categoryGroups.length === 0 ? (
-                                <tr>
-                                    <td colSpan="4" className="p-8 text-center text-gray-500">No subcategories found.</td>
-                                </tr>
-                            ) : (
-                                categoryGroups.flatMap((group) => {
-                                    const isExpanded = expandedCategoryId === group.categoryId;
-                                    return [
-                                    <tr key={`group-${group.categoryId}`} className="bg-blue-50/50">
-                                        <td colSpan="4" className="px-4 py-2.5 border-y border-blue-100">
-                                            <button
-                                                type="button"
-                                                onClick={() => toggleCategory(group.categoryId)}
-                                                className="w-full flex items-center justify-between text-left"
-                                            >
-                                                <span className="flex items-center gap-2 font-bold text-blue-900">
-                                                    {isExpanded ? <MdExpandMore /> : <MdChevronRight />}
-                                                    {group.name}
-                                                </span>
-                                                <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                                                    {group.items.length} items
-                                                </span>
-                                            </button>
-                                        </td>
-                                    </tr>,
-                                    ...(isExpanded ? group.items.map((sub) => (
-                                        <tr key={sub._id || sub.id} className="hover:bg-gray-50 transition">
-                                            <td className="p-4 font-semibold text-gray-800">{sub.name}</td>
-                                            <td className="p-4 text-gray-700 text-sm">{group.name}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${sub.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {sub.isActive ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <button
-                                                        onClick={() => handleEdit(sub)}
-                                                        className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition"
-                                                    >
-                                                        <MdEdit size={18} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(sub._id || sub.id, sub.name)}
-                                                        className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition"
-                                                    >
-                                                        <MdDelete size={18} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )) : [])
-                                ];
-                                })
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                {isLoading ? (
+                    <div className="p-8 text-center text-gray-500">Loading subcategories...</div>
+                ) : categoryGroups.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">No subcategories found.</div>
+                ) : (
+                    <div className="divide-y divide-gray-100">
+                        {categoryGroups.map((group) => {
+                            const isExpanded = expandedCategoryId === group.categoryId;
+
+                            return (
+                                <div key={group.categoryId} className="bg-white">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleCategory(group.categoryId)}
+                                        className={`w-full flex items-center justify-between px-5 py-4 text-left transition ${isExpanded ? 'bg-blue-50/70 border-b border-blue-100' : 'hover:bg-gray-50'}`}
+                                    >
+                                        <span className="flex items-center gap-2 font-bold text-blue-900 text-lg">
+                                            {isExpanded ? <MdExpandMore /> : <MdChevronRight />}
+                                            {group.name}
+                                        </span>
+                                        <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
+                                            {group.items.length} items
+                                        </span>
+                                    </button>
+
+                                    {isExpanded ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-gray-50/70 border-b border-gray-100">
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Name</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Category</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Status</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+                                                    {group.items.map((sub) => (
+                                                        <tr key={sub._id || sub.id} className="hover:bg-gray-50 transition">
+                                                            <td className="p-4 font-semibold text-gray-800">{sub.name}</td>
+                                                            <td className="p-4 text-gray-700 text-sm">{group.name}</td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${sub.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                                    {sub.isActive ? 'Active' : 'Inactive'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-right">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <button
+                                                                        onClick={() => handleEdit(sub)}
+                                                                        className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition"
+                                                                    >
+                                                                        <MdEdit size={18} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(sub._id || sub.id, sub.name)}
+                                                                        className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition"
+                                                                    >
+                                                                        <MdDelete size={18} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </div>
 
             {showForm && (
