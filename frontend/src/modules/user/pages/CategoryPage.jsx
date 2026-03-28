@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { MdArrowBack } from 'react-icons/md';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { MdArrowBack, MdKeyboardArrowDown, MdKeyboardArrowUp, MdStar } from 'react-icons/md';
 import API from '../../../services/api';
 import { useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
@@ -9,23 +9,32 @@ import CategoryLandingSections from '../components/category/CategoryLandingSecti
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
 
+const SORT_OPTIONS = [
+    { id: 'popularity', label: 'Popularity' },
+    { id: 'price-low', label: 'Price -- Low to High' },
+    { id: 'price-high', label: 'Price -- High to Low' },
+    { id: 'rating', label: 'Customer Rating' }
+];
+const RATING_OPTIONS = [4, 3, 2];
+const DISCOUNT_OPTIONS = [50, 40, 30, 20, 10];
+
 const CategoryPageSkeleton = () => (
-    <div className="bg-white min-h-screen pb-36 md:pb-10 animate-pulse">
-        <div className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 py-3">
+    <div className="min-h-screen animate-pulse bg-white pb-36 md:pb-10">
+        <div className="border-b border-gray-200 bg-white shadow-sm">
+            <div className="mx-auto max-w-[1440px] px-2 py-3 md:px-4 lg:px-5">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gray-200" />
+                    <div className="h-9 w-9 rounded-full bg-gray-200" />
                     <div className="h-7 w-44 rounded bg-gray-200" />
                 </div>
             </div>
         </div>
-        <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-2 pb-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 p-3 md:p-6">
+        <div className="mx-auto max-w-[1440px] px-2 pb-4 pt-2 md:px-4 lg:px-5">
+            <div className="grid grid-cols-2 gap-3 p-3 md:grid-cols-3 md:gap-5 md:p-6 xl:grid-cols-4">
                 {Array.from({ length: 8 }).map((_, index) => (
                     <div key={index} className="space-y-2">
                         <div className="aspect-square rounded-xl bg-gray-200" />
-                        <div className="h-3 rounded bg-gray-200 w-4/5" />
-                        <div className="h-3 rounded bg-gray-200 w-2/3" />
+                        <div className="h-3 w-4/5 rounded bg-gray-200" />
+                        <div className="h-3 w-2/3 rounded bg-gray-200" />
                     </div>
                 ))}
             </div>
@@ -33,18 +42,42 @@ const CategoryPageSkeleton = () => (
     </div>
 );
 
+const FilterSection = ({ sectionKey, title, collapsedSections, toggleSection, badge, children }) => (
+    <div className="px-4 py-4">
+        <button type="button" onClick={() => toggleSection(sectionKey)} className="flex w-full items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-2">
+                <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-800">{title}</h4>
+                {badge ? <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">{badge}</span> : null}
+            </div>
+            {collapsedSections[sectionKey] ? <MdKeyboardArrowDown className="text-lg text-gray-500" /> : <MdKeyboardArrowUp className="text-lg text-gray-500" />}
+        </button>
+        {!collapsedSections[sectionKey] ? <div className="mt-4">{children}</div> : null}
+    </div>
+);
+
+const FilterCheckRow = ({ checked, onChange, label }) => (
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2 hover:border-gray-200 hover:bg-gray-50">
+        <input type="checkbox" checked={checked} onChange={onChange} className="h-4 w-4 rounded accent-blue-600" />
+        <span className="text-sm font-semibold text-gray-700">{label}</span>
+    </label>
+);
+
+const FilterRadioRow = ({ checked, onChange, label, name }) => (
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2 hover:border-gray-200 hover:bg-gray-50">
+        <input type="radio" name={name} checked={checked} onChange={onChange} className="h-4 w-4 accent-blue-600" />
+        <span className="text-sm font-semibold text-gray-700">{label}</span>
+    </label>
+);
+
 const CategoryPage = () => {
     const PAGE_SIZE = 12;
     const navigate = useNavigate();
-    const { categoryName, "*": subPath } = useParams();
+    const { categoryName, '*': subPath } = useParams();
     const routeSegments = String(subPath || '').split('/').filter(Boolean);
     const routeHasExplicitSubPath = routeSegments.length > 0;
-    
     const { categories, loading: categoriesLoading } = useCategories({ lite: true });
-    
     const [products, setProducts] = useState([]);
     const [productsLoading, setProductsLoading] = useState(true);
-
     const [categoryData, setCategoryData] = useState(null);
     const [breadcrumbs, setBreadcrumbs] = useState([]);
     const [categoryProducts, setCategoryProducts] = useState([]);
@@ -52,13 +85,13 @@ const CategoryPage = () => {
     const [showSortModal, setShowSortModal] = useState(false);
     const [showFilterModal, setShowFilterModal] = useState(false);
     const [sortBy, setSortBy] = useState('popularity');
-    
     const [filterRange, setFilterRange] = useState([0, 1000000]);
     const [priceRange, setPriceRange] = useState({ min: 0, max: 1000000 });
     const [selectedBrands, setSelectedBrands] = useState([]);
     const [selectedRam, setSelectedRam] = useState([]);
     const [selectedCategories, setSelectedCategories] = useState([]);
     const [selectedDiscount, setSelectedDiscount] = useState(null);
+    const [selectedRating, setSelectedRating] = useState(null);
     const [brandSearch, setBrandSearch] = useState('');
     const [showAllBrands, setShowAllBrands] = useState(false);
     const [showAllRam, setShowAllRam] = useState(false);
@@ -66,13 +99,12 @@ const CategoryPage = () => {
     const [collapsedSections, setCollapsedSections] = useState({});
     const [fetchError, setFetchError] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
-    
+
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const parseAmount = (value, fallback = 0) => {
         const parsed = Number(String(value ?? '').replace(/[^0-9.]/g, ''));
         return Number.isFinite(parsed) ? parsed : fallback;
     };
-
     const getEffectivePricing = (product) => {
         const skus = Array.isArray(product?.skus) ? product.skus : [];
         const firstSku = skus.length > 0 ? skus[0] : null;
@@ -80,18 +112,8 @@ const CategoryPage = () => {
         const rawOriginalPrice = parseAmount(firstSku?.originalPrice ?? product?.originalPrice ?? price, price);
         const originalPrice = Math.max(rawOriginalPrice, price);
         const discountFromText = Number.parseInt(String(product?.discount || '').replace(/\D/g, ''), 10) || 0;
-        const discountPercent = originalPrice > price
-            ? Math.round(((originalPrice - price) / originalPrice) * 100)
-            : discountFromText;
+        const discountPercent = originalPrice > price ? Math.round(((originalPrice - price) / originalPrice) * 100) : discountFromText;
         return { price, originalPrice, discountPercent };
-    };
-
-    const handleBackNavigation = () => {
-        if (window.history.state?.idx > 0) {
-            navigate(-1);
-            return;
-        }
-        navigate('/');
     };
 
     useEffect(() => {
@@ -138,7 +160,7 @@ const CategoryPage = () => {
             setCategoryProducts(routeProducts);
             setSortedProducts(routeProducts);
             if (routeProducts.length > 0) {
-                const prices = routeProducts.map((p) => getEffectivePricing(p).price);
+                const prices = routeProducts.map((product) => getEffectivePricing(product).price);
                 const min = Math.min(...prices);
                 const max = Math.max(...prices);
                 setPriceRange({ min, max });
@@ -150,16 +172,13 @@ const CategoryPage = () => {
         }
     }, [categoryName, subPath, products, categories, productsLoading, categoriesLoading]);
 
-    // Temporarily disable backend subcategory hydration for category landing sections.
-    // const dbId = categoryData?._id || categoryData?.id;
-    // const { subCategories: detailedSubCategories, loading: subsLoading } = useSubCategoriesByCategory(dbId);
-
     useEffect(() => {
         setSortBy('popularity');
         setSelectedBrands([]);
         setSelectedRam([]);
         setSelectedCategories([]);
         setSelectedDiscount(null);
+        setSelectedRating(null);
         setBrandSearch('');
         setShowAllBrands(false);
         setShowAllRam(false);
@@ -172,76 +191,31 @@ const CategoryPage = () => {
 
     useEffect(() => {
         let updated = [...categoryProducts];
-        updated = updated.filter((p) => {
-            const { price } = getEffectivePricing(p);
+        updated = updated.filter((product) => {
+            const { price } = getEffectivePricing(product);
             return price >= filterRange[0] && price <= filterRange[1];
         });
-        if (sortBy === 'price-low') {
-            updated.sort((a, b) => getEffectivePricing(a).price - getEffectivePricing(b).price);
-        } else if (sortBy === 'price-high') {
-            updated.sort((a, b) => getEffectivePricing(b).price - getEffectivePricing(a).price);
-        } else if (sortBy === 'rating') {
-            updated.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-        }
-        if (selectedCategories.length > 0) {
-            updated = updated.filter(p =>
-                Array.isArray(p.tags) && p.tags.some((tag) =>
-                    selectedCategories.some((selected) => normalizeText(selected) === normalizeText(tag))
-                )
-            );
-        }
-        if (selectedBrands.length > 0) {
-            updated = updated.filter((p) =>
-                p.brand && selectedBrands.some((brand) => normalizeText(brand) === normalizeText(p.brand))
-            );
-        }
-        if (selectedRam.length > 0) {
-            updated = updated.filter((p) =>
-                p.ram && selectedRam.some((ram) => normalizeText(ram) === normalizeText(p.ram))
-            );
-        }
-        if (selectedDiscount) {
-            updated = updated.filter((p) => {
-                const { discountPercent } = getEffectivePricing(p);
-                return discountPercent >= selectedDiscount;
-            });
-        }
+        if (sortBy === 'price-low') updated.sort((a, b) => getEffectivePricing(a).price - getEffectivePricing(b).price);
+        else if (sortBy === 'price-high') updated.sort((a, b) => getEffectivePricing(b).price - getEffectivePricing(a).price);
+        else if (sortBy === 'rating') updated.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        if (selectedCategories.length > 0) updated = updated.filter((product) => Array.isArray(product.tags) && product.tags.some((tag) => selectedCategories.some((selected) => normalizeText(selected) === normalizeText(tag))));
+        if (selectedBrands.length > 0) updated = updated.filter((product) => product.brand && selectedBrands.some((brand) => normalizeText(brand) === normalizeText(product.brand)));
+        if (selectedRam.length > 0) updated = updated.filter((product) => product.ram && selectedRam.some((ram) => normalizeText(ram) === normalizeText(product.ram)));
+        if (selectedDiscount) updated = updated.filter((product) => getEffectivePricing(product).discountPercent >= selectedDiscount);
+        if (selectedRating) updated = updated.filter((product) => Number(product.rating || 0) >= selectedRating);
         setSortedProducts(updated);
         setCurrentPage(1);
-    }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, categoryProducts]);
+    }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, categoryProducts]);
 
-    const availableBrands = [...new Set(categoryProducts.map(p => String(p.brand || '').trim()).filter(Boolean))];
-    const availableRam = [...new Set(categoryProducts.map(p => String(p.ram || '').trim()).filter(Boolean))];
-    const availableCategories = [...new Set(
-        categoryProducts
-            .flatMap(p => p.tags || [])
-            .map((tag) => String(tag || '').trim())
-            .filter(tag => normalizeText(tag) !== normalizeText(categoryData?.name))
-            .filter(Boolean)
-    )];
-
-    const toggleBrand = (brand) => setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
-    const toggleRam = (ram) => setSelectedRam(prev => prev.includes(ram) ? prev.filter(r => r !== ram) : [...prev, ram]);
-    const toggleCategory = (category) => setSelectedCategories(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
-    const toggleSection = (section) => setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
-    const handlePriceInputChange = (index, value) => {
-        const numValue = parseInt(value) || 0;
-        const newRange = [...filterRange];
-        newRange[index] = numValue;
-        setFilterRange(newRange);
-    };
-    const resetAllFilters = () => {
-        setFilterRange([priceRange.min, priceRange.max]);
-        setSelectedBrands([]);
-        setSelectedRam([]);
-        setSelectedCategories([]);
-        setSelectedDiscount(null);
-    };
-
-    const filteredBrands = availableBrands.filter(brand => brand.toLowerCase().includes(brandSearch.toLowerCase()));
+    const availableBrands = [...new Set(categoryProducts.map((product) => String(product.brand || '').trim()).filter(Boolean))];
+    const availableRam = [...new Set(categoryProducts.map((product) => String(product.ram || '').trim()).filter(Boolean))];
+    const availableCategories = [...new Set(categoryProducts.flatMap((product) => product.tags || []).map((tag) => String(tag || '').trim()).filter((tag) => normalizeText(tag) !== normalizeText(categoryData?.name)).filter(Boolean))];
+    const filteredBrands = availableBrands.filter((brand) => brand.toLowerCase().includes(brandSearch.toLowerCase()));
     const displayedBrands = showAllBrands ? filteredBrands : filteredBrands.slice(0, 6);
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
+    const activeFilterCount = useMemo(() => selectedBrands.length + selectedRam.length + selectedCategories.length + (selectedDiscount ? 1 : 0) + (selectedRating ? 1 : 0) + ((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? 1 : 0), [selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, filterRange, priceRange]);
+    const activeFilterChips = useMemo(() => ([...(selectedRating ? [`${selectedRating}★ & above`] : []), ...(selectedDiscount ? [`${selectedDiscount}% off`] : []), ...selectedBrands.map((brand) => `Brand: ${brand}`), ...selectedRam.map((ram) => `RAM: ${ram}`), ...selectedCategories.map((category) => `Type: ${category}`), ...((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? [`₹${filterRange[0].toLocaleString()} - ₹${filterRange[1].toLocaleString()}`] : [])]), [selectedRating, selectedDiscount, selectedBrands, selectedRam, selectedCategories, filterRange, priceRange]);
     const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
     const safeCurrentPage = Math.min(currentPage, totalPages);
     const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
@@ -257,118 +231,108 @@ const CategoryPage = () => {
     const isSubCategoryLandingView = !routeHasExplicitSubPath && breadcrumbs.length === 1;
     const rootCategory = breadcrumbs[0] || categoryData;
     const gridSubCategories = [];
+    const handleBackNavigation = () => {
+        if (window.history.state?.idx > 0) return navigate(-1);
+        navigate('/');
+    };
+    const handlePriceInputChange = (index, value) => {
+        const parsedValue = parseInt(value, 10);
+        const nextValue = Number.isFinite(parsedValue) ? Math.max(0, parsedValue) : 0;
+        const nextRange = [...filterRange];
+        nextRange[index] = nextValue;
+        if (index === 0 && nextRange[0] > nextRange[1]) nextRange[1] = nextRange[0];
+        if (index === 1 && nextRange[1] < nextRange[0]) nextRange[0] = nextRange[1];
+        setFilterRange(nextRange);
+    };
+    const resetAllFilters = () => {
+        setFilterRange([priceRange.min, priceRange.max]);
+        setSelectedBrands([]);
+        setSelectedRam([]);
+        setSelectedCategories([]);
+        setSelectedDiscount(null);
+        setSelectedRating(null);
+        setBrandSearch('');
+    };
+    const toggleBrand = (brand) => setSelectedBrands((prev) => prev.includes(brand) ? prev.filter((item) => item !== brand) : [...prev, brand]);
+    const toggleRam = (ram) => setSelectedRam((prev) => prev.includes(ram) ? prev.filter((item) => item !== ram) : [...prev, ram]);
+    const toggleCategory = (category) => setSelectedCategories((prev) => prev.includes(category) ? prev.filter((item) => item !== category) : [...prev, category]);
+    const toggleSection = (section) => setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
 
     return (
-        <div className="bg-white min-h-screen pb-36 md:pb-10">
-            <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[116px] z-40">
-                <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-3 pb-3">
+        <div className="min-h-screen bg-white pb-36 md:pb-10">
+            <div className="z-40 border-b border-gray-200 bg-white shadow-sm md:sticky md:top-[116px]">
+                <div className="mx-auto max-w-[1440px] px-2 pb-3 pt-3 md:px-4 lg:px-5">
                     <div className="flex items-center gap-3">
-                        <button onClick={handleBackNavigation} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 transition-colors"><MdArrowBack className="text-xl text-gray-700"/></button>
-                        <h1 className="text-base md:text-2xl font-bold md:font-black text-gray-900 capitalize tracking-tight">{categoryData.name}</h1>
+                        <button onClick={handleBackNavigation} className="rounded-full bg-gray-50 p-2 transition-colors hover:bg-gray-100"><MdArrowBack className="text-xl text-gray-700" /></button>
+                        <h1 className="text-base font-bold capitalize tracking-tight text-gray-900 md:text-2xl md:font-black">{categoryData.name}</h1>
                     </div>
                 </div>
             </div>
-
-            <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-1 pb-4 md:py-4 flex flex-col min-h-[calc(100vh-160px)]">
-                <div className="flex flex-col lg:flex-row gap-4 h-full relative">
+            <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-[1440px] flex-col px-2 pb-4 pt-1 md:px-4 md:py-4 lg:px-5">
+                <div className="relative flex h-full flex-col gap-4 lg:flex-row">
                     {!isSubCategoryLandingView && (
-                        <aside className="hidden lg:block w-[280px] shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[116px] h-fit">
-                            <div className="px-4 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                                <h3 className="font-black text-gray-900 text-sm uppercase tracking-widest">Filters</h3>
-                                <button onClick={resetAllFilters} className="text-[11px] font-black text-blue-600 hover:text-blue-700 uppercase">Clear All</button>
-                            </div>
-                            <div className="divide-y divide-gray-50 overflow-y-auto no-scrollbar max-h-[70vh]">
-                                <div className="px-4 py-5">
-                                    <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Price Range</h4>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <div className="flex-1 bg-gray-50 border border-gray-200 rounded p-1.5"><span className="text-[9px] text-gray-400 block uppercase font-bold">Min</span><div className="flex items-center gap-0.5"><span className="text-xs font-black text-gray-900">₹</span><input type="number" value={filterRange[0]} onChange={(e) => handlePriceInputChange(0, e.target.value)} className="w-full bg-transparent text-xs font-black focus:outline-none"/></div></div>
-                                        <div className="w-2 h-[1px] bg-gray-300"></div>
-                                        <div className="flex-1 bg-gray-50 border border-gray-200 rounded p-1.5"><span className="text-[9px] text-gray-400 block uppercase font-bold">Max</span><div className="flex items-center gap-0.5"><span className="text-xs font-black text-gray-900">₹</span><input type="number" value={filterRange[1]} onChange={(e) => handlePriceInputChange(1, e.target.value)} className="w-full bg-transparent text-xs font-black focus:outline-none"/></div></div>
+                        <aside className="sticky top-[128px] hidden h-fit w-[300px] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:block xl:w-[320px]">
+                            <div className="border-b border-gray-100 bg-white px-4 py-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Filters</h3>
+                                        <p className="mt-1 text-xs font-medium text-gray-500">{sortedProducts.length} matching products</p>
                                     </div>
+                                    <button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600 hover:text-blue-700">Clear All</button>
                                 </div>
+                                {activeFilterChips.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{activeFilterChips.slice(0, 5).map((chip) => <span key={chip} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">{chip}</span>)}{activeFilterChips.length > 5 && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] font-bold text-gray-500">+{activeFilterChips.length - 5} more</span>}</div>}
+                            </div>
+                            <div className="max-h-[calc(100vh-180px)] divide-y divide-gray-100 overflow-y-auto no-scrollbar">
+                                <FilterSection sectionKey="sort" title="Sort" badge={sortBy === 'popularity' ? 'Default' : sortBy.replace('-', ' ')} collapsedSections={collapsedSections} toggleSection={toggleSection}>
+                                    <div className="space-y-2">{SORT_OPTIONS.map((option) => <FilterRadioRow key={option.id} name="desktop-sort" checked={sortBy === option.id} onChange={() => setSortBy(option.id)} label={option.label} />)}</div>
+                                </FilterSection>
+                                <FilterSection sectionKey="price" title="Price" badge={`₹${priceRange.min.toLocaleString()} - ₹${priceRange.max.toLocaleString()}`} collapsedSections={collapsedSections} toggleSection={toggleSection}>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Min</span><div className="mt-1 flex items-center gap-1"><span className="text-sm font-black text-gray-900">₹</span><input type="number" value={filterRange[0]} min={priceRange.min} max={filterRange[1]} onChange={(e) => handlePriceInputChange(0, e.target.value)} className="w-full bg-transparent text-sm font-black text-gray-900 focus:outline-none" /></div></div>
+                                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"><span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Max</span><div className="mt-1 flex items-center gap-1"><span className="text-sm font-black text-gray-900">₹</span><input type="number" value={filterRange[1]} min={filterRange[0]} max={priceRange.max} onChange={(e) => handlePriceInputChange(1, e.target.value)} className="w-full bg-transparent text-sm font-black text-gray-900 focus:outline-none" /></div></div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <input type="range" min={priceRange.min} max={priceRange.max} value={filterRange[0]} onChange={(e) => handlePriceInputChange(0, e.target.value)} className="w-full accent-blue-600" />
+                                            <input type="range" min={priceRange.min} max={priceRange.max} value={filterRange[1]} onChange={(e) => handlePriceInputChange(1, e.target.value)} className="w-full accent-blue-600" />
+                                            <div className="flex items-center justify-between text-xs font-semibold text-gray-500"><span>₹{priceRange.min.toLocaleString()}</span><span>₹{priceRange.max.toLocaleString()}</span></div>
+                                        </div>
+                                    </div>
+                                </FilterSection>
+                                <FilterSection sectionKey="rating" title="Customer Ratings" badge={selectedRating ? `${selectedRating}★` : null} collapsedSections={collapsedSections} toggleSection={toggleSection}>
+                                    <div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="desktop-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={<span className="flex items-center gap-1"><span>{rating}</span><MdStar className="text-base text-green-600" /><span>& above</span></span>} />)}<button type="button" onClick={() => setSelectedRating(null)} className="px-3 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-blue-600">Clear Rating</button></div>
+                                </FilterSection>
+                                <FilterSection sectionKey="discount" title="Discount" badge={selectedDiscount ? `${selectedDiscount}%+` : null} collapsedSections={collapsedSections} toggleSection={toggleSection}>
+                                    <div className="space-y-2">{DISCOUNT_OPTIONS.map((discount) => <FilterRadioRow key={discount} name="desktop-discount" checked={selectedDiscount === discount} onChange={() => setSelectedDiscount(discount)} label={`${discount}% or more`} />)}<button type="button" onClick={() => setSelectedDiscount(null)} className="px-3 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-blue-600">Clear Discount</button></div>
+                                </FilterSection>
+                                {availableBrands.length > 0 && <FilterSection sectionKey="brand" title="Brand" badge={selectedBrands.length > 0 ? selectedBrands.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-3"><input type="text" value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Search brand" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500" /><div className="space-y-1">{displayedBrands.map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div>{filteredBrands.length > 6 && <button type="button" onClick={() => setShowAllBrands((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllBrands ? 'Show Less' : `Show ${filteredBrands.length - 6} More`}</button>}</div></FilterSection>}
+                                {availableRam.length > 0 && <FilterSection sectionKey="ram" title="RAM" badge={selectedRam.length > 0 ? selectedRam.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-1">{displayedRam.map((ram) => <FilterCheckRow key={ram} checked={selectedRam.includes(ram)} onChange={() => toggleRam(ram)} label={ram} />)}{availableRam.length > 6 && <button type="button" onClick={() => setShowAllRam((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllRam ? 'Show Less' : `Show ${availableRam.length - 6} More`}</button>}</div></FilterSection>}
+                                {availableCategories.length > 0 && <FilterSection sectionKey="category" title="Category" badge={selectedCategories.length > 0 ? selectedCategories.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-1">{displayedCategories.map((category) => <FilterCheckRow key={category} checked={selectedCategories.includes(category)} onChange={() => toggleCategory(category)} label={category} />)}{availableCategories.length > 6 && <button type="button" onClick={() => setShowAllCategories((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllCategories ? 'Show Less' : `Show ${availableCategories.length - 6} More`}</button>}</div></FilterSection>}
                             </div>
                         </aside>
                     )}
-
-                    <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
-                        {isSubCategoryLandingView && (
-                            <div className="relative">
-                                <CategoryLandingSections categoryName={rootCategory.name} />
-                            </div>
-                        )}
-
-                        {isSubCategoryLandingView && (
-                            <div className="relative">
-                                <SubCategoryList
-                                    subCategories={isSubCategoryLandingView ? gridSubCategories : []}
-                                    categoryName={rootCategory.name}
-                                />
-                            </div>
-                        )}
-
+                    <main className={`min-w-0 flex-1 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
+                        {isSubCategoryLandingView && <div className="relative"><CategoryLandingSections categoryName={rootCategory.name} /></div>}
+                        {isSubCategoryLandingView && <div className="relative"><SubCategoryList subCategories={isSubCategoryLandingView ? gridSubCategories : []} categoryName={rootCategory.name} /></div>}
                         {!isSubCategoryLandingView && (
-                            <div className="bg-white md:rounded-lg md:shadow-sm border border-gray-100 p-3 md:p-6 min-h-[600px]">
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">Product List<div className="h-1.5 w-1.5 rounded-full bg-blue-600"></div></h2>
-                                    <span className="text-[11px] font-bold text-gray-400 uppercase">Total {sortedProducts.length} Items</span>
+                            <div className="min-h-[600px] border border-gray-100 bg-white p-3 md:rounded-lg md:p-6 md:shadow-sm">
+                                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-gray-900">Product List<div className="h-1.5 w-1.5 rounded-full bg-blue-600" /></h2>
+                                        <p className="mt-1 text-xs font-medium text-gray-500">Showing results for {categoryData.name}{activeFilterCount > 0 ? ` with ${activeFilterCount} active filter${activeFilterCount > 1 ? 's' : ''}` : ''}</p>
+                                    </div>
+                                    <span className="text-[11px] font-bold uppercase text-gray-400">Total {sortedProducts.length} Items</span>
                                 </div>
-                                {sortedProducts.length > 0 ? (
-                                    <>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                                            {currentPageProducts.map((p) => <ProductCard key={p.id || p._id} product={p} />)}
-                                        </div>
-                                        {totalPages > 1 && (
-                                            <div className="mt-8 flex flex-col items-center gap-3">
-                                                <p className="text-xs text-gray-500 font-semibold">Showing {pageStartLabel}-{pageEndLabel} of {sortedProducts.length}</p>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => setCurrentPage(p => Math.max(1, p-1))} disabled={safeCurrentPage === 1} className="px-3 py-2 border rounded-lg disabled:opacity-30">Prev</button>
-                                                    <span className="px-3 py-2 bg-blue-50 text-blue-600 font-bold rounded-lg">{safeCurrentPage} / {totalPages}</span>
-                                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} disabled={safeCurrentPage === totalPages} className="px-3 py-2 border rounded-lg disabled:opacity-30">Next</button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </>
-                                ) : ( <div className="text-center py-24">No products found.</div> )}
+                                {sortedProducts.length > 0 ? (<><div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4">{currentPageProducts.map((product) => <ProductCard key={product.id || product._id} product={product} />)}</div>{totalPages > 1 && <div className="mt-8 flex flex-col items-center gap-3"><p className="text-xs font-semibold text-gray-500">Showing {pageStartLabel}-{pageEndLabel} of {sortedProducts.length}</p><div className="flex items-center gap-2"><button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} className="rounded-lg border px-3 py-2 disabled:opacity-30">Prev</button><span className="rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-600">{safeCurrentPage} / {totalPages}</span><button onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages} className="rounded-lg border px-3 py-2 disabled:opacity-30">Next</button></div></div>}</>) : <div className="py-24 text-center">No products found.</div>}
                             </div>
                         )}
                     </main>
                 </div>
             </div>
-
-            {!isSubCategoryLandingView && (
-                <div className="lg:hidden fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 bg-white border-t h-14 flex z-40">
-                    <button onClick={() => setShowSortModal(true)} className="flex-1 border-r text-xs font-black uppercase tracking-widest">Sort By</button>
-                    <button onClick={() => setShowFilterModal(true)} className="flex-1 text-xs font-black uppercase tracking-widest">Filters</button>
-                </div>
-            )}
+            {!isSubCategoryLandingView && <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 z-40 flex h-14 border-t bg-white lg:hidden"><button onClick={() => setShowSortModal(true)} className="flex-1 border-r text-xs font-black uppercase tracking-widest">Sort By</button><button onClick={() => setShowFilterModal(true)} className="flex-1 text-xs font-black uppercase tracking-widest">Filters</button></div>}
             <BottomNav />
-
-            {/* Mobile Modals (Sort & Filter) */}
-            {showSortModal && (
-                <div className="fixed inset-0 z-[100] flex items-end">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)}></div>
-                    <div className="relative w-full bg-white rounded-t-2xl p-6 animate-in slide-in-from-bottom duration-300">
-                        <div className="flex items-center justify-between mb-4 border-b pb-4"><h3 className="font-black text-gray-900 uppercase tracking-widest text-xs">Sort By</h3><button onClick={() => setShowSortModal(false)} className="material-icons text-gray-400">close</button></div>
-                        <div className="space-y-1">
-                            {['popularity', 'price-low', 'price-high', 'rating'].map(id => (
-                                <button key={id} onClick={() => { setSortBy(id); setShowSortModal(false); }} className={`w-full text-left py-4 px-4 rounded-xl text-sm font-bold ${sortBy === id ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}>{id.replace('-', ' ')}</button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-            {showFilterModal && (
-                <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300">
-                    <div className="h-full flex flex-col">
-                        <div className="px-5 py-4 border-b flex items-center justify-between">
-                            <div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">Filters</h3></div>
-                            <button onClick={resetAllFilters} className="text-[11px] font-black text-blue-600 uppercase">Clear all</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-5"><h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="bg-gray-50 p-3 rounded-lg border border-gray-100"><span className="text-[9px] text-gray-400 block uppercase font-bold">Min</span><div className="font-black text-sm">₹{filterRange[0]}</div></div><div className="bg-gray-50 p-3 rounded-lg border border-gray-100"><span className="text-[9px] text-gray-400 block uppercase font-bold">Max</span><div className="font-black text-sm">₹{filterRange[1]}</div></div></div></div>
-                        <div className="p-4 border-t"><button onClick={() => setShowFilterModal(false)} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest">Apply Filters</button></div>
-                    </div>
-                </div>
-            )}
+            {showSortModal && <div className="fixed inset-0 z-[100] flex items-end"><div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)} /><div className="relative w-full rounded-t-2xl bg-white p-6 animate-in slide-in-from-bottom duration-300"><div className="mb-4 flex items-center justify-between border-b pb-4"><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Sort By</h3><button onClick={() => setShowSortModal(false)} className="material-icons text-gray-400">close</button></div><div className="space-y-1">{SORT_OPTIONS.map((option) => <button key={option.id} onClick={() => { setSortBy(option.id); setShowSortModal(false); }} className={`w-full rounded-xl px-4 py-4 text-left text-sm font-bold ${sortBy === option.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}>{option.label}</button>)}</div></div></div>}
+            {showFilterModal && <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300"><div className="flex h-full flex-col"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Filters</h3></div><button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600">Clear all</button></div><div className="flex-1 overflow-y-auto p-5"><h4 className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Min</span><div className="text-sm font-black">₹{filterRange[0]}</div></div><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Max</span><div className="text-sm font-black">₹{filterRange[1]}</div></div></div><div className="mt-6 space-y-4"><div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Customer Ratings</h4><div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="mobile-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={`${rating}★ & above`} />)}</div></div>{availableBrands.length > 0 && <div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Brand</h4><div className="space-y-2">{availableBrands.slice(0, 8).map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div></div>}</div></div><div className="border-t p-4"><button onClick={() => setShowFilterModal(false)} className="w-full rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white">Apply Filters</button></div></div></div>}
         </div>
     );
 };

@@ -22,14 +22,17 @@ const getCardWidthClass = (mediaDisplay) => {
     return 'w-[148px] shrink-0 sm:w-[190px] md:w-[240px]';
 };
 
-const getImageHeightClass = (mediaDisplay) => {
+const getImageHeightClass = (mediaDisplay, itemType) => {
     if (mediaDisplay === 'single') return 'aspect-[16/7]';
+    if (mediaDisplay === 'grid' && itemType === 'image') return 'h-40 sm:h-44 md:h-52 lg:h-56';
+    if (mediaDisplay === 'scroll' && itemType === 'image') return 'h-40 sm:h-44 md:h-48';
     return 'aspect-square';
 };
 
 const getImageFitClass = (mediaDisplay, itemType) => {
-    if (mediaDisplay === 'single' || mediaDisplay === 'carousel') return 'object-contain';
-    if (itemType === 'image') return 'object-cover';
+    if (mediaDisplay === 'single') return 'object-cover';
+    if (mediaDisplay === 'carousel') return 'object-contain';
+    if (itemType === 'image') return 'object-contain md:object-cover';
     return 'object-cover';
 };
 
@@ -185,16 +188,16 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
                         onClick={() => openLink(link)}
                         className="block w-full text-left"
                     >
-                        <div className="overflow-hidden bg-gray-100">
+                        <div className="overflow-hidden rounded-2xl bg-gray-100">
                             {image ? (
                                 <img
                                     src={image}
                                     alt={title || section.title || categoryName}
-                                    className="w-full h-auto object-contain"
+                                    className="aspect-[16/7] w-full object-cover"
                                     style={{ transition: 'opacity 0.38s ease' }}
                                 />
                             ) : (
-                                <div className="w-full min-h-[120px] bg-gray-100" />
+                                <div className="aspect-[16/7] w-full bg-gray-100" />
                             )}
                         </div>
                         {(title || description) && (
@@ -302,13 +305,15 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                     >
                         <div className={`overflow-hidden ${getImageFrameClass(item.itemType)}`}>
                             {image ? (
-                                <img
-                                    src={image}
-                                    alt={title || section.title || categoryName}
-                                    className={`${getImageHeightClass(section.mediaDisplay)} ${getImageFitClass(section.mediaDisplay, item.itemType)} w-full`}
-                                />
+                                <div className={`w-full ${section.mediaDisplay === 'single' ? '' : 'flex items-center justify-center'} ${getImageHeightClass(section.mediaDisplay, item.itemType)}`}>
+                                    <img
+                                        src={image}
+                                        alt={title || section.title || categoryName}
+                                        className={`h-full w-full ${getImageFitClass(section.mediaDisplay, item.itemType)}`}
+                                    />
+                                </div>
                             ) : (
-                                <div className={`${getImageHeightClass(section.mediaDisplay)} w-full bg-gray-100`} />
+                                <div className={`${getImageHeightClass(section.mediaDisplay, item.itemType)} w-full bg-gray-100`} />
                             )}
                         </div>
                         {(title || description) && (
