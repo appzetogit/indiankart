@@ -4,6 +4,7 @@ import AdminLogin from '../pages/AdminLogin';
 import AdminLayout from '../components/layout/AdminLayout';
 import Dashboard from '../pages/Dashboard';
 import CategoryList from '../pages/Categories/CategoryList';
+import CategoryPageBuilder from '../pages/Categories/CategoryPageBuilder';
 import SubCategoryList from '../pages/SubCategories/SubCategoryList';
 import BannerManager from '../pages/Homepage/BannerManager';
 import PlayManager from '../pages/Play/PlayManager';
@@ -33,7 +34,6 @@ import OfferList from '../pages/Offers/OfferList';
 import OfferForm from '../pages/Offers/OfferForm';
 import StockManagement from '../pages/StockManagement/StockManagement';
 import FooterManager from '../pages/Settings/FooterManager';
-import HeaderManager from '../pages/Settings/HeaderManager';
 import NotificationManager from '../pages/Notifications/NotificationManager';
 import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
@@ -62,7 +62,7 @@ const AdminRoutes = () => {
                 <Route path="products/edit/:id" element={<ProductForm />} />
                 <Route path="stock" element={<StockManagement />} />
                 <Route path="categories" element={<CategoryList />} />
-                <Route path="category-banners" element={<CategoryList />} />
+                <Route path="categories/page-builder" element={<CategoryPageBuilder />} />
                 <Route path="subcategories" element={<SubCategoryList />} />
                 <Route path="orders" element={<OrderList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
@@ -91,7 +91,6 @@ const AdminRoutes = () => {
                 <Route path="razorpay-credentials" element={<RazorpayCredentials />} />
                 <Route path="shipping-charges" element={<ShippingCharges />} />
                 <Route path="footer-settings" element={<FooterManager />} />
-                <Route path="header-settings" element={<HeaderManager />} />
                 <Route path="notifications" element={<NotificationManager />} />
             </Route>
         </Routes>

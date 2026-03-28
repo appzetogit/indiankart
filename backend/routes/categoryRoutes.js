@@ -16,10 +16,7 @@ router.route('/')
         protect,
         admin,
         upload.fields([
-            { name: 'icon', maxCount: 1 },
-            { name: 'bannerImage', maxCount: 1 },
-            { name: 'smallBanners', maxCount: 20 },
-            { name: 'secondaryBanners', maxCount: 30 }
+            { name: 'icon', maxCount: 1 }
         ]),
         createCategory
     );
@@ -30,10 +27,7 @@ router.route('/:id')
         protect,
         admin,
         upload.fields([
-            { name: 'icon', maxCount: 1 },
-            { name: 'bannerImage', maxCount: 1 },
-            { name: 'smallBanners', maxCount: 20 },
-            { name: 'secondaryBanners', maxCount: 30 }
+            { name: 'icon', maxCount: 1 }
         ]),
         updateCategory
     )

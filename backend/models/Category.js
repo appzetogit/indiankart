@@ -4,25 +4,6 @@ const categorySchema = mongoose.Schema({
     id: { type: Number, required: true, unique: true },
     name: { type: String, required: true },
     icon: { type: String },
-    bannerImage: { type: String },
-    bannerAlt: { type: String },
-    smallBanners: [
-        {
-            image: { type: String, required: true },
-            alt: { type: String, default: '' },
-            title: { type: String, default: '' },
-            redirectLink: { type: String, default: '' }
-        }
-    ],
-    secondaryBannerTitle: { type: String, default: '' },
-    secondaryBanners: [
-        {
-            image: { type: String, required: true },
-            alt: { type: String, default: '' },
-            title: { type: String, default: '' },
-            redirectLink: { type: String, default: '' }
-        }
-    ],
     b2bEnabled: { type: Boolean, default: false, index: true },
     active: { type: Boolean, default: true, index: true },
     // subCategories removed - now using separate SubCategory model

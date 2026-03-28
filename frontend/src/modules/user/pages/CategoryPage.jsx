@@ -2,9 +2,10 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MdArrowBack } from 'react-icons/md';
 import API from '../../../services/api';
-import { useCategories, useSubCategoriesByCategory } from '../../../hooks/useData';
+import { useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
 import SubCategoryList from '../components/category/SubCategoryList';
+import CategoryLandingSections from '../components/category/CategoryLandingSections';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
 
@@ -149,9 +150,9 @@ const CategoryPage = () => {
         }
     }, [categoryName, subPath, products, categories, productsLoading, categoriesLoading]);
 
-    // Integrate Cached Subcategories Hook
-    const dbId = categoryData?._id || categoryData?.id;
-    const { subCategories: detailedSubCategories, loading: subsLoading } = useSubCategoriesByCategory(dbId);
+    // Temporarily disable backend subcategory hydration for category landing sections.
+    // const dbId = categoryData?._id || categoryData?.id;
+    // const { subCategories: detailedSubCategories, loading: subsLoading } = useSubCategoriesByCategory(dbId);
 
     useEffect(() => {
         setSortBy('popularity');
@@ -254,7 +255,9 @@ const CategoryPage = () => {
     if (!categoryData) return <div className="p-10 text-center">Category not found</div>;
 
     const isSubCategoryLandingView = !routeHasExplicitSubPath && breadcrumbs.length === 1;
-    const gridSubCategories = detailedSubCategories.length > 0 ? detailedSubCategories : categoryData.subCategories || [];
+    // Keep landing page driven by local/category config only for now.
+    // const gridSubCategories = detailedSubCategories.length > 0 ? detailedSubCategories : categoryData.subCategories || [];
+    const gridSubCategories = [];
     const rootCategory = breadcrumbs[0] || categoryData;
 
     return (
@@ -290,15 +293,17 @@ const CategoryPage = () => {
                     )}
 
                     <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
-                        {/* Always show banners at the top of the category/subcategory view */}
-                        {(isSubCategoryLandingView || rootCategory?.smallBanners?.length > 0 || rootCategory?.secondaryBanners?.length > 0) && (
+                        {isSubCategoryLandingView && (
+                            <div className="md:rounded-lg overflow-hidden relative mb-4">
+                                <CategoryLandingSections categoryName={rootCategory.name} />
+                            </div>
+                        )}
+
+                        {isSubCategoryLandingView && (
                             <div className="md:rounded-lg overflow-hidden relative mb-4">
                                 <SubCategoryList
                                     subCategories={isSubCategoryLandingView ? gridSubCategories : []}
                                     categoryName={rootCategory.name}
-                                    smallBanners={rootCategory.smallBanners || []}
-                                    secondaryBannerTitle={rootCategory.secondaryBannerTitle || ''}
-                                    secondaryBanners={rootCategory.secondaryBanners || []}
                                 />
                             </div>
                         )}

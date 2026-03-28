@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useCartStore } from '../../store/cartStore';
 import { useLanguageStore } from '../../../../store/languageStore';
-import { useHeaderStore } from '../../../admin/store/headerStore';
+import { useCategories } from '../../../../hooks/useData';
 import API from '../../../../services/api';
 import { IoSearch } from 'react-icons/io5';
 import TranslatedText from '../common/TranslatedText';
@@ -54,12 +54,8 @@ const Header = () => {
     const primaryAddress = addresses && addresses.length > 0 ? addresses[0] : null;
     const navigate = useNavigate();
     const location = useLocation();
-    const { headerCategories, fetchHeaderConfig, isLoading: headerLoading } = useHeaderStore();
+    const { categories, loading: headerLoading } = useCategories({ lite: true });
     const [headerLogo, setHeaderLogo] = useState(logo);
-
-    useEffect(() => {
-        fetchHeaderConfig();
-    }, []);
 
     useEffect(() => {
         const fetchHeaderLogo = async () => {
@@ -76,8 +72,8 @@ const Header = () => {
         fetchHeaderLogo();
     }, []);
 
-    // Show only active admin-configured header categories.
-    const activeHeaderCategories = (headerCategories || []).filter((cat) =>
+    // Show active categories directly in homepage strip. No separate manual header config needed.
+    const activeHeaderCategories = (categories || []).filter((cat) =>
         cat &&
         cat.active !== false &&
         String(cat?.name || '').trim().length > 0

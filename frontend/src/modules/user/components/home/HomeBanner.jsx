@@ -10,13 +10,20 @@ import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 const HomeBanner = ({ banner, isMobileViewport = false }) => {
     const navigate = useNavigate();
     const bannerFrameClass = 'w-full';
-    const bannerImageClass = 'w-full h-auto object-contain object-center block';
-    const getHeroImage = () =>
-        (isMobileViewport && banner?.content?.mobileBackgroundImageUrl) ||
-        banner?.content?.backgroundImageUrl ||
-        banner?.content?.imageUrl;
-    const getSlideImage = (slide) =>
-        (isMobileViewport && slide?.mobileImageUrl) || slide?.imageUrl;
+    const bannerImageClass = 'w-full h-auto object-contain object-center block rounded-xl';
+    const getHeroImage = () => {
+        if (isMobileViewport) {
+            return banner?.content?.mobileBackgroundImageUrl || '';
+        }
+        return banner?.content?.backgroundImageUrl || banner?.content?.imageUrl || '';
+    };
+
+    const getSlideImage = (slide) => {
+        if (isMobileViewport) {
+            return slide?.mobileImageUrl || '';
+        }
+        return slide?.imageUrl || '';
+    };
 
     // Debugging Banner Data
     if (banner?.active && banner?.type === 'hero') {
@@ -76,12 +83,12 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
             <section className="w-full">
                 <div
                     onClick={handleBannerContentClick}
-                    className={`relative ${bannerFrameClass} rounded-2xl overflow-hidden shadow-lg border border-white/5 group cursor-pointer bg-white`}
+                    className={`relative ${bannerFrameClass} rounded-xl overflow-hidden group cursor-pointer`}
                     style={{ backgroundColor: bgColor }}
                 >
                     {/* Background Image Layer */}
                     {getHeroImage() && (
-                        <div className="relative w-full bg-white/10">
+                        <div className="relative w-full rounded-xl overflow-hidden">
                             <img
                                 src={getHeroImage()}
                                 className={`${bannerImageClass} group-hover:scale-[1.02] transition-transform duration-1000`}
@@ -188,19 +195,23 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
                     navigation={true}
                     loop={true}
                     autoHeight={true}
-                    className={`${bannerFrameClass} rounded-2xl overflow-hidden shadow-sm group home-banner-swiper`}
+                    className={`${bannerFrameClass} rounded-xl overflow-hidden group home-banner-swiper`}
                 >
                     {banner.slides.map((slide, index) => (
                         <SwiperSlide key={index}>
                             <div
-                                className="relative w-full bg-white cursor-pointer"
+                                className="relative w-full cursor-pointer rounded-xl overflow-hidden"
                                 onClick={() => handleSlideClick(slide)}
                             >
-                                <img
-                                    src={getSlideImage(slide)}
-                                    className={bannerImageClass}
-                                    alt={`Slide ${index + 1}`}
-                                />
+                                {getSlideImage(slide) ? (
+                                    <img
+                                        src={getSlideImage(slide)}
+                                        className={bannerImageClass}
+                                        alt={`Slide ${index + 1}`}
+                                    />
+                                ) : (
+                                    <div className="w-full min-h-[120px] rounded-xl bg-transparent" />
+                                )}
                             </div>
                         </SwiperSlide>
                     ))}

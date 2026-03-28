@@ -6,21 +6,15 @@ import {
     MdCategory,
     MdShoppingCart,
     MdAssignmentReturn,
-
     MdLocalOffer,
     MdLocalShipping,
     MdStorefront,
-    MdPlayCircle,
-    MdHome,
     MdPeople,
     MdSettings,
     MdMenu,
     MdClose,
     MdDescription,
-    MdSupportAgent,
-    MdLabel,
     MdViewAgenda,
-    MdViewCarousel,
     MdRateReview,
     MdLocationOn,
     MdLayers,
@@ -35,35 +29,68 @@ import logo from '../../../../assets/indiankart-logo.png';
 const Sidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
 
-    const menuItems = [
-        { name: 'Dashboard', icon: MdDashboard, path: '/admin/dashboard' },
-        { name: 'Orders', icon: MdShoppingCart, path: '/admin/orders' },
-        { name: 'Manage PIN Codes', icon: MdLocationOn, path: '/admin/pincodes' },
-        { name: 'Products', icon: MdInventory, path: '/admin/products' },
-        { name: 'B2B', icon: MdBusinessCenter, path: '/admin/b2b' },
-        { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
-        { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
-        { name: 'Category Banners', icon: MdViewCarousel, path: '/admin/category-banners' },
-        { name: 'Subcategories', icon: MdCategory, path: '/admin/subcategories' },
-        { name: 'Users', icon: MdPeople, path: '/admin/users' },
-        { name: 'Seller Requests', icon: MdStorefront, path: '/admin/seller-requests' },
-        { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
-        { name: 'Shipping Charges', icon: MdLocalShipping, path: '/admin/shipping-charges' },
-        { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
-        { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
-        { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },
-        // { name: 'Offers', icon: MdLabel, path: '/admin/offers' },
-        { name: 'Bank Offers', icon: MdLocalOffer, path: '/admin/bank-offers' },
-        { name: 'Home Layout', icon: MdLayers, path: '/admin/content/layout' },
-        { name: 'Home Sections', icon: MdViewAgenda, path: '/admin/content/sections' },
-        { name: 'Home Banners', icon: MdViewCarousel, path: '/admin/content/banners' },
-        { name: 'Help Center', icon: MdHelpCenter, path: '/admin/content/help-center' },
-        { name: 'Content Pages', icon: MdDescription, path: '/admin/pages' },
-        { name: 'Footer Settings', icon: MdViewCompact, path: '/admin/footer-settings' },
-        { name: 'Header Settings', icon: MdViewCompact, path: '/admin/header-settings' },
-        { name: 'Notifications', icon: MdNotifications, path: '/admin/notifications' },
-        { name: 'Razorpay Credentials', icon: MdSettings, path: '/admin/razorpay-credentials' },
-        { name: 'Settings', icon: MdSettings, path: '/admin/settings' },
+    const menuGroups = [
+        {
+            title: 'Operations',
+            items: [
+                { name: 'Dashboard', icon: MdDashboard, path: '/admin/dashboard' },
+                { name: 'Orders', icon: MdShoppingCart, path: '/admin/orders' },
+                { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
+                { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
+                { name: 'Shipping Charges', icon: MdLocalShipping, path: '/admin/shipping-charges' },
+                { name: 'PIN Codes', icon: MdLocationOn, path: '/admin/pincodes' },
+            ]
+        },
+        {
+            title: 'Catalog',
+            items: [
+                { name: 'Products', icon: MdInventory, path: '/admin/products' },
+                { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
+                { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
+                { name: 'Category Page Builder', icon: MdViewAgenda, path: '/admin/categories/page-builder' },
+                { name: 'Subcategories', icon: MdCategory, path: '/admin/subcategories' },
+            ]
+        },
+        {
+            title: 'Marketing',
+            items: [
+                { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },
+                { name: 'Bank Offers', icon: MdLocalOffer, path: '/admin/bank-offers' },
+            ]
+        },
+        {
+            title: 'Users & Support',
+            items: [
+                { name: 'Users', icon: MdPeople, path: '/admin/users' },
+                { name: 'Seller Requests', icon: MdStorefront, path: '/admin/seller-requests' },
+                { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
+                { name: 'Notifications', icon: MdNotifications, path: '/admin/notifications' },
+                { name: 'B2B Enquiries', icon: MdBusinessCenter, path: '/admin/b2b' },
+            ]
+        },
+        {
+            title: 'Homepage',
+            items: [
+                { name: 'Home Layout', icon: MdLayers, path: '/admin/content/layout' },
+                { name: 'Home Sections', icon: MdViewAgenda, path: '/admin/content/sections' },
+                { name: 'Home Banners', icon: MdViewAgenda, path: '/admin/content/banners' },
+                { name: 'Homepage Footer', icon: MdViewCompact, path: '/admin/footer-settings' },
+            ]
+        },
+        {
+            title: 'Content',
+            items: [
+                { name: 'Static Pages', icon: MdDescription, path: '/admin/pages' },
+                { name: 'Help Center Content', icon: MdHelpCenter, path: '/admin/content/help-center' },
+            ]
+        },
+        {
+            title: 'Configuration',
+            items: [
+                { name: 'Razorpay Credentials', icon: MdSettings, path: '/admin/razorpay-credentials' },
+                { name: 'Store Settings', icon: MdSettings, path: '/admin/settings' },
+            ]
+        }
     ];
 
     return (
@@ -103,26 +130,35 @@ const Sidebar = () => {
                     data-lenis-prevent
                     className="mt-4 px-2 flex-1 overflow-y-auto custom-scrollbar pb-10"
                 >
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <NavLink
-                                key={item.path}
-                                to={item.path}
-                                className={({ isActive }) =>
-                                    `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${isActive
-                                        ? 'bg-blue-600 text-white'
-                                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                                    }`
-                                }
-                            >
-                                <Icon size={22} className="shrink-0" />
-                                <span className={`${isOpen ? 'block' : 'hidden lg:hidden'}`}>
-                                    {item.name}
-                                </span>
-                            </NavLink>
-                        );
-                    })}
+                    {menuGroups.map((group) => (
+                        <div key={group.title} className="mb-5">
+                            <div className={`px-4 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500 ${isOpen ? 'block' : 'hidden lg:hidden'}`}>
+                                {group.title}
+                            </div>
+                            <div>
+                                {group.items.map((item) => {
+                                    const Icon = item.icon;
+                                    return (
+                                        <NavLink
+                                            key={item.path}
+                                            to={item.path}
+                                            className={({ isActive }) =>
+                                                `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${isActive
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                                                }`
+                                            }
+                                        >
+                                            <Icon size={22} className="shrink-0" />
+                                            <span className={`${isOpen ? 'block' : 'hidden lg:hidden'}`}>
+                                                {item.name}
+                                            </span>
+                                        </NavLink>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ))}
                 </nav>
             </aside>
 

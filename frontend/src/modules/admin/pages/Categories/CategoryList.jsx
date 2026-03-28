@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { MdAdd, MdEdit, MdDelete } from 'react-icons/md';
-import { useLocation } from 'react-router-dom';
 import useCategoryStore from '../../store/categoryStore';
 import CategoryForm from './CategoryForm';
 import Pagination from '../../components/common/Pagination';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
 const CategoryList = () => {
-    const location = useLocation();
-    const isCategoryBannersPage = location.pathname === '/admin/category-banners';
-    const entityLabel = isCategoryBannersPage ? 'Banner' : 'Category';
+    const entityLabel = 'Category';
     
     const categories = useCategoryStore((state) => state.categories);
     const fetchCategories = useCategoryStore((state) => state.fetchCategories);
@@ -56,23 +53,19 @@ const CategoryList = () => {
             <div className="flex items-center justify-between gap-2">
                 <div>
                     <h1 className="text-xl md:text-3xl font-bold text-gray-800">
-                        {isCategoryBannersPage ? 'Category Banner Management' : 'Category Management'}
+                        Category Management
                     </h1>
                     <p className="text-xs md:text-base text-gray-500 mt-1">
-                        {isCategoryBannersPage
-                            ? 'Edit an existing root category to manage the banners shown on its user page.'
-                            : 'Only root categories are shown here.'}
+                        Only root categories are shown here.
                     </p>
                 </div>
-                {!isCategoryBannersPage && (
-                    <button
-                        onClick={() => setShowForm(true)}
-                        className="flex items-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition text-xs md:text-base font-bold"
-                    >
-                        <MdAdd size={16} className="md:w-5 md:h-5" />
-                        Add Category
-                    </button>
-                )}
+                <button
+                    onClick={() => setShowForm(true)}
+                    className="flex items-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition text-xs md:text-base font-bold"
+                >
+                    <MdAdd size={16} className="md:w-5 md:h-5" />
+                    Add Category
+                </button>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
@@ -99,11 +92,7 @@ const CategoryList = () => {
                     </div>
                 ) : categories.length === 0 ? (
                     <div className="p-12 text-center text-gray-500">
-                        <p>
-                            {isCategoryBannersPage
-                                ? 'No categories found. Create a category first, then edit it here to manage its banners.'
-                                : 'No categories found. Create your first category.'}
-                        </p>
+                        <p>No categories found. Create your first category.</p>
                     </div>
                 ) : (
                     <div>
@@ -176,7 +165,6 @@ const CategoryList = () => {
                 <CategoryForm
                     category={editingCategory}
                     onClose={handleCloseForm}
-                    isBannerMode={isCategoryBannersPage}
                 />
             )}
         </div>

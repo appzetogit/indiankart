@@ -6,22 +6,17 @@ import {
     MdAdd,
     MdDelete,
     MdSearch,
-    MdViewCarousel,
     MdCloudUpload,
     MdArrowBack,
     MdLink,
     MdImage,
     MdDragIndicator,
-    MdChevronLeft,
-    MdChevronRight,
-    MdVisibility,
     MdLocalOffer
 } from 'react-icons/md';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import useBannerStore from '../../store/bannerStore';
 import useProductStore from '../../store/productStore';
-import { useContentStore } from '../../store/contentStore';
 import API from '../../../../services/api';
 
 // DnD Kit imports
@@ -83,30 +78,39 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
                 #{index + 1}
             </div>
 
-            {/* Delete Button */}
-            <button
-                onClick={() => onRemove(index)}
-                className="absolute top-2 right-2 z-20 p-1.5 bg-white text-red-500 rounded-lg shadow-sm hover:bg-red-50 transition"
-            >
-                <MdDelete size={14} />
-            </button>
-
             {/* Image Preview */}
-            <div className="h-32 bg-gray-50 rounded-t-xl overflow-hidden">
-                <img src={slide.preview || slide.imageUrl} className="w-full h-full object-cover" alt="" />
+            <div className="overflow-hidden px-2 pt-2">
+                <img src={slide.preview || slide.imageUrl} className="h-24 w-full rounded-lg object-cover" alt="" />
             </div>
 
             {/* Slide Config */}
-            <div className="p-3 space-y-2">
+            <div className="p-2.5 space-y-2">
                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase">Mobile Image</label>
-                    <button
-                        type="button"
-                        onClick={() => mobileFileInputRef.current?.click()}
-                        className="w-full rounded-lg border border-dashed border-gray-200 bg-gray-50 px-2 py-1.5 text-left text-[10px] font-medium text-gray-600 hover:border-blue-300 hover:bg-blue-50/40 transition"
-                    >
-                        {slide.mobilePreview || slide.mobileImageUrl ? 'Change mobile image' : 'Upload mobile image'}
-                    </button>
+                    <div className="flex items-center justify-between">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase">Mobile Image</label>
+                        <div className="flex items-center gap-1">
+                            {!(slide.mobilePreview || slide.mobileImageUrl) && (
+                                <button
+                                    type="button"
+                                    onClick={() => mobileFileInputRef.current?.click()}
+                                    className="rounded-md border border-gray-200 bg-gray-50 p-1 text-blue-600 transition hover:border-blue-300 hover:bg-blue-50"
+                                    title="Add mobile image"
+                                >
+                                    <MdAdd size={14} />
+                                </button>
+                            )}
+                            {(slide.mobilePreview || slide.mobileImageUrl) && (
+                                <button
+                                    type="button"
+                                    onClick={() => onUpdate(index, { mobileImageUrl: '', mobilePreview: undefined, mobileFile: undefined })}
+                                    className="rounded-md border border-gray-200 bg-gray-50 p-1 text-red-500 transition hover:border-red-200 hover:bg-red-50"
+                                    title="Remove mobile image"
+                                >
+                                    <MdDelete size={14} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
                     <input
                         ref={mobileFileInputRef}
                         type="file"
@@ -123,6 +127,15 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
                             e.target.value = '';
                         }}
                     />
+                    {(slide.mobilePreview || slide.mobileImageUrl) && (
+                        <div className="mt-2 overflow-hidden">
+                            <img
+                                src={slide.mobilePreview || slide.mobileImageUrl}
+                                className="h-24 w-full rounded-lg object-cover"
+                                alt=""
+                            />
+                        </div>
+                    )}
                 </div>
                 <label className="text-[9px] font-bold text-gray-400 uppercase">Click Action</label>
                 <div className="flex gap-1">
@@ -157,7 +170,8 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
                             }
                             onUpdate(index, updates);
                         }}
-                        className="w-full p-1.5 text-[10px] border border-gray-200 rounded bg-white"
+                        className="w-full rounded border border-gray-200 bg-white p-1.5 text-[10px] text-gray-900 outline-none dark:border-zinc-700 dark:bg-white dark:text-gray-900"
+                        style={{ colorScheme: 'light' }}
                     >
                         <option value="">Select Offer...</option>
                         {offers.map(offer => (
@@ -171,7 +185,7 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
                     <button
                         type="button"
                         onClick={() => onProductPick(index)}
-                        className="w-full p-1.5 text-[10px] bg-gray-50 border border-gray-200 rounded text-left hover:bg-gray-100 truncate"
+                        className="w-full rounded border border-gray-200 bg-gray-50 p-1.5 text-left text-[10px] text-gray-900 hover:bg-gray-100 truncate dark:border-zinc-700 dark:bg-white dark:text-gray-900"
                     >
                         {slide.linkedProduct ? slide.linkedProduct.name : 'Select Product...'}
                     </button>
@@ -182,87 +196,18 @@ const SortableSlide = ({ slide, index, onRemove, onUpdate, offers, onProductPick
                         placeholder="https://..."
                         value={slide.linkedUrl || ''}
                         onChange={(e) => onUpdate(index, { linkedUrl: e.target.value })}
-                        className="w-full p-1.5 text-[10px] border border-gray-200 rounded text-gray-800 placeholder-gray-400"
+                        className="w-full rounded border border-gray-200 p-1.5 text-[10px] text-gray-900 placeholder-gray-400 outline-none dark:border-zinc-700 dark:bg-white dark:text-gray-900"
+                        style={{ colorScheme: 'light' }}
                     />
                 )}
-            </div>
-        </div>
-    );
-};
 
-
-
-
-// Live Preview Carousel Component
-const LivePreview = ({ slides }) => {
-    const [currentSlide, setCurrentSlide] = useState(0);
-
-    useEffect(() => {
-        if (slides.length === 0) return;
-        const timer = setInterval(() => {
-            setCurrentSlide(prev => (prev + 1) % slides.length);
-        }, 3000);
-        return () => clearInterval(timer);
-    }, [slides.length]);
-
-    if (slides.length === 0) {
-        return (
-            <div className="bg-gray-100 rounded-xl h-48 flex items-center justify-center">
-                <p className="text-gray-400 text-sm">Add slides to see preview</p>
-            </div>
-        );
-    }
-
-    const goToSlide = (idx) => setCurrentSlide(idx);
-    const prevSlide = () => setCurrentSlide(prev => (prev - 1 + slides.length) % slides.length);
-    const nextSlide = () => setCurrentSlide(prev => (prev + 1) % slides.length);
-
-    return (
-        <div className="relative bg-gray-900 rounded-xl overflow-hidden">
-            {/* Main Image */}
-            <div className="relative h-48 md:h-64">
-                {slides.map((slide, idx) => (
-                    <div
-                        key={slide.id}
-                        className={`absolute inset-0 transition-opacity duration-500 ${idx === currentSlide ? 'opacity-100' : 'opacity-0'}`}
-                    >
-                        <img
-                            src={slide.preview || slide.imageUrl}
-                            className="w-full h-full object-cover"
-                            alt=""
-                        />
-                    </div>
-                ))}
-
-                {/* Navigation Arrows */}
                 <button
-                    onClick={prevSlide}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full shadow hover:bg-white transition"
+                    type="button"
+                    onClick={() => onRemove(index)}
+                    className="w-full rounded-lg border border-red-200 bg-red-50 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-red-600 transition hover:bg-red-100"
                 >
-                    <MdChevronLeft size={20} />
+                    Delete Slide
                 </button>
-                <button
-                    onClick={nextSlide}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/80 rounded-full shadow hover:bg-white transition"
-                >
-                    <MdChevronRight size={20} />
-                </button>
-            </div>
-
-            {/* Dots Indicator */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {slides.map((_, idx) => (
-                    <button
-                        key={idx}
-                        onClick={() => goToSlide(idx)}
-                        className={`w-2 h-2 rounded-full transition-all ${idx === currentSlide ? 'bg-white w-4' : 'bg-white/50'}`}
-                    />
-                ))}
-            </div>
-
-            {/* Slide Counter */}
-            <div className="absolute top-3 right-3 bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-full">
-                {currentSlide + 1} / {slides.length}
             </div>
         </div>
     );
@@ -277,7 +222,6 @@ const HomeBanners = () => {
     
     const { banners, addBanner, updateBanner, deleteBanner, fetchBanners } = useBannerStore();
     const { products, fetchProducts } = useProductStore();
-    const { homeSections, fetchHomeSections } = useContentStore();
     const [offers, setOffers] = useState([]);
 
     console.log('HomeBanners State:', { bannersCount: banners.length, view: searchParams.get('view'), bannerId: searchParams.get('id') });
@@ -285,9 +229,8 @@ const HomeBanners = () => {
     useEffect(() => {
         fetchBanners();
         fetchProducts();
-        fetchHomeSections();
         API.get('/offers').then(({ data }) => setOffers(data)).catch(console.error);
-    }, [fetchBanners, fetchProducts, fetchHomeSections]);
+    }, [fetchBanners, fetchProducts]);
     
     useEffect(() => {
         const view = searchParams.get('view');
@@ -390,8 +333,6 @@ const HomeBanners = () => {
     const fileInputRef = useRef(null);
     const heroFileInputRef = useRef(null);
     const bgFileInputRef = useRef(null);
-    const previewContainerRef = useRef(null);
-    
     // Refs for Draggable components
     const featuredProductRefs = useRef([]);
 
@@ -694,42 +635,9 @@ const HomeBanners = () => {
 
             {/* Two Column Layout for Slides */}
             {formData.type === 'slides' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="space-y-6">
                     {/* Left: Slide Editor */}
-                    <div className="lg:col-span-2 space-y-4">
-                        {/* Configuration */}
-                        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Section</label>
-                                    <select 
-                                        value={formData.section} 
-                                        onChange={(e) => setFormData({...formData, section: e.target.value})}
-                                        className="w-full px-3 py-2 rounded-lg bg-gray-50 border-transparent focus:bg-white focus:border-blue-500 outline-none text-sm font-medium"
-                                    >
-                                        <option value="HomeHero">Home Hero</option>
-                                        {homeSections.map(section => (
-                                            <option key={section.id} value={section.id}>{section.title}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase">Type</label>
-                                    <div className="flex gap-2">
-                                        {['slides', 'hero'].map(type => (
-                                            <button
-                                                key={type}
-                                                onClick={() => setFormData({...formData, type})}
-                                                className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${formData.type === type ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-gray-50 text-gray-400'}`}
-                                            >
-                                                {type.toUpperCase()}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
+                    <div className="space-y-4">
                         {/* Draggable Slides Grid */}
                         <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
                             <div className="flex items-center justify-between mb-4">
@@ -768,18 +676,6 @@ const HomeBanners = () => {
                             </DndContext>
                         </div>
                     </div>
-
-                    {/* Right: Live Preview */}
-                    <div className="space-y-4">
-                        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm sticky top-24">
-                            <div className="flex items-center gap-2 mb-4">
-                                <MdVisibility className="text-green-500" />
-                                <h3 className="text-sm font-bold text-gray-700">Live Preview</h3>
-                            </div>
-                            <LivePreview slides={formData.slides} />
-                            <p className="text-[10px] text-gray-400 mt-3 text-center">Preview updates automatically as you make changes</p>
-                        </div>
-                    </div>
                 </div>
             )}
 
@@ -788,37 +684,6 @@ const HomeBanners = () => {
                 <div className="space-y-6">
                     {/* Configuration & Content */}
                     <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
-                        {/* Type Selector */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase">Section</label>
-                                <select 
-                                    value={formData.section} 
-                                    onChange={(e) => setFormData({...formData, section: e.target.value})}
-                                    className="w-full px-3 py-2 rounded-lg bg-gray-50 border-transparent focus:bg-white focus:border-blue-500 outline-none text-sm font-medium"
-                                >
-                                    <option value="HomeHero">Home Hero</option>
-                                    {homeSections.map(section => (
-                                        <option key={section.id} value={section.id}>{section.title}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase">Type</label>
-                                <div className="flex gap-2">
-                                    {['slides', 'hero'].map(type => (
-                                        <button
-                                            key={type}
-                                            onClick={() => setFormData({...formData, type})}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${formData.type === type ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-gray-50 text-gray-400'}`}
-                                        >
-                                            {type.toUpperCase()}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Image Upload & Click Action */}
                         <div className="space-y-4">
                              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -940,33 +805,6 @@ const HomeBanners = () => {
                         </div>
                     </div>
 
-                    {/* Live Preview */}
-                    <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm sticky top-24">
-                        <div className="flex items-center gap-2 mb-4">
-                            <MdVisibility className="text-green-500" />
-                            <h3 className="text-sm font-bold text-gray-700">Live Preview</h3>
-                        </div>
-                        
-                        <div 
-                            ref={previewContainerRef}
-                            className="relative w-full aspect-[21/9] md:aspect-[3/1] bg-gray-100 rounded-xl overflow-hidden shadow-sm border border-gray-200 group"
-                        >
-                            {backgroundImagePreview ? (
-                                <img 
-                                    src={backgroundImagePreview} 
-                                    className="w-full h-full object-cover" 
-                                    alt="Banner Preview" 
-                                    onError={(e) => console.error('Image Load Error:', backgroundImagePreview)}
-                                />
-                            ) : (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 font-bold uppercase tracking-widest text-[8px] p-4 text-center">
-                                    <span>No Image Selected</span>
-                                    {formData.content?.backgroundImageUrl && <span>BG: {formData.content.backgroundImageUrl.substring(0, 30)}...</span>}
-                                    {formData.content?.imageUrl && <span>IMG: {formData.content.imageUrl.substring(0, 30)}...</span>}
-                                </div>
-                            )}
-                        </div>
-                    </div>
                 </div>
             )}
 

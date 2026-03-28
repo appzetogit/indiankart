@@ -45,7 +45,7 @@ const BannerManager = () => {
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Banner Management</h1>
-                    <p className="text-gray-500 text-sm">Manage homepage sliders and category banners</p>
+                    <p className="text-gray-500 text-sm">Manage homepage sliders</p>
                 </div>
                 <button
                     onClick={() => setShowForm(true)}
