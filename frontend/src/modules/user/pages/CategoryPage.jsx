@@ -12,14 +12,14 @@ import BottomNav from '../components/layout/BottomNav';
 const CategoryPageSkeleton = () => (
     <div className="bg-white min-h-screen pb-36 md:pb-10 animate-pulse">
         <div className="bg-white shadow-sm border-b border-gray-200">
-            <div className="max-w-[1440px] mx-auto px-4 py-3">
+            <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 py-3">
                 <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-gray-200" />
                     <div className="h-7 w-44 rounded bg-gray-200" />
                 </div>
             </div>
         </div>
-        <div className="max-w-[1440px] mx-auto md:px-4 pt-2 pb-4">
+        <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-2 pb-4">
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5 p-3 md:p-6">
                 {Array.from({ length: 8 }).map((_, index) => (
                     <div key={index} className="space-y-2">
@@ -261,7 +261,7 @@ const CategoryPage = () => {
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">
             <div className="bg-white shadow-sm border-b border-gray-200 md:sticky md:top-[116px] z-40">
-                <div className="max-w-[1440px] mx-auto px-4 pt-3 pb-3">
+                <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-3 pb-3">
                     <div className="flex items-center gap-3">
                         <button onClick={handleBackNavigation} className="bg-gray-50 p-2 rounded-full hover:bg-gray-100 transition-colors"><MdArrowBack className="text-xl text-gray-700"/></button>
                         <h1 className="text-base md:text-2xl font-bold md:font-black text-gray-900 capitalize tracking-tight">{categoryData.name}</h1>
@@ -269,7 +269,7 @@ const CategoryPage = () => {
                 </div>
             </div>
 
-            <div className="max-w-[1440px] mx-auto md:px-4 pt-1 pb-4 md:py-4 flex flex-col min-h-[calc(100vh-160px)]">
+            <div className="max-w-[1440px] mx-auto px-2 md:px-4 lg:px-5 pt-1 pb-4 md:py-4 flex flex-col min-h-[calc(100vh-160px)]">
                 <div className="flex flex-col lg:flex-row gap-4 h-full relative">
                     {!isSubCategoryLandingView && (
                         <aside className="hidden lg:block w-[280px] shrink-0 bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col sticky top-[116px] h-fit">
@@ -292,13 +292,13 @@ const CategoryPage = () => {
 
                     <main className={`flex-1 min-w-0 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
                         {isSubCategoryLandingView && (
-                            <div className="md:rounded-lg overflow-hidden relative mb-4">
+                            <div className="relative">
                                 <CategoryLandingSections categoryName={rootCategory.name} />
                             </div>
                         )}
 
                         {isSubCategoryLandingView && (
-                            <div className="md:rounded-lg overflow-hidden relative mb-4">
+                            <div className="relative">
                                 <SubCategoryList
                                     subCategories={isSubCategoryLandingView ? gridSubCategories : []}
                                     categoryName={rootCategory.name}

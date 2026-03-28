@@ -81,6 +81,19 @@ const orderSchema = mongoose.Schema({
     // Order IDs
     displayId: { type: String, unique: true },
     transactionId: { type: String },
+    refund: {
+        status: {
+            type: String,
+            enum: ['not_required', 'pending', 'processed', 'failed'],
+            default: undefined
+        },
+        refundId: { type: String },
+        amount: { type: Number },
+        reason: { type: String },
+        initiatedAt: { type: Date },
+        processedAt: { type: Date },
+        error: { type: String }
+    },
 
     // Order Status
     status: { 

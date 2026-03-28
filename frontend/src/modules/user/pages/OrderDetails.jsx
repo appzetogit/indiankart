@@ -171,23 +171,23 @@ const OrderDetails = () => {
 
     const handleCancelOrder = async () => {
         confirmToast({
-            message: 'Are you sure you want to cancel this order?\nIt will be sent to the admin for approval.',
+            message: 'Are you sure you want to cancel this order?\nIf it was prepaid and not delivered yet, the refund will be started automatically.',
             type: 'warning',
             icon: 'report_problem',
             confirmText: 'Cancel Order',
             onConfirm: async () => {
                 try {
-                    toast.loading('Requesting cancellation...', { id: 'cancel-order' });
+                    toast.loading('Cancelling order...', { id: 'cancel-order' });
                     await API.post(`/returns`, { 
                         orderId: order._id,
                         type: 'Cancellation',
                         reason: 'User requested cancellation'
                     });
-                    toast.success('Cancellation request sent!', { id: 'cancel-order' });
+                    toast.success('Order cancelled successfully!', { id: 'cancel-order' });
                     fetchOrderDetails(); // Refresh details
                 } catch (err) {
                     console.error('Cancel order error:', err);
-                    toast.error(err.response?.data?.message || 'Failed to request cancellation', { id: 'cancel-order' });
+                    toast.error(err.response?.data?.message || 'Failed to cancel order', { id: 'cancel-order' });
                 }
             }
         });

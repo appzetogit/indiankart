@@ -2,6 +2,10 @@ import legacyCategoryPageData from '../modules/user/data/categoryPageData';
 
 export const CATEGORY_PAGE_BUILDER_STORAGE_KEY = 'category-page-builder-catalog-v2';
 const LEGACY_CATEGORY_PAGE_BUILDER_STORAGE_KEY = 'category-page-builder-dummy-catalog-v1';
+const CATEGORY_PAGE_BUILDER_IDB_NAME = 'indiankart-category-page-builder';
+const CATEGORY_PAGE_BUILDER_IDB_STORE = 'catalog';
+const CATEGORY_PAGE_BUILDER_IDB_KEY = 'catalog-v2';
+const INDEXED_DB_POINTER = '__indexed_db__';
 
 const normalizeText = (value) => String(value || '').trim();
 const normalizeKey = (value) => normalizeText(value).toLowerCase();
@@ -151,9 +155,114 @@ export const readCategoryPageCatalog = () => {
     }
 };
 
-export const writeCategoryPageCatalog = (catalog) => {
+const openCategoryPageBuilderDb = () => new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+        reject(new Error('IndexedDB unavailable'));
+        return;
+    }
+
+    const request = window.indexedDB.open(CATEGORY_PAGE_BUILDER_IDB_NAME, 1);
+
+    request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(CATEGORY_PAGE_BUILDER_IDB_STORE)) {
+            db.createObjectStore(CATEGORY_PAGE_BUILDER_IDB_STORE);
+        }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Failed to open IndexedDB'));
+});
+
+const readCatalogFromIndexedDb = async () => {
+    const db = await openCategoryPageBuilderDb();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CATEGORY_PAGE_BUILDER_IDB_STORE, 'readonly');
+        const store = transaction.objectStore(CATEGORY_PAGE_BUILDER_IDB_STORE);
+        const request = store.get(CATEGORY_PAGE_BUILDER_IDB_KEY);
+
+        request.onsuccess = () => {
+            const result = request.result;
+            resolve(Array.isArray(result) && result.length > 0 ? result : legacyCatalog);
+        };
+        request.onerror = () => reject(request.error || new Error('Failed to read IndexedDB catalog'));
+        transaction.oncomplete = () => db.close();
+    });
+};
+
+const writeCatalogToIndexedDb = async (catalog) => {
+    const db = await openCategoryPageBuilderDb();
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction(CATEGORY_PAGE_BUILDER_IDB_STORE, 'readwrite');
+        const store = transaction.objectStore(CATEGORY_PAGE_BUILDER_IDB_STORE);
+        store.put(catalog, CATEGORY_PAGE_BUILDER_IDB_KEY);
+
+        transaction.oncomplete = () => {
+            db.close();
+            resolve();
+        };
+        transaction.onerror = () => reject(transaction.error || new Error('Failed to write IndexedDB catalog'));
+    });
+};
+
+export const readCategoryPageCatalogAsync = async () => {
+    const localCatalog = readCategoryPageCatalog();
+    if (localCatalog !== legacyCatalog) {
+        return localCatalog;
+    }
+
+    if (typeof window === 'undefined') return legacyCatalog;
+
+    try {
+        const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed?.storage === INDEXED_DB_POINTER) {
+                return await readCatalogFromIndexedDb();
+            }
+        }
+    } catch {
+        return legacyCatalog;
+    }
+
+    try {
+        return await readCatalogFromIndexedDb();
+    } catch {
+        return legacyCatalog;
+    }
+};
+
+export const writeCategoryPageCatalog = async (catalog) => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, JSON.stringify(catalog));
+
+    const serialized = JSON.stringify(catalog);
+
+    try {
+        window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
+        try {
+            await writeCatalogToIndexedDb(catalog);
+        } catch {
+            // LocalStorage save succeeded, so IndexedDB mirror failure can be ignored.
+        }
+        window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
+        return;
+    } catch (error) {
+        await writeCatalogToIndexedDb(catalog);
+        try {
+            window.localStorage.removeItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
+            window.localStorage.setItem(
+                CATEGORY_PAGE_BUILDER_STORAGE_KEY,
+                JSON.stringify({
+                    storage: INDEXED_DB_POINTER,
+                    updatedAt: Date.now()
+                })
+            );
+        } catch {
+            // IndexedDB already has the actual payload.
+        }
+        window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
+        return;
+    }
 };
 
 export const mergeCategoryPageCatalogWithCategories = (catalog, categories = []) => {

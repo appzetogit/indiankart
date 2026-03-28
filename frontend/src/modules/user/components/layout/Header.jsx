@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useCartStore } from '../../store/cartStore';
 import { useLanguageStore } from '../../../../store/languageStore';
-import { useCategories } from '../../../../hooks/useData';
+import { useCategories, useProducts } from '../../../../hooks/useData';
 import API from '../../../../services/api';
 import { IoSearch } from 'react-icons/io5';
 import TranslatedText from '../common/TranslatedText';
@@ -34,6 +34,31 @@ import {
     MdCancel
 } from 'react-icons/md';
 import logo from '../../../../assets/indiankart-logo.png';
+
+const normalizeSearchText = (value) => String(value || '').trim().toLowerCase();
+
+const getProductId = (product) => String(product?.id || product?._id || '').trim();
+
+const getProductSubcategoryText = (product) => {
+    const names = [];
+
+    if (Array.isArray(product?.subCategories)) {
+        product.subCategories.forEach((entry) => {
+            const name = typeof entry === 'string' ? entry : entry?.name;
+            if (name) names.push(String(name));
+        });
+    }
+
+    if (product?.subCategory) {
+        names.push(typeof product.subCategory === 'string' ? product.subCategory : product.subCategory?.name);
+    }
+
+    if (product?.subcategory) {
+        names.push(product.subcategory);
+    }
+
+    return names.filter(Boolean).join(' ');
+};
 
 const CategoryNavSkeleton = () => (
     <div className="max-w-[1200px] mx-auto relative px-2">
@@ -93,6 +118,7 @@ const Header = () => {
         ...activeHeaderCategories.filter((cat) => String(cat?.name || '').trim().toLowerCase() !== 'for you')
     ];
     const shouldSpreadCategories = displayCategories.length >= 6;
+    const { products: searchableProducts = [] } = useProducts({ lite: true });
 
 
     // Mega menu state
@@ -120,10 +146,64 @@ const Header = () => {
             setIsSearching(true);
             try {
                 const { data } = await API.get(`/search?q=${searchQuery}`);
-                setSearchResults(data);
+                const normalizedQuery = normalizeSearchText(searchQuery);
+                const fallbackProducts = (searchableProducts || [])
+                    .map((product) => {
+                        const name = normalizeSearchText(product?.name);
+                        const brand = normalizeSearchText(product?.brand);
+                        const category = normalizeSearchText(typeof product?.category === 'string' ? product.category : product?.category?.name);
+                        const subcategory = normalizeSearchText(getProductSubcategoryText(product));
+                        const tags = Array.isArray(product?.tags) ? product.tags.map((tag) => normalizeSearchText(tag)).join(' ') : '';
+                        const haystack = [name, brand, category, subcategory, tags].filter(Boolean).join(' ');
+
+                        if (!haystack.includes(normalizedQuery)) return null;
+
+                        const exactName = name === normalizedQuery;
+                        const startsWithName = name.startsWith(normalizedQuery);
+                        const subcategoryMatch = subcategory.includes(normalizedQuery);
+
+                        return {
+                            product,
+                            score: exactName ? 300 : startsWithName ? 220 : subcategoryMatch ? 180 : 120
+                        };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => b.score - a.score)
+                    .map((entry) => entry.product);
+
+                const backendProducts = Array.isArray(data?.products) ? data.products : [];
+                const mergedProductsMap = new Map();
+                [...backendProducts, ...fallbackProducts].forEach((product) => {
+                    const key = getProductId(product);
+                    if (!key || mergedProductsMap.has(key)) return;
+                    mergedProductsMap.set(key, product);
+                });
+
+                setSearchResults({
+                    categories: Array.isArray(data?.categories) ? data.categories : [],
+                    subCategories: Array.isArray(data?.subCategories) ? data.subCategories : [],
+                    products: Array.from(mergedProductsMap.values()).slice(0, 8)
+                });
                 setShowSearchDropdown(true);
             } catch (error) {
                 console.error("Search failed:", error);
+                const normalizedQuery = normalizeSearchText(searchQuery);
+                const fallbackProducts = (searchableProducts || [])
+                    .filter((product) => {
+                        const haystack = [
+                            normalizeSearchText(product?.name),
+                            normalizeSearchText(product?.brand),
+                            normalizeSearchText(typeof product?.category === 'string' ? product.category : product?.category?.name),
+                            normalizeSearchText(getProductSubcategoryText(product)),
+                            Array.isArray(product?.tags) ? product.tags.map((tag) => normalizeSearchText(tag)).join(' ') : ''
+                        ].filter(Boolean).join(' ');
+
+                        return haystack.includes(normalizedQuery);
+                    })
+                    .slice(0, 8);
+
+                setSearchResults({ products: fallbackProducts, categories: [], subCategories: [] });
+                setShowSearchDropdown(fallbackProducts.length > 0);
             } finally {
                 setIsSearching(false);
             }
@@ -131,7 +211,7 @@ const Header = () => {
 
         const debounceTimer = setTimeout(fetchSearchResults, 300);
         return () => clearTimeout(debounceTimer);
-    }, [searchQuery]);
+    }, [searchQuery, searchableProducts]);
 
     // Close search dropdown on click outside
     useEffect(() => {

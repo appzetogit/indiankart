@@ -57,7 +57,7 @@ const Home = () => {
     }
 
     return (
-        <div className="bg-gradient-to-b from-white to-blue-100 pt-2 flex-1 flex flex-col">
+        <div className="bg-white pt-2 flex-1 flex flex-col">
             <div className="w-full space-y-2 md:space-y-6 px-3 md:px-5 lg:px-6 pb-8 md:pb-12">
 
                 {/* Dynamic Content Stream */}

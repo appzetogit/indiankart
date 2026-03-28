@@ -4,6 +4,7 @@ import Notification from '../models/Notification.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 
 // @desc    Create a new return request
 // @route   POST /api/returns
@@ -189,6 +190,29 @@ export const createReturnRequest = async (req, res) => {
                 return res.status(400).json({ message: `Order cannot be cancelled in its current status: ${order.status}` });
             }
 
+            const isOnlinePaid = Boolean(order.isPaid) && String(order.paymentMethod || '').trim().toUpperCase() !== 'COD';
+
+            let returnStatus = 'Completed';
+            let returnNote = 'Cancellation completed automatically';
+
+            if (order.status !== 'Cancelled') {
+                await restoreOrderStock(order);
+                order.status = 'Cancelled';
+            }
+
+            if (isOnlinePaid) {
+                const refundResult = await refundCancelledRazorpayOrder(order, 'User cancelled order before delivery');
+                if (refundResult.success) {
+                    returnStatus = 'Refund Initiated';
+                    returnNote = 'Cancellation completed and Razorpay refund initiated automatically';
+                } else {
+                    returnStatus = 'Approved';
+                    returnNote = `Cancellation completed but automatic refund failed: ${refundResult.error || 'Unknown error'}`;
+                }
+            }
+
+            await order.save();
+
             const newReturn = new Return({
                 id: `CAN-${Date.now()}`,
                 orderId: order._id,
@@ -201,24 +225,20 @@ export const createReturnRequest = async (req, res) => {
                 type: 'Cancellation',
                 reason: reason || 'User requested cancellation',
                 comment,
-                status: 'Pending',
+                status: returnStatus,
                 timeline: [{
-                    status: 'Pending',
-                    note: 'Cancellation request initiated'
+                    status: returnStatus,
+                    note: returnNote
                 }]
             });
 
             const createdReturn = await newReturn.save();
 
-            // Update Order Status
-            order.status = 'Cancellation Requested';
-            await order.save();
-
             // Create Notification
             await Notification.create({
                 type: 'return',
-                title: 'New Cancellation Request',
-                message: `Cancellation requested for Order #${order._id.toString().slice(-6).toUpperCase()}`,
+                title: 'Order Cancelled',
+                message: `Order #${order._id.toString().slice(-6).toUpperCase()} cancelled${isOnlinePaid ? ' and refund started' : ''}`,
                 relatedId: createdReturn._id
             });
 
@@ -326,33 +346,20 @@ export const updateReturnStatus = async (req, res) => {
                         // Restore Stock and Set Order to Cancelled
                         if (order.status !== 'Cancelled') {
                             order.status = 'Cancelled';
-                            
-                            for (const item of order.orderItems) {
-                                const product = await Product.findOne({ id: item.product });
-                                if (product) {
-                                    const update = { $inc: { stock: item.qty } };
-                                    
-                                    if (item.variant && Object.keys(item.variant).length > 0) {
-                                        const skuIndex = product.skus.findIndex(s => {
-                                            const comb = s.combination instanceof Map ? Object.fromEntries(s.combination) : s.combination;
-                                            const itemKeys = Object.keys(item.variant);
-                                            const combKeys = Object.keys(comb);
-                                            if (itemKeys.length !== combKeys.length) return false;
-                                            return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
-                                        });
-                                        if (skuIndex !== -1) {
-                                            update.$inc[`skus.${skuIndex}.stock`] = item.qty;
-                                        }
-                                    }
-
-                                    await Product.findOneAndUpdate(
-                                        { _id: product._id },
-                                        update
-                                    );
-                                }
-                            }
-                            await order.save();
+                            await restoreOrderStock(order);
                         }
+
+                        const refundResult = await refundCancelledRazorpayOrder(order, 'Admin approved cancellation before delivery');
+                        if (refundResult.attempted && refundResult.success && nextStatus !== 'Completed') {
+                            returnRequest.status = 'Refund Initiated';
+                            returnRequest.timeline.push({
+                                status: 'Refund Initiated',
+                                note: 'Razorpay refund initiated automatically'
+                            });
+                            await returnRequest.save();
+                        }
+
+                        await order.save();
                     } else if (nextStatus === 'Rejected') {
                         // Revert order status back to Pending/Confirmed (we'll guess Pending or just use a fixed logic)
                         // Ideally we'd store the original status, but for now we'll set back to 'Pending' or leave as is.

@@ -1,9 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MdArrowForward } from 'react-icons/md';
 import CategoryQuickLinkGrid from './CategoryQuickLinkGrid';
 import { useCategories, useSubCategoriesByCategory } from '../../../../hooks/useData';
-import { getCategoryPageConfig, getCategoryStripItems, getOrderedCategorySubCategories } from '../../../../utils/categoryPageConfig';
+import {
+    getCategoryStripItems,
+    getOrderedCategorySubCategories,
+    mergeCategoryPageCatalogWithCategories,
+    readCategoryPageCatalogAsync
+} from '../../../../utils/categoryPageConfig';
 
 const getSectionLayoutClass = (mediaDisplay) => {
     if (mediaDisplay === 'grid') return 'flex gap-3 overflow-x-auto no-scrollbar pb-1 md:grid md:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]';
@@ -13,46 +18,353 @@ const getSectionLayoutClass = (mediaDisplay) => {
 
 const getCardWidthClass = (mediaDisplay) => {
     if (mediaDisplay === 'single') return 'w-full';
-    if (mediaDisplay === 'grid') return 'w-[220px] shrink-0 md:w-auto';
-    return 'w-[220px] shrink-0 md:w-[260px]';
+    if (mediaDisplay === 'grid') return 'w-full';
+    return 'w-[148px] shrink-0 sm:w-[190px] md:w-[240px]';
 };
 
 const getImageHeightClass = (mediaDisplay) => {
-    if (mediaDisplay === 'single') return 'h-[140px] md:h-[320px]';
-    if (mediaDisplay === 'grid') return 'h-24 md:h-64 lg:h-72';
-    return 'h-40 md:h-44';
+    if (mediaDisplay === 'single') return 'aspect-[16/7]';
+    return 'aspect-square';
 };
 
 const getImageFitClass = (mediaDisplay, itemType) => {
-    if (itemType === 'image') return 'object-contain md:object-cover';
-    if (mediaDisplay === 'single') return 'object-contain md:object-cover';
+    if (mediaDisplay === 'single' || mediaDisplay === 'carousel') return 'object-contain';
+    if (itemType === 'image') return 'object-cover';
     return 'object-cover';
 };
 
 const getCardSurfaceClass = (itemType) => {
-    if (itemType === 'image') return 'bg-transparent shadow-none md:bg-white/95 md:shadow-sm md:hover:shadow-md';
+    if (itemType === 'image') return 'bg-white/95 shadow-sm hover:shadow-md';
     return 'bg-white/95 shadow-sm hover:shadow-md';
 };
 
 const getImageFrameClass = (itemType) => {
-    if (itemType === 'image') return 'bg-transparent md:bg-gray-100';
+    if (itemType === 'image') return 'bg-gray-100';
     return 'bg-gray-100';
+};
+
+const getProductId = (product) => String(product?.id || product?._id || '').trim();
+
+const getResolvedSectionProduct = (item, products = []) => {
+    if (item?.itemType !== 'product') return null;
+    const targetId = String(item?.productId || '').trim();
+    return products.find((product) => getProductId(product) === targetId) || item?.productSnapshot || null;
+};
+
+const getProductPricing = (product) => {
+    const firstSku = product?.skus?.[0];
+    const price = firstSku?.price ?? product?.price ?? null;
+    const originalPrice = firstSku?.originalPrice ?? product?.originalPrice ?? null;
+    const discountLabel = product?.discount || (
+        price && originalPrice && originalPrice > price
+            ? `${Math.round(((originalPrice - price) / originalPrice) * 100)}% OFF`
+            : ''
+    );
+
+    return {
+        price,
+        originalPrice,
+        discountLabel
+    };
+};
+
+const ProductStyleSectionCard = ({ product, title, description, mediaDisplay, onClick }) => {
+    const { price, originalPrice, discountLabel } = getProductPricing(product || {});
+    const imageFrameClass = mediaDisplay === 'single'
+        ? 'relative aspect-[16/7] overflow-hidden rounded-t-2xl border-b border-gray-100 bg-[#f8f8f8]'
+        : 'relative aspect-square overflow-hidden rounded-t-2xl border-b border-gray-100 bg-[#f8f8f8]';
+    const imageClass = 'h-full w-full object-contain p-2';
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`${getCardWidthClass(mediaDisplay)} overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md`}
+        >
+            <div className={imageFrameClass}>
+                {product?.image ? (
+                    <img
+                        src={product.image}
+                        alt={title || product?.name || 'Product'}
+                        className={imageClass}
+                    />
+                ) : (
+                    <div className="w-full min-h-[96px] bg-gray-100" />
+                )}
+            </div>
+            <div className="px-2 py-2 sm:px-3 sm:py-3">
+                <div className="line-clamp-1 text-xs font-bold text-gray-900 sm:text-sm md:text-base">{title || product?.name}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {(originalPrice && price && originalPrice > price) ? <span className="text-[10px] text-gray-500 line-through sm:text-xs">Rs.{Number(originalPrice).toLocaleString()}</span> : null}
+                    {price ? <span className="text-sm font-bold text-gray-900 sm:text-base md:text-lg">Rs.{Number(price).toLocaleString()}</span> : null}
+                    {discountLabel ? <span className="text-[9px] font-bold uppercase text-green-700 sm:text-xs">{discountLabel}</span> : null}
+                </div>
+                {(description || product?.subtitle) ? <div className="mt-1 line-clamp-1 text-[10px] font-semibold text-blue-600 sm:text-xs">{description || product?.subtitle}</div> : null}
+            </div>
+        </button>
+    );
+};
+
+/* ─── Single-view slideshow for carousel mode ─── */
+const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sectionProducts }) => {
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [animating, setAnimating] = useState(false);
+    const isPausedRef = useRef(false);
+    const timerRef = useRef(null);
+    const total = sectionItems.length;
+
+    const goTo = useCallback((index) => {
+        if (animating) return;
+        setAnimating(true);
+        setActiveIndex(index);
+        setTimeout(() => setAnimating(false), 420);
+    }, [animating]);
+
+    const next = useCallback(() => {
+        goTo((activeIndex + 1) % total);
+    }, [activeIndex, total, goTo]);
+
+    const prev = useCallback(() => {
+        goTo((activeIndex - 1 + total) % total);
+    }, [activeIndex, total, goTo]);
+
+    // Auto-advance
+    useEffect(() => {
+        if (total <= 1) return;
+        const tick = () => {
+            if (!isPausedRef.current) {
+                setActiveIndex((prev) => (prev + 1) % total);
+            }
+        };
+        timerRef.current = window.setInterval(tick, 3000);
+        return () => window.clearInterval(timerRef.current);
+    }, [total]);
+
+    const pause = () => { isPausedRef.current = true; };
+    const resume = () => { isPausedRef.current = false; };
+
+    const item = sectionItems[activeIndex];
+    if (!item) return null;
+
+    const product = getResolvedSectionProduct(item, sectionProducts);
+    const image = item.itemType === 'product' ? product?.image : item.image;
+    const title = item.title || product?.name;
+    const description = item.description || product?.subtitle;
+    const link = item.itemType === 'product' && getProductId(product)
+        ? `/product/${encodeURIComponent(getProductId(product))}`
+        : (item.link || item.sectionLink || section.sectionLink);
+
+    return (
+        <div
+            className="relative w-full overflow-hidden rounded-2xl select-none"
+            onMouseEnter={pause}
+            onMouseLeave={resume}
+            onTouchStart={pause}
+            onTouchEnd={resume}
+        >
+            {/* Slide */}
+            <div
+                style={{
+                    opacity: animating ? 0.85 : 1,
+                    transition: 'opacity 0.38s ease'
+                }}
+            >
+                {item.itemType === 'product' ? (
+                    <div className="w-full">
+                        <ProductStyleSectionCard
+                            product={product}
+                            title={title}
+                            description={description}
+                            mediaDisplay="single"
+                            onClick={() => openLink(link)}
+                        />
+                    </div>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => openLink(link)}
+                        className="block w-full text-left"
+                    >
+                        <div className="overflow-hidden bg-gray-100">
+                            {image ? (
+                                <img
+                                    src={image}
+                                    alt={title || section.title || categoryName}
+                                    className="w-full h-auto object-contain"
+                                    style={{ transition: 'opacity 0.38s ease' }}
+                                />
+                            ) : (
+                                <div className="w-full min-h-[120px] bg-gray-100" />
+                            )}
+                        </div>
+                        {(title || description) && (
+                            <div className="p-3">
+                                {title ? <div className="text-sm font-semibold text-gray-900 md:text-base">{title}</div> : null}
+                                {description ? <div className="mt-1 text-xs text-gray-500 md:text-sm">{description}</div> : null}
+                            </div>
+                        )}
+                    </button>
+                )}
+            </div>
+
+            {/* Prev / Next arrows — only if >1 item */}
+            {total > 1 && (
+                <>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); prev(); }}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
+                        aria-label="Previous"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); next(); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
+                        aria-label="Next"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </>
+            )}
+
+            {/* Dot indicators */}
+            {total > 1 && (
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {sectionItems.map((_, i) => (
+                        <button
+                            key={i}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); goTo(i); }}
+                            className="rounded-full transition-all"
+                            style={{
+                                width: i === activeIndex ? '20px' : '7px',
+                                height: '7px',
+                                backgroundColor: i === activeIndex ? '#ffffff' : 'rgba(255,255,255,0.5)',
+                                transition: 'all 0.3s ease'
+                            }}
+                            aria-label={`Go to slide ${i + 1}`}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, sectionProducts }) => {
+    // Carousel: single-view slideshow
+    if (section.mediaDisplay === 'carousel') {
+        return (
+            <CarouselSlideshow
+                section={section}
+                sectionItems={sectionItems}
+                categoryName={categoryName}
+                openLink={openLink}
+                sectionProducts={sectionProducts}
+            />
+        );
+    }
+
+    // All other display modes unchanged
+    return (
+        <div className={getSectionLayoutClass(section.mediaDisplay)}>
+            {sectionItems.map((item) => {
+                const product = getResolvedSectionProduct(item, sectionProducts);
+                const image = item.itemType === 'product' ? product?.image : item.image;
+                const title = item.title || product?.name;
+                const description = item.description || product?.subtitle;
+                const link = item.itemType === 'product' && getProductId(product)
+                    ? `/product/${encodeURIComponent(getProductId(product))}`
+                    : (item.link || item.sectionLink || section.sectionLink);
+
+                if (item.itemType === 'product') {
+                    return (
+                        <ProductStyleSectionCard
+                            key={item.id}
+                            product={product}
+                            title={title}
+                            description={description}
+                            mediaDisplay={section.mediaDisplay}
+                            onClick={() => openLink(link)}
+                        />
+                    );
+                }
+
+                return (
+                    <button
+                        key={item.id}
+                        type="button"
+                        data-carousel-card="true"
+                        onClick={() => openLink(link)}
+                        className={`${getCardWidthClass(section.mediaDisplay)} ${getCardSurfaceClass(item.itemType)} overflow-hidden rounded-2xl text-left transition`}
+                    >
+                        <div className={`overflow-hidden ${getImageFrameClass(item.itemType)}`}>
+                            {image ? (
+                                <img
+                                    src={image}
+                                    alt={title || section.title || categoryName}
+                                    className={`${getImageHeightClass(section.mediaDisplay)} ${getImageFitClass(section.mediaDisplay, item.itemType)} w-full`}
+                                />
+                            ) : (
+                                <div className={`${getImageHeightClass(section.mediaDisplay)} w-full bg-gray-100`} />
+                            )}
+                        </div>
+                        {(title || description) && (
+                            <div className="p-2 sm:p-3">
+                                {title ? <div className="text-xs font-semibold text-gray-900 sm:text-sm md:text-base">{title}</div> : null}
+                                {description ? <div className="mt-1 text-[10px] text-gray-500 sm:text-xs md:text-sm">{description}</div> : null}
+                            </div>
+                        )}
+                    </button>
+                );
+            })}
+        </div>
+    );
 };
 
 const CategoryLandingSections = ({ categoryName }) => {
     const navigate = useNavigate();
     const { categories = [] } = useCategories({ lite: true });
+    const [catalog, setCatalog] = useState([]);
     const [version, setVersion] = useState(0);
 
     useEffect(() => {
         const handleStorage = () => setVersion((current) => current + 1);
+        const handleCategoryPageBuilderUpdate = () => setVersion((current) => current + 1);
         window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
+        window.addEventListener('category-page-builder-updated', handleCategoryPageBuilderUpdate);
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('category-page-builder-updated', handleCategoryPageBuilderUpdate);
+        };
     }, []);
 
+    useEffect(() => {
+        let active = true;
+
+        readCategoryPageCatalogAsync()
+            .then((storedCatalog) => {
+                if (!active) return;
+                setCatalog(Array.isArray(storedCatalog) ? storedCatalog : []);
+            })
+            .catch(() => {
+                if (!active) return;
+                setCatalog([]);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [version]);
+
     const categoryConfig = useMemo(
-        () => getCategoryPageConfig(categoryName, categories),
-        [categoryName, categories, version]
+        () => {
+            const mergedCatalog = mergeCategoryPageCatalogWithCategories(catalog, categories);
+            return mergedCatalog.find((entry) => String(entry?.name || '').trim().toLowerCase() === String(categoryName || '').trim().toLowerCase()) || null;
+        },
+        [catalog, categoryName, categories]
     );
     const categoryDbId = categoryConfig?.dbId || categoryConfig?._id || '';
     const { subCategories: detailedSubCategories = [] } = useSubCategoriesByCategory(categoryDbId);
@@ -106,12 +418,6 @@ const CategoryLandingSections = ({ categoryName }) => {
 
                         return (
                             <section key={section.id} className="mb-3 rounded-2xl bg-white p-2 md:mb-5 md:p-4">
-                                {(section.title || section.description) && (
-                                    <div className="mb-2 md:mb-4">
-                                        {section.title ? <h3 className="text-xl font-bold tracking-tight text-gray-900 md:text-2xl">{section.title}</h3> : null}
-                                        {section.description ? <p className="mt-1 text-sm text-gray-600">{section.description}</p> : null}
-                                    </div>
-                                )}
                                 <CategoryQuickLinkGrid
                                     categoryName={categoryName}
                                     items={orderedSubCategories.map((item) => ({
@@ -153,51 +459,22 @@ const CategoryLandingSections = ({ categoryName }) => {
                                         <button
                                             type="button"
                                             onClick={() => openLink(section.sectionLink)}
-                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm"
+                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm transition hover:bg-blue-600 md:h-11 md:w-11 md:bg-blue-600 md:hover:bg-blue-700"
                                             aria-label={`Open ${section.title || categoryName}`}
                                         >
-                                            <MdArrowForward size={18} />
+                                            <MdArrowForward className="text-[18px] md:text-[22px]" />
                                         </button>
                                     ) : null}
                                 </div>
                             )}
 
-                            <div className={getSectionLayoutClass(section.mediaDisplay)}>
-                                {sectionItems.map((item) => {
-                                    const product = item.itemType === 'product' ? item.productSnapshot : null;
-                                    const image = item.itemType === 'product' ? product?.image : item.image;
-                                    const title = item.title || product?.name;
-                                    const description = item.description || product?.subtitle;
-                                    const link = item.link || item.sectionLink || section.sectionLink;
-
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            type="button"
-                                            onClick={() => openLink(link)}
-                                            className={`${getCardWidthClass(section.mediaDisplay)} ${getCardSurfaceClass(item.itemType)} overflow-hidden rounded-2xl text-left transition`}
-                                        >
-                                            <div className={`overflow-hidden ${getImageFrameClass(item.itemType)}`}>
-                                                {image ? (
-                                                    <img
-                                                        src={image}
-                                                        alt={title || section.title || categoryName}
-                                                        className={`${getImageHeightClass(section.mediaDisplay)} ${getImageFitClass(section.mediaDisplay, item.itemType)} w-full`}
-                                                    />
-                                                ) : (
-                                                    <div className={`${getImageHeightClass(section.mediaDisplay)} w-full bg-gray-100`} />
-                                                )}
-                                            </div>
-                                            {(title || description) && (
-                                                <div className="p-3">
-                                                    {title ? <div className="text-sm font-semibold text-gray-900 md:text-base">{title}</div> : null}
-                                                    {description ? <div className="mt-1 text-xs text-gray-500 md:text-sm">{description}</div> : null}
-                                                </div>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                            <CategorySectionItems
+                                section={section}
+                                sectionItems={sectionItems}
+                                categoryName={categoryName}
+                                openLink={openLink}
+                                sectionProducts={categoryConfig?.products || []}
+                            />
                         </section>
                     );
                 })}

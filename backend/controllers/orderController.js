@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
+import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -363,6 +364,16 @@ export const updateOrderStatus = async (req, res) => {
         const { status, serialNumbers } = req.body;
 
         if (order) {
+            if (status === 'Cancelled') {
+                if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
+                    return res.status(400).json({ message: 'Delivered order cannot be cancelled' });
+                }
+
+                if (order.status !== 'Cancelled') {
+                    await restoreOrderStock(order);
+                }
+            }
+
             order.status = status;
             if (status === 'Delivered') {
                 order.isDelivered = true;
@@ -379,6 +390,10 @@ export const updateOrderStatus = async (req, res) => {
                        item.serialType = sItem.type || 'Serial Number';
                    }
                 });
+            }
+
+            if (status === 'Cancelled') {
+                await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
             }
 
             const updatedOrder = await order.save();
