@@ -255,10 +255,8 @@ const CategoryPage = () => {
     if (!categoryData) return <div className="p-10 text-center">Category not found</div>;
 
     const isSubCategoryLandingView = !routeHasExplicitSubPath && breadcrumbs.length === 1;
-    // Keep landing page driven by local/category config only for now.
-    // const gridSubCategories = detailedSubCategories.length > 0 ? detailedSubCategories : categoryData.subCategories || [];
-    const gridSubCategories = [];
     const rootCategory = breadcrumbs[0] || categoryData;
+    const gridSubCategories = [];
 
     return (
         <div className="bg-white min-h-screen pb-36 md:pb-10">

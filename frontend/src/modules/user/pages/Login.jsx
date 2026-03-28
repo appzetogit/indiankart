@@ -152,7 +152,7 @@ const Login = () => {
                                             placeholder="Enter mobile number"
                                         />
                                     </div>
-                                </div>
+                                 </div>
 
                                 <p className="text-[10px] text-gray-400 leading-tight">
                                     By continuing, you agree to Indiankart&apos;s{' '}

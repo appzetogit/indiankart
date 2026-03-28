@@ -90,6 +90,10 @@ const B2BManager = () => {
                 .some((value) => String(value).toLowerCase().includes(term))
         );
     }, [products, searchTerm]);
+    const enabledProductCount = useMemo(
+        () => products.filter((product) => Boolean(product?.b2bEnabled)).length,
+        [products]
+    );
 
     const handleCategoryToggle = async () => {
         if (!selectedCategory) return;
@@ -131,7 +135,7 @@ const B2BManager = () => {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">B2B Management</h1>
-                    <p className="text-sm text-gray-500">Choose a category, enable B2B for it, and toggle individual products on or off.</p>
+                    <p className="text-sm text-gray-500">Turn B2B on for a category as a gate, then choose the exact products that should show B2B on checkout.</p>
                 </div>
                 <button
                     type="button"
@@ -170,10 +174,13 @@ const B2BManager = () => {
                                     <MdBusinessCenter size={22} />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-black uppercase tracking-widest text-blue-600">Category B2B Status</p>
+                                    <p className="text-xs font-black uppercase tracking-widest text-blue-600">Category B2B Gate</p>
                                     <h2 className="text-lg font-bold text-gray-900">{selectedCategory?.name || 'Select a category'}</h2>
                                     <p className="text-sm text-gray-600">
-                                        When this is off, the category stays outside the B2B flow even if some products are marked on.
+                                        This does not enable every product. It only allows checkout B2B for products below that are individually turned on.
+                                    </p>
+                                    <p className="mt-2 text-xs font-bold uppercase tracking-wide text-blue-700">
+                                        {enabledProductCount} selected B2B product{enabledProductCount === 1 ? '' : 's'}
                                     </p>
                                 </div>
                             </div>
@@ -197,7 +204,7 @@ const B2BManager = () => {
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Category Products</h2>
-                        <p className="text-sm text-gray-500">{filteredProducts.length} products in the current view</p>
+                        <p className="text-sm text-gray-500">{filteredProducts.length} products in the current view. Only toggled products will show B2B on checkout.</p>
                     </div>
                     <div className="relative w-full md:w-80">
                         <MdSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />

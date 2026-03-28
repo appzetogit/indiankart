@@ -8,6 +8,7 @@ import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
+import { useCategories } from '../../../hooks/useData';
 
 const parseDateOnly = (dateStr) => {
     if (!dateStr || typeof dateStr !== 'string') return null;
@@ -64,6 +65,7 @@ const Checkout = () => {
     
     // Use buyNowItem if present, otherwise fallback to global cart
     const checkoutItems = buyNowItem ? [buyNowItem] : cart;
+    const { categories = [] } = useCategories();
     const { coupons, fetchCoupons } = useCouponStore(); // Get coupons from the store
 
     useEffect(() => {
@@ -100,6 +102,20 @@ const Checkout = () => {
         maxShippingOrderAmount: 499
     });
     const [bankOffers, setBankOffers] = useState([]);
+
+    const eligibleB2BItems = checkoutItems.filter((item) => {
+        const productCategoryName = String(item?.category?.name || item?.category || '').trim().toLowerCase();
+        const productCategoryId = String(item?.categoryId || '').trim();
+        const matchedCategory = categories.find((category) => {
+            const categoryName = String(category?.name || '').trim().toLowerCase();
+            const categoryId = String(category?.id || category?._id || '').trim();
+            return (productCategoryName && categoryName === productCategoryName)
+                || (productCategoryId && categoryId === productCategoryId);
+        });
+
+        return Boolean(item?.b2bEnabled) && Boolean(matchedCategory?.b2bEnabled);
+    });
+    const hasEligibleB2BItems = eligibleB2BItems.length > 0;
 
 
     useEffect(() => {
@@ -326,7 +342,7 @@ const Checkout = () => {
             return;
         }
 
-        if (retailerInfo.isRetailer === null) {
+        if (hasEligibleB2BItems && retailerInfo.isRetailer === null) {
             setRetailerTypeError('Please choose whether you are a customer or a retailer');
             toast.error('Please choose customer or retailer before placing the order');
             return;
@@ -338,7 +354,7 @@ const Checkout = () => {
         const normalizedGstNumber = retailerInfo.gstNumber.replace(/\s+/g, '').toUpperCase();
         const gstRegex = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
-        if (retailerInfo.isRetailer) {
+        if (hasEligibleB2BItems && retailerInfo.isRetailer) {
             if (!normalizedShopName) {
                 toast.error('Please enter your shop name');
                 return;
@@ -380,9 +396,9 @@ const Checkout = () => {
             shippingPrice: delivery,
             totalPrice: finalAmount,
             retailerDetails: {
-                isRetailer: Boolean(retailerInfo.isRetailer),
-                shopName: retailerInfo.isRetailer ? normalizedShopName : '',
-                gstNumber: retailerInfo.isRetailer ? normalizedGstNumber : ''
+                isRetailer: hasEligibleB2BItems ? Boolean(retailerInfo.isRetailer) : false,
+                shopName: hasEligibleB2BItems && retailerInfo.isRetailer ? normalizedShopName : '',
+                gstNumber: hasEligibleB2BItems && retailerInfo.isRetailer ? normalizedGstNumber : ''
             },
             coupon: appliedCoupon
                 ? {
@@ -712,67 +728,72 @@ const Checkout = () => {
                             )}
 
                             {/* Retailer Details */}
-                            <div className="bg-white p-4 md:rounded-sm md:shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-3">Business Details</h3>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Are you a retailer?</label>
-                                    <select
-                                        value={retailerInfo.isRetailer === null ? '' : retailerInfo.isRetailer ? 'yes' : 'no'}
-                                        onChange={(e) => {
-                                            const isRetailer = e.target.value === 'yes';
-                                            setRetailerTypeError('');
-                                            setRetailerInfo((prev) => ({
-                                                ...prev,
-                                                isRetailer: e.target.value === '' ? null : isRetailer,
-                                                shopName: isRetailer ? prev.shopName : '',
-                                                gstNumber: isRetailer ? prev.gstNumber : ''
-                                            }));
-                                        }}
-                                        className={`w-full rounded-lg p-3 text-sm outline-none focus:ring-2 bg-white text-gray-900 ${
-                                            retailerTypeError
-                                                ? 'border border-red-400 focus:border-red-500 focus:ring-red-100'
-                                                : 'border border-gray-200 focus:border-blue-500 focus:ring-blue-200'
-                                        }`}
-                                    >
-                                        <option value="" disabled>Select business type</option>
-                                        <option value="no">No, I am a customer</option>
-                                        <option value="yes">Yes, I am a retailer</option>
-                                    </select>
-                                    {retailerTypeError && (
-                                        <p className="mt-2 text-xs font-medium text-red-500">{retailerTypeError}</p>
+                            {hasEligibleB2BItems && (
+                                <div className="bg-white p-4 md:rounded-sm md:shadow-sm border border-gray-100">
+                                    <h3 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-3">Business Details</h3>
+                                    <p className="mb-3 text-xs font-medium text-blue-600">
+                                        B2B is available for {eligibleB2BItems.length} selected product{eligibleB2BItems.length > 1 ? 's' : ''} in this order.
+                                    </p>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Are you a retailer?</label>
+                                        <select
+                                            value={retailerInfo.isRetailer === null ? '' : retailerInfo.isRetailer ? 'yes' : 'no'}
+                                            onChange={(e) => {
+                                                const isRetailer = e.target.value === 'yes';
+                                                setRetailerTypeError('');
+                                                setRetailerInfo((prev) => ({
+                                                    ...prev,
+                                                    isRetailer: e.target.value === '' ? null : isRetailer,
+                                                    shopName: isRetailer ? prev.shopName : '',
+                                                    gstNumber: isRetailer ? prev.gstNumber : ''
+                                                }));
+                                            }}
+                                            className={`w-full rounded-lg p-3 text-sm outline-none focus:ring-2 bg-white text-gray-900 ${
+                                                retailerTypeError
+                                                    ? 'border border-red-400 focus:border-red-500 focus:ring-red-100'
+                                                    : 'border border-gray-200 focus:border-blue-500 focus:ring-blue-200'
+                                            }`}
+                                        >
+                                            <option value="" disabled>Select business type</option>
+                                            <option value="no">No, I am a customer</option>
+                                            <option value="yes">Yes, I am a retailer</option>
+                                        </select>
+                                        {retailerTypeError && (
+                                            <p className="mt-2 text-xs font-medium text-red-500">{retailerTypeError}</p>
+                                        )}
+                                    </div>
+
+                                    {retailerInfo.isRetailer && (
+                                        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Shop Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={retailerInfo.shopName}
+                                                    onChange={(e) => setRetailerInfo((prev) => ({ ...prev, shopName: e.target.value }))}
+                                                    placeholder="Enter shop name"
+                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">GST Number</label>
+                                                <input
+                                                    type="text"
+                                                    value={retailerInfo.gstNumber}
+                                                    onChange={(e) =>
+                                                        setRetailerInfo((prev) => ({
+                                                            ...prev,
+                                                            gstNumber: e.target.value.toUpperCase()
+                                                        }))
+                                                    }
+                                                    placeholder="15-character GSTIN"
+                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white uppercase"
+                                                />
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
-
-                                {retailerInfo.isRetailer && (
-                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Shop Name</label>
-                                            <input
-                                                type="text"
-                                                value={retailerInfo.shopName}
-                                                onChange={(e) => setRetailerInfo((prev) => ({ ...prev, shopName: e.target.value }))}
-                                                placeholder="Enter shop name"
-                                                className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">GST Number</label>
-                                            <input
-                                                type="text"
-                                                value={retailerInfo.gstNumber}
-                                                onChange={(e) =>
-                                                    setRetailerInfo((prev) => ({
-                                                        ...prev,
-                                                        gstNumber: e.target.value.toUpperCase()
-                                                    }))
-                                                }
-                                                placeholder="15-character GSTIN"
-                                                className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white uppercase"
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            )}
 
                             {/* Order Items */}
                             <div className="bg-white md:rounded-sm md:shadow-sm">
