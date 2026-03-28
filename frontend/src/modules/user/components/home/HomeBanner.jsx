@@ -13,14 +13,19 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
     const bannerImageClass = 'w-full h-auto object-contain object-center block rounded-xl';
     const getHeroImage = () => {
         if (isMobileViewport) {
-            return banner?.content?.mobileBackgroundImageUrl || '';
+            return (
+                banner?.content?.mobileBackgroundImageUrl ||
+                banner?.content?.backgroundImageUrl ||
+                banner?.content?.imageUrl ||
+                ''
+            );
         }
         return banner?.content?.backgroundImageUrl || banner?.content?.imageUrl || '';
     };
 
     const getSlideImage = (slide) => {
         if (isMobileViewport) {
-            return slide?.mobileImageUrl || '';
+            return slide?.mobileImageUrl || slide?.imageUrl || '';
         }
         return slide?.imageUrl || '';
     };

@@ -305,10 +305,8 @@ export const useBanners = () => {
 
         const fetchBanners = async () => {
             try {
-                const data = await getOrFetch('banners', async () => {
-                    const { data } = await API.get('/banners');
-                    return data;
-                });
+                const { data } = await API.get('/banners');
+                writeCache('banners', data);
 
                 if (!active) return;
                 setBanners(data);

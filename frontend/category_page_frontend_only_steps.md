@@ -1,3 +1,4 @@
+
 # Category Page Frontend Only Steps
 
 ## Scope
@@ -12,7 +13,7 @@ This phase uses:
 - dummy subcategories
 - dummy products
 - local state only
-
+.6
 ---
 
 ## Frontend Deliverables
