@@ -4,51 +4,145 @@ import { MdAdd, MdArrowForward, MdDelete, MdDragIndicator, MdToggleOff, MdToggle
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import useCategoryStore from '../../store/categoryStore';
+import { useSubCategoriesByCategory } from '../../../../hooks/useData';
+import {
+    getOrderedCategorySubCategories,
+    mergeCategoryPageCatalogWithCategories,
+    readCategoryPageCatalog,
+    writeCategoryPageCatalog
+} from '../../../../utils/categoryPageConfig';
 
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-const BUILDER_STORAGE_KEY = 'category-page-builder-dummy-catalog-v1';
 const PRODUCT_PICKER_RESULT_KEY = 'category-page-builder-product-picker-result-v1';
-const dummyCatalog = [{
-    id: 'electronics',
-    name: 'Electronics',
-    subCategories: [
-        { id: 'sub-headsets', name: 'Headsets', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=300&q=80' },
-        { id: 'sub-wearables', name: 'Wearables', image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=300&q=80' },
-        { id: 'sub-laptops', name: 'Laptops', image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=300&q=80' },
-        { id: 'sub-grooming', name: 'Grooming', image: 'https://images.unsplash.com/photo-1522338140262-f46f5913618a?auto=format&fit=crop&w=300&q=80' }
-    ],
-    products: [
-        { id: 'prod-airbuds', name: 'Noise Air Buds', image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=400&q=80', subtitle: 'Wireless audio' },
-        { id: 'prod-watch', name: 'Active Smartwatch', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80', subtitle: 'Health and style' },
-        { id: 'prod-laptop', name: 'Slim Laptop Pro', image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=400&q=80', subtitle: 'Work and study' }
-    ],
-    categoryStrip: {
-        isActive: true,
-        items: [
-            { id: 'strip-1', subCategoryId: 'sub-headsets', isActive: true, order: 1 },
-            { id: 'strip-2', subCategoryId: 'sub-wearables', isActive: true, order: 2 },
-            { id: 'strip-3', subCategoryId: 'sub-laptops', isActive: false, order: 3 }
-        ]
-    },
-    pageSections: [
-        {
-            id: 'sec-1', sectionKind: 'image', isActive: true, order: 1, title: 'Exclusively For You', description: 'Frontend only preview',
-            sectionLink: '/category/Electronics/Laptops', showArrow: true, backgroundType: 'color', backgroundColor: '#ffffff', backgroundImage: '', mediaDisplay: 'carousel',
-            items: [
-                { id: 'img-1', itemType: 'image', image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1200&q=80', title: '', description: '', link: '' },
-                { id: 'img-2', itemType: 'image', image: 'https://images.unsplash.com/photo-1541807084-5c52b6b3adef?auto=format&fit=crop&w=1200&q=80', title: '', description: '', link: '' }
-            ]
-        },
-        {
-            id: 'sec-2', sectionKind: 'product', isActive: true, order: 2, title: 'Best Gadgets', description: 'Products in same section container',
-            sectionLink: '', showArrow: false, backgroundType: 'color', backgroundColor: '#f8fafc', backgroundImage: '', mediaDisplay: 'scroll',
-            items: [
-                { id: 'prod-1', itemType: 'product', productId: 'prod-airbuds', title: '', description: '', link: '' },
-                { id: 'prod-2', itemType: 'product', productId: 'prod-watch', title: '', description: '', link: '' }
-            ]
+const DEFAULT_SUBCATEGORIES_SECTION_ID = 'default-subcategories-section';
+const CUSTOM_LINK_VALUE = '__custom__';
+const SELECTED_CATEGORY_STORAGE_KEY = 'category-page-builder-selected-category-v1';
+
+const normalizeText = (value) => String(value || '').trim();
+
+const buildCategoryPageRoute = (categoryName, subCategoryName = '') => {
+    const base = `/category/${encodeURIComponent(normalizeText(categoryName))}`;
+    return subCategoryName ? `${base}/${encodeURIComponent(normalizeText(subCategoryName))}` : base;
+};
+
+const getCategoryChildren = (category) => {
+    const directChildren = Array.isArray(category?.children) ? category.children : [];
+    if (directChildren.length > 0) return directChildren;
+    return Array.isArray(category?.subCategories) ? category.subCategories : [];
+};
+
+const buildPageRouteOptions = (categories = []) => {
+    const seen = new Set();
+    const options = [];
+
+    (Array.isArray(categories) ? categories : []).forEach((category) => {
+        const categoryName = normalizeText(category?.name);
+        if (!categoryName) return;
+
+        const categoryLink = buildCategoryPageRoute(categoryName);
+        if (!seen.has(categoryLink)) {
+            seen.add(categoryLink);
+            options.push({ value: categoryLink, label: categoryName });
         }
-    ]
-}];
+
+        getCategoryChildren(category).forEach((subCategory) => {
+            const subCategoryName = normalizeText(subCategory?.name);
+            if (!subCategoryName) return;
+
+            const subCategoryLink = buildCategoryPageRoute(categoryName, subCategoryName);
+            if (seen.has(subCategoryLink)) return;
+
+            seen.add(subCategoryLink);
+            options.push({
+                value: subCategoryLink,
+                label: `${categoryName} / ${subCategoryName}`
+            });
+        });
+    });
+
+    return options;
+};
+
+const buildProductRouteOptions = (products = []) => {
+    const seen = new Set();
+
+    return (Array.isArray(products) ? products : [])
+        .map((product) => {
+            const productId = String(product?.id || product?._id || '').trim();
+            const productName = normalizeText(product?.name);
+            if (!productId || !productName) return null;
+
+            const value = `/product/${encodeURIComponent(productId)}`;
+            if (seen.has(value)) return null;
+            seen.add(value);
+
+            return {
+                value,
+                label: `Product: ${productName}`
+            };
+        })
+        .filter(Boolean);
+};
+
+const resolveLinkSelectValue = (link, options = []) => {
+    const normalizedLink = normalizeText(link);
+    if (!normalizedLink) return '';
+    return options.some((option) => option.value === normalizedLink) ? normalizedLink : CUSTOM_LINK_VALUE;
+};
+
+const buildDefaultSubcategoriesSection = () => ({
+    id: DEFAULT_SUBCATEGORIES_SECTION_ID,
+    sectionKind: 'subcategories',
+    isActive: true,
+    order: 1,
+    title: 'Subcategories',
+    description: 'Auto-fetched from this category',
+    sectionLink: '',
+    showArrow: false,
+    backgroundType: 'color',
+    backgroundColor: '#ffffff',
+    backgroundImage: '',
+    mediaDisplay: 'grid',
+    items: [],
+    locked: true
+});
+
+const isLockedSection = (section) => String(section?.id) === DEFAULT_SUBCATEGORIES_SECTION_ID || section?.locked;
+
+const withDefaultSections = (sections = []) => {
+    const filtered = Array.isArray(sections) ? sections.filter(Boolean) : [];
+    const lockedSection = filtered.find((section) => isLockedSection(section));
+    const normalized = filtered.map((section, index) => ({
+        ...section,
+        order: Number(section?.order) || index + 1
+    }));
+
+    if (!lockedSection) {
+        return [buildDefaultSubcategoriesSection(), ...normalized]
+            .map((section, index) => ({ ...section, order: index + 1 }));
+    }
+
+    const deduped = [];
+    let lockedInjected = false;
+
+    normalized.forEach((section) => {
+        if (isLockedSection(section)) {
+            if (!lockedInjected) {
+                deduped.push({ ...buildDefaultSubcategoriesSection(), ...section });
+                lockedInjected = true;
+            }
+            return;
+        }
+        deduped.push(section);
+    });
+
+    if (!lockedInjected) {
+        deduped.unshift(buildDefaultSubcategoriesSection());
+    }
+
+    return deduped.map((section, index) => ({ ...section, order: index + 1 }));
+};
 
 const SortableWrap = ({ id, children }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -63,30 +157,104 @@ const SortableWrap = ({ id, children }) => {
 };
 
 const CategoryPageBuilder = () => {
-    const [catalog, setCatalog] = useState(() => {
-        try {
-            const stored = localStorage.getItem(BUILDER_STORAGE_KEY);
-            if (!stored) return dummyCatalog;
-            const parsed = JSON.parse(stored);
-            return Array.isArray(parsed) && parsed.length > 0 ? parsed : dummyCatalog;
-        } catch (err) {
-            return dummyCatalog;
-        }
+    const categories = useCategoryStore((state) => state.categories);
+    const fetchCategories = useCategoryStore((state) => state.fetchCategories);
+    const [catalog, setCatalog] = useState(() => readCategoryPageCatalog());
+    const [categoryId, setCategoryId] = useState(() => {
+        if (typeof window === 'undefined') return String(readCategoryPageCatalog()?.[0]?.id || '');
+        const savedCategoryId = String(window.localStorage.getItem(SELECTED_CATEGORY_STORAGE_KEY) || '').trim();
+        return savedCategoryId || String(readCategoryPageCatalog()?.[0]?.id || '');
     });
-    const [categoryId, setCategoryId] = useState(dummyCatalog[0].id);
     const [sectionId, setSectionId] = useState('');
     const [isDirty, setIsDirty] = useState(false);
     const [saveMessage, setSaveMessage] = useState('');
     const navigate = useNavigate();
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
 
-    const category = useMemo(() => catalog.find((item) => item.id === categoryId) || catalog[0], [catalog, categoryId]);
-    const section = category.pageSections.find((item) => item.id === sectionId) || null;
-    const getProduct = (id) => category.products.find((item) => item.id === id);
+    const category = useMemo(() => catalog.find((item) => item.id === categoryId) || catalog[0] || null, [catalog, categoryId]);
+    const { subCategories: detailedSubCategories = [] } = useSubCategoriesByCategory(category?.dbId || category?._id || '');
+    const section = category?.pageSections?.find((item) => item.id === sectionId) || null;
+    const getProduct = (id) => category?.products?.find((item) => item.id === id);
     const hasSelectedSection = Boolean(section);
+    const isDefaultSubcategoriesSection = isLockedSection(section);
+    const previewSubCategories = useMemo(
+        () => getOrderedCategorySubCategories(category, detailedSubCategories),
+        [category, detailedSubCategories]
+    );
+    const allPageRouteOptions = useMemo(() => buildPageRouteOptions(categories), [categories]);
+    const pageRouteOptions = useMemo(() => {
+        if (!category?.name) return allPageRouteOptions;
+
+        const selectedCategoryName = normalizeText(category.name).toLowerCase();
+        const currentCategoryOptions = allPageRouteOptions.filter((option) => {
+            const [rootCategoryName = ''] = option.label.split(' / ');
+            return normalizeText(rootCategoryName).toLowerCase() === selectedCategoryName;
+        });
+
+        return currentCategoryOptions.length > 0 ? currentCategoryOptions : allPageRouteOptions;
+    }, [allPageRouteOptions, category]);
+    const productRouteOptions = useMemo(
+        () => buildProductRouteOptions(category?.products),
+        [category]
+    );
+    const itemLinkOptions = useMemo(
+        () => [...pageRouteOptions, ...productRouteOptions],
+        [pageRouteOptions, productRouteOptions]
+    );
+
+    useEffect(() => {
+        if (!categories || categories.length === 0) {
+            fetchCategories();
+        }
+    }, [categories, fetchCategories]);
+
+    useEffect(() => {
+        if (!categories || categories.length === 0) return;
+
+        setCatalog((prev) => mergeCategoryPageCatalogWithCategories(prev, categories).map((item) => ({
+            ...item,
+            pageSections: withDefaultSections(item.pageSections)
+        })));
+    }, [categories]);
+
+    useEffect(() => {
+        if (!catalog.length) {
+            setCategoryId('');
+            setSectionId('');
+            return;
+        }
+
+        const activeCategory = catalog.find((item) => item.id === categoryId) || catalog[0];
+        if (!activeCategory) return;
+
+        if (activeCategory.id !== categoryId) {
+            setCategoryId(activeCategory.id);
+        }
+
+        if (sectionId && activeCategory.pageSections.some((item) => item.id === sectionId)) return;
+        setSectionId(activeCategory.pageSections?.[0]?.id || '');
+    }, [catalog, categoryId, sectionId]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        if (categoryId) {
+            window.localStorage.setItem(SELECTED_CATEGORY_STORAGE_KEY, categoryId);
+            return;
+        }
+
+        window.localStorage.removeItem(SELECTED_CATEGORY_STORAGE_KEY);
+    }, [categoryId]);
 
     const updateCategory = (updater) => setCatalog((prev) => {
-        const next = prev.map((item) => item.id === categoryId ? updater(item) : item);
+        const next = prev.map((item) => {
+            if (item.id !== categoryId) return item;
+            const updated = updater(item);
+            return {
+                ...updated,
+                pageSections: withDefaultSections(updated.pageSections)
+            };
+        });
         setIsDirty(true);
         return next;
     });
@@ -99,6 +267,40 @@ const CategoryPageBuilder = () => {
         updateCategory((item) => ({ ...item, pageSections: item.pageSections.map((entry) => entry.id === section.id ? { ...entry, items: updater(entry.items) } : entry) }));
     };
     const updateSectionItem = (itemId, updates) => updateItems((items) => items.map((entry) => entry.id === itemId ? { ...entry, ...updates } : entry));
+    const updateSubCategoryOrder = (orderedIds = []) => {
+        updateCategory((item) => {
+            const currentSubCategories = Array.isArray(item.subCategories) ? item.subCategories : [];
+            const subCategoryMap = new Map(currentSubCategories.map((subCategory) => [String(subCategory.id || subCategory._id || subCategory.name), subCategory]));
+            const reorderedSubCategories = orderedIds
+                .map((id) => subCategoryMap.get(String(id)))
+                .filter(Boolean);
+            const remainingSubCategories = currentSubCategories.filter((subCategory) => {
+                const key = String(subCategory.id || subCategory._id || subCategory.name);
+                return !orderedIds.some((orderedId) => String(orderedId) === key);
+            });
+            const nextSubCategories = [...reorderedSubCategories, ...remainingSubCategories];
+
+            const stripItems = Array.isArray(item.categoryStrip?.items) ? item.categoryStrip.items : [];
+            const stripItemMap = new Map(stripItems.map((stripItem) => [String(stripItem.subCategoryId), stripItem]));
+            const reorderedStripItems = nextSubCategories.map((subCategory, index) => {
+                const key = String(subCategory.id || subCategory._id || subCategory.name);
+                const existingStripItem = stripItemMap.get(key);
+                return existingStripItem
+                    ? { ...existingStripItem, order: index + 1 }
+                    : { id: `strip-${key}`, subCategoryId: key, isActive: true, order: index + 1 };
+            });
+
+            return {
+                ...item,
+                subCategories: nextSubCategories,
+                categoryStrip: {
+                    ...(item.categoryStrip || {}),
+                    isActive: item.categoryStrip?.isActive !== false,
+                    items: reorderedStripItems
+                }
+            };
+        });
+    };
     const handleSectionItemImageUpload = (itemId, file) => {
         if (!file) return;
         const reader = new FileReader();
@@ -121,7 +323,7 @@ const CategoryPageBuilder = () => {
         updateCategory((item) => {
             const oldIndex = item.pageSections.findIndex((entry) => entry.id === active.id);
             const newIndex = item.pageSections.findIndex((entry) => entry.id === over.id);
-            return { ...item, pageSections: arrayMove(item.pageSections, oldIndex, newIndex).map((entry, index) => ({ ...entry, order: index + 1 })) };
+            return { ...item, pageSections: withDefaultSections(arrayMove(item.pageSections, oldIndex, newIndex)) };
         });
     };
 
@@ -132,6 +334,15 @@ const CategoryPageBuilder = () => {
             const newIndex = items.findIndex((entry) => entry.id === over.id);
             return arrayMove(items, oldIndex, newIndex);
         });
+    };
+    const onSubCategoryDragEnd = ({ active, over }) => {
+        if (!over || active.id === over.id) return;
+        const ids = previewSubCategories.map((item) => String(item.id || item._id || item.name));
+        const oldIndex = ids.findIndex((id) => id === String(active.id));
+        const newIndex = ids.findIndex((id) => id === String(over.id));
+        if (oldIndex < 0 || newIndex < 0) return;
+        const nextIds = arrayMove(ids, oldIndex, newIndex);
+        updateSubCategoryOrder(nextIds);
     };
 
     const selectedBackgroundType = section?.backgroundType || (section?.backgroundImage ? 'image' : 'color');
@@ -186,9 +397,30 @@ const CategoryPageBuilder = () => {
             setCatalog((prev) => {
                 const next = prev.map((cat) => {
                     if (cat.id !== payloadCategoryId) return cat;
+                    const existingProducts = Array.isArray(cat.products) ? cat.products : [];
+                    const mergedProductsMap = new Map(
+                        existingProducts
+                            .map((product) => ({
+                                ...product,
+                                id: String(product?.id || product?._id || '').trim()
+                            }))
+                            .filter((product) => product.id)
+                            .map((product) => [product.id, product])
+                    );
+
+                    pickedProducts.forEach((product) => {
+                        const productId = String(product?.id || product?._id || '').trim();
+                        if (!productId) return;
+                        mergedProductsMap.set(productId, {
+                            ...product,
+                            id: productId
+                        });
+                    });
+
                     return {
                         ...cat,
-                        pageSections: cat.pageSections.map((sec) => {
+                        products: Array.from(mergedProductsMap.values()),
+                        pageSections: withDefaultSections(cat.pageSections.map((sec) => {
                             if (sec.id !== payloadSectionId) return sec;
                             const existingProductMap = new Map(
                                 (sec.items || [])
@@ -206,7 +438,7 @@ const CategoryPageBuilder = () => {
                                 link: ''
                             });
                             return { ...sec, items: [...nonProductItems, ...nextProductItems] };
-                        })
+                        }))
                     };
                 });
                 return next;
@@ -223,11 +455,11 @@ const CategoryPageBuilder = () => {
     }, []);
 
     const handleSaveSection = () => {
-        if (!section) return;
+        if (!category) return;
         try {
-            localStorage.setItem(BUILDER_STORAGE_KEY, JSON.stringify(catalog));
+            writeCategoryPageCatalog(catalog);
             setIsDirty(false);
-            setSaveMessage('Section saved');
+            setSaveMessage('Page saved');
             window.setTimeout(() => setSaveMessage(''), 1800);
         } catch (err) {
             setSaveMessage('Save failed');
@@ -235,12 +467,20 @@ const CategoryPageBuilder = () => {
         }
     };
 
+    if (!category) {
+        return (
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-8 text-sm font-medium text-gray-600 shadow-sm">
+                No categories found. Create a category first, then build its landing page.
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Category Page Builder</h1>
-                    <p className="text-sm text-gray-500">Frontend-only dummy admin page. Backend later step by step.</p>
+                    <p className="text-sm text-gray-500">Build category landing content and save it for the user-facing category page.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <select
@@ -253,7 +493,7 @@ const CategoryPageBuilder = () => {
                     >
                         {catalog.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                     </select>
-                    <div className="rounded-full bg-blue-50 px-4 py-2 text-xs font-bold uppercase tracking-wider text-blue-600">Frontend Dummy</div>
+                    <div className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-wider text-emerald-700">Dynamic Builder</div>
                 </div>
             </div>
 
@@ -267,7 +507,7 @@ const CategoryPageBuilder = () => {
                             </div>
                             <button type="button" onClick={() => {
                                 const next = { id: makeId('sec'), sectionKind: 'image', isActive: true, order: category.pageSections.length + 1, title: 'New Section', description: '', sectionLink: '', showArrow: false, backgroundType: 'color', backgroundColor: '#ffffff', backgroundImage: '', mediaDisplay: 'single', items: [] };
-                                updateCategory((item) => ({ ...item, pageSections: [...item.pageSections, next] }));
+                                updateCategory((item) => ({ ...item, pageSections: withDefaultSections([...item.pageSections, next]) }));
                             }} className="rounded-xl bg-blue-600 px-3 py-2 text-white"><MdAdd size={18} /></button>
                         </div>
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onSectionDragEnd}>
@@ -276,13 +516,19 @@ const CategoryPageBuilder = () => {
                                     {category.pageSections.map((item) => <SortableWrap key={item.id} id={item.id}>
                                         <button type="button" onClick={() => { setSectionId(item.id); }} className={`w-full rounded-xl border p-3 pl-10 text-left ${section?.id === item.id ? 'border-blue-500 bg-blue-50' : 'border-gray-100 bg-white'}`}>
                                             <div className="flex items-start justify-between gap-3">
-                                                <div>
+                                                    <div>
                                                     <div className="text-sm font-bold text-gray-900">{item.title || 'Untitled Section'}</div>
-                                                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500"><span>{item.sectionKind}</span><span>{item.mediaDisplay}</span><span>{item.items.length} items</span></div>
+                                                    <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500"><span>{item.sectionKind}</span><span>{item.mediaDisplay}</span><span>{isLockedSection(item) ? previewSubCategories.length : item.items.length} items</span></div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span onClick={(e) => { e.stopPropagation(); updateCategory((entry) => ({ ...entry, pageSections: entry.pageSections.map((row) => row.id === item.id ? { ...row, isActive: !row.isActive } : row) })); }} className={item.isActive ? 'text-green-600' : 'text-gray-400'}>{item.isActive ? <MdToggleOn size={26} /> : <MdToggleOff size={26} />}</span>
-                                                    <span onClick={(e) => { e.stopPropagation(); updateCategory((entry) => ({ ...entry, pageSections: entry.pageSections.filter((row) => row.id !== item.id).map((row, index) => ({ ...row, order: index + 1 })) })); }} className="text-red-500"><MdDelete size={18} /></span>
+                                                    {!isLockedSection(item) && (
+                                                        <span onClick={(e) => { e.stopPropagation(); updateCategory((entry) => ({ ...entry, pageSections: entry.pageSections.map((row) => row.id === item.id ? { ...row, isActive: !row.isActive } : row) })); }} className={item.isActive ? 'text-green-600' : 'text-gray-400'}>{item.isActive ? <MdToggleOn size={26} /> : <MdToggleOff size={26} />}</span>
+                                                    )}
+                                                    {!isLockedSection(item) ? (
+                                                        <span onClick={(e) => { e.stopPropagation(); updateCategory((entry) => ({ ...entry, pageSections: entry.pageSections.filter((row) => row.id !== item.id).map((row, index) => ({ ...row, order: index + 1 })) })); }} className="text-red-500"><MdDelete size={18} /></span>
+                                                    ) : (
+                                                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">Locked</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </button>
@@ -298,22 +544,22 @@ const CategoryPageBuilder = () => {
                         <div className="mb-4 flex items-start justify-between gap-3">
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900">Section Editor</h2>
-                                <p className="mt-1 text-sm text-gray-500">Dummy local state, backend payload later same shape mein jayega.</p>
+                                <p className="mt-1 text-sm text-gray-500">This saved content is what the user category landing page will render.</p>
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 <button
                                     type="button"
                                     onClick={handleSaveSection}
-                                    disabled={!hasSelectedSection}
+                                    disabled={!category}
                                     className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide ${
-                                        hasSelectedSection
+                                        category
                                             ? 'bg-blue-600 text-white hover:bg-blue-700'
                                             : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                     }`}
                                 >
-                                    Save Section
+                                    Save Page
                                 </button>
-                                {hasSelectedSection && (
+                                {category && (
                                     <p className={`text-[11px] font-semibold ${saveMessage ? 'text-green-700' : isDirty ? 'text-amber-600' : 'text-gray-400'}`}>
                                         {saveMessage || (isDirty ? 'Unsaved changes' : 'Saved')}
                                     </p>
@@ -323,6 +569,10 @@ const CategoryPageBuilder = () => {
                         {!hasSelectedSection ? (
                             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm font-medium text-gray-600">
                                 Select a section from the left panel to edit.
+                            </div>
+                        ) : isDefaultSubcategoriesSection ? (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                                This is a default system section. It automatically fetches all subcategories for the selected category and cannot be deleted.
                             </div>
                         ) : (
                         <div className="grid gap-4 md:grid-cols-2">
@@ -387,14 +637,33 @@ const CategoryPageBuilder = () => {
                                 </label>
                             )}
                             {section.showArrow && (
-                                <label className="space-y-2 text-sm font-semibold text-gray-700">
-                                    <span>Section Link</span>
-                                    <input
-                                        value={section.sectionLink}
-                                        onChange={(e) => updateSection({ sectionLink: e.target.value })}
-                                        className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
-                                    />
-                                </label>
+                                <>
+                                    <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                        <span>Section Link</span>
+                                        <select
+                                            value={resolveLinkSelectValue(section.sectionLink, pageRouteOptions)}
+                                            onChange={(e) => updateSection({ sectionLink: e.target.value === CUSTOM_LINK_VALUE ? section.sectionLink : e.target.value })}
+                                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                        >
+                                            <option value="">No link</option>
+                                            {pageRouteOptions.map((option) => (
+                                                <option key={option.value} value={option.value}>{option.label}</option>
+                                            ))}
+                                            <option value={CUSTOM_LINK_VALUE}>Custom URL</option>
+                                        </select>
+                                    </label>
+                                    {resolveLinkSelectValue(section.sectionLink, pageRouteOptions) === CUSTOM_LINK_VALUE && (
+                                        <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                            <span>Custom Section URL</span>
+                                            <input
+                                                value={section.sectionLink}
+                                                onChange={(e) => updateSection({ sectionLink: e.target.value })}
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                                placeholder="/category/Mobiles/VIVO"
+                                            />
+                                        </label>
+                                    )}
+                                </>
                             )}
                             <div className="grid grid-cols-2 gap-3">
                                 <button type="button" onClick={() => updateSection({ isActive: !section.isActive })} className={`rounded-xl border px-3 py-2.5 text-sm font-semibold ${section.isActive ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600'}`}>{section.isActive ? 'Section Active' : 'Section Inactive'}</button>
@@ -410,7 +679,7 @@ const CategoryPageBuilder = () => {
                                 <h3 className="text-base font-bold text-gray-900">Section Items</h3>
                                 <p className="mt-1 text-sm text-gray-500">Image ya product source dono same section ke andar.</p>
                             </div>
-                            {!hasSelectedSection ? null : section.sectionKind === 'image' ? (
+                            {!hasSelectedSection || isDefaultSubcategoriesSection ? null : section.sectionKind === 'image' ? (
                                 <button type="button" onClick={() => updateItems((items) => [...items, { id: makeId('item'), itemType: 'image', image: '', title: '', description: '', link: '' }])} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><MdAdd size={18} />Add Image</button>
                             ) : (
                                 <button type="button" onClick={openProductPicker} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><MdAdd size={18} />Add Product</button>
@@ -420,6 +689,34 @@ const CategoryPageBuilder = () => {
                             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm font-medium text-gray-600">
                                 Select a section to manage items.
                             </div>
+                        ) : isDefaultSubcategoriesSection ? (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onSubCategoryDragEnd}>
+                                <SortableContext items={previewSubCategories.map((item) => String(item.id || item._id || item.name))} strategy={rectSortingStrategy}>
+                                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                        {previewSubCategories.map((item, index) => (
+                                            <SortableWrap key={item.id || item._id || item.name} id={String(item.id || item._id || item.name)}>
+                                                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 pl-10">
+                                                    <div className="mb-3 flex items-center justify-between">
+                                                        <div>
+                                                            <div className="text-sm font-bold text-gray-900">Subcategory {index + 1}</div>
+                                                            <div className="text-xs uppercase tracking-wider text-gray-500">Auto-fetched</div>
+                                                        </div>
+                                                        <span className="rounded-full bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700">Drag</span>
+                                                    </div>
+                                                    <div className="overflow-hidden rounded-xl bg-white">
+                                                        {item.image ? (
+                                                            <img src={item.image} alt={item.name} className="h-28 w-full object-cover" />
+                                                        ) : (
+                                                            <div className="h-28 w-full bg-gray-100" />
+                                                        )}
+                                                    </div>
+                                                    <div className="pt-3 text-sm font-semibold text-gray-900">{item.name}</div>
+                                                </div>
+                                            </SortableWrap>
+                                        ))}
+                                    </div>
+                                </SortableContext>
+                            </DndContext>
                         ) : (
                         <>
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onItemDragEnd}>
@@ -470,6 +767,28 @@ const CategoryPageBuilder = () => {
                                                         </div>
                                                         <input value={item.title || ''} onChange={(e) => updateSectionItem(item.id, { title: e.target.value })} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none" placeholder="Title" />
                                                         <input value={item.description || ''} onChange={(e) => updateSectionItem(item.id, { description: e.target.value })} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none" placeholder="Description" />
+                                                        <label className="space-y-2 md:col-span-2">
+                                                            <span className="block text-sm font-semibold text-gray-700">Item Link</span>
+                                                            <select
+                                                                value={resolveLinkSelectValue(item.link, itemLinkOptions)}
+                                                                onChange={(e) => updateSectionItem(item.id, { link: e.target.value === CUSTOM_LINK_VALUE ? item.link || '' : e.target.value })}
+                                                                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                                            >
+                                                                <option value="">No link</option>
+                                                                {itemLinkOptions.map((option) => (
+                                                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                                                ))}
+                                                                <option value={CUSTOM_LINK_VALUE}>Custom URL</option>
+                                                            </select>
+                                                        </label>
+                                                        {resolveLinkSelectValue(item.link, itemLinkOptions) === CUSTOM_LINK_VALUE && (
+                                                            <input
+                                                                value={item.link || ''}
+                                                                onChange={(e) => updateSectionItem(item.id, { link: e.target.value })}
+                                                                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none md:col-span-2"
+                                                                placeholder="/category/Mobiles/VIVO"
+                                                            />
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <div className="grid gap-3 md:grid-cols-2">
@@ -491,9 +810,9 @@ const CategoryPageBuilder = () => {
                 </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
-                    <div><h3 className="text-base font-bold text-gray-900">Dummy Preview</h3><p className="mt-1 text-sm text-gray-500">Selected section preview only.</p></div>
+                    <div><h3 className="text-base font-bold text-gray-900">Front-end Preview</h3><p className="mt-1 text-sm text-gray-500">This mirrors how the category landing page will consume the saved config.</p></div>
                     {hasSelectedSection && section.showArrow && <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white"><MdArrowForward size={18} /></div>}
                 </div>
                 {!hasSelectedSection ? (
@@ -511,18 +830,37 @@ const CategoryPageBuilder = () => {
                     }}
                 >
                     {(section.title || section.description) && <div className="mb-4">{section.title && <h4 className="text-xl font-bold text-gray-900">{section.title}</h4>}{section.description && <p className="mt-1 text-sm text-gray-600">{section.description}</p>}</div>}
-                    <div className={`${section.mediaDisplay === 'grid' ? 'grid grid-cols-2 gap-3 md:grid-cols-4' : section.mediaDisplay === 'single' ? 'block' : 'flex gap-3 overflow-x-auto no-scrollbar pb-1'}`}>
-                                {previewItems.map((item) => {
-                                    const product = item.itemType === 'product' ? (getProduct(item.productId) || item.productSnapshot) : null;
-                                    const image = item.itemType === 'product' ? product?.image : item.image;
-                            const title = item.title || product?.name;
-                            const description = item.description || product?.subtitle;
-                            return <div key={item.id} className={`${section.mediaDisplay === 'single' ? 'w-full' : section.mediaDisplay === 'grid' ? '' : 'w-[220px] shrink-0'} rounded-xl bg-white p-2 shadow-sm`}>
-                                <div className="overflow-hidden rounded-xl bg-gray-100">{image ? <img src={image} alt="" className={`${section.mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full object-cover`} /> : <div className={`${section.mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full bg-gray-100`} />}</div>
-                                {(title || description) && <div className="pt-2">{title && <div className="text-sm font-semibold text-gray-900">{title}</div>}{description && <div className="mt-1 text-xs text-gray-500">{description}</div>}</div>}
-                            </div>;
-                        })}
-                    </div>
+                    {isDefaultSubcategoriesSection ? (
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                            {previewSubCategories.length > 0 ? previewSubCategories.map((item) => (
+                                <div key={item.id || item._id || item.name} className="rounded-xl bg-white p-2 shadow-sm">
+                                    <div className="overflow-hidden rounded-xl bg-gray-100">
+                                        {item.image ? <img src={item.image} alt={item.name} className="h-40 w-full object-cover" /> : <div className="h-40 w-full bg-gray-100" />}
+                                    </div>
+                                    <div className="pt-2">
+                                        <div className="text-sm font-semibold text-gray-900">{item.name}</div>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+                                    No subcategories found for this category.
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className={`${section.mediaDisplay === 'grid' ? 'grid grid-cols-2 gap-3 md:grid-cols-4' : section.mediaDisplay === 'single' ? 'block' : 'flex gap-3 overflow-x-auto no-scrollbar pb-1'}`}>
+                                    {previewItems.map((item) => {
+                                        const product = item.itemType === 'product' ? (getProduct(item.productId) || item.productSnapshot) : null;
+                                        const image = item.itemType === 'product' ? product?.image : item.image;
+                                const title = item.title || product?.name;
+                                const description = item.description || product?.subtitle;
+                                return <div key={item.id} className={`${section.mediaDisplay === 'single' ? 'w-full' : section.mediaDisplay === 'grid' ? '' : 'w-[220px] shrink-0'} rounded-xl bg-white p-2 shadow-sm`}>
+                                    <div className="overflow-hidden rounded-xl bg-gray-100">{image ? <img src={image} alt="" className={`${section.mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full object-cover`} /> : <div className={`${section.mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full bg-gray-100`} />}</div>
+                                    {(title || description) && <div className="pt-2">{title && <div className="text-sm font-semibold text-gray-900">{title}</div>}{description && <div className="mt-1 text-xs text-gray-500">{description}</div>}</div>}
+                                </div>;
+                            })}
+                        </div>
+                    )}
                 </div>
                 )}
             </div>
