@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MdAdd, MdSearch, MdEdit, MdDelete, MdFilterList, MdImage, MdVisibility, MdChevronLeft, MdChevronRight, MdClose } from 'react-icons/md';
 import useProductStore from '../../store/productStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api'; import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
+
+const PRODUCT_PICKER_RESULT_KEY = 'category-page-builder-product-picker-result-v1';
 
 const getCategoryLabel = (product) => {
     const rawCategory = product?.category;
@@ -29,8 +31,11 @@ const getSubCategoryLabel = (product) => {
     return single.name || '';
 };
 
+const getProductId = (product) => String(product?.id || product?._id || '');
+
 const ProductManager = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { deleteProduct } = useProductStore();
     const { categories, fetchCategories } = useCategoryStore();
     const [searchTerm, setSearchTerm] = useState('');
@@ -45,6 +50,21 @@ const ProductManager = () => {
 
     const [localProducts, setLocalProducts] = useState([]);
     const [loading, setLoading] = useState(false);
+    const pickerMode = searchParams.get('picker') === 'category-builder';
+    const pickerReturnTo = searchParams.get('returnTo') || '/admin/categories/page-builder';
+    const pickerCategoryId = searchParams.get('categoryId') || '';
+    const pickerSectionId = searchParams.get('sectionId') || '';
+    const preselectedParam = searchParams.get('selected') || '';
+    const [pickerSelectedIds, setPickerSelectedIds] = useState([]);
+
+    useEffect(() => {
+        if (!pickerMode) return;
+        const parsed = preselectedParam
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+        setPickerSelectedIds(parsed);
+    }, [pickerMode, preselectedParam]);
 
     useEffect(() => {
         let active = true;
@@ -133,20 +153,78 @@ const ProductManager = () => {
         }
     };
 
+    const togglePickerSelection = (productId, checked) => {
+        const normalizedId = String(productId);
+        setPickerSelectedIds((prev) => {
+            const set = new Set(prev.map((id) => String(id)));
+            if (checked) set.add(normalizedId);
+            else set.delete(normalizedId);
+            return Array.from(set);
+        });
+    };
+
+    const handlePickerSave = async () => {
+        try {
+            const { data } = await API.get('/products', {
+                params: { all: 'true', limit: 1000 }
+            });
+            const allProducts = Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []);
+            const selectedSet = new Set(pickerSelectedIds.map((id) => String(id)));
+            const selectedProducts = allProducts
+                .filter((product) => selectedSet.has(getProductId(product)))
+                .map((product) => ({
+                    id: getProductId(product),
+                    name: product?.name || '',
+                    image: product?.image || '',
+                    subtitle: product?.subtitle || ''
+                }));
+
+            localStorage.setItem(PRODUCT_PICKER_RESULT_KEY, JSON.stringify({
+                target: 'category-page-builder',
+                categoryId: pickerCategoryId,
+                sectionId: pickerSectionId,
+                productIds: pickerSelectedIds,
+                products: selectedProducts
+            }));
+            navigate(pickerReturnTo);
+        } catch (error) {
+            toast.error('Failed to save selected products');
+        }
+    };
+
 
     return (
         <div className="space-y-2 md:space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
                 <div>
-                    <h1 className="text-lg md:text-2xl font-bold text-gray-800">Product Management</h1>
-                    <p className="text-gray-500 text-xs md:text-sm">Manage inventory, prices, and product details ({totalProducts} total)</p>
+                    <h1 className="text-lg md:text-2xl font-bold text-gray-800">{pickerMode ? 'Select Products' : 'Product Management'}</h1>
+                    <p className="text-gray-500 text-xs md:text-sm">
+                        {pickerMode ? `Select products and save (${pickerSelectedIds.length} selected)` : `Manage inventory, prices, and product details (${totalProducts} total)`}
+                    </p>
                 </div>
-                <button
-                    onClick={() => navigate('/admin/products/new')}
-                    className="flex items-center justify-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium w-full md:w-auto text-xs md:text-base"
-                >
-                    <MdAdd size={20} className="w-4 h-4 md:w-5 md:h-5" /> Add Product
-                </button>
+                {pickerMode ? (
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button
+                            onClick={() => navigate(pickerReturnTo)}
+                            className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-sm font-semibold hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handlePickerSave}
+                            className="flex-1 md:flex-none px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"
+                        >
+                            Save Selected
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => navigate('/admin/products/new')}
+                        className="flex items-center justify-center gap-1 md:gap-2 bg-blue-600 text-white px-3 py-2 md:px-4 md:py-2 rounded-lg hover:bg-blue-700 transition shadow-sm font-medium w-full md:w-auto text-xs md:text-base"
+                    >
+                        <MdAdd size={20} className="w-4 h-4 md:w-5 md:h-5" /> Add Product
+                    </button>
+                )}
             </div>
 
             {/* Filters */}
@@ -195,6 +273,7 @@ const ProductManager = () => {
                             <table className="w-full min-w-max text-left border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/50 border-b border-gray-100">
+                                        {pickerMode && <th className="whitespace-nowrap px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Select</th>}
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Details</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Category</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Subcategory</th>
@@ -204,7 +283,17 @@ const ProductManager = () => {
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {localProducts.map(product => (
-                                        <tr key={product.id} className="hover:bg-blue-50/10 transition-colors group">
+                                        <tr key={getProductId(product)} className="hover:bg-blue-50/10 transition-colors group">
+                                            {pickerMode && (
+                                                <td className="whitespace-nowrap px-2 py-1.5 md:px-4 md:py-2.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={pickerSelectedIds.includes(getProductId(product))}
+                                                        onChange={(e) => togglePickerSelection(getProductId(product), e.target.checked)}
+                                                        className="h-4 w-4 accent-blue-600"
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5">
                                                 <div className="flex items-center gap-2 md:gap-3">
                                                     <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
@@ -252,29 +341,33 @@ const ProductManager = () => {
                                                 </div>
                                             </td>
                                             <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-1 md:gap-2">
-                                                    <button
-                                                        onClick={() => setSelectedProduct(product)}
-                                                        className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-green-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-green-700"
-                                                        title="Quick View"
-                                                    >
-                                                        <MdVisibility size={14} className="md:w-[18px] md:h-[18px]" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => navigate(`/admin/products/edit/${product.id}`)}
-                                                        className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-700"
-                                                        title="Edit Product"
-                                                    >
-                                                        <MdEdit size={14} className="md:w-[18px] md:h-[18px]" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(product.id)}
-                                                        className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-red-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-red-700"
-                                                        title="Delete Product"
-                                                    >
-                                                        <MdDelete size={14} className="md:w-[18px] md:h-[18px]" />
-                                                    </button>
-                                                </div>
+                                                {pickerMode ? (
+                                                    <span className="text-[11px] font-semibold text-gray-500">Select from checkbox</span>
+                                                ) : (
+                                                    <div className="flex items-center justify-end gap-1 md:gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedProduct(product)}
+                                                            className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-green-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-green-700"
+                                                            title="Quick View"
+                                                        >
+                                                            <MdVisibility size={14} className="md:w-[18px] md:h-[18px]" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => navigate(`/admin/products/edit/${getProductId(product)}`)}
+                                                            className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-700"
+                                                            title="Edit Product"
+                                                        >
+                                                            <MdEdit size={14} className="md:w-[18px] md:h-[18px]" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(getProductId(product))}
+                                                            className="w-7 h-7 md:w-9 md:h-9 flex items-center justify-center bg-gray-50 hover:bg-red-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-red-700"
+                                                            title="Delete Product"
+                                                        >
+                                                            <MdDelete size={14} className="md:w-[18px] md:h-[18px]" />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
