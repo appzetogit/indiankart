@@ -6,6 +6,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordi
 import { CSS } from '@dnd-kit/utilities';
 import useCategoryStore from '../../store/categoryStore';
 import { useProducts, useSubCategoriesByCategory } from '../../../../hooks/useData';
+import API from '../../../../services/api';
 import {
     getOrderedCategorySubCategories,
     mergeCategoryPageCatalogWithCategories,
@@ -144,10 +145,30 @@ const buildDefaultSubcategoriesSection = () => ({
     backgroundType: 'color',
     backgroundColor: '#ffffff',
     backgroundImage: '',
+    imageRatio: 'square',
+    imageWidth: '',
+    imageHeight: '',
     mediaDisplay: 'grid',
     items: [],
     locked: true
 });
+
+const isProductSupportedDisplay = (mediaDisplay) => ['grid', 'scroll'].includes(String(mediaDisplay || '').trim());
+
+const enforceSectionItemRules = (items = [], sectionKind = 'image', mediaDisplay = 'single') => {
+    const list = Array.isArray(items) ? items : [];
+    const normalizedDisplay = String(mediaDisplay || '').trim();
+    const normalizedKind = String(sectionKind || '').trim();
+    const forcedImageOnly = normalizedDisplay === 'single' || normalizedDisplay === 'carousel';
+    const allowedItemType = forcedImageOnly ? 'image' : (normalizedKind === 'product' ? 'product' : 'image');
+    let next = list.filter((item) => item?.itemType === allowedItemType);
+
+    if (normalizedDisplay === 'single' && allowedItemType === 'image') {
+        next = next.slice(0, 1);
+    }
+
+    return next;
+};
 
 const isLockedSection = (section) => String(section?.id) === DEFAULT_SUBCATEGORIES_SECTION_ID || section?.locked;
 
@@ -213,6 +234,8 @@ const CategoryPageBuilder = () => {
     const [layoutDirty, setLayoutDirty] = useState(false);
     const [sectionSaveMessage, setSectionSaveMessage] = useState('');
     const [layoutSaveMessage, setLayoutSaveMessage] = useState('');
+    const [isSavingSection, setIsSavingSection] = useState(false);
+    const [isUploadingSectionImage, setIsUploadingSectionImage] = useState(false);
     const [draftSection, setDraftSection] = useState(null);
     const [openItems, setOpenItems] = useState({});
     const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
@@ -233,10 +256,20 @@ const CategoryPageBuilder = () => {
     const getProduct = (id) => category?.products?.find((item) => item.id === id);
     const hasSelectedSection = Boolean(section);
     const isDefaultSubcategoriesSection = isLockedSection(section);
-    const previewSubCategories = useMemo(
-        () => getOrderedCategorySubCategories(category, detailedSubCategories),
-        [category, detailedSubCategories]
-    );
+    const previewSubCategories = useMemo(() => {
+        const ordered = getOrderedCategorySubCategories(category, detailedSubCategories);
+        const categorySubCategories = Array.isArray(category?.subCategories) ? category.subCategories : [];
+        if (categorySubCategories.length === 0) return ordered;
+
+        const allowedIds = new Set(categorySubCategories.map((item) => String(item?.id || item?._id || '').trim()).filter(Boolean));
+        const allowedNames = new Set(categorySubCategories.map((item) => normalizeText(item?.name).toLowerCase()).filter(Boolean));
+
+        return ordered.filter((item) => {
+            const itemId = String(item?.id || item?._id || '').trim();
+            const itemName = normalizeText(item?.name).toLowerCase();
+            return (itemId && allowedIds.has(itemId)) || (itemName && allowedNames.has(itemName));
+        });
+    }, [category, detailedSubCategories]);
     const allPageRouteOptions = useMemo(() => buildPageRouteOptions(categories), [categories]);
     const pageRouteOptions = useMemo(() => {
         if (!category?.name) return allPageRouteOptions;
@@ -345,6 +378,9 @@ const CategoryPageBuilder = () => {
             backgroundType: 'color',
             backgroundColor: '#ffffff',
             backgroundImage: '',
+            imageRatio: 'square',
+            imageWidth: '',
+            imageHeight: '',
             mediaDisplay: 'single',
             items: []
         });
@@ -416,6 +452,40 @@ const CategoryPageBuilder = () => {
         updateCategory((item) => ({ ...item, pageSections: item.pageSections.map((entry) => entry.id === section.id ? { ...entry, items: updater(entry.items) } : entry) }), 'section');
     };
     const updateSectionItem = (itemId, updates) => updateItems((items) => items.map((entry) => entry.id === itemId ? { ...entry, ...updates } : entry));
+    const handleSectionKindChange = (nextKindRaw) => {
+        if (!section) return;
+        const requestedKind = String(nextKindRaw || '').trim();
+        if (requestedKind === 'product') {
+            const nextDisplay = isProductSupportedDisplay(section.mediaDisplay) ? section.mediaDisplay : 'scroll';
+            const nextItems = enforceSectionItemRules(section.items || [], 'product', nextDisplay);
+            updateSection({ sectionKind: 'product', mediaDisplay: nextDisplay, items: nextItems });
+            return;
+        }
+
+        const nextItems = enforceSectionItemRules(section.items || [], requestedKind, section.mediaDisplay);
+        updateSection({ sectionKind: requestedKind, items: nextItems });
+    };
+    const handleDisplayModeChange = (nextDisplayRaw) => {
+        if (!section) return;
+        const nextDisplay = String(nextDisplayRaw || '').trim();
+        const forcedImageKind = (nextDisplay === 'single' || nextDisplay === 'carousel') ? 'image' : section.sectionKind;
+        const nextItems = enforceSectionItemRules(section.items || [], forcedImageKind, nextDisplay);
+        updateSection({ mediaDisplay: nextDisplay, sectionKind: forcedImageKind, items: nextItems });
+    };
+    const displayModeOptions = section?.sectionKind === 'product'
+        ? [
+            { value: 'scroll', label: 'Scroll' },
+            { value: 'grid', label: 'Grid' }
+        ]
+        : [
+            { value: 'single', label: 'Single' },
+            { value: 'scroll', label: 'Scroll' },
+            { value: 'carousel', label: 'Carousel' },
+            { value: 'grid', label: 'Grid' }
+        ];
+    const selectedDisplayMode = section?.sectionKind === 'product' && !isProductSupportedDisplay(section?.mediaDisplay)
+        ? 'scroll'
+        : section?.mediaDisplay;
     const updateSubCategoryOrder = (orderedIds = []) => {
         updateCategory((item) => {
             const currentSubCategories = Array.isArray(item.subCategories) ? item.subCategories : [];
@@ -450,21 +520,48 @@ const CategoryPageBuilder = () => {
             };
         }, 'layout');
     };
-    const handleSectionItemImageUpload = (itemId, file) => {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            updateSectionItem(itemId, { image: String(reader.result || '') });
-        };
-        reader.readAsDataURL(file);
+    const uploadCategoryPageImage = async (file) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        const { data } = await API.post('/settings/category-page-image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return String(data?.imageUrl || '').trim();
     };
-    const handleBackgroundImageUpload = (file) => {
+
+    const handleSectionItemImageUpload = async (itemId, file) => {
+        if (!file) return;
+        setIsUploadingSectionImage(true);
+        setSectionSaveMessage('Uploading image...');
+        try {
+            const imageUrl = await uploadCategoryPageImage(file);
+            if (!imageUrl) throw new Error('Upload failed');
+            updateSectionItem(itemId, { image: imageUrl });
+            setSectionSaveMessage('Image uploaded');
+            window.setTimeout(() => setSectionSaveMessage(''), 1500);
+        } catch {
+            setSectionSaveMessage('Image upload failed');
+            window.setTimeout(() => setSectionSaveMessage(''), 1800);
+        } finally {
+            setIsUploadingSectionImage(false);
+        }
+    };
+    const handleBackgroundImageUpload = async (file) => {
         if (!section || !file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            updateSection({ backgroundImage: String(reader.result || '') });
-        };
-        reader.readAsDataURL(file);
+        setIsUploadingSectionImage(true);
+        setSectionSaveMessage('Uploading image...');
+        try {
+            const imageUrl = await uploadCategoryPageImage(file);
+            if (!imageUrl) throw new Error('Upload failed');
+            updateSection({ backgroundImage: imageUrl });
+            setSectionSaveMessage('Image uploaded');
+            window.setTimeout(() => setSectionSaveMessage(''), 1500);
+        } catch {
+            setSectionSaveMessage('Image upload failed');
+            window.setTimeout(() => setSectionSaveMessage(''), 1800);
+        } finally {
+            setIsUploadingSectionImage(false);
+        }
     };
 
     const onSectionDragEnd = ({ active, over }) => {
@@ -531,6 +628,7 @@ const CategoryPageBuilder = () => {
 
     const openProductPicker = () => {
         if (!section) return;
+        if (!isProductSupportedDisplay(section.mediaDisplay) || section.sectionKind !== 'product') return;
         setProductPickerSelectedIds(Array.from(selectedProductIds));
         setProductPickerSearch('');
         setProductPickerCategory(normalizeText(category?.name) || 'All');
@@ -552,6 +650,10 @@ const CategoryPageBuilder = () => {
     };
 
     const applyPickedProducts = () => {
+        if (!section || !isProductSupportedDisplay(section.mediaDisplay) || section.sectionKind !== 'product') {
+            setIsProductPickerOpen(false);
+            return;
+        }
         const selectedIds = productPickerSelectedIds.map((id) => String(id));
         const selectedProductMap = new Map(
             (allProducts || [])
@@ -590,7 +692,8 @@ const CategoryPageBuilder = () => {
                 };
             });
 
-            return [...nonProductItems, ...nextProductItems];
+            const merged = [...nonProductItems, ...nextProductItems];
+            return enforceSectionItemRules(merged, section.sectionKind, section.mediaDisplay);
         };
 
         if (isCreatingSection) {
@@ -661,7 +764,13 @@ const CategoryPageBuilder = () => {
     };
 
     const handleSaveSection = async () => {
-        await saveBuilderState('Section saved', 'section');
+        if (isSavingSection) return;
+        setIsSavingSection(true);
+        try {
+            await saveBuilderState('Section saved', 'section');
+        } finally {
+            setIsSavingSection(false);
+        }
     };
 
     const handleSaveLayout = async () => {
@@ -797,21 +906,31 @@ const CategoryPageBuilder = () => {
                                     <button
                                         type="button"
                                         onClick={handleDiscardSection}
-                                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-gray-700 hover:bg-gray-50"
+                                        disabled={isSavingSection || isUploadingSectionImage}
+                                        className={`rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold uppercase tracking-wide ${
+                                            (isSavingSection || isUploadingSectionImage)
+                                                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                                                : 'bg-white text-gray-700 hover:bg-gray-50'
+                                        }`}
                                     >
                                         Discard Section
                                     </button>
                                     <button
                                         type="button"
                                         onClick={handleSaveSection}
-                                        disabled={!category}
+                                        disabled={!category || isSavingSection || isUploadingSectionImage}
                                         className={`rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide ${
-                                            category
+                                            category && !isSavingSection && !isUploadingSectionImage
                                                 ? 'bg-blue-600 text-white hover:bg-blue-700'
                                                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                                         }`}
                                     >
-                                        Save Section
+                                        {isSavingSection ? (
+                                            <span className="inline-flex items-center gap-2">
+                                                <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-t-white" />
+                                                Saving...
+                                            </span>
+                                        ) : 'Save Section'}
                                     </button>
                                 </div>
                                 {category && (
@@ -833,8 +952,57 @@ const CategoryPageBuilder = () => {
                         <div className="min-w-0 grid gap-4 md:grid-cols-2">
                             <label className="space-y-2 text-sm font-semibold text-gray-700"><span>Heading</span><input value={section.title} onChange={(e) => updateSection({ title: e.target.value })} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none" /></label>
                             <label className="space-y-2 text-sm font-semibold text-gray-700"><span>Paragraph</span><input value={section.description} onChange={(e) => updateSection({ description: e.target.value })} className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none" /></label>
-                            <label className="space-y-2 text-sm font-semibold text-gray-700"><span>Section Kind</span><select value={section.sectionKind} onChange={(e) => updateSection({ sectionKind: e.target.value, items: [] })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"><option value="image">Image</option><option value="product">Product</option></select></label>
-                            <label className="space-y-2 text-sm font-semibold text-gray-700"><span>Display Mode</span><select value={section.mediaDisplay} onChange={(e) => updateSection({ mediaDisplay: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"><option value="single">Single</option><option value="scroll">Scroll</option><option value="carousel">Carousel</option><option value="grid">Grid</option></select></label>
+                            <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                <span>Section Kind</span>
+                                <select
+                                    value={section.sectionKind}
+                                    onChange={(e) => handleSectionKindChange(e.target.value)}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                >
+                                    <option value="image">Image</option>
+                                    <option value="product">Product</option>
+                                </select>
+                            </label>
+                            <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                <span>Display Mode</span>
+                                <select
+                                    value={selectedDisplayMode || 'single'}
+                                    onChange={(e) => handleDisplayModeChange(e.target.value)}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                >
+                                    {displayModeOptions.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            {section.sectionKind === 'image' && !['single', 'carousel'].includes(String(section.mediaDisplay || '').trim()) && (
+                                <>
+                                    <div className="grid grid-cols-2 gap-3 md:col-span-2">
+                                        <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                            <span>Image Width (px)</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={section.imageWidth || ''}
+                                                onChange={(e) => updateSection({ imageWidth: e.target.value.replace(/[^\d]/g, '') })}
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                                placeholder="e.g. 320"
+                                            />
+                                        </label>
+                                        <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                            <span>Image Height (px)</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={section.imageHeight || ''}
+                                                onChange={(e) => updateSection({ imageHeight: e.target.value.replace(/[^\d]/g, '') })}
+                                                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                                placeholder="e.g. 180"
+                                            />
+                                        </label>
+                                    </div>
+                                </>
+                            )}
                             <label className="space-y-2 text-sm font-semibold text-gray-700">
                                 <span>Background Type</span>
                                 <select
@@ -935,7 +1103,21 @@ const CategoryPageBuilder = () => {
                                 <p className="mt-1 text-sm text-gray-500">Image ya product source dono same section ke andar.</p>
                             </div>
                             {!hasSelectedSection || isDefaultSubcategoriesSection ? null : section.sectionKind === 'image' ? (
-                                <button type="button" onClick={() => updateItems((items) => [...items, { id: makeId('item'), itemType: 'image', image: '', title: '', description: '', link: '' }])} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><MdAdd size={18} />Add Image</button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (section.mediaDisplay === 'single' && (section.items || []).filter((item) => item.itemType === 'image').length >= 1) return;
+                                        updateItems((items) => [...items, { id: makeId('item'), itemType: 'image', image: '', title: '', description: '', link: '' }]);
+                                    }}
+                                    disabled={section.mediaDisplay === 'single' && (section.items || []).filter((item) => item.itemType === 'image').length >= 1}
+                                    className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${
+                                        section.mediaDisplay === 'single' && (section.items || []).filter((item) => item.itemType === 'image').length >= 1
+                                            ? 'cursor-not-allowed bg-gray-200 text-gray-500'
+                                            : 'bg-blue-600 text-white'
+                                    }`}
+                                >
+                                    <MdAdd size={18} />Add Image
+                                </button>
                             ) : (
                                 <button type="button" onClick={openProductPicker} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white"><MdAdd size={18} />Add Product</button>
                             )}

@@ -15,7 +15,8 @@ const getSettings = async (req, res) => {
                 shippingCharge: 40,
                 freeShippingThreshold: 500,
                 minShippingOrderAmount: 0,
-                maxShippingOrderAmount: 499
+                maxShippingOrderAmount: 499,
+                categoryPageCatalog: []
             });
         }
         res.json(settings);
@@ -42,7 +43,8 @@ const updateSettings = async (req, res) => {
             shippingCharge,
             freeShippingThreshold,
             minShippingOrderAmount,
-            maxShippingOrderAmount
+            maxShippingOrderAmount,
+            categoryPageCatalog
         } = req.body;
 
         let settings = await Setting.findOne();
@@ -98,6 +100,14 @@ const updateSettings = async (req, res) => {
                 const parsed = Number(maxShippingOrderAmount);
                 if (Number.isFinite(parsed) && parsed >= 0) settings.maxShippingOrderAmount = parsed;
             }
+            if (categoryPageCatalog !== undefined) {
+                const parsedCatalog = typeof categoryPageCatalog === 'string'
+                    ? JSON.parse(categoryPageCatalog)
+                    : categoryPageCatalog;
+                if (Array.isArray(parsedCatalog)) {
+                    settings.categoryPageCatalog = parsedCatalog;
+                }
+            }
 
             const updatedSettings = await settings.save();
             res.json(updatedSettings);
@@ -118,7 +128,12 @@ const updateSettings = async (req, res) => {
                 shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
                 freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
                 minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,
-                maxShippingOrderAmount: Number.isFinite(Number(maxShippingOrderAmount)) ? Number(maxShippingOrderAmount) : 499
+                maxShippingOrderAmount: Number.isFinite(Number(maxShippingOrderAmount)) ? Number(maxShippingOrderAmount) : 499,
+                categoryPageCatalog: Array.isArray(categoryPageCatalog)
+                    ? categoryPageCatalog
+                    : (typeof categoryPageCatalog === 'string'
+                        ? (JSON.parse(categoryPageCatalog) || [])
+                        : [])
             });
             res.json(newSettings);
         }
@@ -127,4 +142,25 @@ const updateSettings = async (req, res) => {
     }
 };
 
-export { getSettings, updateSettings };
+// @desc    Upload category page builder image
+// @route   POST /api/settings/category-page-image
+// @access  Private/Admin
+const uploadCategoryPageImage = async (req, res) => {
+    try {
+        if (!req.file?.buffer) {
+            return res.status(400).json({ message: 'Image file is required' });
+        }
+
+        const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+            folder: 'ecom_uploads/category-page'
+        });
+
+        return res.json({
+            imageUrl: uploaded?.secure_url || ''
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message || 'Image upload failed' });
+    }
+};
+
+export { getSettings, updateSettings, uploadCategoryPageImage };

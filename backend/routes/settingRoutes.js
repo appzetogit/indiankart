@@ -1,5 +1,5 @@
 import express from 'express';
-import { getSettings, updateSettings } from '../controllers/settingController.js';
+import { getSettings, updateSettings, uploadCategoryPageImage } from '../controllers/settingController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
@@ -18,5 +18,7 @@ const uploadMiddleware = (req, res, next) => {
 router.route('/')
     .get(getSettings)
     .put(protect, admin, uploadMiddleware, updateSettings);
+
+router.post('/category-page-image', protect, admin, upload.single('image'), uploadCategoryPageImage);
 
 export default router;

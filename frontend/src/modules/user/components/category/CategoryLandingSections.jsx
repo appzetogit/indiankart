@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { MdArrowForward } from 'react-icons/md';
 import CategoryQuickLinkGrid from './CategoryQuickLinkGrid';
+import ProductCard from '../product/ProductCard';
 import { useCategories, useSubCategoriesByCategory } from '../../../../hooks/useData';
 import {
     getCategoryStripItems,
@@ -11,7 +12,7 @@ import {
 } from '../../../../utils/categoryPageConfig';
 
 const getSectionLayoutClass = (mediaDisplay) => {
-    if (mediaDisplay === 'grid') return 'flex gap-3 overflow-x-auto no-scrollbar pb-1 md:grid md:[grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]';
+    if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
     if (mediaDisplay === 'single') return 'block';
     return 'flex gap-3 overflow-x-auto no-scrollbar pb-1';
 };
@@ -19,20 +20,85 @@ const getSectionLayoutClass = (mediaDisplay) => {
 const getCardWidthClass = (mediaDisplay) => {
     if (mediaDisplay === 'single') return 'w-full';
     if (mediaDisplay === 'grid') return 'w-full';
-    return 'w-[148px] shrink-0 sm:w-[190px] md:w-[240px]';
+    return 'w-[120px] shrink-0';
 };
 
-const getImageHeightClass = (mediaDisplay, itemType) => {
+const getProductCardWrapClass = (mediaDisplay) => {
+    if (mediaDisplay === 'grid') return 'w-full min-w-0';
+    return 'w-[160px] shrink-0';
+};
+
+const normalizeImageRatio = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['square', 'portrait', 'banner', 'auto'].includes(normalized)) return normalized;
+    return 'square';
+};
+
+const parsePositiveNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const getSectionCustomDimensions = (section) => {
+    const width = parsePositiveNumber(section?.imageWidth);
+    const height = parsePositiveNumber(section?.imageHeight);
+    return { width, height };
+};
+
+const getSectionAspectRatio = (section) => {
+    const { width, height } = getSectionCustomDimensions(section);
+    if (width > 0 && height > 0) return `${width} / ${height}`;
+    const ratio = normalizeImageRatio(section?.imageRatio);
+    if (ratio === 'portrait') return '3 / 4';
+    if (ratio === 'banner') return '16 / 5';
+    if (ratio === 'square') return '1 / 1';
+    return '';
+};
+
+const getImageCardStyle = (section, mediaDisplay, itemType) => {
+    if (itemType !== 'image') return undefined;
+    const { width } = getSectionCustomDimensions(section);
+    if (mediaDisplay === 'scroll' && width > 0) {
+        return { width: `${width}px` };
+    }
+    if (mediaDisplay === 'scroll') {
+        return { width: '120px' };
+    }
+    return undefined;
+};
+
+const getImageFrameStyle = (section, itemType, mediaDisplay) => {
+    if (itemType !== 'image') return undefined;
+    if (mediaDisplay === 'single' || mediaDisplay === 'carousel') return undefined;
+    const { width, height } = getSectionCustomDimensions(section);
+    if (width > 0 && height > 0) return { aspectRatio: `${width} / ${height}` };
+    if (height > 0) {
+        return {
+            height: `${height}px`,
+            maxHeight: mediaDisplay === 'scroll' ? '52vw' : '70vh'
+        };
+    }
+    return undefined;
+};
+
+const getImageHeightClass = (mediaDisplay, itemType, imageRatio = 'square') => {
+    if (itemType === 'image') {
+        const ratio = normalizeImageRatio(imageRatio);
+        if (ratio === 'auto') return 'h-auto';
+        if (ratio === 'portrait') return 'aspect-[3/4]';
+        if (ratio === 'banner') return 'aspect-[16/5]';
+        return 'aspect-square';
+    }
     if (mediaDisplay === 'single') return 'aspect-[16/7]';
-    if (mediaDisplay === 'grid' && itemType === 'image') return 'h-40 sm:h-44 md:h-52 lg:h-56';
-    if (mediaDisplay === 'scroll' && itemType === 'image') return 'h-40 sm:h-44 md:h-48';
     return 'aspect-square';
 };
 
-const getImageFitClass = (mediaDisplay, itemType) => {
+const getImageFitClass = (mediaDisplay, itemType, imageRatio = 'square') => {
+    if (itemType === 'image') {
+        return 'object-contain';
+    }
     if (mediaDisplay === 'single') return 'object-cover';
     if (mediaDisplay === 'carousel') return 'object-contain';
-    if (itemType === 'image') return 'object-contain md:object-cover';
     return 'object-cover';
 };
 
@@ -52,60 +118,6 @@ const getResolvedSectionProduct = (item, products = []) => {
     if (item?.itemType !== 'product') return null;
     const targetId = String(item?.productId || '').trim();
     return products.find((product) => getProductId(product) === targetId) || item?.productSnapshot || null;
-};
-
-const getProductPricing = (product) => {
-    const firstSku = product?.skus?.[0];
-    const price = firstSku?.price ?? product?.price ?? null;
-    const originalPrice = firstSku?.originalPrice ?? product?.originalPrice ?? null;
-    const discountLabel = product?.discount || (
-        price && originalPrice && originalPrice > price
-            ? `${Math.round(((originalPrice - price) / originalPrice) * 100)}% OFF`
-            : ''
-    );
-
-    return {
-        price,
-        originalPrice,
-        discountLabel
-    };
-};
-
-const ProductStyleSectionCard = ({ product, title, description, mediaDisplay, onClick }) => {
-    const { price, originalPrice, discountLabel } = getProductPricing(product || {});
-    const imageFrameClass = mediaDisplay === 'single'
-        ? 'relative aspect-[16/7] overflow-hidden rounded-t-2xl border-b border-gray-100 bg-[#f8f8f8]'
-        : 'relative aspect-square overflow-hidden rounded-t-2xl border-b border-gray-100 bg-[#f8f8f8]';
-    const imageClass = 'h-full w-full object-contain p-2';
-
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`${getCardWidthClass(mediaDisplay)} overflow-hidden rounded-2xl bg-white text-left shadow-sm transition hover:shadow-md`}
-        >
-            <div className={imageFrameClass}>
-                {product?.image ? (
-                    <img
-                        src={product.image}
-                        alt={title || product?.name || 'Product'}
-                        className={imageClass}
-                    />
-                ) : (
-                    <div className="w-full min-h-[96px] bg-gray-100" />
-                )}
-            </div>
-            <div className="px-2 py-2 sm:px-3 sm:py-3">
-                <div className="line-clamp-1 text-xs font-bold text-gray-900 sm:text-sm md:text-base">{title || product?.name}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {(originalPrice && price && originalPrice > price) ? <span className="text-[10px] text-gray-500 line-through sm:text-xs">Rs.{Number(originalPrice).toLocaleString()}</span> : null}
-                    {price ? <span className="text-sm font-bold text-gray-900 sm:text-base md:text-lg">Rs.{Number(price).toLocaleString()}</span> : null}
-                    {discountLabel ? <span className="text-[9px] font-bold uppercase text-green-700 sm:text-xs">{discountLabel}</span> : null}
-                </div>
-                {(description || product?.subtitle) ? <div className="mt-1 line-clamp-1 text-[10px] font-semibold text-blue-600 sm:text-xs">{description || product?.subtitle}</div> : null}
-            </div>
-        </button>
-    );
 };
 
 /* ─── Single-view slideshow for carousel mode ─── */
@@ -173,14 +185,8 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
                 }}
             >
                 {item.itemType === 'product' ? (
-                    <div className="w-full">
-                        <ProductStyleSectionCard
-                            product={product}
-                            title={title}
-                            description={description}
-                            mediaDisplay="single"
-                            onClick={() => openLink(link)}
-                        />
+                    <div className={getProductCardWrapClass('scroll')}>
+                        {product ? <ProductCard product={product} footerText={description || product?.subtitle || ''} /> : null}
                     </div>
                 ) : (
                     <button
@@ -193,17 +199,19 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
                                 <img
                                     src={image}
                                     alt={title || section.title || categoryName}
-                                    className="aspect-[16/7] w-full object-cover"
+                                    className="w-full h-auto object-contain"
                                     style={{ transition: 'opacity 0.38s ease' }}
                                 />
                             ) : (
-                                <div className="aspect-[16/7] w-full bg-gray-100" />
+                                <div
+                                    className="w-full min-h-[120px] bg-gray-100"
+                                />
                             )}
                         </div>
                         {(title || description) && (
                             <div className="p-3">
-                                {title ? <div className="text-sm font-semibold text-gray-900 md:text-base">{title}</div> : null}
-                                {description ? <div className="mt-1 text-xs text-gray-500 md:text-sm">{description}</div> : null}
+                                {title ? <div className="text-sm font-semibold text-gray-900">{title}</div> : null}
+                                {description ? <div className="mt-1 text-xs text-gray-500">{description}</div> : null}
                             </div>
                         )}
                     </button>
@@ -282,16 +290,20 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                     ? `/product/${encodeURIComponent(getProductId(product))}`
                     : (item.link || item.sectionLink || section.sectionLink);
 
+                const customAspectRatio = (section.mediaDisplay === 'single' || section.mediaDisplay === 'carousel')
+                    ? ''
+                    : getSectionAspectRatio(section);
+                const customCardStyle = getImageCardStyle(section, section.mediaDisplay, item.itemType);
+                const customFrameStyle = getImageFrameStyle(section, item.itemType, section.mediaDisplay);
+                const hasCustomFrameSize = Boolean(customFrameStyle);
+                const useAutoImageSize = normalizeImageRatio(section?.imageRatio) === 'auto' && !customAspectRatio && !hasCustomFrameSize;
+                const isSingleImageMode = section.mediaDisplay === 'single' && item.itemType === 'image';
+
                 if (item.itemType === 'product') {
                     return (
-                        <ProductStyleSectionCard
-                            key={item.id}
-                            product={product}
-                            title={title}
-                            description={description}
-                            mediaDisplay={section.mediaDisplay}
-                            onClick={() => openLink(link)}
-                        />
+                        <div key={item.id} className={getProductCardWrapClass(section.mediaDisplay)}>
+                            {product ? <ProductCard product={product} footerText={description || product?.subtitle || ''} /> : null}
+                        </div>
                     );
                 }
 
@@ -302,24 +314,45 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                         data-carousel-card="true"
                         onClick={() => openLink(link)}
                         className={`${getCardWidthClass(section.mediaDisplay)} ${getCardSurfaceClass(item.itemType)} overflow-hidden rounded-2xl text-left transition`}
+                        style={customCardStyle}
                     >
                         <div className={`overflow-hidden ${getImageFrameClass(item.itemType)}`}>
                             {image ? (
-                                <div className={`w-full ${section.mediaDisplay === 'single' ? '' : 'flex items-center justify-center'} ${getImageHeightClass(section.mediaDisplay, item.itemType)}`}>
+                                isSingleImageMode ? (
                                     <img
                                         src={image}
                                         alt={title || section.title || categoryName}
-                                        className={`h-full w-full ${getImageFitClass(section.mediaDisplay, item.itemType)}`}
+                                        className="w-full h-auto object-contain"
                                     />
-                                </div>
+                                ) : useAutoImageSize && item.itemType === 'image' ? (
+                                    <img
+                                        src={image}
+                                        alt={title || section.title || categoryName}
+                                        className="w-full h-auto object-contain"
+                                    />
+                                ) : (
+                                    <div
+                                        className={`w-full ${section.mediaDisplay === 'single' ? '' : 'flex items-center justify-center'} ${hasCustomFrameSize ? '' : getImageHeightClass(section.mediaDisplay, item.itemType, section?.imageRatio)}`}
+                                        style={customFrameStyle || (item.itemType === 'image' && customAspectRatio ? { aspectRatio: customAspectRatio } : undefined)}
+                                    >
+                                        <img
+                                            src={image}
+                                            alt={title || section.title || categoryName}
+                                            className={`h-full w-full ${getImageFitClass(section.mediaDisplay, item.itemType, section?.imageRatio)}`}
+                                        />
+                                    </div>
+                                )
                             ) : (
-                                <div className={`${getImageHeightClass(section.mediaDisplay, item.itemType)} w-full bg-gray-100`} />
+                                <div
+                                    className={`${isSingleImageMode ? 'w-full min-h-[140px]' : useAutoImageSize && item.itemType === 'image' ? 'w-full min-h-[120px]' : `${hasCustomFrameSize ? '' : getImageHeightClass(section.mediaDisplay, item.itemType, section?.imageRatio)} w-full`} bg-gray-100`}
+                                    style={customFrameStyle || (item.itemType === 'image' && customAspectRatio ? { aspectRatio: customAspectRatio } : undefined)}
+                                />
                             )}
                         </div>
                         {(title || description) && (
-                            <div className="p-2 sm:p-3">
-                                {title ? <div className="text-xs font-semibold text-gray-900 sm:text-sm md:text-base">{title}</div> : null}
-                                {description ? <div className="mt-1 text-[10px] text-gray-500 sm:text-xs md:text-sm">{description}</div> : null}
+                            <div className="p-2">
+                                {title ? <div className="text-xs font-semibold text-gray-900">{title}</div> : null}
+                                {description ? <div className="mt-1 text-[10px] text-gray-500">{description}</div> : null}
                             </div>
                         )}
                     </button>
@@ -416,13 +449,13 @@ const CategoryLandingSections = ({ categoryName }) => {
 
     return (
         <div className="w-full">
-            <div className="max-w-[1360px] mx-auto px-3 py-2 md:px-5 md:py-4">
+            <div className="max-w-[1360px] mx-auto px-3 py-2">
                 {sections.map((section) => {
                     if (section.sectionKind === 'subcategories') {
                         if (orderedSubCategories.length === 0) return null;
 
                         return (
-                            <section key={section.id} className="mb-3 rounded-2xl bg-white p-2 md:mb-5 md:p-4">
+                            <section key={section.id} className="mb-3 rounded-2xl bg-white p-1.5">
                                 <CategoryQuickLinkGrid
                                     categoryName={categoryName}
                                     items={orderedSubCategories.map((item) => ({
@@ -446,7 +479,7 @@ const CategoryLandingSections = ({ categoryName }) => {
                     return (
                         <section
                             key={section.id}
-                            className="mb-3 overflow-hidden rounded-2xl p-2 md:mb-5 md:p-4"
+                            className="mb-3 overflow-hidden rounded-2xl p-2"
                             style={{
                                 backgroundColor: backgroundType === 'color' ? (section.backgroundColor || '#ffffff') : '#ffffff',
                                 backgroundImage: backgroundType === 'image' && section.backgroundImage ? `url(${section.backgroundImage})` : undefined,
@@ -455,19 +488,19 @@ const CategoryLandingSections = ({ categoryName }) => {
                             }}
                         >
                             {(section.title || section.description || section.showArrow) && (
-                                <div className="mb-2 md:mb-4 flex items-start justify-between gap-3">
+                                <div className="mb-2 flex items-start justify-between gap-3">
                                     <div>
-                                        {section.title ? <h3 className="text-xl font-bold tracking-tight text-gray-900 md:text-2xl">{section.title}</h3> : null}
+                                        {section.title ? <h3 className="text-xl font-bold tracking-tight text-gray-900">{section.title}</h3> : null}
                                         {section.description ? <p className="mt-1 text-sm text-gray-600">{section.description}</p> : null}
                                     </div>
                                     {section.showArrow && section.sectionLink ? (
                                         <button
                                             type="button"
                                             onClick={() => openLink(section.sectionLink)}
-                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm transition hover:bg-blue-600 md:h-11 md:w-11 md:bg-blue-600 md:hover:bg-blue-700"
+                                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm transition hover:bg-blue-600"
                                             aria-label={`Open ${section.title || categoryName}`}
                                         >
-                                            <MdArrowForward className="text-[18px] md:text-[22px]" />
+                                            <MdArrowForward className="text-[18px]" />
                                         </button>
                                     ) : null}
                                 </div>
@@ -485,7 +518,7 @@ const CategoryLandingSections = ({ categoryName }) => {
                 })}
 
                 {quickLinks.length > 0 && !hasSubcategoriesSection && (
-                    <div className="mt-3 md:mt-6">
+                    <div className="mt-3">
                         <CategoryQuickLinkGrid categoryName={categoryName} items={quickLinks} />
                     </div>
                 )}
@@ -495,3 +528,4 @@ const CategoryLandingSections = ({ categoryName }) => {
 };
 
 export default CategoryLandingSections;
+

@@ -16,6 +16,7 @@ const settingSchema = mongoose.Schema({
     maxShippingOrderAmount: { type: Number, default: 499 },
     razorpayKeyId: { type: String, default: '' },
     razorpayKeySecret: { type: String, default: '', select: false },
+    categoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, {
     timestamps: true,
 });

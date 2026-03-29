@@ -1,4 +1,5 @@
 import legacyCategoryPageData from '../modules/user/data/categoryPageData';
+import API from '../services/api';
 
 export const CATEGORY_PAGE_BUILDER_STORAGE_KEY = 'category-page-builder-catalog-v2';
 const LEGACY_CATEGORY_PAGE_BUILDER_STORAGE_KEY = 'category-page-builder-dummy-catalog-v1';
@@ -6,6 +7,7 @@ const CATEGORY_PAGE_BUILDER_IDB_NAME = 'indiankart-category-page-builder';
 const CATEGORY_PAGE_BUILDER_IDB_STORE = 'catalog';
 const CATEGORY_PAGE_BUILDER_IDB_KEY = 'catalog-v2';
 const INDEXED_DB_POINTER = '__indexed_db__';
+const CATEGORY_PAGE_BUILDER_SERVER_FIELD = 'categoryPageCatalog';
 
 const normalizeText = (value) => String(value || '').trim();
 const normalizeKey = (value) => normalizeText(value).toLowerCase();
@@ -206,6 +208,29 @@ const writeCatalogToIndexedDb = async (catalog) => {
 };
 
 export const readCategoryPageCatalogAsync = async () => {
+    try {
+        const { data } = await API.get('/settings');
+        const serverCatalog = data?.[CATEGORY_PAGE_BUILDER_SERVER_FIELD];
+        if (Array.isArray(serverCatalog) && serverCatalog.length >= 0) {
+            if (typeof window !== 'undefined') {
+                try {
+                    const serialized = JSON.stringify(serverCatalog);
+                    window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
+                    try {
+                        await writeCatalogToIndexedDb(serverCatalog);
+                    } catch {
+                        // Ignore IndexedDB mirror failure.
+                    }
+                } catch {
+                    // Ignore local mirror issues.
+                }
+            }
+            return serverCatalog.length > 0 ? serverCatalog : legacyCatalog;
+        }
+    } catch {
+        // Fallback to local/offline catalog below.
+    }
+
     const localCatalog = readCategoryPageCatalog();
     if (localCatalog !== legacyCatalog) {
         return localCatalog;
@@ -234,6 +259,14 @@ export const readCategoryPageCatalogAsync = async () => {
 
 export const writeCategoryPageCatalog = async (catalog) => {
     if (typeof window === 'undefined') return;
+
+    try {
+        await API.put('/settings', {
+            [CATEGORY_PAGE_BUILDER_SERVER_FIELD]: catalog
+        });
+    } catch {
+        // Continue with local persistence fallback.
+    }
 
     const serialized = JSON.stringify(catalog);
 
@@ -280,9 +313,12 @@ export const mergeCategoryPageCatalogWithCategories = (catalog, categories = [])
         const existingSubCategoryMap = new Map(
             toArray(existing?.subCategories).map((item) => [normalizeKey(item?.name), item])
         );
-        const subCategories = getCategoryChildren(category)
+        const incomingSubCategories = getCategoryChildren(category)
             .map((item) => normalizeSubCategory(item, existingSubCategoryMap.get(normalizeKey(item?.name))))
             .filter((item) => item.name);
+        const subCategories = incomingSubCategories.length > 0
+            ? incomingSubCategories
+            : toArray(existing?.subCategories);
 
         return {
             ...existing,
@@ -331,7 +367,12 @@ export const getCategoryStripItems = (categoryConfig) => {
 
 export const getOrderedCategorySubCategories = (categoryConfig, detailedSubCategories = []) => {
     const baseItems = toArray(categoryConfig?.subCategories);
-    if (baseItems.length === 0) return [];
+    if (baseItems.length === 0) {
+        if (!Array.isArray(detailedSubCategories) || detailedSubCategories.length === 0) return [];
+        return detailedSubCategories
+            .map((item) => normalizeSubCategory(item))
+            .filter((item) => item.name);
+    }
     if (!Array.isArray(detailedSubCategories) || detailedSubCategories.length === 0) return baseItems;
 
     const detailedById = new Map(
