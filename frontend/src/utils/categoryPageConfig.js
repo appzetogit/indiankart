@@ -19,6 +19,22 @@ const makeLocalId = (prefix, seed) => {
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 
+const sanitizeSectionForWidthDrivenImages = (section = {}) => {
+    if (!section || typeof section !== 'object') return section;
+    const { imageHeight, ...rest } = section;
+    return {
+        ...rest,
+        items: toArray(rest.items)
+    };
+};
+
+const sanitizeCategoryPageCatalog = (catalog = []) => {
+    return toArray(catalog).map((entry) => ({
+        ...entry,
+        pageSections: toArray(entry?.pageSections).map((section) => sanitizeSectionForWidthDrivenImages(section))
+    }));
+};
+
 const getCategoryId = (category) => String(category?.id || category?._id || normalizeKey(category?.name) || '');
 const getCategoryDbId = (category) => String(category?._id || category?.dbId || category?.id || '');
 
@@ -151,7 +167,7 @@ export const readCategoryPageCatalog = () => {
         if (!source) return legacyCatalog;
 
         const parsed = JSON.parse(source);
-        return Array.isArray(parsed) && parsed.length > 0 ? parsed : legacyCatalog;
+        return Array.isArray(parsed) && parsed.length > 0 ? sanitizeCategoryPageCatalog(parsed) : legacyCatalog;
     } catch {
         return legacyCatalog;
     }
@@ -225,13 +241,14 @@ export const readCategoryPageCatalogAsync = async () => {
                     // Ignore local mirror issues.
                 }
             }
-            return serverCatalog.length > 0 ? serverCatalog : legacyCatalog;
+            const sanitizedServerCatalog = sanitizeCategoryPageCatalog(serverCatalog);
+            return sanitizedServerCatalog.length > 0 ? sanitizedServerCatalog : legacyCatalog;
         }
     } catch {
         // Fallback to local/offline catalog below.
     }
 
-    const localCatalog = readCategoryPageCatalog();
+    const localCatalog = sanitizeCategoryPageCatalog(readCategoryPageCatalog());
     if (localCatalog !== legacyCatalog) {
         return localCatalog;
     }
@@ -260,27 +277,29 @@ export const readCategoryPageCatalogAsync = async () => {
 export const writeCategoryPageCatalog = async (catalog) => {
     if (typeof window === 'undefined') return;
 
+    const sanitizedCatalog = sanitizeCategoryPageCatalog(catalog);
+
     try {
         await API.put('/settings', {
-            [CATEGORY_PAGE_BUILDER_SERVER_FIELD]: catalog
+            [CATEGORY_PAGE_BUILDER_SERVER_FIELD]: sanitizedCatalog
         });
     } catch {
         // Continue with local persistence fallback.
     }
 
-    const serialized = JSON.stringify(catalog);
+    const serialized = JSON.stringify(sanitizedCatalog);
 
     try {
         window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
         try {
-            await writeCatalogToIndexedDb(catalog);
+            await writeCatalogToIndexedDb(sanitizedCatalog);
         } catch {
             // LocalStorage save succeeded, so IndexedDB mirror failure can be ignored.
         }
         window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
         return;
     } catch (error) {
-        await writeCatalogToIndexedDb(catalog);
+        await writeCatalogToIndexedDb(sanitizedCatalog);
         try {
             window.localStorage.removeItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
             window.localStorage.setItem(

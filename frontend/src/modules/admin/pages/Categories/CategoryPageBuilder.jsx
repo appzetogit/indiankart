@@ -147,13 +147,48 @@ const buildDefaultSubcategoriesSection = () => ({
     backgroundImage: '',
     imageRatio: 'square',
     imageWidth: '',
-    imageHeight: '',
     mediaDisplay: 'grid',
     items: [],
     locked: true
 });
 
 const isProductSupportedDisplay = (mediaDisplay) => ['grid', 'scroll'].includes(String(mediaDisplay || '').trim());
+const getSupportedDisplayModeOptions = (sectionKind) => {
+    const normalizedKind = String(sectionKind || '').trim();
+    if (normalizedKind === 'product') {
+        return [
+            { value: 'scroll', label: 'Scroll' },
+            { value: 'grid', label: 'Grid' }
+        ];
+    }
+    if (normalizedKind === 'banner') {
+        return [
+            { value: 'single', label: 'Single' },
+            { value: 'scroll', label: 'Scroll' },
+            { value: 'carousel', label: 'Carousel' }
+        ];
+    }
+    return [
+        { value: 'scroll', label: 'Scroll' },
+        { value: 'grid', label: 'Grid' }
+    ];
+};
+
+const getDefaultDisplayModeForSectionKind = (sectionKind) => {
+    const normalizedKind = String(sectionKind || '').trim();
+    if (normalizedKind === 'product') return 'scroll';
+    if (normalizedKind === 'banner') return 'single';
+    return 'grid';
+};
+
+const normalizeDisplayModeForSectionKind = (sectionKind, mediaDisplay) => {
+    const normalizedDisplay = String(mediaDisplay || '').trim();
+    const allowedOptions = getSupportedDisplayModeOptions(sectionKind);
+    if (allowedOptions.some((option) => option.value === normalizedDisplay)) {
+        return normalizedDisplay;
+    }
+    return getDefaultDisplayModeForSectionKind(sectionKind);
+};
 
 const enforceSectionItemRules = (items = [], sectionKind = 'image', mediaDisplay = 'single') => {
     const list = Array.isArray(items) ? items : [];
@@ -177,6 +212,9 @@ const withDefaultSections = (sections = []) => {
     const lockedSection = filtered.find((section) => isLockedSection(section));
     const normalized = filtered.map((section, index) => ({
         ...section,
+        mediaDisplay: isLockedSection(section)
+            ? section?.mediaDisplay || 'grid'
+            : normalizeDisplayModeForSectionKind(section?.sectionKind, section?.mediaDisplay),
         order: Number(section?.order) || index + 1
     }));
 
@@ -380,8 +418,7 @@ const CategoryPageBuilder = () => {
             backgroundImage: '',
             imageRatio: 'square',
             imageWidth: '',
-            imageHeight: '',
-            mediaDisplay: 'single',
+            mediaDisplay: 'grid',
             items: []
         });
         setSectionDirty(true);
@@ -455,37 +492,18 @@ const CategoryPageBuilder = () => {
     const handleSectionKindChange = (nextKindRaw) => {
         if (!section) return;
         const requestedKind = String(nextKindRaw || '').trim();
-        if (requestedKind === 'product') {
-            const nextDisplay = isProductSupportedDisplay(section.mediaDisplay) ? section.mediaDisplay : 'scroll';
-            const nextItems = enforceSectionItemRules(section.items || [], 'product', nextDisplay);
-            updateSection({ sectionKind: 'product', mediaDisplay: nextDisplay, items: nextItems });
-            return;
-        }
-
-        const nextItems = enforceSectionItemRules(section.items || [], requestedKind, section.mediaDisplay);
-        updateSection({ sectionKind: requestedKind, items: nextItems });
+        const nextDisplay = normalizeDisplayModeForSectionKind(requestedKind, section.mediaDisplay);
+        const nextItems = enforceSectionItemRules(section.items || [], requestedKind, nextDisplay);
+        updateSection({ sectionKind: requestedKind, mediaDisplay: nextDisplay, items: nextItems });
     };
     const handleDisplayModeChange = (nextDisplayRaw) => {
         if (!section) return;
-        const nextDisplay = String(nextDisplayRaw || '').trim();
-        const forcedImageKind = (nextDisplay === 'single' || nextDisplay === 'carousel') ? 'image' : section.sectionKind;
-        const nextItems = enforceSectionItemRules(section.items || [], forcedImageKind, nextDisplay);
-        updateSection({ mediaDisplay: nextDisplay, sectionKind: forcedImageKind, items: nextItems });
+        const nextDisplay = normalizeDisplayModeForSectionKind(section.sectionKind, nextDisplayRaw);
+        const nextItems = enforceSectionItemRules(section.items || [], section.sectionKind, nextDisplay);
+        updateSection({ mediaDisplay: nextDisplay, items: nextItems });
     };
-    const displayModeOptions = section?.sectionKind === 'product'
-        ? [
-            { value: 'scroll', label: 'Scroll' },
-            { value: 'grid', label: 'Grid' }
-        ]
-        : [
-            { value: 'single', label: 'Single' },
-            { value: 'scroll', label: 'Scroll' },
-            { value: 'carousel', label: 'Carousel' },
-            { value: 'grid', label: 'Grid' }
-        ];
-    const selectedDisplayMode = section?.sectionKind === 'product' && !isProductSupportedDisplay(section?.mediaDisplay)
-        ? 'scroll'
-        : section?.mediaDisplay;
+    const displayModeOptions = getSupportedDisplayModeOptions(section?.sectionKind);
+    const selectedDisplayMode = normalizeDisplayModeForSectionKind(section?.sectionKind, section?.mediaDisplay);
     const updateSubCategoryOrder = (orderedIds = []) => {
         updateCategory((item) => {
             const currentSubCategories = Array.isArray(item.subCategories) ? item.subCategories : [];
@@ -960,6 +978,7 @@ const CategoryPageBuilder = () => {
                                     className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
                                 >
                                     <option value="image">Image</option>
+                                    <option value="banner">Banner</option>
                                     <option value="product">Product</option>
                                 </select>
                             </label>
@@ -975,33 +994,26 @@ const CategoryPageBuilder = () => {
                                     ))}
                                 </select>
                             </label>
-                            {section.sectionKind === 'image' && !['single', 'carousel'].includes(String(section.mediaDisplay || '').trim()) && (
-                                <>
-                                    <div className="grid grid-cols-2 gap-3 md:col-span-2">
-                                        <label className="space-y-2 text-sm font-semibold text-gray-700">
-                                            <span>Image Width (px)</span>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={section.imageWidth || ''}
-                                                onChange={(e) => updateSection({ imageWidth: e.target.value.replace(/[^\d]/g, '') })}
-                                                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
-                                                placeholder="e.g. 320"
-                                            />
-                                        </label>
-                                        <label className="space-y-2 text-sm font-semibold text-gray-700">
-                                            <span>Image Height (px)</span>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={section.imageHeight || ''}
-                                                onChange={(e) => updateSection({ imageHeight: e.target.value.replace(/[^\d]/g, '') })}
-                                                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
-                                                placeholder="e.g. 180"
-                                            />
-                                        </label>
-                                    </div>
-                                </>
+                            {((section.sectionKind === 'image' && !['single', 'carousel'].includes(String(section.mediaDisplay || '').trim()))
+                                || (section.sectionKind === 'banner' && section.mediaDisplay === 'scroll')) && (
+                                <div className="grid grid-cols-1 gap-3 md:col-span-2">
+                                    <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                        <span>Image Width (px)</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={section.imageWidth || ''}
+                                            onChange={(e) => updateSection({ imageWidth: e.target.value.replace(/[^\d]/g, '') })}
+                                            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                            placeholder="e.g. 320"
+                                        />
+                                    </label>
+                                    <p className="text-xs text-gray-500">
+                                        {section.sectionKind === 'banner'
+                                            ? 'Banner scroll me width apply hogi. Single aur carousel me banner full width hi rahega.'
+                                            : 'Height image ke natural ratio ke hisaab se width ke according auto-adjust hogi.'}
+                                    </p>
+                                </div>
                             )}
                             <label className="space-y-2 text-sm font-semibold text-gray-700">
                                 <span>Background Type</span>
@@ -1102,7 +1114,7 @@ const CategoryPageBuilder = () => {
                                 <h3 className="text-base font-bold text-gray-900">Section Items</h3>
                                 <p className="mt-1 text-sm text-gray-500">Image ya product source dono same section ke andar.</p>
                             </div>
-                            {!hasSelectedSection || isDefaultSubcategoriesSection ? null : section.sectionKind === 'image' ? (
+                            {!hasSelectedSection || isDefaultSubcategoriesSection ? null : section.sectionKind !== 'product' ? (
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -1419,7 +1431,33 @@ const ProductPickerModal = ({
     );
 };
 
-const AdminPreviewItemCard = ({ item, mediaDisplay, getProduct }) => {
+const getAdminPreviewImageCardStyle = (section, mediaDisplay) => {
+    const width = Number(section?.imageWidth);
+    if (!Number.isFinite(width) || width <= 0) {
+        return mediaDisplay === 'scroll' ? { width: 'calc((100% - 1rem) / 2)' } : undefined;
+    }
+
+    if (mediaDisplay === 'scroll') {
+        if (section?.sectionKind === 'banner') {
+            return { width: `min(${width}px, calc((100vw - 8rem) / 1.35))` };
+        }
+        return { width: `min(${width}px, calc((100% - 1.5rem) / 2), 180px)` };
+    }
+
+    if (mediaDisplay === 'grid') {
+        return { width: '100%', maxWidth: `min(${width}px, calc((100% - 1.5rem) / 2), 180px)`, marginInline: 'auto' };
+    }
+
+    return undefined;
+};
+
+const getAdminPreviewProductCardClass = (mediaDisplay) => {
+    if (mediaDisplay === 'single') return 'w-full max-w-sm';
+    if (mediaDisplay === 'grid') return 'w-full min-w-0';
+    return 'w-[calc((100%-1rem)/2)] min-w-[calc((100%-1rem)/2)] shrink-0 md:w-[calc((100%-2.5rem)/3)] md:min-w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3rem)/4)] xl:min-w-[calc((100%-3rem)/4)]';
+};
+
+const AdminPreviewItemCard = ({ item, mediaDisplay, getProduct, section }) => {
     const product = item?.itemType === 'product' ? (getProduct(item.productId) || item.productSnapshot) : null;
     const image = item?.itemType === 'product' ? product?.image : item?.image;
     const title = item?.title || product?.name;
@@ -1428,7 +1466,7 @@ const AdminPreviewItemCard = ({ item, mediaDisplay, getProduct }) => {
     if (item?.itemType === 'product') {
         const { price, originalPrice, discountLabel } = getProductPricing(product || {});
         return (
-            <div className={`${mediaDisplay === 'single' ? 'w-full max-w-sm' : mediaDisplay === 'grid' ? 'min-w-0' : 'w-[220px] shrink-0'} rounded-2xl bg-white p-2 shadow-sm`}>
+            <div className={`${getAdminPreviewProductCardClass(mediaDisplay)} rounded-2xl bg-white p-2 shadow-sm`}>
                 <div className="relative aspect-square overflow-hidden rounded-xl border border-gray-100 bg-[#f8f8f8]">
                     {image ? <img src={image} alt={title || ''} className="h-full w-full object-contain p-2" /> : <div className="h-full w-full bg-gray-100" />}
                 </div>
@@ -1446,8 +1484,13 @@ const AdminPreviewItemCard = ({ item, mediaDisplay, getProduct }) => {
     }
 
     return (
-        <div className={`${mediaDisplay === 'single' ? 'w-full min-w-0' : mediaDisplay === 'grid' ? 'min-w-0' : 'w-[220px] shrink-0'} rounded-xl bg-white p-2 shadow-sm`}>
-            <div className="overflow-hidden rounded-xl bg-gray-100">{image ? <img src={image} alt="" className={`${mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full object-cover`} /> : <div className={`${mediaDisplay === 'single' ? 'h-[300px]' : 'h-40'} w-full bg-gray-100`} />}</div>
+        <div
+            className={`${mediaDisplay === 'single' ? 'w-full min-w-0' : mediaDisplay === 'grid' ? 'min-w-0' : 'w-[220px] shrink-0'} rounded-xl bg-white p-2 shadow-sm`}
+            style={getAdminPreviewImageCardStyle(section, mediaDisplay)}
+        >
+            <div className="overflow-hidden rounded-xl bg-gray-100">
+                {image ? <img src={image} alt="" className="w-full h-auto object-contain" /> : <div className="w-full min-h-[120px] bg-gray-100" />}
+            </div>
             {(title || description) && <div className="pt-2">{title && <div className="text-sm font-semibold text-gray-900">{title}</div>}{description && <div className="mt-1 text-xs text-gray-500">{description}</div>}</div>}
         </div>
     );
@@ -1487,7 +1530,7 @@ const CarouselAdminPreview = ({ previewItems, section, getProduct }) => {
         >
             <div style={{ opacity: animating ? 0.85 : 1, transition: 'opacity 0.38s ease' }}>
                 <div className="flex justify-center">
-                    <AdminPreviewItemCard item={item} mediaDisplay="single" getProduct={getProduct} />
+                    <AdminPreviewItemCard item={item} mediaDisplay="single" getProduct={getProduct} section={section} />
                 </div>
             </div>
             {total > 1 && (
@@ -1594,7 +1637,7 @@ const SectionPreviewCard = ({
                         >
                             <div className="flex min-w-max items-stretch gap-4 pr-2">
                                 {previewItems.map((item) => {
-                                    return <AdminPreviewItemCard key={item.id} item={item} mediaDisplay="scroll" getProduct={getProduct} />;
+                                    return <AdminPreviewItemCard key={item.id} item={item} mediaDisplay="scroll" getProduct={getProduct} section={section} />;
                                 })}
                             </div>
                         </div>
@@ -1602,7 +1645,7 @@ const SectionPreviewCard = ({
                         <div className="w-full min-w-0 overflow-hidden">
                             <div className={`${section.mediaDisplay === 'grid' ? 'grid grid-cols-2 gap-3 md:grid-cols-4' : 'block min-w-0'}`}>
                                 {previewItems.map((item) => {
-                                    return <AdminPreviewItemCard key={item.id} item={item} mediaDisplay={section.mediaDisplay} getProduct={getProduct} />;
+                                    return <AdminPreviewItemCard key={item.id} item={item} mediaDisplay={section.mediaDisplay} getProduct={getProduct} section={section} />;
                                 })}
                             </div>
                         </div>

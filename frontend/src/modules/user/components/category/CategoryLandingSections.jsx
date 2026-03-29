@@ -11,7 +11,8 @@ import {
     readCategoryPageCatalogAsync
 } from '../../../../utils/categoryPageConfig';
 
-const getSectionLayoutClass = (mediaDisplay) => {
+const getSectionLayoutClass = (mediaDisplay, sectionKind) => {
+    if (mediaDisplay === 'grid' && sectionKind === 'product') return 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4';
     if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
     if (mediaDisplay === 'single') return 'block';
     return 'flex gap-3 overflow-x-auto no-scrollbar pb-1';
@@ -25,7 +26,7 @@ const getCardWidthClass = (mediaDisplay) => {
 
 const getProductCardWrapClass = (mediaDisplay) => {
     if (mediaDisplay === 'grid') return 'w-full min-w-0';
-    return 'w-[160px] shrink-0';
+    return 'w-[calc((100%-0.75rem)/2)] min-w-[calc((100%-0.75rem)/2)] shrink-0 md:w-[calc((100%-2.5rem)/3)] md:min-w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)] xl:min-w-[calc((100%-3.75rem)/4)]';
 };
 
 const normalizeImageRatio = (value) => {
@@ -39,15 +40,11 @@ const parsePositiveNumber = (value) => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-const getSectionCustomDimensions = (section) => {
-    const width = parsePositiveNumber(section?.imageWidth);
-    const height = parsePositiveNumber(section?.imageHeight);
-    return { width, height };
-};
+const getSectionCustomWidth = (section) => parsePositiveNumber(section?.imageWidth);
 
 const getSectionAspectRatio = (section) => {
-    const { width, height } = getSectionCustomDimensions(section);
-    if (width > 0 && height > 0) return `${width} / ${height}`;
+    const width = getSectionCustomWidth(section);
+    if (width > 0) return '';
     const ratio = normalizeImageRatio(section?.imageRatio);
     if (ratio === 'portrait') return '3 / 4';
     if (ratio === 'banner') return '16 / 5';
@@ -57,12 +54,26 @@ const getSectionAspectRatio = (section) => {
 
 const getImageCardStyle = (section, mediaDisplay, itemType) => {
     if (itemType !== 'image') return undefined;
-    const { width } = getSectionCustomDimensions(section);
+    const width = getSectionCustomWidth(section);
     if (mediaDisplay === 'scroll' && width > 0) {
-        return { width: `${width}px` };
+        if (section?.sectionKind === 'banner') {
+            return {
+                width: `min(${width}px, calc((100vw - 3rem) / 1.35))`
+            };
+        }
+        return {
+            width: `min(${width}px, calc((100vw - 4rem) / 2), 180px)`
+        };
     }
     if (mediaDisplay === 'scroll') {
-        return { width: '120px' };
+        return { width: 'calc((100vw - 4rem) / 2)' };
+    }
+    if (width > 0 && mediaDisplay === 'grid') {
+        return {
+            width: '100%',
+            maxWidth: `min(${width}px, calc((100vw - 4rem) / 2))`,
+            justifySelf: 'center'
+        };
     }
     return undefined;
 };
@@ -70,14 +81,6 @@ const getImageCardStyle = (section, mediaDisplay, itemType) => {
 const getImageFrameStyle = (section, itemType, mediaDisplay) => {
     if (itemType !== 'image') return undefined;
     if (mediaDisplay === 'single' || mediaDisplay === 'carousel') return undefined;
-    const { width, height } = getSectionCustomDimensions(section);
-    if (width > 0 && height > 0) return { aspectRatio: `${width} / ${height}` };
-    if (height > 0) {
-        return {
-            height: `${height}px`,
-            maxHeight: mediaDisplay === 'scroll' ? '52vw' : '70vh'
-        };
-    }
     return undefined;
 };
 
@@ -280,7 +283,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
 
     // All other display modes unchanged
     return (
-        <div className={getSectionLayoutClass(section.mediaDisplay)}>
+        <div className={getSectionLayoutClass(section.mediaDisplay, section.sectionKind)}>
             {sectionItems.map((item) => {
                 const product = getResolvedSectionProduct(item, sectionProducts);
                 const image = item.itemType === 'product' ? product?.image : item.image;
@@ -297,6 +300,9 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                 const customFrameStyle = getImageFrameStyle(section, item.itemType, section.mediaDisplay);
                 const hasCustomFrameSize = Boolean(customFrameStyle);
                 const useAutoImageSize = normalizeImageRatio(section?.imageRatio) === 'auto' && !customAspectRatio && !hasCustomFrameSize;
+                const useWidthDrivenImage = item.itemType === 'image'
+                    && ['grid', 'scroll'].includes(section.mediaDisplay)
+                    && getSectionCustomWidth(section) > 0;
                 const isSingleImageMode = section.mediaDisplay === 'single' && item.itemType === 'image';
 
                 if (item.itemType === 'product') {
@@ -324,7 +330,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                                         alt={title || section.title || categoryName}
                                         className="w-full h-auto object-contain"
                                     />
-                                ) : useAutoImageSize && item.itemType === 'image' ? (
+                                ) : (useAutoImageSize || useWidthDrivenImage) && item.itemType === 'image' ? (
                                     <img
                                         src={image}
                                         alt={title || section.title || categoryName}
@@ -344,7 +350,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                                 )
                             ) : (
                                 <div
-                                    className={`${isSingleImageMode ? 'w-full min-h-[140px]' : useAutoImageSize && item.itemType === 'image' ? 'w-full min-h-[120px]' : `${hasCustomFrameSize ? '' : getImageHeightClass(section.mediaDisplay, item.itemType, section?.imageRatio)} w-full`} bg-gray-100`}
+                                    className={`${isSingleImageMode ? 'w-full min-h-[140px]' : (useAutoImageSize || useWidthDrivenImage) && item.itemType === 'image' ? 'w-full min-h-[120px]' : `${hasCustomFrameSize ? '' : getImageHeightClass(section.mediaDisplay, item.itemType, section?.imageRatio)} w-full`} bg-gray-100`}
                                     style={customFrameStyle || (item.itemType === 'image' && customAspectRatio ? { aspectRatio: customAspectRatio } : undefined)}
                                 />
                             )}
