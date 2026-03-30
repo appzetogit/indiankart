@@ -15,9 +15,9 @@ const DESKTOP_BREAKPOINT = 768;
 
 const getSectionLayoutClass = (mediaDisplay, sectionKind) => {
     if (mediaDisplay === 'grid' && sectionKind === 'product') return 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4';
-    if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3 touch-pan-y';
+    if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
     if (mediaDisplay === 'single') return 'block';
-    return 'flex gap-3 overflow-x-auto no-scrollbar pb-1 touch-pan-x overscroll-x-contain';
+    return 'flex gap-3 overflow-x-auto no-scrollbar pb-1';
 };
 
 const getCardWidthClass = (mediaDisplay) => {
@@ -289,36 +289,6 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
 };
 
 const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, sectionProducts, isDesktop }) => {
-    const touchStartRef = useRef({ x: 0, y: 0 });
-    const didSwipeRef = useRef(false);
-
-    const handleTouchStart = (event) => {
-        if (section.mediaDisplay !== 'scroll') return;
-        const touch = event.touches?.[0];
-        if (!touch) return;
-        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
-        didSwipeRef.current = false;
-    };
-
-    const handleTouchMove = (event) => {
-        if (section.mediaDisplay !== 'scroll') return;
-        const touch = event.touches?.[0];
-        if (!touch) return;
-        const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
-        const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
-        if (deltaX > 8 && deltaX > deltaY) {
-            didSwipeRef.current = true;
-        }
-    };
-
-    const handleItemActivate = (link) => {
-        if (didSwipeRef.current) {
-            didSwipeRef.current = false;
-            return;
-        }
-        openLink(link);
-    };
-
     // Carousel: single-view slideshow
     if (section.mediaDisplay === 'carousel') {
         return (
@@ -373,10 +343,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                         key={item.id}
                         type="button"
                         data-carousel-card="true"
-                        onClick={() => handleItemActivate(link)}
-                        onTouchStart={section.mediaDisplay === 'scroll' ? handleTouchStart : undefined}
-                        onTouchMove={section.mediaDisplay === 'scroll' ? handleTouchMove : undefined}
-                        onTouchEnd={section.mediaDisplay === 'scroll' ? () => window.setTimeout(() => { didSwipeRef.current = false; }, 0) : undefined}
+                        onClick={() => openLink(link)}
                         className={`${getCardWidthClass(section.mediaDisplay)} ${getCardSurfaceClass(item.itemType)} overflow-hidden rounded-2xl text-left transition`}
                         style={customCardStyle}
                     >
