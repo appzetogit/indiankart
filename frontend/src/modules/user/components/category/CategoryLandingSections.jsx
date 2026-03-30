@@ -15,7 +15,7 @@ const DESKTOP_BREAKPOINT = 768;
 
 const getSectionLayoutClass = (mediaDisplay, sectionKind) => {
     if (mediaDisplay === 'grid' && sectionKind === 'product') return 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4';
-    if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
+    if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3 touch-pan-y';
     if (mediaDisplay === 'single') return 'block';
     return 'flex gap-3 overflow-x-auto no-scrollbar pb-1 touch-pan-x overscroll-x-contain';
 };
@@ -293,6 +293,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
     const didSwipeRef = useRef(false);
 
     const handleTouchStart = (event) => {
+        if (section.mediaDisplay !== 'scroll') return;
         const touch = event.touches?.[0];
         if (!touch) return;
         touchStartRef.current = { x: touch.clientX, y: touch.clientY };
@@ -300,6 +301,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
     };
 
     const handleTouchMove = (event) => {
+        if (section.mediaDisplay !== 'scroll') return;
         const touch = event.touches?.[0];
         if (!touch) return;
         const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
@@ -372,9 +374,9 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                         type="button"
                         data-carousel-card="true"
                         onClick={() => handleItemActivate(link)}
-                        onTouchStart={handleTouchStart}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={() => window.setTimeout(() => { didSwipeRef.current = false; }, 0)}
+                        onTouchStart={section.mediaDisplay === 'scroll' ? handleTouchStart : undefined}
+                        onTouchMove={section.mediaDisplay === 'scroll' ? handleTouchMove : undefined}
+                        onTouchEnd={section.mediaDisplay === 'scroll' ? () => window.setTimeout(() => { didSwipeRef.current = false; }, 0) : undefined}
                         className={`${getCardWidthClass(section.mediaDisplay)} ${getCardSurfaceClass(item.itemType)} overflow-hidden rounded-2xl text-left transition`}
                         style={customCardStyle}
                     >
