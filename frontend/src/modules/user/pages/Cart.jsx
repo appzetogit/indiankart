@@ -153,9 +153,9 @@ const Cart = () => {
                                                     <span className="material-icons text-base">add_shopping_cart</span>
                                                     Move to Cart
                                                 </button>
-                                                <button onClick={() => removeFromSavedForLater(item.id)} className="text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
-                                                    <span className="material-icons text-base">delete</span>
-                                                    Remove
+                                                <button onClick={() => removeFromSavedForLater(item.id, item.variant)} className="text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1">
+                                                    <span className="material-icons text-base">bookmark</span>
+                                                    Saved for later
                                                 </button>
                                             </div>
                                         </div>
@@ -261,7 +261,7 @@ const Cart = () => {
                                                 </div>
                                                 <div className="flex items-center gap-6 text-sm font-bold uppercase">
                                                     <button onClick={() => moveToSavedForLater(item)} className="text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1">
-                                                        <span className="material-icons text-base">bookmark</span>
+                                                        <span className="material-icons text-base">bookmark_border</span>
                                                         Save for later
                                                     </button>
                                                     <button onClick={() => removeFromCart(item.id, item.variant)} className="text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
@@ -309,9 +309,9 @@ const Cart = () => {
                                                             <span className="material-icons text-base">add_shopping_cart</span>
                                                             Move to Cart
                                                         </button>
-                                                        <button onClick={() => removeFromSavedForLater(item.id)} className="text-red-500 hover:text-red-700 transition-colors flex items-center gap-1">
-                                                            <span className="material-icons text-base">delete</span>
-                                                            Remove
+                                                        <button onClick={() => removeFromSavedForLater(item.id, item.variant)} className="text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1">
+                                                            <span className="material-icons text-base">bookmark</span>
+                                                            Saved for later
                                                         </button>
                                                     </div>
                                                 </div>

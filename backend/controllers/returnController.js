@@ -6,6 +6,8 @@ import mongoose from 'mongoose';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 
+const RETURN_WINDOW_DAYS = 7;
+
 // @desc    Create a new return request
 // @route   POST /api/returns
 // @access  Private
@@ -17,6 +19,7 @@ export const createReturnRequest = async (req, res) => {
             reason,
             comment,
             type,
+            requestedQuantity,
             images,
             googleDriveLink,
             bankDetails,
@@ -111,6 +114,19 @@ export const createReturnRequest = async (req, res) => {
         }
 
         if (type !== 'Cancellation') {
+            const deliveredAt = order.deliveredAt ? new Date(order.deliveredAt) : null;
+            if (!deliveredAt || Number.isNaN(deliveredAt.getTime())) {
+                return res.status(400).json({ message: 'Return or replacement is allowed only after successful delivery.' });
+            }
+
+            const diffMs = Date.now() - deliveredAt.getTime();
+            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            if (diffDays > RETURN_WINDOW_DAYS) {
+                return res.status(400).json({
+                    message: `Return or replacement can only be requested within ${RETURN_WINDOW_DAYS} days of delivery.`
+                });
+            }
+
             const itemIndex = order.orderItems.findIndex(item => 
                 String(item.product) === String(productId) || 
                 String(item._id) === String(productId)
@@ -121,6 +137,51 @@ export const createReturnRequest = async (req, res) => {
             }
 
             const item = order.orderItems[itemIndex];
+            const normalizedRequestedQuantity = Math.max(1, Number.parseInt(requestedQuantity, 10) || 1);
+            const maxAllowedQuantity = Math.max(1, Number(item.qty || item.quantity || 1));
+
+            if (normalizedRequestedQuantity > maxAllowedQuantity) {
+                return res.status(400).json({ message: `You can request up to ${maxAllowedQuantity} quantity for this item.` });
+            }
+
+            const orderedVariant = item.variant && typeof item.variant === 'object'
+                ? item.variant
+                : {};
+            const orderedVariantEntries = Object.entries(orderedVariant)
+                .filter(([key, value]) => key && value !== undefined && value !== null && String(value).trim() !== '');
+
+            if (type === 'Replacement') {
+                const productDoc = await Product.findOne({ id: item.product }).lean();
+
+                if (!productDoc) {
+                    return res.status(404).json({ message: 'Replacement product details not found.' });
+                }
+
+                const skuList = Array.isArray(productDoc.skus) ? productDoc.skus : [];
+                const hasVariantSnapshot = orderedVariantEntries.length > 0;
+
+                if (hasVariantSnapshot && skuList.length > 0) {
+                    const exactSku = skuList.find((sku) => {
+                        const combination = sku?.combination && typeof sku.combination === 'object'
+                            ? sku.combination
+                            : {};
+
+                        return orderedVariantEntries.every(([key, value]) =>
+                            String(combination[key] || '') === String(value)
+                        );
+                    });
+
+                    if (!exactSku || Number(exactSku.stock || 0) <= 0) {
+                        return res.status(400).json({
+                            message: 'Exact same product variant is unavailable for replacement right now. Please request a refund instead.'
+                        });
+                    }
+                } else if (Number(productDoc.stock || 0) <= 0) {
+                    return res.status(400).json({
+                        message: 'This product is currently out of stock for replacement. Please request a refund instead.'
+                    });
+                }
+            }
             
             // Create Return Record
             const newReturn = new Return({
@@ -128,11 +189,14 @@ export const createReturnRequest = async (req, res) => {
                 orderId: order._id,
                 customer: req.user.name,
                 product: {
+                    id: item.product,
                     name: item.name,
                     image: item.image,
-                    price: item.price
+                    price: item.price,
+                    variant: orderedVariant
                 },
                 type,
+                requestedQuantity: normalizedRequestedQuantity,
                 reason,
                 comment,
                 pickupAddress: parsedPickupAddress || {
@@ -166,7 +230,13 @@ export const createReturnRequest = async (req, res) => {
             // Update Order Item Status
             order.orderItems[itemIndex].status = type === 'Return' ? 'Return Requested' : 'Replacement Requested';
             
-            if (selectedReplacementSize || selectedReplacementColor) {
+            if (type === 'Replacement' && orderedVariantEntries.length > 0) {
+                const replacementVariantLabel = orderedVariantEntries
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join(', ');
+                createdReturn.comment = `${createdReturn.comment || ''} [Exact replacement: ${replacementVariantLabel}]`.trim();
+                await createdReturn.save();
+            } else if (selectedReplacementSize || selectedReplacementColor) {
                 createdReturn.comment = `${createdReturn.comment || ''} [Replacement: Size ${selectedReplacementSize}, Color ${selectedReplacementColor}]`;
                 await createdReturn.save();
             }
@@ -368,9 +438,15 @@ export const updateReturnStatus = async (req, res) => {
                     }
                 } else {
                     // RETURN / REPLACEMENT ACTION
-                    const itemToUpdate = order.orderItems.find(i => 
-                        i.name === returnRequest.product.name
-                    );
+                    const returnVariant = returnRequest.product?.variant && typeof returnRequest.product.variant === 'object'
+                        ? returnRequest.product.variant
+                        : {};
+                    const itemToUpdate = order.orderItems.find((i) => {
+                        const sameById = String(i.product) === String(returnRequest.product?.id) &&
+                            JSON.stringify(i.variant || {}) === JSON.stringify(returnVariant);
+                        const sameByName = String(i.name || '').trim() === String(returnRequest.product?.name || '').trim();
+                        return sameById || sameByName;
+                    });
                     
                     if (itemToUpdate) {
                         let newItemStatus = itemToUpdate.status;

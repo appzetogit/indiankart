@@ -50,8 +50,8 @@ const UserRoutes = () => {
                 <Route path="my-orders/:orderId/track" element={<ProtectedRoute><TrackOrder /></ProtectedRoute>} />
                 <Route path="track-order/:orderId" element={<ProtectedRoute><TrackOrder /></ProtectedRoute>} />
                 <Route path="track-order/:orderId/:productId" element={<ProtectedRoute><TrackOrder /></ProtectedRoute>} />
-                <Route path="my-orders/:orderId/return" element={<ProtectedRoute><ReturnOrder /></ProtectedRoute>} />
-                <Route path="my-orders/:orderId/return/:productId" element={<ProtectedRoute><ReturnOrder /></ProtectedRoute>} />
+                <Route path="my-orders/:orderId/:action" element={<ProtectedRoute><ReturnOrder /></ProtectedRoute>} />
+                <Route path="my-orders/:orderId/:action/:productId" element={<ProtectedRoute><ReturnOrder /></ProtectedRoute>} />
                 <Route path="deals" element={<TopDeals />} />
                 <Route path="categories" element={<AllCategories />} />
                 <Route path="category/:categoryName/*" element={<CategoryPage />} />

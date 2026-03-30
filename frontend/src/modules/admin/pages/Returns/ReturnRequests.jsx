@@ -416,6 +416,31 @@ const ReturnRequests = () => {
                                         </div>
                                     </div>
                                 )}
+
+                                {selectedReturn.pickupAddress && (
+                                    <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-100">
+                                        <p className="text-[9px] font-black text-blue-500 uppercase mb-2 tracking-widest">
+                                            Pickup Address
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">Name:</span> {selectedReturn.pickupAddress.name || '-'}
+                                            </p>
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">Phone:</span> {selectedReturn.pickupAddress.phone || '-'}
+                                            </p>
+                                            <p className="text-xs text-gray-700">
+                                                <span className="font-black text-gray-900">Type:</span> {selectedReturn.pickupAddress.type || '-'}
+                                            </p>
+                                            <p className="text-xs text-gray-700 leading-relaxed">
+                                                <span className="font-black text-gray-900">Address:</span> {selectedReturn.pickupAddress.address || '-'}
+                                                {selectedReturn.pickupAddress.city ? `, ${selectedReturn.pickupAddress.city}` : ''}
+                                                {selectedReturn.pickupAddress.state ? `, ${selectedReturn.pickupAddress.state}` : ''}
+                                                {selectedReturn.pickupAddress.pincode ? ` - ${selectedReturn.pickupAddress.pincode}` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

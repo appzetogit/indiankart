@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+const isSameItem = (item, product, variant = product?.variant || {}) => (
+    item.id === product.id &&
+    JSON.stringify(item.variant || {}) === JSON.stringify(variant || {})
+);
+
 export const useCartStore = create()(
     persist(
         (set, get) => ({
@@ -69,19 +74,37 @@ export const useCartStore = create()(
             },
 
             moveToSavedForLater: (product) => {
-                set((state) => ({
-                    cart: state.cart.filter(item => item.id !== product.id),
-                    savedForLater: [...state.savedForLater, product]
-                }));
+                set((state) => {
+                    const existingSavedItem = state.savedForLater.find((item) => isSameItem(item, product));
+
+                    if (existingSavedItem) {
+                        return {
+                            savedForLater: state.savedForLater.filter((item) => !isSameItem(item, product))
+                        };
+                    }
+
+                    return {
+                        cart: state.cart.filter((item) => !isSameItem(item, product)),
+                        savedForLater: [...state.savedForLater, product]
+                    };
+                });
             },
 
             moveToCart: (product) => {
                 set((state) => {
-                    const isInSaved = state.savedForLater.find(item => item.id === product.id);
+                    const isInSaved = state.savedForLater.find((item) => isSameItem(item, product));
                     if (isInSaved) {
+                        const existingCartItem = state.cart.find((item) => isSameItem(item, product));
+
                         return {
-                            savedForLater: state.savedForLater.filter(item => item.id !== product.id),
-                            cart: [...state.cart, { ...product, quantity: 1 }]
+                            savedForLater: state.savedForLater.filter((item) => !isSameItem(item, product)),
+                            cart: existingCartItem
+                                ? state.cart.map((item) =>
+                                    isSameItem(item, product)
+                                        ? { ...item, quantity: item.quantity + 1 }
+                                        : item
+                                )
+                                : [...state.cart, { ...product, quantity: 1 }]
                         };
                     }
                     const isInWishlist = state.wishlist.find(item => item.id === product.id);
@@ -95,9 +118,12 @@ export const useCartStore = create()(
                 });
             },
 
-            removeFromSavedForLater: (productId) => {
+            removeFromSavedForLater: (productId, variant = {}) => {
                 set((state) => ({
-                    savedForLater: state.savedForLater.filter(item => item.id !== productId)
+                    savedForLater: state.savedForLater.filter((item) => !(
+                        item.id === productId &&
+                        JSON.stringify(item.variant || {}) === JSON.stringify(variant || {})
+                    ))
                 }));
             },
 
@@ -296,6 +322,21 @@ export const useCartStore = create()(
         }),
         {
             name: 'cart-storage',
+            version: 2,
+            migrate: (persistedState, version) => {
+                if (!persistedState) {
+                    return persistedState;
+                }
+
+                if (version < 2) {
+                    return {
+                        ...persistedState,
+                        savedForLater: []
+                    };
+                }
+
+                return persistedState;
+            }
         }
     )
 );

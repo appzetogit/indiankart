@@ -6,6 +6,8 @@ import { confirmToast } from '../../../utils/toastUtils.jsx';
 import Loader from '../../../components/common/Loader';
 import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
 
+const RETURN_WINDOW_DAYS = 7;
+
 const buildEstimatedDeliveryText = (deliveryTime, unit) => {
     const timeValue = Number(deliveryTime);
     const normalizedUnit = String(unit || '').toLowerCase();
@@ -60,6 +62,29 @@ const formatReturnTimelineDate = (value) => {
         hour: '2-digit',
         minute: '2-digit'
     });
+};
+
+const isEligibleForNewReturnRequest = (status) => {
+    const normalized = String(status || '').trim().toLowerCase();
+
+    if (!normalized || normalized === 'delivered') return true;
+
+    const blockedStatuses = new Set([
+        'return requested',
+        'replacement requested',
+        'approved',
+        'pickup scheduled',
+        'received at warehouse',
+        'refund initiated',
+        'replacement dispatched',
+        'returned',
+        'replaced',
+        'completed',
+        'rejected',
+        'return rejected'
+    ]);
+
+    return !blockedStatuses.has(normalized);
 };
 
 const OrderDetails = () => {
@@ -288,6 +313,14 @@ const OrderDetails = () => {
     const paymentInfoStatus = order?.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
         ? 'Confirmed'
         : 'Pending';
+    const isWithinReturnWindow = useMemo(() => {
+        const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
+        if (!deliveredAt || Number.isNaN(deliveredAt.getTime())) return false;
+
+        const diffMs = Date.now() - deliveredAt.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        return diffDays <= RETURN_WINDOW_DAYS;
+    }, [order?.deliveredAt]);
 
     if (loading) {
         return (
@@ -399,7 +432,10 @@ const OrderDetails = () => {
                                         const timeline = Array.isArray(ret?.timeline) ? ret.timeline : [];
                                         const latestEntry = timeline.length > 0 ? timeline[timeline.length - 1] : null;
                                         const currentStatus = normalizeReturnTrackingStatus(latestEntry?.status || ret?.status || 'Pending');
-                                        const stepsForType = getReturnLifecycleSteps(ret?.type);
+                                        const baseStepsForType = getReturnLifecycleSteps(ret?.type);
+                                        const stepsForType = currentStatus === 'Rejected'
+                                            ? [...baseStepsForType, 'Rejected']
+                                            : baseStepsForType;
                                         const currentStepIndex = stepsForType.indexOf(currentStatus);
                                         const safeStepIndex = currentStepIndex >= 0 ? currentStepIndex : 0;
                                         const returnProgress = stepsForType.length > 1
@@ -431,49 +467,61 @@ const OrderDetails = () => {
                                                     </p>
                                                 )}
 
-                                                <div className="pb-2">
-                                                    <div className="relative w-full">
-                                                        <div
-                                                            className="absolute left-[calc(100%/(var(--steps)*2))] right-[calc(100%/(var(--steps)*2))] top-5 h-1.5 -translate-y-1/2 rounded-full bg-blue-100"
-                                                            style={{ '--steps': stepsForType.length }}
-                                                        >
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-300 ${
-                                                                    currentStatus === 'Rejected' ? 'bg-red-500' : 'bg-blue-600'
-                                                                }`}
-                                                                style={{
-                                                                    width: `${returnProgress}%`
-                                                                }}
-                                                            />
-                                                        </div>
-
-                                                        <div
-                                                            className="grid gap-0"
-                                                            style={{ gridTemplateColumns: `repeat(${stepsForType.length}, minmax(0, 1fr))` }}
-                                                        >
-                                                            {stepsForType.map((stepName, idx) => {
-                                                                const done = idx <= safeStepIndex;
-                                                                const active = idx === safeStepIndex;
-                                                                return (
-                                                                    <div key={`${ret?._id || ret?.id}-${stepName}`} className="flex flex-col items-center relative z-10 px-1">
-                                                                        <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
-                                                                            done
-                                                                                ? currentStatus === 'Rejected'
-                                                                                    ? 'bg-red-500 text-white shadow-[0_10px_24px_rgba(239,68,68,0.22)]'
-                                                                                    : 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
-                                                                                : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
-                                                                        } ${active ? (currentStatus === 'Rejected' ? 'ring-4 ring-red-100 scale-110' : 'ring-4 ring-blue-100 scale-110') : ''}`}>
-                                                                            <span className="material-icons text-base md:text-lg">{getStatusIcon(stepName)}</span>
-                                                                        </div>
-                                                                        <p className={`text-[9px] md:text-[11px] font-semibold text-center leading-tight break-words ${done ? 'text-gray-800' : 'text-gray-500'}`}>
-                                                                            {stepName}
-                                                                        </p>
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                {currentStatus === 'Rejected' ? (
+                                                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-5">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-11 h-11 rounded-full bg-red-500 text-white flex items-center justify-center shadow-[0_10px_24px_rgba(239,68,68,0.22)]">
+                                                                <span className="material-icons text-xl">cancel</span>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-bold text-red-700">Request Rejected</p>
+                                                                <p className="text-xs text-red-600 mt-1">
+                                                                    This return/replacement request was rejected by the review team.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                ) : (
+                                                    <div className="pb-2">
+                                                        <div className="relative w-full">
+                                                            <div
+                                                                className="absolute left-[calc(100%/(var(--steps)*2))] right-[calc(100%/(var(--steps)*2))] top-5 h-1.5 -translate-y-1/2 rounded-full bg-blue-100"
+                                                                style={{ '--steps': stepsForType.length }}
+                                                            >
+                                                                <div
+                                                                    className="h-full rounded-full transition-all duration-300 bg-blue-600"
+                                                                    style={{
+                                                                        width: `${returnProgress}%`
+                                                                    }}
+                                                                />
+                                                            </div>
+
+                                                            <div
+                                                                className="grid gap-0"
+                                                                style={{ gridTemplateColumns: `repeat(${stepsForType.length}, minmax(0, 1fr))` }}
+                                                            >
+                                                                {stepsForType.map((stepName, idx) => {
+                                                                    const done = idx <= safeStepIndex;
+                                                                    const active = idx === safeStepIndex;
+                                                                    return (
+                                                                        <div key={`${ret?._id || ret?.id}-${stepName}`} className="flex flex-col items-center relative z-10 px-1">
+                                                                            <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
+                                                                                done
+                                                                                    ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
+                                                                                    : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
+                                                                            } ${active ? 'ring-4 ring-blue-100 scale-110' : ''}`}>
+                                                                                <span className="material-icons text-base md:text-lg">{getStatusIcon(stepName)}</span>
+                                                                            </div>
+                                                                            <p className={`text-[9px] md:text-[11px] font-semibold text-center leading-tight break-words ${done ? 'text-gray-800' : 'text-gray-500'}`}>
+                                                                                {stepName}
+                                                                            </p>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -698,7 +746,7 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Request Return Button */}
-                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && order.orderItems.some(item => !['Return Requested', 'Replacement Requested', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Returned', 'Replaced', 'Approved', 'Completed'].includes(item.status)) && (
+                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && isWithinReturnWindow && order.orderItems.some((item) => isEligibleForNewReturnRequest(item.status)) && (
                             <button
                                 onClick={() => navigate(`/my-orders/${order._id}/return`)}
                                 className="w-full bg-white border border-blue-200 text-blue-700 px-6 py-4 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
@@ -706,6 +754,12 @@ const OrderDetails = () => {
                                 <span className="material-icons">assignment_return</span>
                                 Request Return / Replacement
                             </button>
+                        )}
+
+                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && !isWithinReturnWindow && (
+                            <div className="w-full bg-gray-50 border border-gray-200 text-gray-600 px-6 py-4 rounded-xl font-semibold text-sm">
+                                Return or replacement is available only within {RETURN_WINDOW_DAYS} days of successful delivery.
+                            </div>
                         )}
 
                         {/* Cancel Order Button */}

@@ -5,15 +5,18 @@ const returnSchema = mongoose.Schema({
     orderId: { type: String, required: true },
     customer: { type: String, required: true },
     product: {
+        id: { type: Number },
         name: { type: String, required: true },
         image: { type: String, required: true },
-        price: { type: Number, required: true }
+        price: { type: Number, required: true },
+        variant: { type: mongoose.Schema.Types.Mixed }
     },
     type: { 
         type: String, 
         required: true, 
         enum: ['Return', 'Replacement', 'Cancellation'] 
     },
+    requestedQuantity: { type: Number, default: 1, min: 1 },
     reason: { type: String, required: true },
     comment: { type: String },
     googleDriveLink: { type: String },
