@@ -335,6 +335,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
     return (
         <div
             className={getSectionLayoutClass(section.mediaDisplay, section.sectionKind)}
+            data-lenis-prevent={section.mediaDisplay === 'scroll' ? 'true' : undefined}
             style={section.mediaDisplay === 'scroll' ? { WebkitOverflowScrolling: 'touch' } : undefined}
         >
             {sectionItems.map((item) => {
