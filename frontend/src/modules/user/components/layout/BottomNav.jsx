@@ -8,12 +8,13 @@ const BottomNav = () => {
     const navItems = [
         { name: 'Home', icon: 'home', path: '/' },
         { name: 'Categories', icon: 'grid_view', path: '/categories' },
+        { name: 'Play', icon: 'play_circle', path: '/play' },
         { name: 'Account', icon: 'person_outline', path: '/account' },
         { name: 'Cart', icon: 'shopping_cart', path: '/cart', badge: totalItems },
     ];
 
     return (
-        <footer className="fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-blue-50/50 flex items-center justify-center gap-10 px-4 py-3 z-50 md:hidden rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
+        <footer className="fixed bottom-0 left-0 right-0 w-full bg-white/95 backdrop-blur-md border-t border-blue-50/50 flex items-center justify-between px-4 py-3 z-50 md:hidden rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.08)]">
             {navItems.map((item) => (
                 <NavLink
                     key={item.name}

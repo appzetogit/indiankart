@@ -21,7 +21,8 @@ import {
     MdHelpCenter,
     MdViewCompact,
     MdNotifications,
-    MdBusinessCenter
+    MdBusinessCenter,
+    MdPlayCircle
 } from 'react-icons/md';
 
 import logo from '../../../../assets/indiankart-logo.png';
@@ -56,6 +57,7 @@ const Sidebar = () => {
             items: [
                 { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },
                 { name: 'Bank Offers', icon: MdLocalOffer, path: '/admin/bank-offers' },
+                { name: 'Play', icon: MdPlayCircle, path: '/admin/play' },
             ]
         },
         {

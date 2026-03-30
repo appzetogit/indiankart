@@ -89,3 +89,21 @@ export const deleteReel = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Increment reel likes
+// @route   POST /api/reels/:id/like
+// @access  Public
+export const likeReel = async (req, res) => {
+    try {
+        const reel = await Reel.findById(req.params.id);
+        if (!reel) {
+            return res.status(404).json({ message: 'Reel not found' });
+        }
+
+        reel.likes = Number(reel.likes || 0) + 1;
+        const updatedReel = await reel.save();
+        res.json(updatedReel);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};

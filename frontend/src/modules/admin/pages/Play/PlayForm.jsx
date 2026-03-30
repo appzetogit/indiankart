@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdClose, MdCloudUpload, MdVideoLibrary } from 'react-icons/md';
+import { MdClose, MdVideoLibrary } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import usePlayStore from '../../store/playStore';
 
@@ -7,23 +7,10 @@ const PlayForm = ({ reel, onClose }) => {
     const { addReel, updateReel } = usePlayStore();
 
     const [formData, setFormData] = useState({
-        caption: '',
         videoUrl: '',
-        thumbnailUrl: '', // In a real app, you'd generate this from video
-        productId: '',
-        productName: '',
         active: true,
         file: null
     });
-
-    // Mock products for linking
-    const productOptions = [
-        { id: '101', name: 'Neon T-Shirt' },
-        { id: '102', name: 'Floral Dress' },
-        { id: '103', name: 'Nike Air Jordan' },
-        { id: '104', name: 'Sony Headphones' },
-        { id: '105', name: 'OnePlus 11R' },
-    ];
 
     useEffect(() => {
         if (reel) {
@@ -50,7 +37,7 @@ const PlayForm = ({ reel, onClose }) => {
         }
 
         if (reel) {
-            updateReel(reel.id, data);
+            updateReel(reel._id, data);
         } else {
             addReel(data);
         }
@@ -64,8 +51,7 @@ const PlayForm = ({ reel, onClose }) => {
             setFormData(prev => ({
                 ...prev,
                 videoUrl: url,
-                file: file,
-                thumbnailUrl: 'https://via.placeholder.com/150/000000/FFFFFF/?text=Video' // Placeholder for thumbnail
+                file: file
             }));
         }
     };
@@ -122,10 +108,9 @@ const PlayForm = ({ reel, onClose }) => {
                             onChange={(e) => setFormData({ ...formData, productLink: e.target.value })}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none focus:border-pink-500"
                             placeholder="e.g., /product/123 or https://..."
-                            required
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                            Link where user will be redirected on clicking "View Product"
+                            Optional. Add a link if you want users redirected from the reel.
                         </p>
                     </div>
 
