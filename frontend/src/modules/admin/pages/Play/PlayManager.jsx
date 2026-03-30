@@ -55,7 +55,7 @@ const PlayManager = () => {
                     </div>
                 ) : (
                     reels.map(reel => (
-                        <div key={reel.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300">
+                        <div key={reel._id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group hover:shadow-xl transition-all duration-300">
                             {/* Video Preview */}
                             <div className="h-48 bg-black relative">
                                 <video
@@ -74,7 +74,7 @@ const PlayManager = () => {
                                             <MdEdit size={16} />
                                         </button>
                                         <button
-                                            onClick={() => handleDelete(reel.id)}
+                                            onClick={() => handleDelete(reel._id)}
                                             className="p-1.5 bg-white/20 backdrop-blur-sm rounded-full text-red-500 hover:bg-white/40 transition"
                                             title="Delete"
                                         >
@@ -115,7 +115,7 @@ const PlayManager = () => {
                                         <MdFavorite size={14} /> {reel.likes || 0}
                                     </div>
                                     <button
-                                        onClick={() => toggleReelStatus(reel.id)}
+                                        onClick={() => toggleReelStatus(reel._id)}
                                         className="text-gray-400 hover:text-blue-600 font-medium transition"
                                     >
                                         {reel.active ? 'Hide' : 'Publish'}
