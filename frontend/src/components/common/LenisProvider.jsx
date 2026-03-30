@@ -5,6 +5,8 @@ const LenisProvider = ({ children }) => {
   useEffect(() => {
     if (window.__lenisInstance) return undefined;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return undefined;
+    if (window.matchMedia?.('(pointer: coarse)')?.matches) return undefined;
+    if (window.matchMedia?.('(hover: none)')?.matches) return undefined;
 
     const lenis = new Lenis({
       smoothWheel: true,
