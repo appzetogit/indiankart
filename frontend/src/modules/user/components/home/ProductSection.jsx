@@ -8,6 +8,7 @@ const ProductSection = ({
     titleBadge,
     products = [],
     onViewAll,
+    showArrow = true,
     containerClass = "mt-6",
     isScrollable = true,
     loading = false
@@ -57,7 +58,7 @@ const ProductSection = ({
                     </div>
                     {subtitle && <p className="text-[9px] md:text-sm text-gray-500 font-medium -mt-0.5">{translatedSubtitle}</p>}
                 </div>
-                {onViewAll && (
+                {onViewAll && showArrow && (
                     <button
                         onClick={onViewAll}
                         className="bg-blue-600 text-white rounded-full w-7 h-7 md:w-10 md:h-10 flex items-center justify-center hover:bg-blue-700 transition-colors"

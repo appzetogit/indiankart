@@ -11,6 +11,8 @@ import {
     readCategoryPageCatalogAsync
 } from '../../../../utils/categoryPageConfig';
 
+const DESKTOP_BREAKPOINT = 768;
+
 const getSectionLayoutClass = (mediaDisplay, sectionKind) => {
     if (mediaDisplay === 'grid' && sectionKind === 'product') return 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4';
     if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
@@ -52,9 +54,28 @@ const getSectionAspectRatio = (section) => {
     return '';
 };
 
-const getImageCardStyle = (section, mediaDisplay, itemType) => {
+const getImageCardStyle = (section, mediaDisplay, itemType, isDesktop = false) => {
     if (itemType !== 'image') return undefined;
     const width = getSectionCustomWidth(section);
+    if (isDesktop && width > 0) {
+        if (mediaDisplay === 'scroll') {
+            if (section?.sectionKind === 'banner') {
+                return {
+                    width: `min(${width}px, 100%)`
+                };
+            }
+            return {
+                width: `${width}px`
+            };
+        }
+        if (mediaDisplay === 'grid') {
+            return {
+                width: '100%',
+                maxWidth: `min(${width}px, 100%)`,
+                justifySelf: 'center'
+            };
+        }
+    }
     if (mediaDisplay === 'scroll' && width > 0) {
         if (section?.sectionKind === 'banner') {
             return {
@@ -124,7 +145,7 @@ const getResolvedSectionProduct = (item, products = []) => {
 };
 
 /* ─── Single-view slideshow for carousel mode ─── */
-const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sectionProducts }) => {
+const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sectionProducts, isDesktop }) => {
     const [activeIndex, setActiveIndex] = useState(0);
     const [animating, setAnimating] = useState(false);
     const isPausedRef = useRef(false);
@@ -267,7 +288,7 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
     );
 };
 
-const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, sectionProducts }) => {
+const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, sectionProducts, isDesktop }) => {
     // Carousel: single-view slideshow
     if (section.mediaDisplay === 'carousel') {
         return (
@@ -277,6 +298,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                 categoryName={categoryName}
                 openLink={openLink}
                 sectionProducts={sectionProducts}
+                isDesktop={isDesktop}
             />
         );
     }
@@ -296,7 +318,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                 const customAspectRatio = (section.mediaDisplay === 'single' || section.mediaDisplay === 'carousel')
                     ? ''
                     : getSectionAspectRatio(section);
-                const customCardStyle = getImageCardStyle(section, section.mediaDisplay, item.itemType);
+                const customCardStyle = getImageCardStyle(section, section.mediaDisplay, item.itemType, isDesktop);
                 const customFrameStyle = getImageFrameStyle(section, item.itemType, section.mediaDisplay);
                 const hasCustomFrameSize = Boolean(customFrameStyle);
                 const useAutoImageSize = normalizeImageRatio(section?.imageRatio) === 'auto' && !customAspectRatio && !hasCustomFrameSize;
@@ -373,6 +395,10 @@ const CategoryLandingSections = ({ categoryName }) => {
     const { categories = [] } = useCategories({ lite: true });
     const [catalog, setCatalog] = useState([]);
     const [version, setVersion] = useState(0);
+    const [isDesktop, setIsDesktop] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.innerWidth >= DESKTOP_BREAKPOINT;
+    });
 
     useEffect(() => {
         const handleStorage = () => setVersion((current) => current + 1);
@@ -402,6 +428,21 @@ const CategoryLandingSections = ({ categoryName }) => {
             active = false;
         };
     }, [version]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+
+        const handleResize = () => {
+            setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT);
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
 
     const categoryConfig = useMemo(
         () => {
@@ -496,7 +537,7 @@ const CategoryLandingSections = ({ categoryName }) => {
                             {(section.title || section.description || section.showArrow) && (
                                 <div className="mb-2 flex items-start justify-between gap-3">
                                     <div>
-                                        {section.title ? <h3 className="text-xl font-bold tracking-tight text-gray-900">{section.title}</h3> : null}
+                                        {section.title ? <h3 className="text-lg font-bold tracking-tight text-gray-900 md:text-3xl">{section.title}</h3> : null}
                                         {section.description ? <p className="mt-1 text-sm text-gray-600">{section.description}</p> : null}
                                     </div>
                                     {section.showArrow && section.sectionLink ? (
@@ -518,6 +559,7 @@ const CategoryLandingSections = ({ categoryName }) => {
                                 categoryName={categoryName}
                                 openLink={openLink}
                                 sectionProducts={categoryConfig?.products || []}
+                                isDesktop={isDesktop}
                             />
                         </section>
                     );

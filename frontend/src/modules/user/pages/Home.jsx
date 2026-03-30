@@ -123,7 +123,7 @@ const Home = () => {
                                     titleKey="name"
                                     subtitleKey="price"
                                     containerClass="mt-0"
-                                    showArrow={true}
+                                    showArrow={false}
                                 />
                             </Suspense>
                         ) : (
@@ -133,6 +133,7 @@ const Home = () => {
                                     subtitle={section.subtitle}
                                     products={section.products}
                                     containerClass="mt-0"
+                                    showArrow={false}
                                     onViewAll={() => navigate(`/products?search=${section.title}`)}
                                 />
                             </Suspense>
