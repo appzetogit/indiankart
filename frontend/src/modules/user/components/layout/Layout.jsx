@@ -42,8 +42,7 @@ const Layout = () => {
         !location.pathname.includes('/checkout') &&
         !location.pathname.includes('/login') &&
         !location.pathname.includes('/track-order') &&
-        !location.pathname.includes('/category/') &&
-        !location.pathname.includes('/play');
+        !location.pathname.includes('/category/');
     const showFooter = !isCategory && !isAllCategories;
 
     return (

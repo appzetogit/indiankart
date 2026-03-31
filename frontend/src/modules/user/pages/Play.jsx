@@ -180,6 +180,7 @@ const Play = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [activeVideoId, setActiveVideoId] = useState(null);
     const containerRef = useRef(null);
+    const mobileBottomNavHeight = 'calc(92px + env(safe-area-inset-bottom))';
 
     useEffect(() => {
         const loadReels = async () => {
@@ -229,7 +230,10 @@ const Play = () => {
 
     if (isLoading) {
         return (
-            <div className="h-screen w-full bg-black relative flex items-center justify-center">
+            <div
+                className="w-full bg-black relative flex items-center justify-center md:h-screen"
+                style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+            >
                 <button
                     onClick={() => navigate('/')}
                     className="absolute top-4 left-4 z-50 p-2 bg-black/50 rounded-full text-white backdrop-blur-sm active:scale-95 transition-all"
@@ -246,7 +250,10 @@ const Play = () => {
 
     if (!reels.length) {
         return (
-            <div className="h-screen w-full bg-black relative flex items-center justify-center">
+            <div
+                className="w-full bg-black relative flex items-center justify-center md:h-screen"
+                style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+            >
                 <button
                     onClick={() => navigate('/')}
                     className="absolute top-4 left-4 z-50 p-2 bg-black/50 rounded-full text-white backdrop-blur-sm active:scale-95 transition-all"
@@ -262,7 +269,10 @@ const Play = () => {
     }
 
     return (
-        <div className="h-screen w-full bg-black relative">
+        <div
+            className="w-full bg-black relative md:h-screen"
+            style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+        >
             <button
                 onClick={() => navigate('/')}
                 className="absolute top-4 left-4 z-50 p-2 bg-black/50 rounded-full text-white backdrop-blur-sm active:scale-95 transition-all"
