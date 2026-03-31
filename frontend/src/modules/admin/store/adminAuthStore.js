@@ -4,7 +4,7 @@ import API from '../../../services/api';
 
 const useAdminAuthStore = create(
     persist(
-        (set) => ({
+        (set, get) => ({
             isAuthenticated: false,
             adminUser: null,
             error: null,
@@ -52,8 +52,9 @@ const useAdminAuthStore = create(
             updateProfile: async (profileData) => {
                 try {
                     const { data } = await API.put('/admin/profile', profileData);
+                    const existingToken = get().adminUser?.token;
                     set({
-                        adminUser: data,
+                        adminUser: existingToken ? { ...data, token: existingToken } : data,
                         error: null
                     });
                     return data;

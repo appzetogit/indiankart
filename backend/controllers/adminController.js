@@ -79,14 +79,15 @@ export const updateAdminProfile = async (req, res) => {
 
             const updatedAdmin = await admin.save();
 
-            generateToken(res, updatedAdmin._id, 'admin_jwt');
+            const token = generateToken(res, updatedAdmin._id, 'admin_jwt');
 
             res.json({
                 _id: updatedAdmin._id,
                 name: updatedAdmin.name,
                 email: updatedAdmin.email,
                 role: updatedAdmin.role,
-                isAdmin: true
+                isAdmin: true,
+                token
             });
         } else {
             res.status(404).json({ message: 'Admin not found' });
