@@ -231,8 +231,8 @@ const Play = () => {
     if (isLoading) {
         return (
             <div
-                className="w-full bg-black relative flex items-center justify-center md:h-screen"
-                style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+                className="h-[var(--play-mobile-height)] md:h-screen w-full bg-black relative flex items-center justify-center"
+                style={{ '--play-mobile-height': `calc(100vh - ${mobileBottomNavHeight})` }}
             >
                 <button
                     onClick={() => navigate('/')}
@@ -251,8 +251,8 @@ const Play = () => {
     if (!reels.length) {
         return (
             <div
-                className="w-full bg-black relative flex items-center justify-center md:h-screen"
-                style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+                className="h-[var(--play-mobile-height)] md:h-screen w-full bg-black relative flex items-center justify-center"
+                style={{ '--play-mobile-height': `calc(100vh - ${mobileBottomNavHeight})` }}
             >
                 <button
                     onClick={() => navigate('/')}
@@ -270,8 +270,8 @@ const Play = () => {
 
     return (
         <div
-            className="w-full bg-black relative md:h-screen"
-            style={{ height: `calc(100vh - ${mobileBottomNavHeight})` }}
+            className="h-[var(--play-mobile-height)] md:h-screen w-full bg-black relative"
+            style={{ '--play-mobile-height': `calc(100vh - ${mobileBottomNavHeight})` }}
         >
             <button
                 onClick={() => navigate('/')}
