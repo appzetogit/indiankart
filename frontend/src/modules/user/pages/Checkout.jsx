@@ -101,6 +101,10 @@ const Checkout = () => {
         minShippingOrderAmount: 0,
         maxShippingOrderAmount: 499
     });
+    const [storeBranding, setStoreBranding] = useState({
+        sellerName: 'IndiaKart',
+        logoUrl: ''
+    });
     const [bankOffers, setBankOffers] = useState([]);
 
     const eligibleB2BItems = checkoutItems.filter((item) => {
@@ -128,8 +132,16 @@ const Checkout = () => {
                     minShippingOrderAmount: Number(data?.minShippingOrderAmount ?? 0),
                     maxShippingOrderAmount: Number(data?.maxShippingOrderAmount ?? (fallbackMax >= 0 ? fallbackMax : 499))
                 });
+                setStoreBranding({
+                    sellerName: data?.sellerName?.trim() || 'IndiaKart',
+                    logoUrl: data?.logoUrl || ''
+                });
             } catch (error) {
                 console.error('Failed to fetch shipping settings:', error);
+                setStoreBranding({
+                    sellerName: 'IndiaKart',
+                    logoUrl: ''
+                });
             }
         };
         const fetchBankOffers = async () => {
@@ -443,8 +455,9 @@ const Checkout = () => {
                     key: config.keyId,
                     amount: order.amount,
                     currency: order.currency,
-                    name: "Geeta Stores",
+                    name: storeBranding.sellerName || 'IndiaKart',
                     description: "Order Payment",
+                    image: storeBranding.logoUrl || undefined,
                     order_id: order.id,
                     handler: async (response) => {
                         try {

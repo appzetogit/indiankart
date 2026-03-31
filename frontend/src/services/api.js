@@ -7,10 +7,33 @@ const API = axios.create({
 API.interceptors.request.use((config) => {
     try {
         const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
+        const requestPath = config.url || '';
+        const requestMethod = String(config.method || 'get').toLowerCase();
         const currentPath =
             typeof window !== 'undefined' ? window.location.pathname : '';
         const isAdminContext = currentPath.startsWith('/admin');
         const isAdminApiCall = requestUrl.includes('/admin');
+        const requiresAdminToken = [
+            '/coupons',
+            '/bank-offers',
+            '/categories',
+            '/subcategories',
+            '/products',
+            '/orders',
+            '/returns',
+            '/reels',
+            '/banners',
+            '/home-sections',
+            '/pages',
+            '/home-layout',
+            '/pincodes',
+            '/settings',
+            '/offers',
+            '/notifications',
+            '/footer',
+            '/header',
+            '/seller-requests'
+        ].some((path) => requestPath.startsWith(path)) && requestMethod !== 'get';
 
         const adminStorageData = localStorage.getItem('admin-auth-storage');
         const userStorageData = localStorage.getItem('user-auth-storage');
@@ -26,9 +49,7 @@ API.interceptors.request.use((config) => {
 
         // Keep admin/user sessions isolated:
         // admin pages -> admin token, user pages -> user token.
-        if (isAdminContext && adminToken) {
-            config.headers.Authorization = `Bearer ${adminToken}`;
-        } else if (isAdminApiCall && adminToken) {
+        if ((isAdminContext || isAdminApiCall || requiresAdminToken) && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
         } else if (userToken) {
             config.headers.Authorization = `Bearer ${userToken}`;
