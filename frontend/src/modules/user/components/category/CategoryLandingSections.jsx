@@ -13,11 +13,32 @@ import {
 
 const DESKTOP_BREAKPOINT = 768;
 
+const normalizeDesktopImageItemsPerRow = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 0;
+    const rounded = Math.round(parsed);
+    if (rounded < 1) return 0;
+    return Math.min(6, rounded);
+};
+
 const getSectionLayoutClass = (mediaDisplay, sectionKind) => {
     if (mediaDisplay === 'grid' && sectionKind === 'product') return 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4';
     if (mediaDisplay === 'grid') return 'grid grid-cols-2 gap-3';
     if (mediaDisplay === 'single') return 'block';
     return 'flex gap-3 overflow-x-auto no-scrollbar pb-1';
+};
+
+const getDesktopImageGridStyle = (section, isDesktop = false) => {
+    if (!isDesktop) return undefined;
+    if (section?.sectionKind !== 'image' || section?.mediaDisplay !== 'grid') return undefined;
+    const desktopItemsPerRow = normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow);
+    if (!desktopItemsPerRow) return undefined;
+    return {
+        display: 'inline-grid',
+        gridTemplateColumns: `repeat(${desktopItemsPerRow}, max-content)`,
+        justifyContent: 'start',
+        maxWidth: '100%'
+    };
 };
 
 const getCardWidthClass = (mediaDisplay) => {
@@ -69,6 +90,12 @@ const getImageCardStyle = (section, mediaDisplay, itemType, isDesktop = false) =
             };
         }
         if (mediaDisplay === 'grid') {
+            if (section?.sectionKind === 'image' && normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow)) {
+                return {
+                    width: `${width}px`,
+                    justifySelf: 'start'
+                };
+            }
             return {
                 width: '100%',
                 maxWidth: `min(${width}px, 100%)`,
@@ -289,6 +316,8 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
 };
 
 const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, sectionProducts, isDesktop }) => {
+    const desktopImageGridStyle = getDesktopImageGridStyle(section, isDesktop);
+
     // Carousel: single-view slideshow
     if (section.mediaDisplay === 'carousel') {
         return (
@@ -307,7 +336,9 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
     return (
         <div
             className={getSectionLayoutClass(section.mediaDisplay, section.sectionKind)}
-            style={section.mediaDisplay === 'scroll' ? { WebkitOverflowScrolling: 'touch' } : undefined}
+            style={section.mediaDisplay === 'scroll'
+                ? { WebkitOverflowScrolling: 'touch' }
+                : desktopImageGridStyle}
         >
             {sectionItems.map((item) => {
                 const product = getResolvedSectionProduct(item, sectionProducts);

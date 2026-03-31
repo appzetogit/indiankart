@@ -181,6 +181,14 @@ const getDefaultDisplayModeForSectionKind = (sectionKind) => {
     return 'grid';
 };
 
+const normalizeDesktopImageItemsPerRow = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return '';
+    const rounded = Math.round(parsed);
+    if (rounded < 1) return '';
+    return Math.min(6, rounded);
+};
+
 const normalizeDisplayModeForSectionKind = (sectionKind, mediaDisplay) => {
     const normalizedDisplay = String(mediaDisplay || '').trim();
     const allowedOptions = getSupportedDisplayModeOptions(sectionKind);
@@ -212,6 +220,7 @@ const withDefaultSections = (sections = []) => {
     const lockedSection = filtered.find((section) => isLockedSection(section));
     const normalized = filtered.map((section, index) => ({
         ...section,
+        desktopImageItemsPerRow: normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow),
         mediaDisplay: isLockedSection(section)
             ? section?.mediaDisplay || 'grid'
             : normalizeDisplayModeForSectionKind(section?.sectionKind, section?.mediaDisplay),
@@ -418,6 +427,7 @@ const CategoryPageBuilder = () => {
             backgroundImage: '',
             imageRatio: 'square',
             imageWidth: '',
+            desktopImageItemsPerRow: '',
             mediaDisplay: 'grid',
             items: []
         });
@@ -1015,6 +1025,25 @@ const CategoryPageBuilder = () => {
                                     </p>
                                 </div>
                             )}
+                            {section.sectionKind === 'image' && section.mediaDisplay === 'grid' && (
+                                <div className="grid grid-cols-1 gap-3 md:col-span-2">
+                                    <label className="space-y-2 text-sm font-semibold text-gray-700">
+                                        <span>Desktop Photos Per Row</span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="6"
+                                            value={section.desktopImageItemsPerRow || ''}
+                                            onChange={(e) => updateSection({ desktopImageItemsPerRow: e.target.value.replace(/[^\d]/g, '') })}
+                                            className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                            placeholder="e.g. 3"
+                                        />
+                                    </label>
+                                    <p className="text-xs text-gray-500">
+                                        Sirf web/desktop par image grid ke liye apply hoga. Mobile layout same rahega.
+                                    </p>
+                                </div>
+                            )}
                             <label className="space-y-2 text-sm font-semibold text-gray-700">
                                 <span>Background Type</span>
                                 <select
@@ -1445,6 +1474,9 @@ const getAdminPreviewImageCardStyle = (section, mediaDisplay) => {
     }
 
     if (mediaDisplay === 'grid') {
+        if (section?.sectionKind === 'image' && normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow)) {
+            return { width: `${width}px`, justifySelf: 'start' };
+        }
         return { width: '100%', maxWidth: `min(${width}px, calc((100% - 1.5rem) / 2), 180px)`, marginInline: 'auto' };
     }
 
@@ -1587,6 +1619,19 @@ const SectionPreviewCard = ({
         );
     }
 
+    const previewDesktopPhotosPerRow = normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow);
+    const shouldUseCustomImageGridPreview = section.sectionKind === 'image'
+        && section.mediaDisplay === 'grid'
+        && previewDesktopPhotosPerRow;
+    const gridPreviewStyle = shouldUseCustomImageGridPreview
+        ? {
+            display: 'inline-grid',
+            gridTemplateColumns: `repeat(${previewDesktopPhotosPerRow}, max-content)`,
+            justifyContent: 'start',
+            maxWidth: '100%'
+        }
+        : undefined;
+
     return (
         <div
             className="w-full min-w-0 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
@@ -1643,7 +1688,10 @@ const SectionPreviewCard = ({
                         </div>
                     ) : (
                         <div className="w-full min-w-0 overflow-hidden">
-                            <div className={`${section.mediaDisplay === 'grid' ? 'grid grid-cols-2 gap-3 md:grid-cols-4' : 'block min-w-0'}`}>
+                            <div
+                                className={`${section.mediaDisplay === 'grid' ? 'grid grid-cols-2 gap-3 md:grid-cols-4' : 'block min-w-0'}`}
+                                style={gridPreviewStyle}
+                            >
                                 {previewItems.map((item) => {
                                     return <AdminPreviewItemCard key={item.id} item={item} mediaDisplay={section.mediaDisplay} getProduct={getProduct} section={section} />;
                                 })}

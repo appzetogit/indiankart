@@ -19,11 +19,20 @@ const makeLocalId = (prefix, seed) => {
 
 const toArray = (value) => (Array.isArray(value) ? value : []);
 
+const normalizeDesktopImageItemsPerRow = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return '';
+    const rounded = Math.round(parsed);
+    if (rounded < 1) return '';
+    return Math.min(6, rounded);
+};
+
 const sanitizeSectionForWidthDrivenImages = (section = {}) => {
     if (!section || typeof section !== 'object') return section;
     const { imageHeight, ...rest } = section;
     return {
         ...rest,
+        desktopImageItemsPerRow: normalizeDesktopImageItemsPerRow(rest.desktopImageItemsPerRow),
         items: toArray(rest.items)
     };
 };
