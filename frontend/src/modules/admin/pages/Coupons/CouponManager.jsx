@@ -22,8 +22,14 @@ const CouponManager = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const handleCouponSubmit = (e) => {
+    const handleCouponSubmit = async (e) => {
         e.preventDefault();
+        const normalizedCode = couponData.code.trim().toUpperCase();
+
+        if (!normalizedCode) {
+            toast.error('Coupon code is required');
+            return;
+        }
         if (!couponData.expiryDate) {
             toast.error('Expiry date is required');
             return;
@@ -32,21 +38,24 @@ const CouponManager = () => {
             toast.error('Expiry date must be greater than creation date');
             return;
         }
+        try {
+            await addCoupon({
+                ...couponData,
+                code: normalizedCode,
+                value: Number(couponData.value),
+                minPurchase: Number(couponData.minPurchase),
+                maxDiscount: couponData.maxDiscount ? Number(couponData.maxDiscount) : 0
+            });
 
-        addCoupon({
-            ...couponData,
-            code: couponData.code.toUpperCase(),
-            value: Number(couponData.value),
-            minPurchase: Number(couponData.minPurchase),
-            maxDiscount: couponData.maxDiscount ? Number(couponData.maxDiscount) : 0
-        });
-
-        setShowForm(false);
-        setCouponData({
-            code: '', title: '', description: '', type: 'percentage', value: '',
-            minPurchase: '', maxDiscount: '', expiryDate: '',
-            userSegment: 'all', applicableCategory: 'all'
-        });
+            setShowForm(false);
+            setCouponData({
+                code: '', title: '', description: '', type: 'percentage', value: '',
+                minPurchase: '', maxDiscount: '', expiryDate: '',
+                userSegment: 'all', applicableCategory: 'all'
+            });
+        } catch {
+            // Store shows the backend error toast; keep the form open so admins can fix the values.
+        }
     };
 
     const handleDelete = (id) => {

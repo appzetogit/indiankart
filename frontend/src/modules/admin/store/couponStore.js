@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import API from '../../../services/api';
+import toast from 'react-hot-toast';
 
 const useCouponStore = create((set) => ({
     coupons: [],
@@ -28,8 +29,13 @@ const useCouponStore = create((set) => ({
         try {
             const { data } = await API.post('/coupons', payload);
             set((state) => ({ coupons: [...state.coupons, data] }));
+            toast.success('Coupon created');
+            return data;
         } catch (error) {
             console.error(error);
+            const message = error.response?.data?.message || 'Failed to create coupon';
+            toast.error(message);
+            throw error;
         }
     },
     
