@@ -164,7 +164,12 @@ export const getProducts = async (req, res) => {
         }
 
         if (searchTerm) {
-            const regex = new RegExp(searchTerm, 'i');
+            const searchPattern = searchTerm
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((part) => escapeRegex(part))
+                .join('\\s*');
+            const regex = new RegExp(searchPattern, 'i');
             const searchFilter = {
                 $or: [
                     { name: regex },

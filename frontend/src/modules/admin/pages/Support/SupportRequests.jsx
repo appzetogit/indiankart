@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import useSupportStore from '../../store/supportStore';
 import { MdSearch, MdDelete, MdCheckCircle, MdPending, MdAccessTime, MdFilterList } from 'react-icons/md';
+import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const SupportRequests = () => {
     const { supportRequests, updateStatus, deleteRequest } = useSupportStore();
@@ -10,9 +12,9 @@ const SupportRequests = () => {
     const filteredRequests = supportRequests.filter(req => {
         const matchesStatus = filterStatus === 'ALL' || req.status === filterStatus;
         const matchesSearch =
-            req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            req.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            req.contact.toLowerCase().includes(searchQuery.toLowerCase());
+            matchesNormalizedSearch(req.id, searchQuery) ||
+            matchesNormalizedSearch(req.customerName, searchQuery) ||
+            matchesNormalizedSearch(req.contact, searchQuery);
         return matchesStatus && matchesSearch;
     });
 
@@ -81,15 +83,15 @@ const SupportRequests = () => {
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <table className="w-full text-left">
-                    <thead>
-                        <tr className="bg-gray-50/50 border-b border-gray-100">
-                            <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">ID / Date</th>
-                            <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Customer</th>
-                            <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Issue</th>
-                            <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Status</th>
-                            <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                        </tr>
-                    </thead>
+                    <AdminTableHead>
+                        <AdminTableHeaderRow>
+                            <AdminTableHeaderCell>ID / Date</AdminTableHeaderCell>
+                            <AdminTableHeaderCell>Customer</AdminTableHeaderCell>
+                            <AdminTableHeaderCell>Issue</AdminTableHeaderCell>
+                            <AdminTableHeaderCell>Status</AdminTableHeaderCell>
+                            <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
+                        </AdminTableHeaderRow>
+                    </AdminTableHead>
                     <tbody className="divide-y divide-gray-100">
                         {paginatedRequests.length > 0 ? (
                             paginatedRequests.map((req) => (

@@ -177,7 +177,20 @@ const OrderDetail = () => {
     const currentStatusTimeMs = new Date(
         timelineByStatus[normalizedCurrentStatus]?.time || order.updatedAt || order.createdAt || order.date || Date.now()
     ).getTime();
-    const completedCount = currentFlowIndex >= 0 ? currentFlowIndex + 1 : 0;
+    const explicitTimelineFlowIndex = orderedTimeline.reduce((highestIdx, event) => {
+        const eventIdx = timelineFlow.indexOf(normalizeFulfillmentStatus(event.status));
+        return eventIdx > highestIdx ? eventIdx : highestIdx;
+    }, -1);
+    const inferredCancelledFlowIndex = (() => {
+        if (explicitTimelineFlowIndex >= 0) return explicitTimelineFlowIndex;
+        if (order.isDelivered || order.deliveredAt) return timelineFlow.indexOf('Delivered');
+        const hasPackedSignal = Array.isArray(order.items) && order.items.some(item => item.serialNumber);
+        return hasPackedSignal ? timelineFlow.indexOf('Packed') : timelineFlow.indexOf('Pending');
+    })();
+    const effectiveFlowIndex = normalizedCurrentStatus === 'Cancelled'
+        ? inferredCancelledFlowIndex
+        : currentFlowIndex;
+    const completedCount = effectiveFlowIndex >= 0 ? effectiveFlowIndex + 1 : 0;
     const fallbackTimeByStatus = {};
     if (completedCount > 0) {
         for (let i = 0; i < completedCount; i += 1) {
@@ -191,11 +204,11 @@ const OrderDetail = () => {
                 fallbackTimeByStatus[status] = new Date(createdTimeMs);
                 continue;
             }
-            if (i === currentFlowIndex) {
+            if (i === effectiveFlowIndex) {
                 fallbackTimeByStatus[status] = new Date(currentStatusTimeMs);
                 continue;
             }
-            const ratio = currentFlowIndex > 0 ? i / currentFlowIndex : 0;
+            const ratio = effectiveFlowIndex > 0 ? i / effectiveFlowIndex : 0;
             const syntheticMs = createdTimeMs + ((currentStatusTimeMs - createdTimeMs) * ratio);
             fallbackTimeByStatus[status] = new Date(syntheticMs);
         }
@@ -334,9 +347,9 @@ const OrderDetail = () => {
                         <div className="space-y-4 md:space-y-5">
                             {timelineFlow.map((status, idx) => {
                                 const statusEvent = timelineByStatus[status];
-                                const isCompleted = currentFlowIndex >= idx;
+                                const isCompleted = effectiveFlowIndex >= idx;
                                 const isCurrent = normalizedCurrentStatus === status;
-                                const isUpcoming = currentFlowIndex !== -1 ? idx > currentFlowIndex : !statusEvent;
+                                const isUpcoming = effectiveFlowIndex !== -1 ? idx > effectiveFlowIndex : !statusEvent;
                                 const displayTime = statusEvent?.time ? new Date(statusEvent.time) : fallbackTimeByStatus[status];
                                 return (
                                 <div key={status} className="flex items-start gap-3 md:gap-4">

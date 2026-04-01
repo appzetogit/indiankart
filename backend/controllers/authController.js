@@ -240,7 +240,13 @@ export const getUsers = async (req, res) => {
 
         // Search Implementation
         if (search) {
-            const searchRegex = { $regex: search, $options: 'i' };
+            const normalizedSearch = String(search || '').trim();
+            const searchPattern = normalizedSearch
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                .join('\\s*');
+            const searchRegex = { $regex: searchPattern, $options: 'i' };
             filter.$or = [
                 { name: searchRegex },
                 { email: searchRegex },

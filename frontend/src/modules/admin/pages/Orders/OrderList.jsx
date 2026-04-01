@@ -4,6 +4,7 @@ import { MdSearch, MdFilterList, MdVisibility, MdChevronLeft, MdChevronRight, Md
 import useOrderStore from '../../store/orderStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
+import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 
 const OrderList = () => {
     const navigate = useNavigate();
@@ -18,7 +19,7 @@ const OrderList = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalOrders, setTotalOrders] = useState(0);
-    const itemsPerPage = 12;
+    const itemsPerPage = 20;
 
     const [localOrders, setLocalOrders] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -172,19 +173,17 @@ const OrderList = () => {
             ) : (
                 <div className="space-y-4">
                     <div className="relative md:mx-0">
-                        <div className="bg-white md:rounded-2xl border-y md:border border-gray-200 shadow-sm">
-                            <div className="overflow-x-auto overflow-y-visible" style={{ WebkitOverflowScrolling: 'touch', maxWidth: '100vw' }}>
-                                <table className="w-full min-w-max text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-gray-50/50 border-b border-gray-100">
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Order ID & Date</th>
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">CustomerDetails</th>
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Items & Price</th>
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Payment</th>
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Status</th>
-                                            <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                                        </tr>
-                                    </thead>
+                        <AdminTable shellClassName="md:rounded-2xl border-y md:border" tableClassName="w-full min-w-max text-left border-collapse">
+                                    <AdminTableHead>
+                                        <AdminTableHeaderRow>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Order ID & Date</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">CustomerDetails</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Items & Price</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Payment</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Status</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
+                                        </AdminTableHeaderRow>
+                                    </AdminTableHead>
                                     <tbody className="divide-y divide-gray-50">
                                         {filteredOrders.map((order, index) => (
                                             <tr key={order.id || `order-${index}`} className="hover:bg-blue-50/10 transition-colors group">
@@ -263,9 +262,7 @@ const OrderList = () => {
                                             </tr>
                                         ))}
                                     </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        </AdminTable>
 
                         {/* Pagination */}
                         {totalPages >= 1 && (

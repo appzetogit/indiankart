@@ -3,6 +3,7 @@ import { MdSearch, MdInventory, MdExpandMore, MdExpandLess, MdSave, MdRefresh } 
 import API from '../../../../services/api';
 import { toast } from 'react-hot-toast';
 import Loader from '../../../../components/common/Loader';
+import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 
 const StockManagement = () => {
     const [products, setProducts] = useState([]);
@@ -131,40 +132,40 @@ const StockManagement = () => {
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Info</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Category</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Variants</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Remaining Stock</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
+                        <AdminTableHead>
+                            <AdminTableHeaderRow>
+                                <AdminTableHeaderCell compact>Product Info</AdminTableHeaderCell>
+                                <AdminTableHeaderCell compact>Category</AdminTableHeaderCell>
+                                <AdminTableHeaderCell compact className="text-center">Variants</AdminTableHeaderCell>
+                                <AdminTableHeaderCell compact className="text-center">Remaining Stock</AdminTableHeaderCell>
+                                <AdminTableHeaderCell compact className="text-right">Actions</AdminTableHeaderCell>
+                            </AdminTableHeaderRow>
+                        </AdminTableHead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredProducts.map(product => (
                                 <React.Fragment key={product.id}>
                                     <tr className={`hover:bg-blue-50/10 transition-colors group ${expandedProduct === product.id ? 'bg-blue-50/30' : ''}`}>
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
+                                        <td className="px-4 py-3.5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
                                                     <img src={product.image} className="w-full h-full object-contain p-1" alt="" />
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <h4 className="text-sm font-black text-gray-800 truncate max-w-[250px]">{product.name}</h4>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{product.brand || 'No Brand'}</p>
+                                                    <h4 className="text-sm font-black text-gray-800 truncate max-w-[220px]">{product.name}</h4>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.14em]">{product.brand || 'No Brand'}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5">
-                                            <span className="text-xs font-bold text-gray-600 px-2 py-1 bg-gray-100 rounded-md">
+                                        <td className="px-4 py-3.5">
+                                            <span className="inline-flex text-[11px] font-bold text-gray-600 px-2 py-1 bg-gray-100 rounded-md">
                                                 {product.category}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-5 text-center">
+                                        <td className="px-4 py-3.5 text-center">
                                             {product.skus && product.skus.length > 0 ? (
                                                 <button
                                                     onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-tighter hover:bg-blue-100 transition-all border border-blue-100 shadow-sm"
+                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-[0.14em] hover:bg-blue-100 transition-all border border-blue-100 shadow-sm"
                                                 >
                                                     {product.skus.length} variants
                                                     {expandedProduct === product.id ? <MdExpandLess /> : <MdExpandMore />}
@@ -173,12 +174,12 @@ const StockManagement = () => {
                                                 <span className="text-[10px] font-black text-gray-300 uppercase italic tracking-widest">No Variants</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center justify-center gap-3">
+                                        <td className="px-4 py-3.5">
+                                            <div className="flex items-center justify-center gap-2">
                                                 <input
                                                     type="number"
                                                     disabled={product.skus && product.skus.length > 0}
-                                                    className={`w-20 px-3 py-2 text-center rounded-xl border-2 font-black text-sm transition-all outline-none ${product.skus && product.skus.length > 0
+                                                    className={`w-16 px-2 py-1.5 text-center rounded-lg border-2 font-black text-sm transition-all outline-none ${product.skus && product.skus.length > 0
                                                             ? 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'
                                                             : 'bg-white border-blue-50 focus:border-blue-500 text-gray-900 group-hover:shadow-lg'
                                                         }`}
@@ -195,17 +196,17 @@ const StockManagement = () => {
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5 text-right">
+                                        <td className="px-4 py-3.5 text-right">
                                             {(!product.skus || product.skus.length === 0) && (
                                                 <button
                                                     onClick={() => updateStock(product)}
                                                     disabled={editingStock[product.id] === undefined}
-                                                    className={`p-2 rounded-xl transition-all shadow-sm border ${editingStock[product.id] !== undefined
+                                                    className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[product.id] !== undefined
                                                             ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
                                                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
                                                         }`}
                                                 >
-                                                    <MdSave size={20} />
+                                                    <MdSave size={18} />
                                                 </button>
                                             )}
                                         </td>
@@ -214,39 +215,39 @@ const StockManagement = () => {
                                     {/* Variant Rows */}
                                     {expandedProduct === product.id && product.skus?.map((sku, idx) => (
                                         <tr key={`${product.id}-${idx}`} className="bg-gray-50/80 animate-in slide-in-from-top-2 duration-300 border-l-4 border-blue-500">
-                                            <td className="pl-16 pr-6 py-4" colSpan={2}>
+                                            <td className="pl-14 pr-4 py-3" colSpan={2}>
                                                 <div className="flex items-center gap-3">
-                                                    <div className="flex gap-2">
+                                                    <div className="flex flex-wrap gap-2">
                                                         {Object.entries(sku.combination).map(([key, value]) => (
                                                             <div key={key} className="flex flex-col">
                                                                 <span className="text-[10px] font-bold text-gray-400 leading-none mb-1">{key}</span>
-                                                                <span className="text-xs font-black text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-100">{value}</span>
+                                                                <span className="text-[11px] font-black text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-100">{value}</span>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             </td>
                                             <td></td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center gap-3">
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center justify-center gap-2">
                                                     <input
                                                         type="number"
-                                                        className="w-20 px-3 py-2 text-center rounded-xl border-2 bg-white border-blue-100 focus:border-blue-500 text-gray-900 font-black text-sm transition-all outline-none"
+                                                        className="w-16 px-2 py-1.5 text-center rounded-lg border-2 bg-white border-blue-100 focus:border-blue-500 text-gray-900 font-black text-sm transition-all outline-none"
                                                         value={editingStock[`${product.id}-${idx}`] ?? sku.stock}
                                                         onChange={(e) => handleStockChange(`${product.id}-${idx}`, e.target.value)}
                                                     />
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-4 py-3 text-right">
                                                 <button
                                                     onClick={() => updateStock(product, true, idx)}
                                                     disabled={editingStock[`${product.id}-${idx}`] === undefined}
-                                                    className={`p-2 rounded-xl transition-all shadow-sm border ${editingStock[`${product.id}-${idx}`] !== undefined
+                                                    className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[`${product.id}-${idx}`] !== undefined
                                                             ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
                                                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
                                                         }`}
                                                 >
-                                                    <MdSave size={20} />
+                                                    <MdSave size={18} />
                                                 </button>
                                             </td>
                                         </tr>

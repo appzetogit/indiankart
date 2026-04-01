@@ -291,6 +291,7 @@ export const createReturnRequest = async (req, res) => {
                 id: `RET-${Date.now()}`,
                 orderId: order._id,
                 orderItemId: item._id?.toString(),
+                userId: req.user._id?.toString(),
                 customer: req.user.name,
                 product: {
                     id: item.product,
@@ -388,6 +389,7 @@ export const createReturnRequest = async (req, res) => {
             const newReturn = new Return({
                 id: `CAN-${Date.now()}`,
                 orderId: order._id,
+                userId: req.user._id?.toString(),
                 customer: req.user.name,
                 product: {
                     name: 'Whole Order Cancellation',
@@ -432,16 +434,20 @@ export const getReturns = async (req, res) => {
         
         // Populate displayId manually since orderId is String
         const orderIds = returns.map(r => r.orderId);
-        const orders = await Order.find({ _id: { $in: orderIds } }).select('_id displayId');
+        const orders = await Order.find({ _id: { $in: orderIds } }).select('_id displayId user');
         
         const orderMap = orders.reduce((acc, order) => {
-            acc[order._id.toString()] = order.displayId;
+            acc[order._id.toString()] = {
+                displayId: order.displayId,
+                userId: order.user ? order.user.toString() : ''
+            };
             return acc;
         }, {});
 
         const returnsWithDisplayId = returns.map(ret => ({
             ...ret,
-            orderDisplayId: orderMap[ret.orderId] || ret.orderId
+            orderDisplayId: orderMap[ret.orderId]?.displayId || ret.orderId,
+            userId: ret.userId || orderMap[ret.orderId]?.userId || ''
         }));
 
         res.json(returnsWithDisplayId);
@@ -455,11 +461,14 @@ export const getReturns = async (req, res) => {
 // @access  Private
 export const getUserReturnRequests = async (req, res) => {
     try {
-        const userOrders = await Order.find({ user: req.user._id }).select('_id displayId');
+        const userOrders = await Order.find({ user: req.user._id }).select('_id displayId user');
         const orderIds = userOrders.map(order => order._id.toString());
         
         const orderMap = userOrders.reduce((acc, order) => {
-            acc[order._id.toString()] = order.displayId;
+            acc[order._id.toString()] = {
+                displayId: order.displayId,
+                userId: order.user ? order.user.toString() : ''
+            };
             return acc;
         }, {});
 
@@ -467,7 +476,8 @@ export const getUserReturnRequests = async (req, res) => {
 
         const returnsWithDisplayId = returns.map(ret => ({
             ...ret,
-            orderDisplayId: orderMap[ret.orderId] || ret.orderId
+            orderDisplayId: orderMap[ret.orderId]?.displayId || ret.orderId,
+            userId: ret.userId || orderMap[ret.orderId]?.userId || ''
         }));
 
         res.json(returnsWithDisplayId);

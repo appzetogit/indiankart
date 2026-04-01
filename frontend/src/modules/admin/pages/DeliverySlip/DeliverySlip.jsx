@@ -5,6 +5,7 @@ import { MdLocalShipping, MdSearch, MdFilterList, MdDownload, MdCheckBox, MdChec
 import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator, { BulkInvoiceGenerator } from '../../components/orders/InvoiceGenerator';
 import API from '../../../../services/api';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const DeliverySlip = () => {
     const navigate = useNavigate();
@@ -38,9 +39,9 @@ const DeliverySlip = () => {
     // Apply search and filter
     const filteredOrders = orders.filter(order => {
         const matchesSearch =
-            (order.displayId || order.id)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.user?.phone?.includes(searchTerm);
+            matchesNormalizedSearch(order.displayId || order.id, searchTerm) ||
+            matchesNormalizedSearch(order.user?.name, searchTerm) ||
+            matchesNormalizedSearch(order.user?.phone, searchTerm);
 
         const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
 
@@ -183,7 +184,7 @@ const DeliverySlip = () => {
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-100">
+                            <thead className="bg-slate-900 border-b border-slate-800">
                                 <tr>
                                     <th className="px-6 py-4 text-left">
                                         <input
@@ -193,13 +194,13 @@ const DeliverySlip = () => {
                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                         />
                                     </th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Order ID</th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Customer</th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Phone</th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Items</th>
-                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">COD Amount</th>
-                                    <th className="px-6 py-4 text-center text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">Action</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Order ID</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Customer</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Phone</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Status</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Items</th>
+                                    <th className="px-6 py-4 text-left text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">COD Amount</th>
+                                    <th className="px-6 py-4 text-center text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">

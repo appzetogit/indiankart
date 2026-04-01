@@ -1283,13 +1283,13 @@ const ProductForm = () => {
                                                 <div className="rounded-2xl border border-gray-100 bg-white overflow-hidden shadow-sm overflow-x-auto">
                                                     <table className="w-full text-left border-collapse min-w-[300px]">
                                                         <thead>
-                                                            <tr className="bg-gray-50 border-b border-gray-100">
+                                                            <tr className="bg-slate-900 border-b border-slate-800">
                                                                 {formData.variantHeadings.map(vh => (
                                                                     <th key={vh.id} className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest whitespace-nowrap">{vh.name || 'Variant'}</th>
                                                                 ))}
-                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Selling Price</th>
-                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Marked Price</th>
-                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right whitespace-nowrap">Stock</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right whitespace-nowrap">Selling Price</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right whitespace-nowrap">Marked Price</th>
+                                                                <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right whitespace-nowrap">Stock</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-50">

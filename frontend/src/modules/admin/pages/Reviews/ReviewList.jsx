@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MdSearch, MdFilterList, MdCheckCircle, MdCancel, MdStar, MdRateReview } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import API from '../../../../services/api';
+import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const ReviewList = () => {
     const [reviews, setReviews] = useState([]);
@@ -42,9 +44,9 @@ const ReviewList = () => {
 
     const filteredReviews = reviews.filter(rev => {
         const matchesSearch =
-            (rev.product?.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (rev.user?.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-            (rev.comment?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+            matchesNormalizedSearch(rev.product?.name, searchTerm) ||
+            matchesNormalizedSearch(rev.user?.name, searchTerm) ||
+            matchesNormalizedSearch(rev.comment, searchTerm);
 
         const matchesStatus = statusFilter === 'All' || rev.status === statusFilter.toLowerCase();
 
@@ -97,19 +99,17 @@ const ReviewList = () => {
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">User</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Rating</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Comment</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Status</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Actions</th>
-                            </tr>
-                        </thead>
+            <AdminTable shellClassName="border-gray-100">
+                        <AdminTableHead>
+                            <AdminTableHeaderRow>
+                                <AdminTableHeaderCell>Product</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>User</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Rating</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Comment</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Status</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-center">Actions</AdminTableHeaderCell>
+                            </AdminTableHeaderRow>
+                        </AdminTableHead>
                         <tbody className="divide-y divide-gray-50">
                             {loading ? (
                                 <tr>
@@ -193,9 +193,7 @@ const ReviewList = () => {
                                 </tr>
                             )}
                         </tbody>
-                    </table>
-                </div>
-            </div>
+            </AdminTable>
         </div>
     );
 };

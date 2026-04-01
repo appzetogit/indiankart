@@ -3,6 +3,7 @@ import { MdAdd, MdEdit, MdDelete, MdExpandMore, MdChevronRight } from 'react-ico
 import useSubCategoryStore from '../../store/subCategoryStore';
 import SubCategoryForm from './SubCategoryForm';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const getCategoryId = (sub) => String(sub?.category?._id || sub?.category || 'uncategorized');
 const getCategoryName = (sub) => sub?.category?.name || 'Unassigned';
@@ -47,13 +48,10 @@ const SubCategoryList = () => {
     };
 
     const categoryGroups = useMemo(() => {
-        const filtered = (subCategories || []).filter(sub => {
-            const search = searchTerm.toLowerCase();
-            return (
-                sub.name?.toLowerCase().includes(search) || 
-                getCategoryName(sub).toLowerCase().includes(search)
-            );
-        });
+        const filtered = (subCategories || []).filter(sub => (
+            matchesNormalizedSearch(sub.name, searchTerm) ||
+            matchesNormalizedSearch(getCategoryName(sub), searchTerm)
+        ));
 
         const byCategory = new Map();
 
@@ -131,11 +129,11 @@ const SubCategoryList = () => {
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left border-collapse">
                                                 <thead>
-                                                    <tr className="bg-gray-50/70 border-b border-gray-100">
-                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Name</th>
-                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Category</th>
-                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Status</th>
-                                                        <th className="p-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
+                                                    <tr className="bg-slate-900 border-b border-slate-800">
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Name</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Category</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Status</th>
+                                                        <th className="p-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-100">

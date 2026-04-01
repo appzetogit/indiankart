@@ -3,6 +3,7 @@ import { MdBusinessCenter, MdSearch, MdSync } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import API from '../../../../services/api';
 import useCategoryStore from '../../store/categoryStore';
+import { normalizeSearchValue } from '../../utils/search';
 
 const Toggle = ({ checked, disabled = false, onChange }) => (
     <button
@@ -81,13 +82,13 @@ const B2BManager = () => {
     }, [selectedCategory?.name]);
 
     const filteredProducts = useMemo(() => {
-        const term = searchTerm.trim().toLowerCase();
+        const term = normalizeSearchValue(searchTerm);
         if (!term) return products;
 
         return products.filter((product) =>
             [product.name, product.brand]
                 .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(term))
+                .some((value) => normalizeSearchValue(value).includes(term))
         );
     }, [products, searchTerm]);
     const enabledProductCount = useMemo(

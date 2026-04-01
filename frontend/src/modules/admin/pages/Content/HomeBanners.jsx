@@ -18,6 +18,7 @@ import { toast } from 'react-hot-toast';
 import useBannerStore from '../../store/bannerStore';
 import useProductStore from '../../store/productStore';
 import API from '../../../../services/api';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 // DnD Kit imports
 import {
@@ -553,7 +554,7 @@ const HomeBanners = () => {
     };
 
     const filteredProducts = products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+        matchesNormalizedSearch(p.name, searchTerm)
     );
 
     // --- Main List View ---

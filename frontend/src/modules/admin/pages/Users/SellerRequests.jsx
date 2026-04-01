@@ -82,13 +82,13 @@ const SellerRequests = () => {
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px]">
                         <thead>
-                            <tr className="bg-gray-50 border-b border-gray-200">
-                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Store</th>
-                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Email</th>
-                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Phone</th>
-                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">GST</th>
-                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-gray-500">Status</th>
-                                <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-gray-500">Action</th>
+                            <tr className="bg-slate-900 border-b border-slate-800">
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-white">Store</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-white">Email</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-white">Phone</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-white">GST</th>
+                                <th className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-widest text-white">Status</th>
+                                <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-white">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">

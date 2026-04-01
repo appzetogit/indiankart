@@ -12,6 +12,8 @@ import {
 import toast from 'react-hot-toast';
 import useOfferStore from '../../store/offerStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
+import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const OfferList = () => {
     const navigate = useNavigate();
@@ -26,7 +28,7 @@ const OfferList = () => {
     }, []);
 
     const filteredOffers = offers.filter((offer) => {
-        const matchesSearch = offer.title.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = matchesNormalizedSearch(offer.title, searchTerm);
         const matchesStatus = statusFilter === 'all' ||
             (statusFilter === 'active' && offer.isActive) ||
             (statusFilter === 'inactive' && !offer.isActive);
@@ -161,16 +163,16 @@ const OfferList = () => {
                     <div className="bg-white md:rounded-2xl border-y md:border border-gray-200 shadow-sm">
                         <div className="overflow-x-auto overflow-y-visible" style={{ WebkitOverflowScrolling: 'touch', maxWidth: '100vw' }}>
                             <table className="w-full min-w-max text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50/50 border-b border-gray-100">
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Title</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Discount</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Type</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Duration</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Status</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                                    </tr>
-                                </thead>
+                                <AdminTableHead>
+                                    <AdminTableHeaderRow>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Title</AdminTableHeaderCell>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Discount</AdminTableHeaderCell>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Type</AdminTableHeaderCell>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Duration</AdminTableHeaderCell>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Status</AdminTableHeaderCell>
+                                        <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
+                                    </AdminTableHeaderRow>
+                                </AdminTableHead>
                                 <tbody className="divide-y divide-gray-50">
                                     {filteredOffers.map((offer) => (
                                         <tr key={offer._id} className="hover:bg-blue-50/10 transition-colors group">

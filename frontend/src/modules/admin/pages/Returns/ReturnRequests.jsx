@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MdSearch, MdCheckCircle, MdCancel, MdPendingActions, MdHistory, MdVisibility, MdChevronLeft, MdChevronRight } from 'react-icons/md';
 import useReturnStore from '../../store/returnStore';
+import API from '../../../../services/api';
+import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 
 const ReturnRequests = () => {
+    const navigate = useNavigate();
     const { returns, updateReturnStatus, fetchReturns } = useReturnStore();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -69,6 +73,27 @@ const ReturnRequests = () => {
             return;
         }
         await handleStatusUpdate(id, 'Rejected', trimmedReason);
+    };
+
+    const handleOpenCustomerProfile = async (ret) => {
+        try {
+            let userId = String(ret?.userId || '').trim();
+
+            if (!userId && ret?.orderId) {
+                const { data } = await API.get(`/orders/${ret.orderId}`);
+                userId = String(data?.user?._id || data?.user?.id || '').trim();
+            }
+
+            if (!userId) {
+                window.alert('Customer profile could not be opened for this request.');
+                return;
+            }
+
+            setSelectedReturn(null);
+            navigate(`/admin/users/${userId}`);
+        } catch (error) {
+            window.alert('Failed to open customer profile.');
+        }
     };
 
     const isVideoUrl = (url = '') => /\.(mp4|mov|webm|mkv|avi)(\?|$)/i.test(url);
@@ -197,18 +222,16 @@ const ReturnRequests = () => {
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Request Info</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Last Status Update</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Status</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
+            <AdminTable>
+                        <AdminTableHead>
+                            <AdminTableHeaderRow>
+                                <AdminTableHeaderCell>Request Info</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Product</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Last Status Update</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-center">Status</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
+                            </AdminTableHeaderRow>
+                        </AdminTableHead>
                         <tbody className="divide-y divide-gray-50">
                             {paginatedReturns.map(ret => (
                                 <tr key={ret.id} className="hover:bg-blue-50/10 transition-colors group">
@@ -270,9 +293,7 @@ const ReturnRequests = () => {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
-                </div>
-            </div>
+            </AdminTable>
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -399,7 +420,14 @@ const ReturnRequests = () => {
                                     </div>
                                     <div className="bg-gray-50 p-4 rounded-2xl">
                                         <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Customer</p>
-                                        <p className="text-xs font-black text-gray-800">{selectedReturn.customer}</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenCustomerProfile(selectedReturn)}
+                                            className="text-xs font-black text-blue-700 hover:text-blue-800 hover:underline transition-all cursor-pointer text-left"
+                                            title="Open customer profile"
+                                        >
+                                            {selectedReturn.customer}
+                                        </button>
                                     </div>
                                 </div>
 

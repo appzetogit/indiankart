@@ -4,6 +4,7 @@ const returnSchema = mongoose.Schema({
     id: { type: String, required: true, unique: true }, // Custom ID string e.g., 'RET123'
     orderId: { type: String, required: true },
     orderItemId: { type: String },
+    userId: { type: String },
     customer: { type: String, required: true },
     product: {
         id: { type: Number },

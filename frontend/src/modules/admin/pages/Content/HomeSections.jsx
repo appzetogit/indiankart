@@ -12,6 +12,7 @@ import {
 } from 'react-icons/md';
 import { useContentStore } from '../../store/contentStore';
 import useProductStore from '../../store/productStore';
+import { matchesNormalizedSearch } from '../../utils/search';
 
 const HomeSections = () => {
     const {
@@ -104,8 +105,8 @@ const HomeSections = () => {
     };
 
     const filteredProducts = products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchTerm.toLowerCase())
+        matchesNormalizedSearch(p.name, searchTerm) ||
+        matchesNormalizedSearch(p.category, searchTerm)
     );
 
     // --- Main List View (Highly Compact) ---
@@ -174,11 +175,11 @@ const HomeSections = () => {
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-100">
+                            <thead className="bg-slate-900 border-b border-slate-800">
                                 <tr>
-                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Section Heading</th>
-                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Items</th>
-                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Action</th>
+                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Section Heading</th>
+                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Items</th>
+                                    <th className="px-6 py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">

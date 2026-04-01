@@ -14,6 +14,7 @@ import {
 import useNotificationStore from '../../store/notificationStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 import toast from 'react-hot-toast';
+import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 
 const NotificationManager = () => {
     const {
@@ -302,16 +303,16 @@ const NotificationManager = () => {
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">S.No</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Title & Message</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Type</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Audience</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Status</th>
-                                <th className="px-6 py-4 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
+                        <AdminTableHead className="bg-slate-900">
+                            <AdminTableHeaderRow className="bg-transparent border-b-0">
+                                <AdminTableHeaderCell>S.No</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Title & Message</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-center">Type</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-center">Audience</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-center">Status</AdminTableHeaderCell>
+                                <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
+                            </AdminTableHeaderRow>
+                        </AdminTableHead>
                         <tbody className="divide-y divide-gray-50">
                             {filteredPushNotifications.length === 0 ? (
                                 <tr>

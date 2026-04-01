@@ -46,7 +46,7 @@ const ProductManager = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalProducts, setTotalProducts] = useState(0);
-    const itemsPerPage = 12;
+    const itemsPerPage = 20;
 
     const [localProducts, setLocalProducts] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -272,13 +272,13 @@ const ProductManager = () => {
                         <div className="overflow-x-auto overflow-y-visible" style={{ WebkitOverflowScrolling: 'touch', maxWidth: '100vw' }}>
                             <table className="w-full min-w-max text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50/50 border-b border-gray-100">
-                                        {pickerMode && <th className="whitespace-nowrap px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Select</th>}
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest">Product Details</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Category</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Subcategory</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-center">Stock Status</th>
-                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-gray-900 uppercase tracking-widest text-right">Actions</th>
+                                    <tr className="bg-slate-900 border-b border-slate-800">
+                                        {pickerMode && <th className="whitespace-nowrap px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Select</th>}
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Product Details</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Category</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Subcategory</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Stock Status</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
