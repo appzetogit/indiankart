@@ -85,6 +85,17 @@ const getReturnLifecycleSteps = (type) => {
     return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
 };
 
+const getReturnStatusLabel = (type, status) => {
+    const normalizedType = String(type || '').trim();
+    if (normalizedType === 'Return' && String(status || '').trim() === 'Completed') {
+        return 'Returned';
+    }
+    if (normalizedType === 'Replacement' && String(status || '').trim() === 'Completed') {
+        return 'Replaced';
+    }
+    return status;
+};
+
 const formatReturnTimelineDate = (value) => {
     if (!value) return '';
     const parsed = new Date(value);
@@ -120,6 +131,12 @@ const isEligibleForNewReturnRequest = (status) => {
     return !blockedStatuses.has(normalized);
 };
 
+const normalizeOrderStatus = (status = '') => {
+    const value = String(status || '').trim();
+    if (value === 'Shipped') return 'Dispatched';
+    return value;
+};
+
 const OrderDetails = () => {
     const { orderId } = useParams();
     const navigate = useNavigate();
@@ -152,7 +169,7 @@ const OrderDetails = () => {
     }, []);
 
     useEffect(() => {
-        const delivered = String(order?.status || '').trim() === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
+        const delivered = normalizeOrderStatus(order?.status) === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
         if (delivered) {
             setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
             return;
@@ -320,7 +337,7 @@ const OrderDetails = () => {
     const orderProgress = steps.length > 1 && currentStep >= 0
         ? (currentStep / (steps.length - 1)) * 100
         : 0;
-    const normalizedOrderStatus = String(order?.status || '').trim();
+    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
     const isDeliveredOrder = normalizedOrderStatus === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
     const itemReturnMetaById = useMemo(() => {
         const out = {};
@@ -428,9 +445,9 @@ const OrderDetails = () => {
                         <h1 className="text-lg font-bold text-gray-900">Order Details</h1>
                         <p className="text-xs text-gray-500">#{order.displayId || order._id.slice(-8).toUpperCase()}</p>
                     </div>
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(order.status)}`}>
-                        <span className="material-icons text-sm">{getStatusIcon(order.status)}</span>
-                        {order.status}
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(normalizedOrderStatus)}`}>
+                        <span className="material-icons text-sm">{getStatusIcon(normalizedOrderStatus)}</span>
+                        {normalizedOrderStatus}
                     </span>
                 </div>
             </div>
@@ -497,6 +514,7 @@ const OrderDetails = () => {
                                         const timeline = Array.isArray(ret?.timeline) ? ret.timeline : [];
                                         const latestEntry = timeline.length > 0 ? timeline[timeline.length - 1] : null;
                                         const currentStatus = normalizeReturnTrackingStatus(latestEntry?.status || ret?.status || 'Pending');
+                                        const currentStatusLabel = getReturnStatusLabel(ret?.type, currentStatus);
                                         const baseStepsForType = getReturnLifecycleSteps(ret?.type);
                                         const stepsForType = currentStatus === 'Rejected'
                                             ? [...baseStepsForType, 'Rejected']
@@ -521,9 +539,9 @@ const OrderDetails = () => {
                                                             {latestEntry?.time ? ` • ${formatReturnTimelineDate(latestEntry.time)}` : ''}
                                                         </p>
                                                     </div>
-                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(currentStatus)}`}>
-                                                        <span className="material-icons text-[14px]">{getStatusIcon(currentStatus)}</span>
-                                                        {currentStatus}
+                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusColor(currentStatusLabel)}`}>
+                                                        <span className="material-icons text-[14px]">{getStatusIcon(currentStatusLabel)}</span>
+                                                        {currentStatusLabel}
                                                     </span>
                                                 </div>
 
@@ -569,6 +587,7 @@ const OrderDetails = () => {
                                                                 {stepsForType.map((stepName, idx) => {
                                                                     const done = idx <= safeStepIndex;
                                                                     const active = idx === safeStepIndex;
+                                                                    const stepLabel = getReturnStatusLabel(ret?.type, stepName);
                                                                     return (
                                                                         <div key={`${ret?._id || ret?.id}-${stepName}`} className="flex flex-col items-center relative z-10 px-1">
                                                                             <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${
@@ -576,10 +595,10 @@ const OrderDetails = () => {
                                                                                     ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
                                                                                     : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
                                                                             } ${active ? 'ring-4 ring-blue-100 scale-110' : ''}`}>
-                                                                                <span className="material-icons text-base md:text-lg">{getStatusIcon(stepName)}</span>
+                                                                                <span className="material-icons text-base md:text-lg">{getStatusIcon(stepLabel)}</span>
                                                                             </div>
                                                                             <p className={`text-[9px] md:text-[11px] font-semibold text-center leading-tight break-words ${done ? 'text-gray-800' : 'text-gray-500'}`}>
-                                                                                {stepName}
+                                                                                {stepLabel}
                                                                             </p>
                                                                         </div>
                                                                     );
@@ -657,7 +676,7 @@ const OrderDetails = () => {
                                                             ))}
                                                         </div>
                                                     )}
-                                                    {(item.serialNumber && (order.status === 'Delivered' || order.isDelivered)) && (
+                                                    {(item.serialNumber && (normalizedOrderStatus === 'Delivered' || order.isDelivered)) && (
                                                         <div className="mt-2">
                                                             <span className="text-sm bg-gray-100 text-gray-800 px-3 py-1.5 rounded-lg font-bold font-mono border border-gray-300 shadow-sm flex items-center gap-2 w-max select-all">
                                                     <span className="text-gray-500 select-none">{item.serialType === 'IMEI' ? 'IMEI:' : 'SN:'}</span> {item.serialNumber}
@@ -828,7 +847,7 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Request Return Button */}
-                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && isWithinReturnWindow && order.orderItems.some((item) => {
+                        {(normalizedOrderStatus === 'Delivered' || order.status === 'Partially Returned') && isWithinReturnWindow && order.orderItems.some((item) => {
                             const itemMeta = itemReturnMetaById[String(item._id)];
                             const remainingQty = itemMeta?.remainingQty ?? Math.max(1, Number(item?.qty || item?.quantity || 1));
                             return remainingQty > 0 && !itemMeta?.hasAnyReturnRequest && isEligibleForNewReturnRequest(item.status);
@@ -842,14 +861,14 @@ const OrderDetails = () => {
                             </button>
                         )}
 
-                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && !isWithinReturnWindow && (
+                        {(normalizedOrderStatus === 'Delivered' || order.status === 'Partially Returned') && !isWithinReturnWindow && (
                             <div className="w-full bg-gray-50 border border-gray-200 text-gray-600 px-6 py-4 rounded-xl font-semibold text-sm">
                                 Return or replacement is available only within {RETURN_WINDOW_DAYS} days of successful delivery.
                             </div>
                         )}
 
                         {/* Cancel Order Button */}
-                        {['Pending', 'Confirmed'].includes(order.status) && (
+                        {['Pending', 'Confirmed'].includes(normalizedOrderStatus) && (
                             <button
                                 onClick={handleCancelOrder}
                                 className="w-full bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"
@@ -860,7 +879,7 @@ const OrderDetails = () => {
                         )}
 
                         {/* Download Invoice Button - visible only after delivery */}
-                        {order.status === 'Delivered' && (
+                        {normalizedOrderStatus === 'Delivered' && (
                             <InvoiceGenerator
                                 order={order}
                                 items={order.orderItems}

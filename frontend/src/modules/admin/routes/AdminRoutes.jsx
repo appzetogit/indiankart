@@ -66,7 +66,26 @@ const AdminRoutes = () => {
                 <Route path="orders" element={<OrderList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
                 <Route path="delivery-slip" element={<DeliverySlip />} />
-                <Route path="returns" element={<ReturnRequests />} />
+                <Route
+                    path="returns"
+                    element={
+                        <ReturnRequests
+                            forcedType="Return"
+                            pageTitle="Returns"
+                            pageDescription="Manage lifecycle of return requests"
+                        />
+                    }
+                />
+                <Route
+                    path="replacements"
+                    element={
+                        <ReturnRequests
+                            forcedType="Replacement"
+                            pageTitle="Replacements"
+                            pageDescription="Manage lifecycle of replacement requests"
+                        />
+                    }
+                />
                 <Route path="reviews" element={<ReviewList />} />
                 <Route path="coupons" element={<CouponManager />} />
                 <Route path="offers" element={<OfferList />} />

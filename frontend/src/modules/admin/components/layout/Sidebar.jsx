@@ -36,6 +36,7 @@ const Sidebar = () => {
                 { name: 'Dashboard', icon: MdDashboard, path: '/admin/dashboard' },
                 { name: 'Orders', icon: MdShoppingCart, path: '/admin/orders' },
                 { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
+                { name: 'Replacements', icon: MdAssignmentReturn, path: '/admin/replacements' },
                 { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
                 { name: 'Shipping Charges', icon: MdLocalShipping, path: '/admin/shipping-charges' },
                 { name: 'PIN Codes', icon: MdLocationOn, path: '/admin/pincodes' },

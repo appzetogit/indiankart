@@ -19,7 +19,7 @@ import useUserStore from '../../store/userStore';
 import useOrderStore from '../../store/orderStore';
 import useReturnStore from '../../store/returnStore';
 
-const ORDER_TABS = ['All', 'Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returns'];
+const ORDER_TABS = ['All', 'Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Returns', 'Replacements'];
 
 const UserDetail = () => {
     const { id } = useParams();
@@ -90,7 +90,9 @@ const UserDetail = () => {
     const filteredItems = useMemo(() => {
         let items = [];
         if (activeTab === 'Returns') {
-            items = userReturns;
+            items = userReturns.filter((ret) => ret.type === 'Return');
+        } else if (activeTab === 'Replacements') {
+            items = userReturns.filter((ret) => ret.type === 'Replacement');
         } else if (activeTab === 'All') {
             items = [...userOrders, ...userReturns];
         } else {
@@ -130,6 +132,12 @@ const UserDetail = () => {
             default:
                 return 'bg-gray-100 text-gray-700 border-gray-200';
         }
+    };
+
+    const getDisplayStatus = (item) => {
+        if (item?.type === 'Return' && item?.status === 'Completed') return 'Returned';
+        if (item?.type === 'Replacement' && item?.status === 'Completed') return 'Replaced';
+        return item?.type ? item.status : normalizeOrderStatus(item?.status);
     };
 
     const getItemTimestamp = (item) => {
@@ -390,7 +398,11 @@ const UserDetail = () => {
                                     const isReturn = item.type === 'Return' || item.type === 'Replacement';
                                     const itemKey = item._id || item.id;
                                     const normalizedStatus = isReturn ? item.status : normalizeOrderStatus(item.status);
+                                    const displayStatus = getDisplayStatus(item);
                                     const amountValue = isReturn ? Number(item.product?.price || 0) : Number(item.total || 0);
+                                    const displayPaymentStatus = !isReturn && normalizedStatus === 'Delivered'
+                                        ? 'Completed'
+                                        : (item.payment?.status || 'Pending');
 
                                     return (
                                         <div
@@ -404,7 +416,7 @@ const UserDetail = () => {
                                                             {isReturn ? item.type : 'Order'}
                                                         </span>
                                                         <span className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${getStatusStyle(normalizedStatus)}`}>
-                                                            {normalizedStatus || 'N/A'}
+                                                            {displayStatus || 'N/A'}
                                                         </span>
                                                     </div>
 
@@ -442,7 +454,7 @@ const UserDetail = () => {
                                                             <div className="min-w-0">
                                                                 <p className="text-base font-black text-gray-900">{(item.items || []).length} item{(item.items || []).length === 1 ? '' : 's'}</p>
                                                                 <p className="mt-1 text-sm font-medium text-gray-500">
-                                                                    {item.payment?.method || 'Payment'} • {item.payment?.status || 'Pending'}
+                                                                    {item.payment?.method || 'Payment'} • {displayPaymentStatus}
                                                                 </p>
                                                             </div>
                                                         </div>

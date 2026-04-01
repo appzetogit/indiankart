@@ -891,8 +891,8 @@ const ReturnOrder = () => {
                                             }`}>
                                                 <span className="material-icons text-2xl">account_balance_wallet</span>
                                             </div>
-                                            <h4 className={`font-black text-sm uppercase tracking-tight ${returnMode === 'REFUND' ? 'text-blue-700' : 'text-gray-800'}`}>Refund / Return</h4>
-                                            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">Original payment source or bank account. Average time: 5-7 working days after pickup.</p>
+                                            <h4 className="font-black text-sm uppercase tracking-tight text-gray-900">Refund / Return</h4>
+                                            <p className="text-[11px] text-gray-900 mt-2 leading-relaxed">Original payment source or bank account. Average time: 5-7 working days after pickup.</p>
                                             {returnMode === 'REFUND' && <span className="absolute top-4 right-4 material-icons text-blue-600">check_circle</span>}
                                         </div>
 
@@ -915,8 +915,8 @@ const ReturnOrder = () => {
                                             }`}>
                                                 <span className="material-icons text-2xl">published_with_changes</span>
                                             </div>
-                                            <h4 className={`font-black text-sm uppercase tracking-tight ${returnMode === 'REPLACEMENT' ? 'text-green-700' : 'text-gray-800'}`}>Replacement</h4>
-                                            <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">Swap for another unit of the same item. Subject to availability.</p>
+                                            <h4 className="font-black text-sm uppercase tracking-tight text-gray-900">Replacement</h4>
+                                            <p className="text-[11px] text-gray-900 mt-2 leading-relaxed">Swap for another unit of the same item. Subject to availability.</p>
                                             
                                             {exactReplacementAvailability.checked && !exactReplacementAvailability.available && (
                                                 <div className="mt-3 py-1.5 px-3 bg-red-100/50 border border-red-200 rounded-lg">
@@ -927,14 +927,14 @@ const ReturnOrder = () => {
                                         </div>
                                     </div>
                                     
-                                    <div className="mt-8 pt-8 border-t border-gray-100 flex items-center justify-between text-gray-400">
+                                    <div className="mt-8 pt-8 border-t border-gray-100 flex items-center justify-between text-gray-900">
                                         <div className="flex items-center gap-2">
                                             <span className="material-icons text-lg">verified_user</span>
-                                            <span className="text-[10px] font-bold uppercase tracking-widest leading-none">Safe & Secure process</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-widest leading-none text-gray-900">Safe & Secure process</span>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-                                            <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest leading-none">Trusted Flow</span>
+                                            <span className="text-[10px] font-bold text-gray-900 uppercase tracking-widest leading-none">Trusted Flow</span>
                                         </div>
                                     </div>
 
@@ -966,8 +966,8 @@ const ReturnOrder = () => {
                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                     <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between">
                                         <div>
-                                            <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Final Details</h3>
-                                            <p className="text-[10px] text-gray-400 mt-1 uppercase font-bold">Step 4 of 4: Complete your request</p>
+                                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Final Details</h3>
+                                            <p className="text-[10px] text-gray-900 mt-1 uppercase font-bold">Step 4 of 4: Complete your request</p>
                                         </div>
                                         <button type="button" onClick={() => setStep(3)} className="text-blue-600 font-black text-[10px] uppercase hover:underline border border-blue-100 px-2 py-1 rounded">Edit Choice</button>
                                     </div>
@@ -975,9 +975,9 @@ const ReturnOrder = () => {
                                     <div className="p-6 space-y-6">
                                         {/* Comments */}
                                         <div>
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Detailed Comments</label>
+                                            <label className="text-[10px] font-black text-gray-900 uppercase tracking-widest block mb-2">Detailed Comments</label>
                                             <textarea
-                                                className="w-full bg-gray-50 border-2 border-transparent focus:border-blue-100 focus:bg-white rounded-xl p-4 text-sm outline-none transition-all h-28 text-gray-800 placeholder-gray-300 resize-none"
+                                                className="w-full bg-gray-50 border border-gray-300 focus:border-blue-500 focus:bg-white rounded-xl p-4 text-sm outline-none transition-all h-28 text-gray-800 placeholder-gray-300 resize-none"
                                                 placeholder="Tell us more about the issue (e.g. Item damaged, missing parts)..."
                                                 value={comment}
                                                 onChange={(e) => setComment(e.target.value)}

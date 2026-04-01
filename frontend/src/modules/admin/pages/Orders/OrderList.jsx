@@ -24,6 +24,12 @@ const OrderList = () => {
     const [localOrders, setLocalOrders] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    const normalizeOrderStatus = (status = '') => {
+        const value = String(status || '').trim();
+        if (value === 'Shipped') return 'Dispatched';
+        return value;
+    };
+
     useEffect(() => {
         const fetchPaginatedOrders = async () => {
             setLoading(true);
@@ -40,7 +46,7 @@ const OrderList = () => {
                 const { data } = await API.get('/orders', { params });
 
                 const transformOrder = (order) => {
-                    const normalizedOrderStatus = String(order?.status || '').trim();
+                    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
                     const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
                     const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
                     const paymentStatus = normalizedOrderStatus === 'Delivered'
@@ -62,7 +68,8 @@ const OrderList = () => {
                         payment: {
                             method: order.paymentMethod || 'COD',
                             status: paymentStatus
-                        }
+                        },
+                        status: normalizedOrderStatus
                     };
                 };
 
@@ -93,7 +100,9 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'Confirmed': return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'Shipped': return 'bg-purple-50 text-purple-600 border-purple-100';
+            case 'Packed': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+            case 'Dispatched': return 'bg-purple-50 text-purple-600 border-purple-100';
+            case 'Out for Delivery': return 'bg-orange-50 text-orange-600 border-orange-100';
             case 'Delivered': return 'bg-green-50 text-green-600 border-green-100';
             case 'Cancelled': return 'bg-red-50 text-red-600 border-red-100';
             default: return 'bg-gray-50 text-gray-600 border-gray-100';
@@ -104,7 +113,9 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return <MdPendingActions size={14} />;
             case 'Confirmed': return <MdCheckCircle size={14} />;
-            case 'Shipped': return <MdLocalShipping size={14} />;
+            case 'Packed': return <MdPendingActions size={14} />;
+            case 'Dispatched': return <MdLocalShipping size={14} />;
+            case 'Out for Delivery': return <MdLocalShipping size={14} />;
             case 'Delivered': return <MdCheckCircle size={14} />;
             case 'Cancelled': return <MdCancel size={14} />;
             default: return null;
@@ -155,7 +166,9 @@ const OrderList = () => {
                         <option value="All">All Statuses</option>
                         <option value="Pending">Pending</option>
                         <option value="Confirmed">Confirmed</option>
-                        <option value="Shipped">Shipped</option>
+                        <option value="Packed">Packed</option>
+                        <option value="Dispatched">Dispatched</option>
+                        <option value="Out for Delivery">Out for Delivery</option>
                         <option value="Delivered">Delivered</option>
                         <option value="Cancelled">Cancelled</option>
                     </select>

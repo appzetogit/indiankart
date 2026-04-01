@@ -5,15 +5,21 @@ import useReturnStore from '../../store/returnStore';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 
-const ReturnRequests = () => {
+const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacements', pageDescription = 'Manage lifecycle of return and replacement requests' }) => {
     const navigate = useNavigate();
     const { returns, updateReturnStatus, fetchReturns } = useReturnStore();
     const [searchTerm, setSearchTerm] = useState('');
+    const [typeFilter, setTypeFilter] = useState(forcedType);
 
     useEffect(() => {
         fetchReturns();
     }, [fetchReturns]);
-    const [typeFilter, setTypeFilter] = useState('All');
+
+    useEffect(() => {
+        setTypeFilter(forcedType);
+        setCurrentPage(1);
+    }, [forcedType]);
+
     const [statusFilter, setStatusFilter] = useState('All');
     const [selectedReturn, setSelectedReturn] = useState(null);
     const [selectedProof, setSelectedProof] = useState(null);
@@ -22,7 +28,9 @@ const ReturnRequests = () => {
     const itemsPerPage = 20;
     const normalizeSearchValue = (value) => String(value || '').toLowerCase().replace(/\s+/g, '');
 
-    const filteredReturns = returns.filter(ret => {
+    const visibleReturns = returns.filter((ret) => ret.type !== 'Cancellation');
+
+    const filteredReturns = visibleReturns.filter(ret => {
         const normalizedSearch = normalizeSearchValue(searchTerm);
         const matchesSearch =
             !normalizedSearch ||
@@ -118,6 +126,27 @@ const ReturnRequests = () => {
         return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
     };
 
+    const getFilterStatusOptions = () => {
+        if (forcedType === 'Return') {
+            return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed', 'Rejected'];
+        }
+        if (forcedType === 'Replacement') {
+            return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Replacement Dispatched', 'Completed', 'Rejected'];
+        }
+        return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Completed', 'Rejected'];
+    };
+
+    const getDisplayStatusLabel = (type, status) => {
+        const normalizedType = String(type || '').trim();
+        if (normalizedType === 'Return' && String(status || '').trim() === 'Completed') {
+            return 'Returned';
+        }
+        if (normalizedType === 'Replacement' && String(status || '').trim() === 'Completed') {
+            return 'Replaced';
+        }
+        return status;
+    };
+
     const getStatusOptions = (ret) => {
         if (!ret) return [];
         if (ret.status === 'Completed' || ret.status === 'Rejected') return [];
@@ -142,7 +171,11 @@ const ReturnRequests = () => {
         if (status === 'Received at Warehouse') return 'Confirm Item Received';
         if (status === 'Refund Initiated') return 'Initiate Refund';
         if (status === 'Replacement Dispatched') return 'Dispatch Replacement';
-        if (status === 'Completed') return 'Mark as Completed';
+        if (status === 'Completed') {
+            if (type === 'Return') return 'Mark as Returned';
+            if (type === 'Replacement') return 'Mark as Replaced';
+            return 'Mark as Completed';
+        }
         return 'Update Status';
     };
 
@@ -167,8 +200,8 @@ const ReturnRequests = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Returns & Cancellations</h1>
-                    <p className="text-sm text-gray-500 font-medium italic">Manage lifecycle of return, replacement, and cancellation requests</p>
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">{pageTitle}</h1>
+                    <p className="text-sm text-gray-500 font-medium italic">{pageDescription}</p>
                 </div>
             </div>
 
@@ -187,19 +220,20 @@ const ReturnRequests = () => {
                     />
                 </div>
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                    <select
-                        className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-50 border border-transparent rounded-xl outline-none focus:bg-white focus:border-blue-500 text-sm font-black text-gray-900 min-w-[130px]"
-                        value={typeFilter}
-                        onChange={(e) => {
-                            setTypeFilter(e.target.value);
-                            setCurrentPage(1);
-                        }}
-                    >
-                        <option value="All">All Types</option>
-                        <option value="Return">Return</option>
-                        <option value="Replacement">Replacement</option>
-                        <option value="Cancellation">Cancellation</option>
-                    </select>
+                    {forcedType === 'All' && (
+                        <select
+                            className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-50 border border-transparent rounded-xl outline-none focus:bg-white focus:border-blue-500 text-sm font-black text-gray-900 min-w-[130px]"
+                            value={typeFilter}
+                            onChange={(e) => {
+                                setTypeFilter(e.target.value);
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <option value="All">All Types</option>
+                            <option value="Return">Return</option>
+                            <option value="Replacement">Replacement</option>
+                        </select>
+                    )}
                     <select
                         className="flex-1 lg:flex-none px-4 py-2.5 bg-gray-50 border border-transparent rounded-xl outline-none focus:bg-white focus:border-blue-500 text-sm font-black text-gray-900 min-w-[150px]"
                         value={statusFilter}
@@ -209,14 +243,11 @@ const ReturnRequests = () => {
                         }}
                     >
                         <option value="All">All Statuses</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Pickup Scheduled">Pickup Scheduled</option>
-                        <option value="Received at Warehouse">Received</option>
-                        <option value="Refund Initiated">Refund Initiated</option>
-                        <option value="Replacement Dispatched">Dispatched</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Rejected">Rejected</option>
+                        {getFilterStatusOptions().map((status) => (
+                            <option key={status} value={status}>
+                                {getDisplayStatusLabel(forcedType === 'All' ? typeFilter : forcedType, status)}
+                            </option>
+                        ))}
                     </select>
                 </div>
             </div>
@@ -226,8 +257,8 @@ const ReturnRequests = () => {
                         <AdminTableHead>
                             <AdminTableHeaderRow>
                                 <AdminTableHeaderCell>Request Info</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Customer</AdminTableHeaderCell>
                                 <AdminTableHeaderCell>Product</AdminTableHeaderCell>
-                                <AdminTableHeaderCell>Last Status Update</AdminTableHeaderCell>
                                 <AdminTableHeaderCell className="text-center">Status</AdminTableHeaderCell>
                                 <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
@@ -247,8 +278,17 @@ const ReturnRequests = () => {
                                                 </span>
                                             </div>
                                             <span className="text-[10px] font-bold text-blue-600 mt-1 uppercase tracking-tighter">Order: {ret.orderDisplayId || ret.orderId}</span>
-                                            <span className="text-[9px] text-gray-400 font-medium mt-0.5">{ret.customer}</span>
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenCustomerProfile(ret)}
+                                            className="text-[11px] font-black text-blue-700 hover:text-blue-800 hover:underline transition-all text-left"
+                                            title="Open customer profile"
+                                        >
+                                            {ret.customer || 'N/A'}
+                                        </button>
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
@@ -261,23 +301,9 @@ const ReturnRequests = () => {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="max-w-[200px]">
-                                            <p className="text-[10px] font-bold text-gray-700">
-                                                {ret.timeline && ret.timeline.length > 0
-                                                    ? ret.timeline[ret.timeline.length - 1].status
-                                                    : 'Initialized'}
-                                            </p>
-                                            <p className="text-[9px] text-gray-900">
-                                                {ret.timeline && ret.timeline.length > 0
-                                                    ? new Date(ret.timeline[ret.timeline.length - 1].time).toLocaleString()
-                                                    : new Date(ret.date).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </td>
                                     <td className="px-6 py-4 text-center">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(ret.status)}`}>
-                                            {ret.status}
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(getDisplayStatusLabel(ret.type, ret.status))}`}>
+                                            {getDisplayStatusLabel(ret.type, ret.status)}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -511,6 +537,7 @@ const ReturnRequests = () => {
                                                 const event = [...timelineEvents].reverse().find((entry) => entry.status === step);
                                                 const isCompleted = idx <= safeCurrentIndex;
                                                 const isCurrent = idx === safeCurrentIndex;
+                                                const stepLabel = getDisplayStatusLabel(selectedReturn.type, step);
                                                 return (
                                                     <div key={`${selectedReturn.id}-${step}`} className="relative flex gap-6 mb-8 last:mb-0">
                                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center relative z-10 text-white transition-all ${isCompleted ? 'bg-blue-600 shadow-lg shadow-blue-100' : 'bg-gray-300'}`}>
@@ -518,7 +545,7 @@ const ReturnRequests = () => {
                                                         </div>
                                                         <div className={`flex-1 bg-white p-4 rounded-2xl shadow-sm border transition-all ${isCurrent ? 'border-blue-200' : 'border-gray-100'}`}>
                                                             <div className="flex items-center justify-between mb-1">
-                                                                <span className="text-xs font-black text-gray-900 uppercase tracking-widest">{step}</span>
+                                                                <span className="text-xs font-black text-gray-900 uppercase tracking-widest">{stepLabel}</span>
                                                                 <span className="text-[9px] text-gray-900 font-bold">
                                                                     {event?.time ? formatLifecycleTime(event.time) : '--'}
                                                                 </span>
@@ -560,7 +587,7 @@ const ReturnRequests = () => {
                                                 <option value="" disabled>Select next status</option>
                                                 {getStatusOptions(selectedReturn).map((status) => (
                                                     <option key={status} value={status}>
-                                                        {status}
+                                                        {getDisplayStatusLabel(selectedReturn.type, status)}
                                                     </option>
                                                 ))}
                                             </select>

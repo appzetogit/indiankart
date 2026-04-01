@@ -165,6 +165,7 @@ const OrderDetail = () => {
         : [];
     const timelineFlow = ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
     const normalizedCurrentStatus = normalizeFulfillmentStatus(order.status);
+    const displayOrderStatus = normalizedCurrentStatus || order.status;
     const currentFlowIndex = timelineFlow.indexOf(normalizedCurrentStatus);
     const timelineByStatus = orderedTimeline.reduce((acc, event) => {
         const normalizedStatus = normalizeFulfillmentStatus(event.status);
@@ -240,11 +241,11 @@ const OrderDetail = () => {
                     <div>
                         <div className="flex items-center gap-2 md:gap-3 mb-1">
                             <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">{order.displayId || order.id}</h1>
-                            <span className={`px-2 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-sm ${order.status === 'Delivered' ? 'bg-green-100 text-green-600' :
-                                order.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
+                            <span className={`px-2 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-sm ${displayOrderStatus === 'Delivered' ? 'bg-green-100 text-green-600' :
+                                displayOrderStatus === 'Cancelled' ? 'bg-red-100 text-red-600' :
                                     'bg-blue-100 text-blue-600 animate-pulse'
                                 }`}>
-                                {order.status}
+                                {displayOrderStatus}
                             </span>
                         </div>
                         <p className="text-xs md:text-sm text-gray-400 font-medium">Placed on {new Date(order.date).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' })}</p>
