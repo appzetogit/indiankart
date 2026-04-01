@@ -127,21 +127,30 @@ export const useCartStore = create()(
                 }));
             },
 
+            setAddresses: (addresses = []) => {
+                set({
+                    addresses: (Array.isArray(addresses) ? addresses : []).map((address) => ({
+                        ...address,
+                        id: address.id || address._id || Date.now()
+                    }))
+                });
+            },
+
             addAddress: (address) => {
                 set((state) => ({
-                    addresses: [...state.addresses, { ...address, id: Date.now() }]
+                    addresses: [...state.addresses, { ...address, id: address.id || address._id || Date.now() }]
                 }));
             },
 
             updateAddress: (id, updatedAddress) => {
                 set((state) => ({
-                    addresses: state.addresses.map(addr => addr.id === id ? { ...addr, ...updatedAddress } : addr)
+                    addresses: state.addresses.map(addr => String(addr.id) === String(id) ? { ...addr, ...updatedAddress, id: addr.id } : addr)
                 }));
             },
 
             removeAddress: (id) => {
                 set((state) => ({
-                    addresses: state.addresses.filter(addr => addr.id !== id)
+                    addresses: state.addresses.filter(addr => String(addr.id) !== String(id))
                 }));
             },
 

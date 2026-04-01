@@ -59,8 +59,8 @@ const buildEstimatedDeliveryText = (deliveryTime, unit) => {
 const Checkout = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { cart, addresses, placeOrder, getTotalPrice, addAddress, appliedCoupon, applyCoupon, removeCoupon } = useCartStore();
-    const { user } = useAuthStore();
+    const { cart, addresses, placeOrder, getTotalPrice, setAddresses, appliedCoupon, applyCoupon, removeCoupon } = useCartStore();
+    const { user, syncAddresses } = useAuthStore();
     const buyNowItem = location.state?.buyNowItem;
     
     // Use buyNowItem if present, otherwise fallback to global cart
@@ -297,7 +297,7 @@ const Checkout = () => {
         }
     }, [user]);
 
-    const handleAddAddress = (e) => {
+    const handleAddAddress = async (e) => {
         e.preventDefault();
         // Validate Indian mobile number
         const mobileRegex = /^[6-9]\d{9}$/;
@@ -305,11 +305,26 @@ const Checkout = () => {
             return toast.error('Please enter a valid 10-digit Indian mobile number (starting with 6-9)');
         }
 
-        const id = Date.now();
-        addAddress({ ...newAddr, name: user?.name || newAddr.name, id });
-        setSelectedAddress(id);
-        setIsAddingAddress(false);
-        setIsChangingAddress(false);
+        try {
+            const payload = {
+                ...newAddr,
+                name: user?.name || newAddr.name,
+                email: user?.email || '',
+                isDefault: false
+            };
+            const { data } = await API.post('/auth/profile/addresses', payload);
+            setAddresses(data);
+            syncAddresses(data);
+            const latestAddressId = data[data.length - 1]?.id;
+            if (latestAddressId) {
+                setSelectedAddress(latestAddressId);
+            }
+            setIsAddingAddress(false);
+            setIsChangingAddress(false);
+            toast.success('Address added!');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to add address');
+        }
     };
 
     
@@ -343,7 +358,7 @@ const Checkout = () => {
         const selectedAddrObj = addresses.find(a => a.id === selectedAddress);
         
         // Validate address object exists and has required fields
-        if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.city || !selectedAddrObj.pincode) {
+        if (!selectedAddrObj || !selectedAddrObj.address || !selectedAddrObj.city || !selectedAddrObj.state || !selectedAddrObj.pincode) {
             toast.error('Please add a complete delivery address with all required fields');
             return;
         }
@@ -399,6 +414,7 @@ const Checkout = () => {
                 phone: selectedAddrObj.mobile,
                 street: selectedAddrObj.address,
                 city: selectedAddrObj.city,
+                state: selectedAddrObj.state,
                 postalCode: selectedAddrObj.pincode,
                 country: 'India'
             },

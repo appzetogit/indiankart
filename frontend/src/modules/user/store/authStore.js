@@ -13,6 +13,13 @@ export const useAuthStore = create(
             loading: true,
             error: null,
 
+            syncAddresses: (addresses = []) => {
+                useCartStore.getState().setAddresses(addresses);
+                set((state) => ({
+                    user: state.user ? { ...state.user, addresses } : state.user
+                }));
+            },
+
             registerFcmToken: async () => {
                 try {
                     await requestForToken();
@@ -38,6 +45,7 @@ export const useAuthStore = create(
                     }
                     // Ensure token is preserved if it exists in data or state
                     set({ user: { ...data, token: storedToken }, isAuthenticated: true, loading: false });
+                    useCartStore.getState().setAddresses(data?.addresses || []);
                     get().registerFcmToken();
                 } catch (error) {
                     set({ user: null, isAuthenticated: false, loading: false });
@@ -67,6 +75,7 @@ export const useAuthStore = create(
             const payload = { mobile, otp, userType, name, email };
             const { data } = await API.post('/auth/verify-otp', payload);
             set({ user: data, isAuthenticated: true, loading: false });
+            useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
             return data;
         } catch (error) {
@@ -84,6 +93,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/login', { email, password });
             set({ user: data, isAuthenticated: true, loading: false });
+            useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
         } catch (error) {
             set({ 
@@ -100,6 +110,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/register', userData);
             set({ user: data, isAuthenticated: true, loading: false });
+            useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
         } catch (error) {
             set({ 
@@ -141,6 +152,7 @@ export const useAuthStore = create(
                 : data;
 
             set({ user: mergedUser, isAuthenticated: true });
+            useCartStore.getState().setAddresses(mergedUser?.addresses || []);
             return mergedUser;
         } catch (error) {
             set({ 

@@ -4,7 +4,6 @@ import {
     MdArrowBack,
     MdMail,
     MdPhone,
-    MdLocationOn,
     MdCalendarToday,
     MdCheckCircle,
     MdBlock,
@@ -84,25 +83,9 @@ const UserDetail = () => {
         };
     }, [userOrders, userReturns, user]);
 
-    const displayAddress = useMemo(() => {
-        const latestOrderWithAddress = [...userOrders]
-            .sort((a, b) => {
-                const aTime = new Date(a.date || a.createdAt || a.updatedAt || 0).getTime();
-                const bTime = new Date(b.date || b.createdAt || b.updatedAt || 0).getTime();
-                return bTime - aTime;
-            })
-            .find((order) => {
-                const address = order.address || {};
-                return address.line || address.city || address.state || address.pincode;
-            });
-
-        const address = latestOrderWithAddress?.address || {};
-        const parts = [address.line, address.city, address.state, address.pincode]
-            .map((part) => String(part || '').trim())
-            .filter(Boolean);
-
-        return parts.length > 0 ? parts.join(', ') : (user?.address || 'N/A');
-    }, [userOrders, user]);
+    const savedAddresses = useMemo(() => {
+        return Array.isArray(user?.addresses) ? user.addresses : [];
+    }, [user]);
 
     const filteredItems = useMemo(() => {
         let items = [];
@@ -292,13 +275,6 @@ const UserDetail = () => {
                                 </div>
                             </div>
                             <div className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-                                <MdLocationOn className="mt-0.5 text-gray-400" size={18} />
-                                <div>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Address</p>
-                                    <p className="mt-1 text-sm font-semibold text-gray-800">{displayAddress}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
                                 <MdCalendarToday className="mt-0.5 text-gray-400" size={18} />
                                 <div>
                                     <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Joined</p>
@@ -313,6 +289,42 @@ const UserDetail = () => {
                                     </p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+                        <h3 className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">Saved Addresses</h3>
+                        <div className="mt-4 space-y-3">
+                            {savedAddresses.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm font-medium text-gray-500">
+                                    No saved addresses available.
+                                </div>
+                            ) : (
+                                savedAddresses.map((address, index) => (
+                                    <div key={address.id || index} className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="inline-flex rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-gray-700 border border-gray-200">
+                                                {address.type || 'Home'}
+                                            </span>
+                                            {address.isDefault && (
+                                                <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700 border border-emerald-200">
+                                                    Default
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="mt-3 space-y-1.5 text-sm font-medium text-gray-700">
+                                            <p className="font-black text-gray-900">{address.name || user?.name || 'N/A'}</p>
+                                            <p>{address.mobile ? `+91 ${address.mobile}` : 'N/A'}</p>
+                                            <p className="break-words">
+                                                {[address.address, address.city, address.state, address.pincode]
+                                                    .map((part) => String(part || '').trim())
+                                                    .filter(Boolean)
+                                                    .join(', ') || 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 
@@ -340,14 +352,12 @@ const UserDetail = () => {
 
                     <div className="rounded-3xl border border-gray-200 bg-white shadow-sm">
                         <div className="border-b border-gray-200 px-5 py-5 md:px-6">
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="space-y-4">
                                 <div className="flex items-center gap-3">
                                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-100 text-gray-700">
                                         <MdHistory size={22} />
                                     </div>
-                                    <div>
-                                        <h3 className="text-lg font-black text-gray-900">Activity & Orders</h3>
-                                    </div>
+                                    <h3 className="text-lg font-black text-gray-900">Activity & Orders</h3>
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto pb-1">
                                     {ORDER_TABS.map((tab) => (
@@ -444,7 +454,7 @@ const UserDetail = () => {
                                                         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">
                                                             {isReturn ? 'Request Value' : 'Order Value'}
                                                         </p>
-                                                        <p className="mt-2 text-2xl font-black text-gray-900">Rs. {amountValue.toLocaleString()}</p>
+                                                        <p className="mt-2 text-xl font-black text-gray-900">Rs. {amountValue.toLocaleString()}</p>
                                                     </div>
                                                     <button
                                                         onClick={() => navigate(isReturn ? '/admin/returns' : `/admin/orders/${item.id}`)}

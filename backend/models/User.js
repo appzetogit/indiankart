@@ -39,7 +39,20 @@ const userSchema = mongoose.Schema({
     fcmToken: {
         type: String,
         default: null
-    }
+    },
+    addresses: [
+        {
+            name: { type: String, default: '' },
+            mobile: { type: String, default: '' },
+            email: { type: String, default: '' },
+            pincode: { type: String, default: '' },
+            address: { type: String, default: '' },
+            city: { type: String, default: '' },
+            state: { type: String, default: '' },
+            type: { type: String, default: 'Home' },
+            isDefault: { type: Boolean, default: false }
+        }
+    ]
 }, {
     timestamps: true,
 });

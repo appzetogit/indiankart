@@ -11,7 +11,11 @@ import {
     deleteUser,
     updateUser,
     updateUserProfile,
-    toggleUserStatus
+    toggleUserStatus,
+    getUserAddresses,
+    addUserAddress,
+    updateUserAddress,
+    deleteUserAddress
 } from '../controllers/authController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
@@ -170,6 +174,14 @@ router.post('/fcm-token/app', protect, async (req, res) => saveFcmToken(req, res
 router.route('/profile')
     .get(protect, getUserProfile)
     .put(protect, updateUserProfile);
+
+router.route('/profile/addresses')
+    .get(protect, getUserAddresses)
+    .post(protect, addUserAddress);
+
+router.route('/profile/addresses/:addressId')
+    .put(protect, updateUserAddress)
+    .delete(protect, deleteUserAddress);
 
 console.log('Auth routes registered: /test, /fcm-token, /fcm-token/web, /fcm-token/mobile, /profile');
 

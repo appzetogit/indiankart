@@ -224,6 +224,7 @@ const OrderDetail = () => {
     const summaryItemsPrice = Number(order.itemsPrice ?? Math.max(0, (order.total || 0) - Number(order.shippingPrice || 0) - Number(order.taxPrice || 0)));
     const summaryShippingPrice = Number(order.shippingPrice || 0);
     const summaryTotal = Number(order.total || 0);
+    const customerProfileId = order.user?._id || order.user?.id;
 
     return (
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-8 animate-in fade-in duration-500">
@@ -424,7 +425,17 @@ const OrderDetail = () => {
                                 {order.user?.name?.charAt(0) || 'U'}
                             </div>
                             <div className="min-w-0">
-                                <h4 className="text-sm font-black text-gray-900 truncate">{order.user?.name || order.shippingAddress?.name || 'Unknown User'}</h4>
+                                {customerProfileId ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/admin/users/${customerProfileId}`)}
+                                        className="truncate text-left text-sm font-black text-gray-900 transition hover:text-blue-600"
+                                    >
+                                        {order.user?.name || order.shippingAddress?.name || 'Unknown User'}
+                                    </button>
+                                ) : (
+                                    <h4 className="text-sm font-black text-gray-900 truncate">{order.user?.name || order.shippingAddress?.name || 'Unknown User'}</h4>
+                                )}
                             </div>
                         </div>
                         <div className="space-y-4">

@@ -20,6 +20,32 @@ const normalizeHardcodedOtp = (otp) => {
     return digits.length < 4 ? digits.padStart(4, '0') : digits;
 };
 
+const mapUserAddresses = (addresses = []) =>
+    (Array.isArray(addresses) ? addresses : []).map((address) => ({
+        id: address._id?.toString?.() || address.id || '',
+        name: address.name || '',
+        mobile: address.mobile || '',
+        email: address.email || '',
+        pincode: address.pincode || '',
+        address: address.address || '',
+        city: address.city || '',
+        state: address.state || '',
+        type: address.type || 'Home',
+        isDefault: Boolean(address.isDefault)
+    }));
+
+const normalizeAddressPayload = (payload = {}) => ({
+    name: String(payload.name || '').trim(),
+    mobile: String(payload.mobile || '').trim(),
+    email: String(payload.email || '').trim().toLowerCase(),
+    pincode: String(payload.pincode || '').trim(),
+    address: String(payload.address || '').trim(),
+    city: String(payload.city || '').trim(),
+    state: String(payload.state || '').trim(),
+    type: String(payload.type || 'Home').trim() || 'Home',
+    isDefault: Boolean(payload.isDefault)
+});
+
 // ... (Existing Auth Functions) ...
 
 // ... (Keep existing login/otp functions same, just appending admin functions) ...
@@ -56,6 +82,7 @@ export const verifyLoginOtp = async (req, res) => {
                 email: email || `${HARDCODED_LOGIN_MOBILE}@temp.local`,
                 phone: HARDCODED_LOGIN_MOBILE,
                 gender: 'male',
+                addresses: [],
                 isNewUser: false,
                 requiresProfile: false,
                 token
@@ -104,6 +131,7 @@ export const verifyLoginOtp = async (req, res) => {
             email: user.email,
             phone: user.phone,
             gender: user.gender,
+            addresses: mapUserAddresses(user.addresses),
             isNewUser,
             requiresProfile,
             token
@@ -125,6 +153,7 @@ export const authUser = async (req, res) => {
             email: user.email,
             phone: user.phone,
             gender: user.gender,
+            addresses: mapUserAddresses(user.addresses),
             token
         });
     } else {
@@ -148,6 +177,7 @@ export const registerUser = async (req, res) => {
             email: user.email,
             phone: user.phone,
             gender: user.gender,
+            addresses: mapUserAddresses(user.addresses),
             token
         });
     } else {
@@ -174,7 +204,8 @@ export const getUserProfile = async (req, res) => {
         name: req.user.name,
         email: req.user.email,
         phone: req.user.phone,
-        gender: req.user.gender
+        gender: req.user.gender,
+        addresses: mapUserAddresses(req.user.addresses)
     };
     res.status(200).json(user);
 };
@@ -217,6 +248,7 @@ export const updateUserProfile = async (req, res) => {
                 email: updatedUser.email,
                 phone: updatedUser.phone,
                 gender: updatedUser.gender,
+                addresses: mapUserAddresses(updatedUser.addresses),
                 token
             });
         } else {
@@ -354,6 +386,98 @@ export const toggleUserStatus = async (req, res) => {
         } else {
             res.status(404).json({ message: 'User not found' });
         }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const getUserAddresses = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).select('addresses');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(mapUserAddresses(user.addresses));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const addUserAddress = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const address = normalizeAddressPayload(req.body);
+        if (!address.name || !address.mobile || !address.address || !address.city || !address.state || !address.pincode) {
+            return res.status(400).json({ message: 'Please provide a complete address' });
+        }
+
+        if (address.isDefault) {
+            user.addresses.forEach((item) => {
+                item.isDefault = false;
+            });
+        }
+
+        user.addresses.push(address);
+        await user.save();
+
+        res.status(201).json(mapUserAddresses(user.addresses));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const updateUserAddress = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const address = user.addresses.id(req.params.addressId);
+        if (!address) {
+            return res.status(404).json({ message: 'Address not found' });
+        }
+
+        const nextAddress = normalizeAddressPayload(req.body);
+        if (!nextAddress.name || !nextAddress.mobile || !nextAddress.address || !nextAddress.city || !nextAddress.state || !nextAddress.pincode) {
+            return res.status(400).json({ message: 'Please provide a complete address' });
+        }
+
+        if (nextAddress.isDefault) {
+            user.addresses.forEach((item) => {
+                item.isDefault = false;
+            });
+        }
+
+        Object.assign(address, nextAddress);
+        await user.save();
+
+        res.json(mapUserAddresses(user.addresses));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export const deleteUserAddress = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        const address = user.addresses.id(req.params.addressId);
+        if (!address) {
+            return res.status(404).json({ message: 'Address not found' });
+        }
+
+        address.deleteOne();
+        await user.save();
+
+        res.json(mapUserAddresses(user.addresses));
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

@@ -12,8 +12,8 @@ import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 
 const Addresses = () => {
     const navigate = useNavigate();
-    const { user } = useAuthStore();
-    const { addresses, addAddress, updateAddress, removeAddress } = useCartStore();
+    const { user, syncAddresses } = useAuthStore();
+    const { addresses, setAddresses } = useCartStore();
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [showMenu, setShowMenu] = useState(null);
@@ -64,7 +64,7 @@ const Addresses = () => {
 
     const [newAddr, setNewAddr] = useState(initialAddr);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         // Validate Indian mobile number
         const mobileRegex = /^[6-9]\d{9}$/;
@@ -84,16 +84,27 @@ const Addresses = () => {
             return toast.error('State should not contain numbers');
         }
 
-        if (editingId) {
-            updateAddress(editingId, newAddr);
-            toast.success('Address updated!');
+        try {
+            const payload = {
+                ...newAddr,
+                name: user?.name || newAddr.name,
+                email: user?.email || '',
+                isDefault: false
+            };
+
+            const { data } = editingId
+                ? await API.put(`/auth/profile/addresses/${editingId}`, payload)
+                : await API.post('/auth/profile/addresses', payload);
+
+            setAddresses(data);
+            syncAddresses(data);
+            toast.success(editingId ? 'Address updated!' : 'Address added!');
             setEditingId(null);
-        } else {
-            addAddress({ ...newAddr, id: Date.now() });
-            toast.success('Address added!');
+            setIsAdding(false);
+            setNewAddr({ ...initialAddr, name: user?.name || '', mobile: user?.phone || user?.mobile || '' });
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to save address');
         }
-        setIsAdding(false);
-        setNewAddr({ ...initialAddr, name: user?.name || '', mobile: user?.phone || user?.mobile || '' });
     };
 
     const handleEdit = (addr) => {
@@ -112,7 +123,16 @@ const Addresses = () => {
     const handleDelete = (id) => {
         confirmToast({
             message: 'Are you sure you want to delete this address?',
-            onConfirm: () => removeAddress(id),
+            onConfirm: async () => {
+                try {
+                    const { data } = await API.delete(`/auth/profile/addresses/${id}`);
+                    setAddresses(data);
+                    syncAddresses(data);
+                    toast.success('Address deleted!');
+                } catch (error) {
+                    toast.error(error.response?.data?.message || 'Failed to delete address');
+                }
+            },
             type: 'danger',
             icon: 'delete_forever',
             confirmText: 'Delete'
@@ -157,6 +177,22 @@ const Addresses = () => {
             }
         });
     }, [addresses]);
+
+    useEffect(() => {
+        const fetchAddresses = async () => {
+            try {
+                const { data } = await API.get('/auth/profile/addresses');
+                setAddresses(data);
+                syncAddresses(data);
+            } catch (error) {
+                console.error('Failed to fetch addresses:', error);
+            }
+        };
+
+        if (user) {
+            fetchAddresses();
+        }
+    }, [user, setAddresses, syncAddresses]);
 
     return (
         <div className="bg-[#f1f3f6] min-h-screen pb-10 md:py-6">
