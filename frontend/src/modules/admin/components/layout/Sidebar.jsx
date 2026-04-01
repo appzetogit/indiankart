@@ -65,7 +65,8 @@ const Sidebar = () => {
                 { name: 'Users', icon: MdPeople, path: '/admin/users' },
                 { name: 'Seller Requests', icon: MdStorefront, path: '/admin/seller-requests' },
                 { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
-                { name: 'Notifications', icon: MdNotifications, path: '/admin/notifications' },
+                { name: 'Admin Notifications', icon: MdNotifications, path: '/admin/notifications' },
+                { name: 'User Notifications', icon: MdNotifications, path: '/admin/user-notifications' },
                 { name: 'B2B Enquiries', icon: MdBusinessCenter, path: '/admin/b2b' },
             ]
         },

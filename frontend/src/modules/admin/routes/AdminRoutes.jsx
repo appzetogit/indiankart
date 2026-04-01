@@ -30,6 +30,7 @@ import OfferForm from '../pages/Offers/OfferForm';
 import StockManagement from '../pages/StockManagement/StockManagement';
 import FooterManager from '../pages/Settings/FooterManager';
 import NotificationManager from '../pages/Notifications/NotificationManager';
+import AdminNotifications from '../pages/Notifications/AdminNotifications';
 import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
 import B2BManager from '../pages/B2B/B2BManager';
@@ -88,7 +89,8 @@ const AdminRoutes = () => {
                 <Route path="razorpay-credentials" element={<RazorpayCredentials />} />
                 <Route path="shipping-charges" element={<ShippingCharges />} />
                 <Route path="footer-settings" element={<FooterManager />} />
-                <Route path="notifications" element={<NotificationManager />} />
+                <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="user-notifications" element={<NotificationManager />} />
             </Route>
         </Routes>
     );

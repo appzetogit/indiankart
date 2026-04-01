@@ -275,3 +275,15 @@ export const deleteNotification = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Delete all notifications
+// @route   DELETE /api/notifications
+// @access  Private/Admin
+export const deleteAllNotifications = async (req, res) => {
+    try {
+        await Notification.deleteMany({});
+        res.json({ message: 'All notifications removed' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};

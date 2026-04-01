@@ -111,6 +111,22 @@ const useNotificationStore = create((set, get) => ({
         }
     },
 
+    deleteAllNotifications: async () => {
+        try {
+            await API.delete('/notifications');
+            set({
+                notifications: [],
+                pushNotifications: [],
+                filteredPushNotifications: [],
+                unreadCount: 0
+            });
+            return true;
+        } catch (error) {
+            console.error('Delete all notifications error:', error);
+            throw error;
+        }
+    },
+
     filterPushNotifications: (type, target) => {
         const { pushNotifications } = get();
         let filtered = [...pushNotifications];

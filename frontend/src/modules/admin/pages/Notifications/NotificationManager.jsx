@@ -15,6 +15,8 @@ import useNotificationStore from '../../store/notificationStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 import toast from 'react-hot-toast';
 import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import Pagination from '../../../../components/Pagination';
+import API from '../../../../services/api';
 
 const NotificationManager = () => {
     const {
@@ -31,20 +33,35 @@ const NotificationManager = () => {
         fetchNotifications();
     }, [fetchNotifications]);
 
+    useEffect(() => {
+        const fetchAudienceUsers = async () => {
+            try {
+                const { data } = await API.get('/auth/users');
+                setUsers(Array.isArray(data?.users) ? data.users : (Array.isArray(data) ? data : []));
+            } catch (error) {
+                console.error('Fetch audience users error:', error);
+            }
+        };
+        fetchAudienceUsers();
+    }, []);
+
     const [formData, setFormData] = useState({
         title: '',
         message: '',
         type: 'General',
-        targetAudience: 'All Users'
+        targetAudience: 'Active Users'
     });
 
     const [filters, setFilters] = useState({
         type: 'All',
         target: 'All'
     });
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
+    const [users, setUsers] = useState([]);
 
     const notificationTypes = ['General', 'Promotional', 'Order Update', 'New Arrival'];
-    const targetAudiences = ['All Users', 'New Users', 'Active Users', 'Inactive Users'];
+    const targetAudiences = ['New Users', 'Active Users', 'Inactive Users'];
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -55,6 +72,7 @@ const NotificationManager = () => {
         const { name, value } = e.target;
         const newFilters = { ...filters, [name]: value };
         setFilters(newFilters);
+        setCurrentPage(1);
         filterPushNotifications(newFilters.type, newFilters.target);
     };
 
@@ -88,7 +106,7 @@ const NotificationManager = () => {
                 title: '',
                 message: '',
                 type: 'General',
-                targetAudience: 'All Users'
+                targetAudience: 'Active Users'
             });
         } catch (error) {
             toast.error('Failed to send notification: ' + (error.message || 'Unknown error'));
@@ -101,7 +119,7 @@ const NotificationManager = () => {
                 title: '🔔 Test Notification',
                 message: 'This is a test push notification from your admin panel!',
                 type: 'General',
-                targetAudience: 'All Users'
+                targetAudience: 'Active Users'
             });
             toast.success('Test notification sent!');
         } catch (error) {
@@ -138,6 +156,58 @@ const NotificationManager = () => {
         }
     };
 
+    const totalPages = Math.max(1, Math.ceil(filteredPushNotifications.length / itemsPerPage));
+    const paginatedNotifications = filteredPushNotifications.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
+    const getAudienceUsers = (audience) => {
+        const normalizedAudience = String(audience || '').trim();
+
+        if (normalizedAudience === 'New Users') {
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            return users.filter((user) => new Date(user.createdAt || user.joinedDate || 0) >= thirtyDaysAgo);
+        }
+
+        if (normalizedAudience === 'Active Users') {
+            return users.filter((user) => (user.status || 'active') === 'active');
+        }
+
+        if (normalizedAudience === 'Inactive Users') {
+            return users.filter((user) => (user.status || 'active') === 'disabled');
+        }
+
+        return users;
+    };
+
+    const getAudienceDisplay = (audience) => {
+        const names = getAudienceUsers(audience)
+            .map((user) => user.name || user.email || user.phone)
+            .filter(Boolean);
+
+        if (names.length === 0) return audience || 'N/A';
+        return names.join(', ');
+    };
+
+    const formatNotificationDate = (value) => {
+        if (!value) return 'N/A';
+        return new Date(value).toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">
             {/* Header Area */}
@@ -147,8 +217,8 @@ const NotificationManager = () => {
                         <MdNotifications size={28} />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Push Notifications</h1>
-                        <p className="text-sm text-gray-500 font-medium">Create and manage blast notifications for your users</p>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">User Notifications</h1>
+                        <p className="text-sm text-gray-500 font-medium">Create and manage notifications sent to users</p>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -321,13 +391,13 @@ const NotificationManager = () => {
                                     </td>
                                 </tr>
                             ) : (
-                                filteredPushNotifications.map((notif, index) => (
+                                paginatedNotifications.map((notif, index) => (
                                     <tr key={notif._id || notif.id} className="hover:bg-blue-50/5 transition-colors group">
-                                        <td className="px-6 py-4 font-bold text-gray-400 text-sm">#{index + 1}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-400 text-sm">#{((currentPage - 1) * itemsPerPage) + index + 1}</td>
                                         <td className="px-6 py-4 max-w-md">
                                             <p className="font-bold text-gray-800 text-sm">{notif.title}</p>
                                             <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{notif.message}</p>
-                                            <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase">{new Date(notif.sentAt).toLocaleString()}</p>
+                                            <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase">{formatNotificationDate(notif.sentAt || notif.createdAt)}</p>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${getTypeColor(notif.type)}`}>
@@ -335,9 +405,9 @@ const NotificationManager = () => {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-gray-600">
+                                            <div className="flex items-start justify-center gap-1.5 text-xs font-bold text-gray-600">
                                                 <MdPeopleAlt size={14} className="text-gray-400" />
-                                                {notif.targetAudience}
+                                                <span className="max-w-[320px] whitespace-normal break-words text-left">{getAudienceDisplay(notif.targetAudience)}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
@@ -364,6 +434,14 @@ const NotificationManager = () => {
                     </table>
                 </div>
             </div>
+
+            {filteredPushNotifications.length > itemsPerPage && (
+                <Pagination
+                    page={currentPage}
+                    pages={totalPages}
+                    changePage={handlePageChange}
+                />
+            )}
         </div >
     );
 };
