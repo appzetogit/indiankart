@@ -23,8 +23,6 @@ import {
     MdFace,
     MdLaptop,
     MdShoppingBasket,
-    MdOutlinePhotoCamera,
-
     MdKeyboardArrowRight,
     MdArrowBack,
     MdStore,
@@ -391,11 +389,6 @@ const Header = () => {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
                         />
-                        {!isSpecialPage && !searchQuery && (
-                            <div className="flex items-center gap-3 pl-2 md:hidden">
-                                <MdOutlinePhotoCamera className="text-gray-400 text-[22px]" />
-                            </div>
-                        )}
                         {searchQuery && (
                             <button
                                 onClick={() => {
