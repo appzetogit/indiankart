@@ -400,9 +400,15 @@ const UserDetail = () => {
                                     const normalizedStatus = isReturn ? item.status : normalizeOrderStatus(item.status);
                                     const displayStatus = getDisplayStatus(item);
                                     const amountValue = isReturn ? Number(item.product?.price || 0) : Number(item.total || 0);
-                                    const displayPaymentStatus = !isReturn && normalizedStatus === 'Delivered'
+                                    const paymentMethodValue = String(item.payment?.method || '').trim().toUpperCase();
+                                    const isOnlinePaidOrder = !isReturn
+                                        && paymentMethodValue
+                                        && paymentMethodValue !== 'COD'
+                                        && ['PAID', 'COMPLETED'].includes(String(item.payment?.status || '').trim().toUpperCase());
+                                    const displayPaymentStatus = !isReturn && (normalizedStatus === 'Delivered' || isOnlinePaidOrder)
                                         ? 'Completed'
                                         : (item.payment?.status || 'Pending');
+                                    const paymentLabel = item.payment?.method || 'Payment';
 
                                     return (
                                         <div
@@ -454,7 +460,7 @@ const UserDetail = () => {
                                                             <div className="min-w-0">
                                                                 <p className="text-base font-black text-gray-900">{(item.items || []).length} item{(item.items || []).length === 1 ? '' : 's'}</p>
                                                                 <p className="mt-1 text-sm font-medium text-gray-500">
-                                                                    {item.payment?.method || 'Payment'} • {displayPaymentStatus}
+                                                                    {paymentLabel} • {displayPaymentStatus}
                                                                 </p>
                                                             </div>
                                                         </div>

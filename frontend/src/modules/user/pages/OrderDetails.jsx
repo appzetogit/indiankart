@@ -392,9 +392,13 @@ const OrderDetails = () => {
             .filter((ret) => String(ret?.orderId || '') === orderKey)
             .sort((a, b) => new Date(b?.updatedAt || b?.createdAt || 0) - new Date(a?.updatedAt || a?.createdAt || 0));
     }, [myReturns, order?._id]);
-    const paymentInfoStatus = order?.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
-        ? 'Confirmed'
-        : 'Pending';
+    const paymentMethodValue = String(order?.paymentMethod || '').trim().toUpperCase();
+    const isOnlinePaidOrder = Boolean(order?.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
+    const paymentInfoStatus = isOnlinePaidOrder
+        ? 'Completed'
+        : (order?.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
+            ? 'Completed'
+            : 'Pending');
     const isWithinReturnWindow = useMemo(() => {
         const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
         if (!deliveredAt || Number.isNaN(deliveredAt.getTime())) return false;
@@ -780,14 +784,14 @@ const OrderDetails = () => {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-gray-600">Status</span>
-                                    <div className={`flex items-center gap-1 px-3 py-1 rounded-full border ${paymentInfoStatus === 'Confirmed'
+                                    <div className={`flex items-center gap-1 px-3 py-1 rounded-full border ${paymentInfoStatus === 'Confirmed' || paymentInfoStatus === 'Completed'
                                             ? 'bg-green-50 border-green-200'
                                             : 'bg-amber-50 border-amber-200'
                                         }`}>
-                                        <span className={`material-icons text-sm ${paymentInfoStatus === 'Confirmed' ? 'text-green-600' : 'text-amber-600'}`}>
-                                            {paymentInfoStatus === 'Confirmed' ? 'check_circle' : 'pending'}
+                                        <span className={`material-icons text-sm ${paymentInfoStatus === 'Confirmed' || paymentInfoStatus === 'Completed' ? 'text-green-600' : 'text-amber-600'}`}>
+                                            {paymentInfoStatus === 'Confirmed' || paymentInfoStatus === 'Completed' ? 'check_circle' : 'pending'}
                                         </span>
-                                        <span className={`text-xs font-bold ${paymentInfoStatus === 'Confirmed' ? 'text-green-700' : 'text-amber-700'}`}>
+                                        <span className={`text-xs font-bold ${paymentInfoStatus === 'Confirmed' || paymentInfoStatus === 'Completed' ? 'text-green-700' : 'text-amber-700'}`}>
                                             {paymentInfoStatus}
                                         </span>
                                     </div>

@@ -215,7 +215,9 @@ const OrderDetail = () => {
         }
     }
     const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
-    const paymentStatusLabel = isOrderDelivered
+    const paymentMethodValue = String(order.payment?.method || order.paymentMethod || '').trim().toUpperCase();
+    const isOnlinePaidOrder = Boolean(order.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
+    const paymentStatusLabel = isOrderDelivered || isOnlinePaidOrder
         ? 'Completed'
         : (order.payment?.status || (order.isPaid ? 'Paid' : 'Pending'));
     const paymentStatusClass =
