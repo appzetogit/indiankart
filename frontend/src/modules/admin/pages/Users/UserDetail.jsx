@@ -349,10 +349,6 @@ const UserDetail = () => {
                             <p className="mt-2 text-xl font-black text-gray-900">{metrics.deliveredOrders}</p>
                         </div>
                         <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Open Orders</p>
-                            <p className="mt-2 text-xl font-black text-gray-900">{metrics.pendingOrders}</p>
-                        </div>
-                        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
                             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Total Spent</p>
                             <p className="mt-2 text-xl font-black text-gray-900">Rs. {metrics.totalSpent.toLocaleString()}</p>
                         </div>
