@@ -1,13 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     MdNotifications,
-    MdAdd,
     MdDelete,
     MdFilterList,
     MdSend,
-    MdClose,
     MdPeopleAlt,
-    MdCategory,
     MdHistory,
     MdCheckCircle
 } from 'react-icons/md';
@@ -24,10 +21,26 @@ const NotificationManager = () => {
         addPushNotification,
         deletePushNotification,
         filterPushNotifications,
-        showForm,
-        toggleForm,
-        fetchNotifications
+        fetchNotifications,
+        isLoading
     } = useNotificationStore();
+
+    const [formData, setFormData] = useState({
+        title: '',
+        message: '',
+        type: 'General',
+        targetAudience: 'Active Users'
+    });
+    const [filters, setFilters] = useState({
+        type: 'All',
+        target: 'All'
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+    const [users, setUsers] = useState([]);
+
+    const itemsPerPage = 20;
+    const notificationTypes = ['General', 'Promotional', 'Order Update', 'New Arrival'];
+    const targetAudiences = ['New Users', 'Active Users', 'Inactive Users'];
 
     useEffect(() => {
         fetchNotifications();
@@ -42,88 +55,73 @@ const NotificationManager = () => {
                 console.error('Fetch audience users error:', error);
             }
         };
+
         fetchAudienceUsers();
     }, []);
 
-    const [formData, setFormData] = useState({
-        title: '',
-        message: '',
-        type: 'General',
-        targetAudience: 'Active Users'
-    });
-
-    const [filters, setFilters] = useState({
-        type: 'All',
-        target: 'All'
-    });
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 20;
-    const [users, setUsers] = useState([]);
-
-    const notificationTypes = ['General', 'Promotional', 'Order Update', 'New Arrival'];
-    const targetAudiences = ['New Users', 'Active Users', 'Inactive Users'];
-
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
-        const newFilters = { ...filters, [name]: value };
-        setFilters(newFilters);
+        const nextFilters = { ...filters, [name]: value };
+        setFilters(nextFilters);
         setCurrentPage(1);
-        filterPushNotifications(newFilters.type, newFilters.target);
+        filterPushNotifications(nextFilters.type, nextFilters.target);
+    };
+
+    const resetForm = () => {
+        setFormData({
+            title: '',
+            message: '',
+            type: 'General',
+            targetAudience: 'Active Users'
+        });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.title || !formData.message) {
+
+        if (!formData.title.trim() || !formData.message.trim()) {
             toast.error('Please fill in both title and message');
             return;
         }
 
         try {
-            const result = await addPushNotification(formData);
+            const result = await addPushNotification({
+                ...formData,
+                title: formData.title.trim(),
+                message: formData.message.trim()
+            });
+
             if (result.firebaseSent) {
-                toast.success(`✅ Notification sent to ${result.tokensTargeted} users!`);
+                toast.success(`Notification sent to ${result.tokensTargeted} users`);
             } else {
                 const firstFailure = result?.failureReasons?.[0];
                 const reasonText = firstFailure?.code
                     ? `${firstFailure.code}${firstFailure.message ? `: ${firstFailure.message}` : ''}`
                     : 'No detailed reason from backend';
-                toast(`⚠️ Notification created but not sent (${result.tokensTargeted} tokens targeted)`, {
-                    icon: '⚠️',
+                toast(`Notification saved but not delivered (${result.tokensTargeted} tokens targeted)`, {
+                    icon: '!',
                     style: {
                         background: '#FEF3C7',
-                        color: '#92400E',
+                        color: '#92400E'
                     },
                     duration: 7000
                 });
                 toast.error(`Send failed reason: ${reasonText}`, { duration: 9000 });
             }
-            setFormData({
-                title: '',
-                message: '',
-                type: 'General',
-                targetAudience: 'Active Users'
-            });
-        } catch (error) {
-            toast.error('Failed to send notification: ' + (error.message || 'Unknown error'));
-        }
-    };
 
-    const handleTestNotification = async () => {
-        try {
-            await addPushNotification({
-                title: '🔔 Test Notification',
-                message: 'This is a test push notification from your admin panel!',
-                type: 'General',
-                targetAudience: 'Active Users'
-            });
-            toast.success('Test notification sent!');
+            resetForm();
         } catch (error) {
-            toast.error('Failed to send test notification');
+            if (error.response?.status === 401) {
+                toast.error('Admin session expired. Please log in again.');
+                return;
+            }
+
+            toast.error(`Failed to send notification: ${error.response?.data?.message || error.message || 'Unknown error'}`);
         }
     };
 
@@ -141,31 +139,29 @@ const NotificationManager = () => {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'Sent': return 'bg-green-100 text-green-700 border-green-200';
-            case 'Failed': return 'bg-red-100 text-red-700 border-red-200';
-            default: return 'bg-gray-100 text-gray-700 border-gray-200';
+            case 'Sent':
+            case 'sent':
+                return 'bg-green-100 text-green-700 border-green-200';
+            case 'Failed':
+            case 'failed':
+                return 'bg-red-100 text-red-700 border-red-200';
+            default:
+                return 'bg-gray-100 text-gray-700 border-gray-200';
         }
     };
 
     const getTypeColor = (type) => {
         switch (type) {
-            case 'Promotional': return 'bg-purple-100 text-purple-700 border-purple-200';
-            case 'Order Update': return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'New Arrival': return 'bg-orange-100 text-orange-700 border-orange-200';
-            default: return 'bg-gray-100 text-gray-700 border-gray-200';
-        }
-    };
-
-    const totalPages = Math.max(1, Math.ceil(filteredPushNotifications.length / itemsPerPage));
-    const paginatedNotifications = filteredPushNotifications.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
-
-    const handlePageChange = (page) => {
-        if (page >= 1 && page <= totalPages) {
-            setCurrentPage(page);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            case 'Promotional':
+            case 'promotional':
+                return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'Order Update':
+            case 'order':
+                return 'bg-sky-100 text-sky-700 border-sky-200';
+            case 'New Arrival':
+                return 'bg-orange-100 text-orange-700 border-orange-200';
+            default:
+                return 'bg-gray-100 text-gray-700 border-gray-200';
         }
     };
 
@@ -193,12 +189,18 @@ const NotificationManager = () => {
             .map((user) => user.name || user.email || user.phone)
             .filter(Boolean);
 
-        if (names.length === 0) return audience || 'N/A';
+        if (names.length === 0) {
+            return audience || 'N/A';
+        }
+
         return names.join(', ');
     };
 
     const formatNotificationDate = (value) => {
-        if (!value) return 'N/A';
+        if (!value) {
+            return 'N/A';
+        }
+
         return new Date(value).toLocaleString('en-IN', {
             day: '2-digit',
             month: 'short',
@@ -208,134 +210,134 @@ const NotificationManager = () => {
         });
     };
 
+    const totalPages = Math.max(1, Math.ceil(filteredPushNotifications.length / itemsPerPage));
+    const paginatedNotifications = filteredPushNotifications.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    const handlePageChange = (page) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-10">
-            {/* Header Area */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex items-center gap-4">
                     <div className="p-3 bg-blue-100 text-blue-600 rounded-xl">
                         <MdNotifications size={28} />
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight">User Notifications</h1>
-                        <p className="text-sm text-gray-500 font-medium">Create and manage notifications sent to users</p>
+                        <p className="text-sm text-gray-500 font-medium">Send push notifications from one simple form.</p>
                     </div>
-                </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleTestNotification}
-                        className="flex items-center gap-2 px-5 py-3 rounded-xl font-bold transition-all bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-200"
-                    >
-                        <MdSend size={18} />
-                        Test Push
-                    </button>
-                    <button
-                        onClick={toggleForm}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg ${showForm
-                            ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 shadow-none'
-                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200'
-                            }`}
-                    >
-                        {showForm ? <MdClose size={20} /> : <MdAdd size={20} />}
-                        {showForm ? 'Cancel Creation' : 'Create Notification'}
-                    </button>
                 </div>
             </div>
 
-            {/* Create Notification Form */}
-            {showForm && (
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="flex items-center gap-3 border-b border-gray-50 pb-4 mb-6">
-                        <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                            <MdSend size={18} />
-                        </span>
-                        <h2 className="text-lg font-bold text-gray-800">New Push Campaign</h2>
+            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 border-b border-gray-50 pb-4 mb-6">
+                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                        <MdSend size={18} />
+                    </span>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-800">Send Push Notification</h2>
+                        <p className="text-sm text-gray-500">No extra test button. Just fill this form and send.</p>
                     </div>
+                </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Notification Title</label>
-                                <input
-                                    type="text"
-                                    name="title"
-                                    value={formData.title}
-                                    onChange={handleInputChange}
-                                    placeholder="e.g. ⚡ Flash Sale Alert!"
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-400"
-                                    required
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Notification Type</label>
-                                <select
-                                    name="type"
-                                    value={formData.type}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900"
-                                >
-                                    {notificationTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                                </select>
-                            </div>
-                        </div>
-
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Message Content</label>
-                            <textarea
-                                name="message"
-                                value={formData.message}
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Notification Title</label>
+                            <input
+                                type="text"
+                                name="title"
+                                value={formData.title}
                                 onChange={handleInputChange}
-                                placeholder="Write your notification message here..."
-                                rows="3"
-                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-400 resize-none"
-                                maxLength="200"
+                                placeholder="e.g. Flash Sale Alert"
+                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 placeholder:text-gray-400"
                                 required
                             />
-                            <p className="text-[10px] text-gray-400 text-right font-medium">Max 200 characters recommended for best delivery</p>
                         </div>
-
-                        <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-center gap-4">
-                                <div className="p-2 bg-white rounded-lg text-blue-500 shadow-sm">
-                                    <MdPeopleAlt size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-bold text-gray-700">Target Audience Selection</p>
-                                    <p className="text-xs text-gray-500">Who should receive this notification?</p>
-                                </div>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {targetAudiences.map(target => (
-                                    <button
-                                        key={target}
-                                        type="button"
-                                        onClick={() => setFormData(prev => ({ ...prev, targetAudience: target }))}
-                                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all border ${formData.targetAudience === target
-                                            ? 'bg-blue-600 text-white border-blue-600 shadow-md transform -translate-y-0.5'
-                                            : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        {target}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end pt-4">
-                            <button
-                                type="submit"
-                                className="flex items-center gap-2 bg-blue-600 text-white px-10 py-3.5 rounded-2xl font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-xl shadow-blue-100"
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Notification Type</label>
+                            <select
+                                name="type"
+                                value={formData.type}
+                                onChange={handleInputChange}
+                                className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900"
                             >
-                                <MdSend size={20} />
-                                Send Notification Now
-                            </button>
+                                {notificationTypes.map((type) => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
+                            </select>
                         </div>
-                    </form>
-                </div>
-            )
-            }
+                    </div>
 
-            {/* Notifications List Table */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">Message Content</label>
+                        <textarea
+                            name="message"
+                            value={formData.message}
+                            onChange={handleInputChange}
+                            placeholder="Write your notification message here..."
+                            rows="4"
+                            className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 placeholder:text-gray-400 resize-none"
+                            maxLength="200"
+                            required
+                        />
+                        <p className="text-[10px] text-gray-400 text-right font-medium">Max 200 characters recommended for best delivery</p>
+                    </div>
+
+                    <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white rounded-lg text-blue-500 shadow-sm">
+                                <MdPeopleAlt size={20} />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-gray-700">Audience</p>
+                                <p className="text-xs text-gray-500">Choose who should receive this push notification.</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {targetAudiences.map((target) => (
+                                <button
+                                    key={target}
+                                    type="button"
+                                    onClick={() => setFormData((prev) => ({ ...prev, targetAudience: target }))}
+                                    className={`px-4 py-3 rounded-xl text-sm font-bold transition-all border ${formData.targetAudience === target
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                                    }`}
+                                >
+                                    {target}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
+                        <p className="text-sm text-gray-500">
+                            Selected audience: <span className="font-semibold text-gray-700">{formData.targetAudience}</span>
+                        </p>
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className={`flex items-center justify-center gap-2 px-8 py-3.5 rounded-2xl font-black tracking-wide transition-all ${isLoading
+                                ? 'bg-blue-300 text-white cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-xl shadow-blue-100'
+                            }`}
+                        >
+                            <MdSend size={20} />
+                            {isLoading ? 'Sending...' : 'Send Push Notification'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gray-50/50">
                     <div className="flex items-center gap-3">
@@ -353,7 +355,9 @@ const NotificationManager = () => {
                                 className="text-[10px] font-black uppercase tracking-widest text-gray-600 outline-none bg-transparent"
                             >
                                 <option value="All">All Types</option>
-                                {notificationTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                {notificationTypes.map((type) => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-gray-200 shadow-sm">
@@ -365,7 +369,9 @@ const NotificationManager = () => {
                                 className="text-[10px] font-black uppercase tracking-widest text-gray-600 outline-none bg-transparent"
                             >
                                 <option value="All">All Audiences</option>
-                                {targetAudiences.map(a => <option key={a} value={a}>{a}</option>)}
+                                {targetAudiences.map((audience) => (
+                                    <option key={audience} value={audience}>{audience}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -376,7 +382,7 @@ const NotificationManager = () => {
                         <AdminTableHead className="bg-slate-900">
                             <AdminTableHeaderRow className="bg-transparent border-b-0">
                                 <AdminTableHeaderCell>S.No</AdminTableHeaderCell>
-                                <AdminTableHeaderCell>Title & Message</AdminTableHeaderCell>
+                                <AdminTableHeaderCell>Title and Message</AdminTableHeaderCell>
                                 <AdminTableHeaderCell className="text-center">Type</AdminTableHeaderCell>
                                 <AdminTableHeaderCell className="text-center">Audience</AdminTableHeaderCell>
                                 <AdminTableHeaderCell className="text-center">Status</AdminTableHeaderCell>
@@ -413,7 +419,7 @@ const NotificationManager = () => {
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${getStatusColor(notif.status)}`}>
-                                                    {notif.status === 'Sent' && <MdCheckCircle size={12} />}
+                                                    {(notif.status === 'Sent' || notif.status === 'sent') && <MdCheckCircle size={12} />}
                                                     {notif.status}
                                                 </span>
                                             </div>
@@ -442,7 +448,7 @@ const NotificationManager = () => {
                     changePage={handlePageChange}
                 />
             )}
-        </div >
+        </div>
     );
 };
 

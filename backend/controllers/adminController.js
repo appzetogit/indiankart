@@ -7,28 +7,30 @@ import generateToken from '../utils/generateToken.js';
 export const authAdmin = async (req, res) => {
     const { password } = req.body;
     const email = req.body.email?.toLowerCase().trim();
-    console.log('Admin login attempt:', { email });
+    const username = req.body.username?.toLowerCase().trim();
+    const loginId = username || email;
 
-    const adminQuery = await Admin.findOne({ email });
-    if (!adminQuery) {
-        console.log('Admin not found with email:', email);
-    } else {
-        const isMatch = await adminQuery.matchPassword(password);
-        console.log('Admin found. Password match:', isMatch);
+    if (!loginId || !password) {
+        return res.status(400).json({ message: 'Username/email and password are required' });
     }
+
+    const adminQuery = await Admin.findOne({
+        $or: [{ username: loginId }, { email: loginId }]
+    });
 
     if (adminQuery && (await adminQuery.matchPassword(password))) {
         const token = generateToken(res, adminQuery._id, 'admin_jwt');
         res.json({
             _id: adminQuery._id,
             name: adminQuery.name,
+            username: adminQuery.username,
             email: adminQuery.email,
             role: adminQuery.role,
             isAdmin: true,
             token
         });
     } else {
-        res.status(401).json({ message: 'Invalid email or password' });
+        res.status(401).json({ message: 'Invalid username/email or password' });
     }
 };
 
@@ -55,6 +57,7 @@ export const getAdminProfile = async (req, res) => {
     const admin = {
         _id: req.user._id,
         name: req.user.name,
+        username: req.user.username,
         email: req.user.email,
         role: req.user.role,
         isAdmin: true
@@ -71,6 +74,7 @@ export const updateAdminProfile = async (req, res) => {
 
         if (admin) {
             admin.name = req.body.name || admin.name;
+            admin.username = req.body.username || admin.username;
             admin.email = req.body.email || admin.email;
 
             if (req.body.password) {
@@ -84,6 +88,7 @@ export const updateAdminProfile = async (req, res) => {
             res.json({
                 _id: updatedAdmin._id,
                 name: updatedAdmin.name,
+                username: updatedAdmin.username,
                 email: updatedAdmin.email,
                 role: updatedAdmin.role,
                 isAdmin: true,

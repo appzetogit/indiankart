@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 
 const AdminLogin = () => {
     const navigate = useNavigate();
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const { login, loading } = useAdminAuthStore();
@@ -16,7 +16,7 @@ const AdminLogin = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const success = await login(email, password);
+        const success = await login(username, password);
         if (success) {
             toast.success('Welcome back, Admin!');
             navigate('/admin/dashboard');
@@ -41,17 +41,17 @@ const AdminLogin = () => {
                 <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Email Address
+                            Username
                         </label>
                         <input
-                            type="email"
-                            name="admin-email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            type="text"
+                            name="admin-username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
                             disabled={loading}
                             autoComplete="off"
                             className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 ${loading ? 'bg-gray-50 cursor-not-allowed opacity-75' : 'bg-white'}`}
-                            placeholder="admin@example.com"
+                            placeholder="Enter your username"
                             required
                         />
                     </div>

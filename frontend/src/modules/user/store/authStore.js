@@ -4,6 +4,17 @@ import API from '../../../services/api';
 import { useCartStore } from './cartStore';
 import { requestForToken } from '../../../services/firebase';
 
+const setUserTokenCache = (token) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (token) {
+        localStorage.setItem('user-auth-token', token);
+    } else {
+        localStorage.removeItem('user-auth-token');
+    }
+};
 
 export const useAuthStore = create(
     persist(
@@ -44,10 +55,12 @@ export const useAuthStore = create(
                         return;
                     }
                     // Ensure token is preserved if it exists in data or state
+                    setUserTokenCache(storedToken);
                     set({ user: { ...data, token: storedToken }, isAuthenticated: true, loading: false });
                     useCartStore.getState().setAddresses(data?.addresses || []);
                     get().registerFcmToken();
                 } catch (error) {
+                    setUserTokenCache(null);
                     set({ user: null, isAuthenticated: false, loading: false });
                 }
             },
@@ -74,6 +87,7 @@ export const useAuthStore = create(
         try {
             const payload = { mobile, otp, userType, name, email };
             const { data } = await API.post('/auth/verify-otp', payload);
+            setUserTokenCache(data?.token);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -92,6 +106,7 @@ export const useAuthStore = create(
         set({ loading: true, error: null });
         try {
             const { data } = await API.post('/auth/login', { email, password });
+            setUserTokenCache(data?.token);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -109,6 +124,7 @@ export const useAuthStore = create(
         set({ loading: true, error: null });
         try {
             const { data } = await API.post('/auth/register', userData);
+            setUserTokenCache(data?.token);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -125,12 +141,14 @@ export const useAuthStore = create(
     logout: async () => {
         try {
             await API.post('/auth/logout');
+            setUserTokenCache(null);
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
             useCartStore.getState().clearStore();
         } catch (error) {
             console.error('Logout failed', error);
             // Force client-side logout anyway
+            setUserTokenCache(null);
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
         }
@@ -151,6 +169,7 @@ export const useAuthStore = create(
                 ? { ...data, token: currentUser.token }
                 : data;
 
+            setUserTokenCache(mergedUser?.token);
             set({ user: mergedUser, isAuthenticated: true });
             useCartStore.getState().setAddresses(mergedUser?.addresses || []);
             return mergedUser;
