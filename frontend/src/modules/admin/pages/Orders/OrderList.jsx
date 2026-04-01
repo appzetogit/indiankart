@@ -190,7 +190,7 @@ const OrderList = () => {
                                     <AdminTableHead>
                                         <AdminTableHeaderRow>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Order ID & Date</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">CustomerDetails</AdminTableHeaderCell>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Customer</AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Items & Price</AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Payment</AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Status</AdminTableHeaderCell>
@@ -210,17 +210,20 @@ const OrderList = () => {
                                                 </td>
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-gray-800">
-                                                            {order.user?.name || order.shippingAddress?.name || 'Unknown'}
-                                                        </span>
-                                                        <div className="flex flex-col mt-0.5 gap-0.5">
-                                                            <span className="text-[10px] text-gray-400 font-medium tracking-tight hover:text-blue-500 transition-colors cursor-pointer">
-                                                                {order.user?.email || order.shippingAddress?.email || 'N/A'}
+                                                        {order.user?._id || order.user?.id ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => navigate(`/admin/users/${order.user?._id || order.user?.id}`)}
+                                                                className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline transition-colors text-left"
+                                                                title="Open customer profile"
+                                                            >
+                                                                {order.user?.name || order.shippingAddress?.name || 'Unknown'}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-gray-800">
+                                                                {order.user?.name || order.shippingAddress?.name || 'Unknown'}
                                                             </span>
-                                                            <span className="text-[10px] text-gray-400 font-medium tracking-tight">
-                                                                {order.user?.phone || 'N/A'}
-                                                            </span>
-                                                        </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
