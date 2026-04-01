@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { getMessaging, getToken, isSupported, onMessage } from "firebase/messaging";
 
 import API from './api';
 
@@ -9,7 +9,8 @@ const firebaseConfig = {
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const requiredConfigKeys = ['apiKey', 'authDomain', 'projectId', 'messagingSenderId', 'appId'];
@@ -20,15 +21,24 @@ let messaging = null;
 
 if (isFirebaseConfigured) {
     app = initializeApp(firebaseConfig);
-    messaging = getMessaging(app);
 } else {
     console.warn('Firebase messaging disabled: missing one or more VITE_FIREBASE_* env values.');
 }
 
 export const requestForToken = async () => {
     try {
-        if (!messaging) {
+        if (!app) {
             return null;
+        }
+
+        const messagingSupported = await isSupported();
+        if (!messagingSupported) {
+            console.warn('Firebase messaging is not supported in this browser.');
+            return null;
+        }
+
+        if (!messaging) {
+            messaging = getMessaging(app);
         }
 
         if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
@@ -71,15 +81,23 @@ export const requestForToken = async () => {
 
 export const onMessageListener = () =>
     new Promise((resolve) => {
-        if (!messaging) {
-            resolve(null);
-            return;
-        }
+        isSupported()
+            .then((messagingSupported) => {
+                if (!app || !messagingSupported) {
+                    resolve(null);
+                    return;
+                }
 
-        onMessage(messaging, (payload) => {
-            console.log("payload", payload);
-            resolve(payload);
-        });
+                if (!messaging) {
+                    messaging = getMessaging(app);
+                }
+
+                onMessage(messaging, (payload) => {
+                    console.log("payload", payload);
+                    resolve(payload);
+                });
+            })
+            .catch(() => resolve(null));
     });
 
 export default app;

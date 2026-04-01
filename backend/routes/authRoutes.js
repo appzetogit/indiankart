@@ -37,11 +37,11 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
     try {
         console.log('FCM Token endpoint hit:', {
             userId: req.user?._id,
-            hasToken: !!req.body.fcmToken || !!req.body.fcmTokenWeb || !!req.body.fcmTokenMobile,
+            hasToken: !!req.body.token || !!req.body.fcmToken || !!req.body.fcmTokenWeb || !!req.body.fcmTokenMobile,
             platform: forcedPlatform || req.body.platform
         });
 
-        const fcmToken = req.body.fcmToken || req.body.fcmTokenWeb || req.body.fcmTokenMobile;
+        const fcmToken = req.body.token || req.body.fcmToken || req.body.fcmTokenWeb || req.body.fcmTokenMobile;
         const normalizedPlatform = normalizePlatform(forcedPlatform || req.body.platform || 'web');
 
         if (!fcmToken) {

@@ -4,6 +4,16 @@ const API = axios.create({
     withCredentials: true,
 });
 
+const parseStoredState = (key) => {
+    try {
+        const rawValue = localStorage.getItem(key);
+        return rawValue ? JSON.parse(rawValue) : null;
+    } catch (error) {
+        console.error(`Error parsing localStorage key ${key}:`, error);
+        return null;
+    }
+};
+
 API.interceptors.request.use((config) => {
     try {
         const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
@@ -35,17 +45,20 @@ API.interceptors.request.use((config) => {
             '/seller-requests'
         ].some((path) => requestPath.startsWith(path)) && requestMethod !== 'get';
 
-        const adminStorageData = localStorage.getItem('admin-auth-storage');
-        const userStorageData = localStorage.getItem('user-auth-storage');
+        const adminStorageState = parseStoredState('admin-auth-storage');
+        const userStorageState = parseStoredState('user-auth-storage');
 
-        const adminToken = adminStorageData
-            ? JSON.parse(adminStorageData)?.state?.adminUser?.token
-            : null;
+        const adminToken =
+            localStorage.getItem('admin-auth-token') ||
+            adminStorageState?.state?.adminUser?.token ||
+            null;
 
         // Token is stored inside user object in zustand persist.
-        const userToken = userStorageData
-            ? (JSON.parse(userStorageData)?.state?.user?.token || JSON.parse(userStorageData)?.state?.token)
-            : null;
+        const userToken =
+            localStorage.getItem('user-auth-token') ||
+            userStorageState?.state?.user?.token ||
+            userStorageState?.state?.token ||
+            null;
 
         // Keep admin/user sessions isolated:
         // admin pages -> admin token, user pages -> user token.
