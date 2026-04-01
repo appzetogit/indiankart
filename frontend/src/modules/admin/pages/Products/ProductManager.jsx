@@ -281,7 +281,7 @@ const ProductManager = () => {
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-200">
                                     {localProducts.map(product => (
                                         <tr key={getProductId(product)} className="hover:bg-blue-50/10 transition-colors group">
                                             {pickerMode && (

@@ -91,7 +91,7 @@ const SellerRequests = () => {
                                 <th className="px-4 py-3 text-right text-[11px] font-black uppercase tracking-widest text-white">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-200">
                             {paginatedRequests.map((request) => (
                                 <tr key={request._id} className="hover:bg-gray-50/70 transition-colors">
                                     <td className="px-4 py-3">

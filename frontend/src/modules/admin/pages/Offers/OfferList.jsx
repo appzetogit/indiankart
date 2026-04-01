@@ -173,7 +173,7 @@ const OfferList = () => {
                                         <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
                                     </AdminTableHeaderRow>
                                 </AdminTableHead>
-                                <tbody className="divide-y divide-gray-50">
+                                <tbody className="divide-y divide-gray-200">
                                     {filteredOffers.map((offer) => (
                                         <tr key={offer._id} className="hover:bg-blue-50/10 transition-colors group">
                                             <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
@@ -188,15 +188,15 @@ const OfferList = () => {
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                 <span className="text-xs font-black text-green-600">
                                                     {getDiscountDisplay(offer)}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                 {getApplicableToBadge(offer.applicableTo)}
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                 <div className="flex flex-col text-[10px] text-gray-600">
                                                     <span className="font-bold">
                                                         {new Date(offer.startDate).toLocaleDateString('en-IN')}
@@ -207,10 +207,10 @@ const OfferList = () => {
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                 {getStatusBadge(offer.isActive)}
                                             </td>
-                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-right">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-right">
                                                 <div className="flex items-center justify-end gap-1 md:gap-2">
                                                     <button
                                                         onClick={() => handleToggleStatus(offer._id)}

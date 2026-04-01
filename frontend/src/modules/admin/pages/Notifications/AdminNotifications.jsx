@@ -127,7 +127,7 @@ const AdminNotifications = () => {
                                 <AdminTableHeaderCell compact className="text-right">Date</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
                         </AdminTableHead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {paginatedNotifications.length === 0 ? (
                                 <tr>
                                     <td colSpan="5" className="px-6 py-12 text-center text-gray-400 italic">
@@ -145,10 +145,10 @@ const AdminNotifications = () => {
                                             }
                                         }}
                                     >
-                                        <td className="px-6 py-4 text-sm font-bold text-gray-400">
+                                        <td className="px-5 py-3 text-sm font-bold text-gray-400">
                                             #{((currentPage - 1) * itemsPerPage) + index + 1}
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <div className="flex items-start gap-3">
                                                 <div className="mt-0.5">{getNotificationIcon(notification.type)}</div>
                                                 <div className="min-w-0">
@@ -157,17 +157,17 @@ const AdminNotifications = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-5 py-3 text-center">
                                             <span className={`inline-flex rounded-lg border px-2 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${getTypeBadgeClass(notification.type)}`}>
                                                 {notification.type || 'general'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-5 py-3 text-center">
                                             <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${notification.isRead ? 'bg-gray-100 text-gray-600' : 'bg-blue-100 text-blue-700'}`}>
                                                 {notification.isRead ? 'Read' : 'Unread'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-right text-sm font-semibold text-gray-600">
+                                        <td className="px-5 py-3 text-right text-sm font-semibold text-gray-600">
                                             {formatDateTime(notification.createdAt)}
                                         </td>
                                     </tr>

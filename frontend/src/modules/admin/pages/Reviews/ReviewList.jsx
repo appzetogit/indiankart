@@ -110,7 +110,7 @@ const ReviewList = () => {
                                 <AdminTableHeaderCell className="text-center">Actions</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
                         </AdminTableHead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {loading ? (
                                 <tr>
                                     <td colSpan="6" className="px-6 py-8 text-center text-gray-400">Loading reviews...</td>
@@ -118,7 +118,7 @@ const ReviewList = () => {
                             ) : filteredReviews.length > 0 ? (
                                 filteredReviews.map((rev) => (
                                     <tr key={rev._id} className="hover:bg-gray-50/50 transition-colors group">
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                                                     <img src={rev.product?.image} alt="" className="w-full h-full object-contain" />
@@ -129,26 +129,26 @@ const ReviewList = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <p className="text-sm font-bold text-gray-900">{rev.user?.name}</p>
                                             <p className="text-[11px] text-gray-500">{rev.user?.email}</p>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-2 py-1 rounded-lg w-fit border border-amber-100">
                                                 <span className="text-sm font-black">{rev.rating}</span>
                                                 <MdStar size={16} />
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <p className="text-sm text-gray-600 font-medium max-w-xs line-clamp-2">{rev.comment}</p>
                                             <p className="text-[10px] text-gray-400 mt-1">{new Date(rev.createdAt).toLocaleString()}</p>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusStyle(rev.status)}`}>
                                                 {rev.status}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-5 py-3">
                                             <div className="flex items-center justify-center gap-2">
                                                 {rev.status === 'pending' ? (
                                                     <>

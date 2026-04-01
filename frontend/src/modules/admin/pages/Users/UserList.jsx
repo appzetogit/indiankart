@@ -119,13 +119,13 @@ const UserList = () => {
             </div>
 
             {/* Filters & Search */}
-            <div className="bg-white p-4 md:p-5 rounded-3xl border border-gray-200 shadow-sm flex flex-col lg:flex-row gap-3 md:gap-4 items-center">
+            <div className="bg-white p-3 md:p-4 rounded-3xl border border-gray-200 shadow-sm flex flex-col lg:flex-row gap-2 md:gap-3 items-center">
                 <div className="relative flex-1 w-full">
                     <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     <input
                         type="text"
                         placeholder="Search by name, email or phone..."
-                        className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm text-gray-900 placeholder:text-gray-400 font-semibold"
+                        className="w-full pl-11 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-2xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm text-gray-900 placeholder:text-gray-400 font-semibold"
                         value={searchTerm}
                         onChange={(e) => {
                             setSearchTerm(e.target.value);
@@ -135,7 +135,7 @@ const UserList = () => {
                 </div>
                 <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
                     <select
-                        className="flex-1 lg:flex-none px-4 py-3 md:px-5 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:bg-white focus:border-blue-500 text-sm font-semibold text-gray-900 min-w-[130px] md:min-w-[170px]"
+                        className="flex-1 lg:flex-none px-4 py-2.5 md:px-5 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:bg-white focus:border-blue-500 text-sm font-semibold text-gray-900 min-w-[130px] md:min-w-[170px]"
                         value={statusFilter}
                         onChange={(e) => {
                             setStatusFilter(e.target.value);
@@ -151,7 +151,7 @@ const UserList = () => {
 
             {/* Users Table */}
             <div className="relative -mx-4 md:mx-0">
-                <AdminTable shellClassName="md:rounded-3xl border-y md:border" tableClassName="w-full min-w-max text-left border-separate border-spacing-0">
+                <AdminTable shellClassName="md:rounded-3xl border-y md:border" tableClassName="w-full min-w-max text-left border-collapse">
                             <AdminTableHead>
                                 <AdminTableHeaderRow>
                                     <AdminTableHeaderCell compact className="whitespace-nowrap tracking-[0.18em]">User Details</AdminTableHeaderCell>
@@ -162,7 +162,7 @@ const UserList = () => {
                                     <AdminTableHeaderCell compact className="whitespace-nowrap tracking-[0.18em] text-right">Actions</AdminTableHeaderCell>
                                 </AdminTableHeaderRow>
                             </AdminTableHead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-200">
                                 {paginatedUsers.length === 0 ? (
                                     <tr>
                                         <td colSpan="6" className="px-4 py-12 md:px-6 text-center text-gray-500 font-medium text-sm">
@@ -172,54 +172,54 @@ const UserList = () => {
                                 ) : (
                                     paginatedUsers.map(user => (
                                         <tr key={user._id || user.id} className="group transition-colors hover:bg-blue-50/30">
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4">
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3">
                                                 <div className="min-w-0">
                                                     <h4 className="font-black text-sm text-gray-900 group-hover:text-blue-700 transition-colors">{user.name || 'Unnamed User'}</h4>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4 text-sm text-gray-600">
-                                                <div className="space-y-2">
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3 text-sm text-gray-600">
+                                                <div className="space-y-1">
                                                     <p className="flex items-center gap-2 font-semibold text-gray-900">
-                                                        <MdPhone className="text-gray-400" />
+                                                        <MdPhone className="text-gray-400" size={16} />
                                                         <span>{user.phone ? `+91 ${user.phone}` : 'N/A'}</span>
                                                     </p>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4 text-center text-sm font-semibold text-gray-600">
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3 text-center text-sm font-semibold text-gray-600">
                                                 {new Date(user.joinedDate || user.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4 text-center">
-                                                <span className="inline-flex min-w-[42px] items-center justify-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-xl font-black text-sm border border-blue-100">
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3 text-center">
+                                                <span className="inline-flex min-w-[38px] items-center justify-center px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg font-black text-sm border border-blue-100">
                                                     {user.orderStats?.total || 0}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-[10px] md:text-[11px] font-black uppercase tracking-[0.16em] border shadow-sm ${(user.status || 'active') === 'active'
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3 text-center">
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] md:text-[11px] font-black uppercase tracking-[0.14em] border shadow-sm ${(user.status || 'active') === 'active'
                                                     ? 'bg-green-50 text-green-700 border-green-200'
                                                     : 'bg-red-50 text-red-700 border-red-200'
                                                     }`}>
                                                     {(user.status || 'active').charAt(0).toUpperCase() + (user.status || 'active').slice(1)}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-3 py-3 md:px-5 md:py-4 text-right">
+                                            <td className="whitespace-nowrap px-3 py-2.5 md:px-5 md:py-3 text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
                                                         onClick={() => navigate(`/admin/users/${user._id || user.id}`)}
-                                                        className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all border border-transparent hover:border-blue-100"
+                                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all border border-transparent hover:border-blue-100"
                                                         title="View Profile"
                                                     >
-                                                        <MdVisibility size={18} />
+                                                        <MdVisibility size={17} />
                                                     </button>
                                                     <button
                                                         onClick={() => handleToggleStatus(user)}
                                                         disabled={updatingUserId === String(user._id || user.id)}
-                                                        className={`p-2.5 rounded-xl transition-all border border-transparent disabled:opacity-50 disabled:cursor-not-allowed ${(user.status || 'active') === 'active'
+                                                        className={`p-2 rounded-lg transition-all border border-transparent disabled:opacity-50 disabled:cursor-not-allowed ${(user.status || 'active') === 'active'
                                                             ? 'text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-100'
                                                             : 'text-gray-400 hover:text-green-600 hover:bg-green-50 hover:border-green-100'
                                                             }`}
                                                         title={(user.status || 'active') === 'active' ? 'Disable Account' : 'Enable Account'}
                                                     >
-                                                        {(user.status || 'active') === 'active' ? <MdBlock size={18} /> : <MdCheckCircle size={18} />}
+                                                        {(user.status || 'active') === 'active' ? <MdBlock size={17} /> : <MdCheckCircle size={17} />}
                                                     </button>
                                                 </div>
                                             </td>

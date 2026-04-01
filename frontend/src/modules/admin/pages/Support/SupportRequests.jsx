@@ -92,28 +92,28 @@ const SupportRequests = () => {
                             <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
                         </AdminTableHeaderRow>
                     </AdminTableHead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-200">
                         {paginatedRequests.length > 0 ? (
                             paginatedRequests.map((req) => (
                                 <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <div className="font-bold text-gray-800 text-sm">#{req.id}</div>
                                         <div className="text-xs text-gray-400 mt-1">{new Date(req.date).toLocaleDateString()}</div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <div className="font-medium text-gray-800">{req.customerName}</div>
                                         <div className="text-xs text-blue-600 mt-1">{req.contact}</div>
                                     </td>
-                                    <td className="px-6 py-4 max-w-xs">
+                                    <td className="px-5 py-3 max-w-xs">
                                         <div className="text-xs font-bold text-gray-500 uppercase mb-1">{req.category}</div>
                                         <p className="text-sm text-gray-600 line-clamp-2" title={req.description}>{req.description}</p>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusColor(req.status)}`}>
                                             {req.status.replace('_', ' ')}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <div className="flex items-center justify-end gap-2">
                                             {req.status !== 'RESOLVED' && (
                                                 <button

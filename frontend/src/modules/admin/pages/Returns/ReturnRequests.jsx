@@ -263,10 +263,10 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                 <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
                         </AdminTableHead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {paginatedReturns.map(ret => (
                                 <tr key={ret.id} className="hover:bg-blue-50/10 transition-colors group">
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <div className="flex flex-col">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-black text-gray-900">{ret.id}</span>
@@ -280,7 +280,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                             <span className="text-[10px] font-bold text-blue-600 mt-1 uppercase tracking-tighter">Order: {ret.orderDisplayId || ret.orderId}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <button
                                             type="button"
                                             onClick={() => handleOpenCustomerProfile(ret)}
@@ -290,7 +290,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                             {ret.customer || 'N/A'}
                                         </button>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
                                                 <img src={ret.product.image} className="w-full h-full object-contain p-1" alt="" />
@@ -301,12 +301,12 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-center">
+                                    <td className="px-5 py-3 text-center">
                                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(getDisplayStatusLabel(ret.type, ret.status))}`}>
                                             {getDisplayStatusLabel(ret.type, ret.status)}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-5 py-3 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <button
                                                 onClick={() => setSelectedReturn(ret)}

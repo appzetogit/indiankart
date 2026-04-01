@@ -389,7 +389,7 @@ const NotificationManager = () => {
                                 <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
                         </AdminTableHead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {filteredPushNotifications.length === 0 ? (
                                 <tr>
                                     <td colSpan="6" className="px-6 py-12 text-center text-gray-400 italic">
@@ -399,24 +399,24 @@ const NotificationManager = () => {
                             ) : (
                                 paginatedNotifications.map((notif, index) => (
                                     <tr key={notif._id || notif.id} className="hover:bg-blue-50/5 transition-colors group">
-                                        <td className="px-6 py-4 font-bold text-gray-400 text-sm">#{((currentPage - 1) * itemsPerPage) + index + 1}</td>
-                                        <td className="px-6 py-4 max-w-md">
+                                        <td className="px-5 py-3 font-bold text-gray-400 text-sm">#{((currentPage - 1) * itemsPerPage) + index + 1}</td>
+                                        <td className="px-5 py-3 max-w-md">
                                             <p className="font-bold text-gray-800 text-sm">{notif.title}</p>
                                             <p className="text-xs text-gray-500 line-clamp-1 mt-0.5">{notif.message}</p>
                                             <p className="text-[10px] text-gray-400 font-medium mt-1 uppercase">{formatNotificationDate(notif.sentAt || notif.createdAt)}</p>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-5 py-3 text-center">
                                             <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${getTypeColor(notif.type)}`}>
                                                 {notif.type}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-5 py-3 text-center">
                                             <div className="flex items-start justify-center gap-1.5 text-xs font-bold text-gray-600">
                                                 <MdPeopleAlt size={14} className="text-gray-400" />
                                                 <span className="max-w-[320px] whitespace-normal break-words text-left">{getAudienceDisplay(notif.targetAudience)}</span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-5 py-3 text-center">
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <span className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border ${getStatusColor(notif.status)}`}>
                                                     {(notif.status === 'Sent' || notif.status === 'sent') && <MdCheckCircle size={12} />}
@@ -424,7 +424,7 @@ const NotificationManager = () => {
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-5 py-3 text-right">
                                             <button
                                                 onClick={() => handleDelete(notif._id || notif.id)}
                                                 className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"

@@ -141,7 +141,7 @@ const StockManagement = () => {
                                 <AdminTableHeaderCell compact className="text-right">Actions</AdminTableHeaderCell>
                             </AdminTableHeaderRow>
                         </AdminTableHead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {filteredProducts.map(product => (
                                 <React.Fragment key={product.id}>
                                     <tr className={`hover:bg-blue-50/10 transition-colors group ${expandedProduct === product.id ? 'bg-blue-50/30' : ''}`}>

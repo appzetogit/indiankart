@@ -203,7 +203,7 @@ const DeliverySlip = () => {
                                     <th className="px-6 py-4 text-center text-[10px] md:text-xs font-black text-white uppercase tracking-widest whitespace-nowrap">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-200">
                                 {filteredOrders.map((order) => (
                                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4">

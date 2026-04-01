@@ -206,7 +206,7 @@ const PinCodeManager = () => {
                         <p>No PIN codes added yet.</p>
                     </div>
                 ) : (
-                    <div className="divide-y divide-gray-50">
+                    <div className="divide-y divide-gray-200">
                         {pinCodes.map((pin) => (
                             <div key={pin._id} className="p-2 md:p-4 flex items-center justify-between hover:bg-blue-50/30 transition-colors group">
                                 <div className="flex items-center gap-2 md:gap-6">

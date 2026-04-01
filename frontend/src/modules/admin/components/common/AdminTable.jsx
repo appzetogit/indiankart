@@ -40,8 +40,8 @@ export const AdminTableHeaderCell = ({
     <th
         className={join(
             compact
-                ? 'px-3 py-3 md:px-5 text-[10px] md:text-[11px]'
-                : 'px-6 py-4 text-[10px] md:text-xs',
+                ? 'px-3 py-2.5 md:px-4 md:py-3 text-[10px] md:text-[11px]'
+                : 'px-4 py-2.5 md:px-5 md:py-3 text-[10px] md:text-xs',
             'font-black text-white uppercase tracking-widest',
             className
         )}

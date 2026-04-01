@@ -295,7 +295,7 @@ const OrderDetail = () => {
                         <div className="p-4 md:p-6 border-b border-gray-50 bg-gray-50/30">
                             <h2 className="text-xs md:text-sm font-black text-gray-800 uppercase tracking-widest">Order Items ({order.items.length})</h2>
                         </div>
-                        <div className="divide-y divide-gray-50">
+                        <div className="divide-y divide-gray-200">
                             {order.items.map((item, idx) => (
                                 <div key={idx} className="p-4 md:p-6 flex items-center gap-3 md:gap-6 hover:bg-gray-50/50 transition-colors">
                                     <div className="w-14 h-14 md:w-20 md:h-20 bg-gray-50 rounded-xl md:rounded-2xl border border-gray-100 p-2 overflow-hidden flex-shrink-0">

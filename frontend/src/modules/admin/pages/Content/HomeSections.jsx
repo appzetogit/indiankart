@@ -182,7 +182,7 @@ const HomeSections = () => {
                                     <th className="px-6 py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-200">
                                 {homeSections.map((section) => (
                                     <tr key={section.id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => setSelectedSectionId(section.id)}>
                                         <td className="px-6 py-4">

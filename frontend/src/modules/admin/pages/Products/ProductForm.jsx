@@ -1292,7 +1292,7 @@ const ProductForm = () => {
                                                                 <th className="px-3 py-2 md:px-6 md:py-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right whitespace-nowrap">Stock</th>
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-gray-50">
+                                                        <tbody className="divide-y divide-gray-200">
                                                             {formData.skus.slice((variantPage - 1) * variantsPerPage, variantPage * variantsPerPage).map((sku, idx) => {
                                                                 const originalIdx = (variantPage - 1) * variantsPerPage + idx;
                                                                 return (

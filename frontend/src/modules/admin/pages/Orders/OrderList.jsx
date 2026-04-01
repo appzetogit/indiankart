@@ -197,7 +197,7 @@ const OrderList = () => {
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
                                         </AdminTableHeaderRow>
                                     </AdminTableHead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-200">
                                         {filteredOrders.map((order, index) => (
                                             <tr key={order.id || `order-${index}`} className="hover:bg-blue-50/10 transition-colors group">
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
@@ -226,7 +226,7 @@ const OrderList = () => {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                     <div className="flex items-center justify-center gap-3">
                                                         {/* Product Thumbnails */}
                                                         <div className="flex -space-x-2 overflow-hidden items-center">
@@ -252,7 +252,7 @@ const OrderList = () => {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                     <div className="flex flex-col items-center gap-1">
                                                         <span className="text-[10px] font-black text-gray-500 uppercase">{order.payment?.method || 'N/A'}</span>
                                                         <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${(order.payment?.status === 'Paid' || order.payment?.status === 'Completed') ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
@@ -260,13 +260,13 @@ const OrderList = () => {
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-center">
+                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(order.status)}`}>
                                                         {getStatusIcon(order.status)}
                                                         {order.status}
                                                     </span>
                                                 </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4 text-right">
+                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-right">
                                                     <button
                                                         onClick={() => navigate(`/admin/orders/${order.id}`)}
                                                         className="w-7 h-7 md:w-10 md:h-10 inline-flex items-center justify-center bg-gray-50 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-700"

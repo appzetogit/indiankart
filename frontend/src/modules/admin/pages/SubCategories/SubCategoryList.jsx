@@ -105,7 +105,7 @@ const SubCategoryList = () => {
                 ) : categoryGroups.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">No subcategories found.</div>
                 ) : (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-200">
                         {categoryGroups.map((group) => {
                             const isExpanded = expandedCategoryId === group.categoryId;
 
@@ -136,7 +136,7 @@ const SubCategoryList = () => {
                                                         <th className="p-4 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody className="divide-y divide-gray-100">
+                                                <tbody className="divide-y divide-gray-200">
                                                     {group.items.map((sub) => (
                                                         <tr key={sub._id || sub.id} className="hover:bg-gray-50 transition">
                                                             <td className="p-4 font-semibold text-gray-800">{sub.name}</td>
