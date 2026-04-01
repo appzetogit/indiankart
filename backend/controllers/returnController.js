@@ -7,6 +7,98 @@ import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 
 const RETURN_WINDOW_DAYS = 7;
+const NON_REJECTED_RETURN_STATUSES = new Set([
+    'Pending',
+    'Approved',
+    'Pickup Scheduled',
+    'Received at Warehouse',
+    'Refund Initiated',
+    'Replacement Dispatched',
+    'Completed'
+]);
+
+const getNormalizedQuantity = (value) => Math.max(1, Number.parseInt(value, 10) || 1);
+const normalizeVariant = (value) => (value && typeof value === 'object' ? value : {});
+const isSameVariant = (first = {}, second = {}) => JSON.stringify(first || {}) === JSON.stringify(second || {});
+
+const doesReturnBelongToOrderItem = (returnRequest, orderItem) => {
+    if (!returnRequest || !orderItem) return false;
+
+    if (returnRequest.orderItemId) {
+        return String(returnRequest.orderItemId) === String(orderItem?._id);
+    }
+
+    const returnProductId = returnRequest?.product?.id;
+    const orderProductId = orderItem?.product;
+    const sameProductId = returnProductId !== undefined && String(returnProductId) === String(orderProductId);
+    const sameVariant = isSameVariant(normalizeVariant(returnRequest?.product?.variant), normalizeVariant(orderItem?.variant));
+    const sameName = String(returnRequest?.product?.name || '').trim() === String(orderItem?.name || '').trim();
+
+    return (sameProductId && sameVariant) || (sameName && sameVariant);
+};
+
+const getConsumedQuantityForOrderItem = (returnRequests = [], orderItem) =>
+    returnRequests.reduce((total, returnRequest) => {
+        if (returnRequest?.type === 'Cancellation') return total;
+        if (!NON_REJECTED_RETURN_STATUSES.has(String(returnRequest?.status || '').trim())) return total;
+        if (!doesReturnBelongToOrderItem(returnRequest, orderItem)) return total;
+        return total + getNormalizedQuantity(returnRequest?.requestedQuantity);
+    }, 0);
+
+const getAggregateReturnStatusForOrderItem = (returnRequests = [], orderItem) => {
+    const orderedQty = getNormalizedQuantity(orderItem?.qty || orderItem?.quantity || 1);
+    let completedReturnQty = 0;
+    let completedReplacementQty = 0;
+    let activeReturnQty = 0;
+    let activeReplacementQty = 0;
+    let rejectedQty = 0;
+
+    returnRequests.forEach((returnRequest) => {
+        if (returnRequest?.type === 'Cancellation') return;
+        if (!doesReturnBelongToOrderItem(returnRequest, orderItem)) return;
+
+        const requestQty = getNormalizedQuantity(returnRequest?.requestedQuantity);
+        const normalizedStatus = String(returnRequest?.status || '').trim();
+
+        if (normalizedStatus === 'Rejected') {
+            rejectedQty += requestQty;
+            return;
+        }
+
+        if (normalizedStatus === 'Completed') {
+            if (returnRequest.type === 'Replacement') completedReplacementQty += requestQty;
+            else completedReturnQty += requestQty;
+            return;
+        }
+
+        if (!NON_REJECTED_RETURN_STATUSES.has(normalizedStatus)) return;
+
+        if (returnRequest.type === 'Replacement') activeReplacementQty += requestQty;
+        else activeReturnQty += requestQty;
+    });
+
+    if (completedReturnQty >= orderedQty) return 'Returned';
+    if (completedReplacementQty >= orderedQty) return 'Replaced';
+    if (activeReturnQty >= orderedQty) return 'Return Requested';
+    if (activeReplacementQty >= orderedQty) return 'Replacement Requested';
+    if (rejectedQty > 0 && completedReturnQty === 0 && completedReplacementQty === 0 && activeReturnQty === 0 && activeReplacementQty === 0) {
+        return 'Return Rejected';
+    }
+    return undefined;
+};
+
+const syncReturnStatusesForOrder = async (order) => {
+    if (!order?._id) return;
+
+    const returnRequests = await Return.find({
+        orderId: order._id.toString(),
+        type: { $ne: 'Cancellation' }
+    }).lean();
+
+    order.orderItems.forEach((item) => {
+        item.status = getAggregateReturnStatusForOrderItem(returnRequests, item);
+    });
+};
 
 // @desc    Create a new return request
 // @route   POST /api/returns
@@ -16,6 +108,7 @@ export const createReturnRequest = async (req, res) => {
         const {
             orderId,
             productId,
+            orderItemId,
             reason,
             comment,
             type,
@@ -127,26 +220,36 @@ export const createReturnRequest = async (req, res) => {
                 });
             }
 
-            const itemIndex = order.orderItems.findIndex(item => 
-                String(item.product) === String(productId) || 
-                String(item._id) === String(productId)
-            );
+            const itemIndex = order.orderItems.findIndex((item) => {
+                if (orderItemId && String(item._id) === String(orderItemId)) return true;
+                return String(item.product) === String(productId) || String(item._id) === String(productId);
+            });
 
             if (itemIndex === -1) {
                 return res.status(404).json({ message: 'Product not found in order' });
             }
 
             const item = order.orderItems[itemIndex];
-            const normalizedRequestedQuantity = Math.max(1, Number.parseInt(requestedQuantity, 10) || 1);
-            const maxAllowedQuantity = Math.max(1, Number(item.qty || item.quantity || 1));
+            const normalizedRequestedQuantity = getNormalizedQuantity(requestedQuantity);
+            const allExistingReturns = await Return.find({
+                orderId: order._id.toString(),
+                type: { $ne: 'Cancellation' }
+            }).lean();
+            const itemOrderedQuantity = getNormalizedQuantity(item.qty || item.quantity || 1);
+            const consumedQuantity = getConsumedQuantityForOrderItem(allExistingReturns, item);
+            const maxAllowedQuantity = Math.max(0, itemOrderedQuantity - consumedQuantity);
+
+            if (maxAllowedQuantity <= 0) {
+                return res.status(400).json({
+                    message: 'No quantity is currently available for return or replacement for this item.'
+                });
+            }
 
             if (normalizedRequestedQuantity > maxAllowedQuantity) {
                 return res.status(400).json({ message: `You can request up to ${maxAllowedQuantity} quantity for this item.` });
             }
 
-            const orderedVariant = item.variant && typeof item.variant === 'object'
-                ? item.variant
-                : {};
+            const orderedVariant = normalizeVariant(item.variant);
             const orderedVariantEntries = Object.entries(orderedVariant)
                 .filter(([key, value]) => key && value !== undefined && value !== null && String(value).trim() !== '');
 
@@ -171,12 +274,12 @@ export const createReturnRequest = async (req, res) => {
                         );
                     });
 
-                    if (!exactSku || Number(exactSku.stock || 0) <= 0) {
+                    if (!exactSku || Number(exactSku.stock || 0) < normalizedRequestedQuantity) {
                         return res.status(400).json({
                             message: 'Exact same product variant is unavailable for replacement right now. Please request a refund instead.'
                         });
                     }
-                } else if (Number(productDoc.stock || 0) <= 0) {
+                } else if (Number(productDoc.stock || 0) < normalizedRequestedQuantity) {
                     return res.status(400).json({
                         message: 'This product is currently out of stock for replacement. Please request a refund instead.'
                     });
@@ -187,6 +290,7 @@ export const createReturnRequest = async (req, res) => {
             const newReturn = new Return({
                 id: `RET-${Date.now()}`,
                 orderId: order._id,
+                orderItemId: item._id?.toString(),
                 customer: req.user.name,
                 product: {
                     id: item.product,
@@ -227,9 +331,6 @@ export const createReturnRequest = async (req, res) => {
 
             const createdReturn = await newReturn.save();
 
-            // Update Order Item Status
-            order.orderItems[itemIndex].status = type === 'Return' ? 'Return Requested' : 'Replacement Requested';
-            
             if (type === 'Replacement' && orderedVariantEntries.length > 0) {
                 const replacementVariantLabel = orderedVariantEntries
                     .map(([key, value]) => `${key}: ${value}`)
@@ -241,6 +342,7 @@ export const createReturnRequest = async (req, res) => {
                 await createdReturn.save();
             }
 
+            await syncReturnStatusesForOrder(order);
             await order.save();
 
             // Create Return Notification
@@ -438,28 +540,8 @@ export const updateReturnStatus = async (req, res) => {
                     }
                 } else {
                     // RETURN / REPLACEMENT ACTION
-                    const returnVariant = returnRequest.product?.variant && typeof returnRequest.product.variant === 'object'
-                        ? returnRequest.product.variant
-                        : {};
-                    const itemToUpdate = order.orderItems.find((i) => {
-                        const sameById = String(i.product) === String(returnRequest.product?.id) &&
-                            JSON.stringify(i.variant || {}) === JSON.stringify(returnVariant);
-                        const sameByName = String(i.name || '').trim() === String(returnRequest.product?.name || '').trim();
-                        return sameById || sameByName;
-                    });
-                    
-                    if (itemToUpdate) {
-                        let newItemStatus = itemToUpdate.status;
-                        if (nextStatus === 'Rejected') {
-                            newItemStatus = 'Return Rejected';
-                        } else if (nextStatus === 'Completed') {
-                            newItemStatus = returnRequest.type === 'Return' ? 'Returned' : 'Replaced';
-                        } else {
-                            newItemStatus = nextStatus;
-                        }
-                        itemToUpdate.status = newItemStatus;
-                        await order.save();
-                    }
+                    await syncReturnStatusesForOrder(order);
+                    await order.save();
                 }
             }
 

@@ -324,6 +324,11 @@ const ReturnRequests = () => {
                                         <h3 className="text-xl font-black text-gray-900 leading-tight mb-2">{selectedReturn.id}</h3>
                                         <p className="text-sm font-bold text-gray-600 line-clamp-2">{selectedReturn.product.name}</p>
                                         <p className="text-lg font-black text-gray-900 mt-2">₹{selectedReturn.product.price.toLocaleString()}</p>
+                                        {!!selectedReturn.requestedQuantity && (
+                                            <p className="text-[11px] font-bold text-gray-500 mt-1 uppercase tracking-wider">
+                                                Requested Qty: {selectedReturn.requestedQuantity}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 

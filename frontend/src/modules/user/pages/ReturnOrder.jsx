@@ -3,9 +3,44 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useCartStore } from '../store/cartStore';
 import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
-import Loader from '../../../components/common/Loader';
 
 const RETURN_WINDOW_DAYS = 7;
+const RETURN_CONSUMING_STATUSES = new Set([
+    'Pending',
+    'Approved',
+    'Pickup Scheduled',
+    'Received at Warehouse',
+    'Refund Initiated',
+    'Replacement Dispatched',
+    'Completed'
+]);
+const RETURN_LOCKING_STATUSES = new Set([
+    'Pending',
+    'Approved',
+    'Pickup Scheduled',
+    'Received at Warehouse',
+    'Refund Initiated',
+    'Replacement Dispatched',
+    'Completed',
+    'Rejected'
+]);
+
+const normalizeVariant = (value) => (value && typeof value === 'object' ? value : {});
+const isSameVariant = (first = {}, second = {}) => JSON.stringify(first || {}) === JSON.stringify(second || {});
+
+const doesReturnMatchItem = (ret, item) => {
+    if (!ret || !item) return false;
+
+    if (ret.orderItemId) {
+        return String(ret.orderItemId) === String(item.orderItemId || item.id);
+    }
+
+    const sameProductId = ret?.product?.id !== undefined && String(ret.product.id) === String(item.productId);
+    const sameVariant = isSameVariant(normalizeVariant(ret?.product?.variant), normalizeVariant(item.variant));
+    const sameName = String(ret?.product?.name || '').trim() === String(item?.name || '').trim();
+
+    return (sameProductId && sameVariant) || (sameName && sameVariant);
+};
 
 const ReturnOrder = () => {
     const { orderId, productId, action } = useParams();
@@ -32,7 +67,6 @@ const ReturnOrder = () => {
     const [googleDriveLink, setGoogleDriveLink] = useState('');
     const [proofFiles, setProofFiles] = useState([]);
     const [loading, setLoading] = useState(false);
-    const updateItemStatus = useCartStore(state => state.updateItemStatus);
     const addresses = useCartStore((state) => state.addresses || []);
     const [showAddressSelector, setShowAddressSelector] = useState(false);
     const [selectedPickupAddressId, setSelectedPickupAddressId] = useState(null);
@@ -92,7 +126,9 @@ const ReturnOrder = () => {
                     id: data._id, 
                     items: data.orderItems.map(item => ({
                         ...item,
-                        id: item.product || item._id, // Ensure we have a consistent ID.
+                        id: item._id,
+                        orderItemId: item._id,
+                        productId: item.product,
                         quantity: item.qty ?? item.quantity ?? 1
                     }))
                 };
@@ -199,10 +235,11 @@ const ReturnOrder = () => {
         }
     ];
 
-    const isEligibleForReturn = (itemStatus) => {
-        if (!itemStatus) return true;
+    const isEligibleForReturn = (itemStatus, availableQuantity = 0) => {
+        if (availableQuantity > 0) return true;
+        if (!itemStatus) return false;
         const normalized = String(itemStatus).trim().toLowerCase();
-        if (normalized === 'delivered') return true;
+        if (normalized === 'delivered') return availableQuantity > 0;
 
         const blocked = [
             'return requested',
@@ -219,7 +256,7 @@ const ReturnOrder = () => {
             'rejected',
             'return rejected'
         ];
-        return !blocked.includes(normalized);
+        return !blocked.includes(normalized) && availableQuantity > 0;
     };
 
     const isWithinReturnWindow = useMemo(() => {
@@ -231,14 +268,80 @@ const ReturnOrder = () => {
         return diffDays <= RETURN_WINDOW_DAYS;
     }, [order?.deliveredAt]);
 
+    const itemReturnMetaById = useMemo(() => {
+        const orderKey = String(order?.id || order?._id || '');
+        const items = Array.isArray(order?.items) ? order.items : [];
+
+        return items.reduce((acc, item) => {
+            const orderedQty = Math.max(1, Number(item.quantity || 1));
+            const matchingReturns = myReturns.filter((ret) =>
+                String(ret?.orderId || '') === orderKey &&
+                String(ret?.type || '') !== 'Cancellation' &&
+                doesReturnMatchItem(ret, item)
+            );
+
+            let consumedQty = 0;
+            let rejectedQty = 0;
+            let latestRejectedReason = '';
+            let hasAnyReturnRequest = false;
+
+            matchingReturns.forEach((ret) => {
+                const requestQty = Math.max(1, Number(ret?.requestedQuantity || 1));
+                const normalizedStatus = String(ret?.status || '').trim();
+
+                if (RETURN_LOCKING_STATUSES.has(normalizedStatus)) {
+                    hasAnyReturnRequest = true;
+                }
+
+                if (normalizedStatus === 'Rejected') {
+                    rejectedQty += requestQty;
+                    const timeline = Array.isArray(ret?.timeline) ? ret.timeline : [];
+                    const latestRejected = [...timeline].reverse().find((entry) => String(entry?.status || '').trim() === 'Rejected');
+                    if (!latestRejectedReason) {
+                        latestRejectedReason = String(latestRejected?.note || '').trim();
+                    }
+                    return;
+                }
+
+                if (RETURN_CONSUMING_STATUSES.has(normalizedStatus)) {
+                    consumedQty += requestQty;
+                }
+            });
+
+            acc[String(item.id)] = {
+                orderedQty,
+                consumedQty,
+                rejectedQty,
+                hasAnyReturnRequest,
+                remainingQty: Math.max(0, orderedQty - consumedQty),
+                latestRejectedReason
+            };
+            return acc;
+        }, {});
+    }, [myReturns, order]);
+
     const targetItems = useMemo(() => {
         if (!order?.items) return [];
         if (!isWithinReturnWindow) return [];
         const itemsToCheck = productId
-            ? order.items.filter((item) => String(item.id) === String(productId))
+            ? order.items.filter((item) => String(item.id) === String(productId) || String(item.productId) === String(productId))
             : order.items;
-        return itemsToCheck.filter((item) => isEligibleForReturn(item.status));
-    }, [order, productId, isWithinReturnWindow]);
+        return itemsToCheck
+            .map((item) => ({
+                ...item,
+                returnMeta: itemReturnMetaById[String(item.id)] || {
+                    orderedQty: Math.max(1, Number(item.quantity || 1)),
+                    consumedQty: 0,
+                    rejectedQty: 0,
+                    hasAnyReturnRequest: false,
+                    remainingQty: Math.max(1, Number(item.quantity || 1)),
+                    latestRejectedReason: ''
+                },
+                returnableQuantity: itemReturnMetaById[String(item.id)]?.remainingQty ?? Math.max(1, Number(item.quantity || 1))
+            }))
+            .filter((item) => !item.returnMeta?.hasAnyReturnRequest)
+            .filter((item) => isEligibleForReturn(item.status, item.returnableQuantity));
+    }, [order, productId, isWithinReturnWindow, itemReturnMetaById]);
 
     useEffect(() => {
         const targetIds = targetItems.map((item) => String(item.id));
@@ -255,7 +358,7 @@ const ReturnOrder = () => {
             const next = {};
             targetItems.forEach((item) => {
                 const itemKey = String(item.id);
-                const maxQty = Math.max(1, Number(item.quantity || 1));
+                const maxQty = Math.max(1, Number(item.returnableQuantity || item.quantity || 1));
                 next[itemKey] = Math.min(Math.max(1, Number(prev[itemKey] || 1)), maxQty);
             });
             return next;
@@ -310,13 +413,13 @@ const ReturnOrder = () => {
         let cancelled = false;
 
         const fetchReplacementProduct = async () => {
-            if (!replacementItem?.id) {
+            if (!replacementItem?.productId) {
                 setReplacementProduct(null);
                 return;
             }
 
             try {
-                const { data } = await API.get(`/products/${replacementItem.id}?all=true`);
+                const { data } = await API.get(`/products/${replacementItem.productId}?all=true`);
                 if (!cancelled) setReplacementProduct(data);
             } catch (err) {
                 if (!cancelled) setReplacementProduct(null);
@@ -328,7 +431,7 @@ const ReturnOrder = () => {
         return () => {
             cancelled = true;
         };
-    }, [replacementItem?.id]);
+    }, [replacementItem?.productId]);
 
     const orderedReplacementVariant = useMemo(() => (
         replacementItem?.variant && typeof replacementItem.variant === 'object'
@@ -342,9 +445,9 @@ const ReturnOrder = () => {
         )
     ), [orderedReplacementVariant]);
 
-    const orderedReplacementVariantLabel = useMemo(() => (
-        orderedReplacementVariantEntries.map(([key, value]) => `${key}: ${value}`).join(' | ')
-    ), [orderedReplacementVariantEntries]);
+    const replacementRequestedQuantity = useMemo(() => (
+        replacementItem ? Math.max(1, Number(selectedItemQuantities[String(replacementItem.id)] || 1)) : 1
+    ), [replacementItem, selectedItemQuantities]);
 
     const exactReplacementAvailability = useMemo(() => {
         if (!replacementItem) {
@@ -373,7 +476,7 @@ const ReturnOrder = () => {
                 );
             });
 
-            const isAvailable = Boolean(exactSku && Number(exactSku.stock || 0) > 0);
+            const isAvailable = Boolean(exactSku && Number(exactSku.stock || 0) >= replacementRequestedQuantity);
             return {
                 checked: true,
                 available: isAvailable,
@@ -383,7 +486,7 @@ const ReturnOrder = () => {
             };
         }
 
-        const isAvailable = Number(replacementProduct.stock || 0) > 0;
+        const isAvailable = Number(replacementProduct.stock || 0) >= replacementRequestedQuantity;
         return {
             checked: true,
             available: isAvailable,
@@ -391,7 +494,7 @@ const ReturnOrder = () => {
                 ? 'Replacement will be processed for the same product.'
                 : 'This product is currently out of stock, so only refund is available right now.'
         };
-    }, [replacementItem, replacementProduct, orderedReplacementVariantEntries]);
+    }, [replacementItem, replacementProduct, orderedReplacementVariantEntries, replacementRequestedQuantity]);
 
     useEffect(() => {
         const lowerEntries = orderedReplacementVariantEntries.map(([key, value]) => [String(key).toLowerCase(), String(value)]);
@@ -530,7 +633,8 @@ const ReturnOrder = () => {
             for (const item of selectedItems) {
                 const payload = new FormData();
                 payload.append('orderId', order.id);
-                payload.append('productId', item.id);
+                payload.append('productId', item.productId);
+                payload.append('orderItemId', item.orderItemId || item.id);
                 payload.append('type', returnMode === 'REFUND' ? 'Return' : 'Replacement');
                 payload.append('requestedQuantity', String(selectedItemQuantities[String(item.id)] || 1));
                 payload.append('reason', reason);
@@ -547,14 +651,10 @@ const ReturnOrder = () => {
                 }
 
                 proofFiles.forEach((file) => payload.append('proof_files', file));
-
+                
                 await API.post('/returns', payload, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
-                
-                // Optimistic Update (Optional, but good for UX)
-                const itemStatus = returnMode === 'REFUND' ? 'Return Requested' : 'Replacement Requested';
-                updateItemStatus(order.id, item.id, itemStatus);
             }
 
             toast.dismiss();
@@ -613,7 +713,7 @@ const ReturnOrder = () => {
                                     {targetItems.map((item) => {
                                         const isSelected = selectedItemIds.includes(String(item.id));
                                         const selectedQty = selectedItemQuantities[String(item.id)] || 1;
-                                        const maxQty = Math.max(1, Number(item.quantity || 1));
+                                        const maxQty = Math.max(1, Number(item.returnableQuantity || item.quantity || 1));
                                         return (
                                             <button
                                                 key={item.id}
@@ -629,7 +729,14 @@ const ReturnOrder = () => {
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-bold text-gray-800 line-clamp-2">{item.name}</p>
-                                                        <p className="text-[11px] text-gray-500 mt-1">Qty: {item.quantity} | Rs. {item.price?.toLocaleString?.() || item.price}</p>
+                                                        <p className="text-[11px] text-gray-500 mt-1">
+                                                            Ordered Qty: {item.quantity} | Available: {item.returnableQuantity} | Rs. {item.price?.toLocaleString?.() || item.price}
+                                                        </p>
+                                                        {item.returnMeta?.latestRejectedReason && (
+                                                            <p className="text-[10px] text-red-600 mt-1 font-semibold">
+                                                                Last reject reason: {item.returnMeta.latestRejectedReason}
+                                                            </p>
+                                                        )}
                                                         {isSelected && maxQty > 1 && (
                                                             <div
                                                                 className="mt-3 flex items-center gap-3"
@@ -1009,7 +1116,7 @@ const ReturnOrder = () => {
                                         <div className="flex-1 min-w-0 pt-1">
                                             <p className="text-xs font-bold text-gray-800 line-clamp-2 leading-snug tracking-tight uppercase mb-1">{item.name}</p>
                                             <p className="text-[10px] text-gray-400 font-black tracking-widest leading-none">
-                                                Price: Rs. {item.price.toLocaleString()} | Selected Qty: {selectedItemQuantities[String(item.id)] || 1}{item.quantity > 1 ? ` / ${item.quantity}` : ''}
+                                                Price: Rs. {item.price.toLocaleString()} | Selected Qty: {selectedItemQuantities[String(item.id)] || 1}{item.quantity > 1 ? ` / ${item.returnableQuantity || item.quantity}` : ''}
                                             </p>
                                             {item.variant && Object.entries(item.variant).length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">

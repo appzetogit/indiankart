@@ -3,10 +3,44 @@ import { useNavigate, useParams } from 'react-router-dom';
 import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
-import Loader from '../../../components/common/Loader';
 import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
 
 const RETURN_WINDOW_DAYS = 7;
+const RETURN_CONSUMING_STATUSES = new Set([
+    'Pending',
+    'Approved',
+    'Pickup Scheduled',
+    'Received at Warehouse',
+    'Refund Initiated',
+    'Replacement Dispatched',
+    'Completed'
+]);
+const RETURN_LOCKING_STATUSES = new Set([
+    'Pending',
+    'Approved',
+    'Pickup Scheduled',
+    'Received at Warehouse',
+    'Refund Initiated',
+    'Replacement Dispatched',
+    'Completed',
+    'Rejected'
+]);
+
+const normalizeReturnVariant = (value) => (value && typeof value === 'object' ? value : {});
+const isSameVariant = (first = {}, second = {}) => JSON.stringify(first || {}) === JSON.stringify(second || {});
+const doesReturnMatchOrderItem = (ret, item) => {
+    if (!ret || !item) return false;
+
+    if (ret.orderItemId) {
+        return String(ret.orderItemId) === String(item?._id);
+    }
+
+    const sameProductId = ret?.product?.id !== undefined && String(ret.product.id) === String(item?.product);
+    const sameVariant = isSameVariant(normalizeReturnVariant(ret?.product?.variant), normalizeReturnVariant(item?.variant));
+    const sameName = String(ret?.product?.name || '').trim() === String(item?.name || '').trim();
+
+    return (sameProductId && sameVariant) || (sameName && sameVariant);
+};
 
 const buildEstimatedDeliveryText = (deliveryTime, unit) => {
     const timeValue = Number(deliveryTime);
@@ -68,6 +102,7 @@ const isEligibleForNewReturnRequest = (status) => {
     const normalized = String(status || '').trim().toLowerCase();
 
     if (!normalized || normalized === 'delivered') return true;
+    if (normalized === 'rejected' || normalized === 'return rejected') return true;
 
     const blockedStatuses = new Set([
         'return requested',
@@ -79,9 +114,7 @@ const isEligibleForNewReturnRequest = (status) => {
         'replacement dispatched',
         'returned',
         'replaced',
-        'completed',
-        'rejected',
-        'return rejected'
+        'completed'
     ]);
 
     return !blockedStatuses.has(normalized);
@@ -289,21 +322,53 @@ const OrderDetails = () => {
         : 0;
     const normalizedOrderStatus = String(order?.status || '').trim();
     const isDeliveredOrder = normalizedOrderStatus === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
-    const rejectedReasonByProduct = useMemo(() => {
+    const itemReturnMetaById = useMemo(() => {
         const out = {};
         const orderKey = String(order?._id || '');
-        myReturns
-            .filter((ret) => String(ret?.orderId || '') === orderKey && String(ret?.status || '').trim() === 'Rejected')
-            .forEach((ret) => {
+        (order?.orderItems || []).forEach((item) => {
+            const orderedQty = Math.max(1, Number(item?.qty || item?.quantity || 1));
+            const matchingReturns = myReturns.filter((ret) =>
+                String(ret?.orderId || '') === orderKey &&
+                String(ret?.type || '') !== 'Cancellation' &&
+                doesReturnMatchOrderItem(ret, item)
+            );
+
+            let consumedQty = 0;
+            let latestRejectedReason = '';
+            let hasAnyReturnRequest = false;
+
+            matchingReturns.forEach((ret) => {
+                const requestQty = Math.max(1, Number(ret?.requestedQuantity || 1));
+                const normalizedStatus = String(ret?.status || '').trim();
                 const timeline = Array.isArray(ret.timeline) ? ret.timeline : [];
-                const latestRejected = [...timeline].reverse().find((entry) => String(entry?.status || '').trim() === 'Rejected');
-                const reason = String(latestRejected?.note || '').trim();
-                if (!reason) return;
-                const productName = String(ret?.product?.name || '').trim();
-                if (productName) out[productName] = reason;
+
+                if (RETURN_LOCKING_STATUSES.has(normalizedStatus)) {
+                    hasAnyReturnRequest = true;
+                }
+
+                if (normalizedStatus === 'Rejected') {
+                    const latestRejected = [...timeline].reverse().find((entry) => String(entry?.status || '').trim() === 'Rejected');
+                    if (!latestRejectedReason) {
+                        latestRejectedReason = String(latestRejected?.note || '').trim();
+                    }
+                    return;
+                }
+
+                if (RETURN_CONSUMING_STATUSES.has(normalizedStatus)) {
+                    consumedQty += requestQty;
+                }
             });
+
+            out[String(item._id)] = {
+                orderedQty,
+                consumedQty,
+                hasAnyReturnRequest,
+                remainingQty: Math.max(0, orderedQty - consumedQty),
+                latestRejectedReason
+            };
+        });
         return out;
-    }, [myReturns, order?._id]);
+    }, [myReturns, order?._id, order?.orderItems]);
     const orderReturnRequests = useMemo(() => {
         const orderKey = String(order?._id || '');
         return myReturns
@@ -452,6 +517,7 @@ const OrderDetails = () => {
                                                         <p className="text-sm font-bold text-gray-900">{productName}</p>
                                                         <p className="text-xs text-gray-600">
                                                             {ret?.type || 'Return'} Request
+                                                            {ret?.requestedQuantity ? ` • Qty ${ret.requestedQuantity}` : ''}
                                                             {latestEntry?.time ? ` • ${formatReturnTimelineDate(latestEntry.time)}` : ''}
                                                         </p>
                                                     </div>
@@ -562,7 +628,20 @@ const OrderDetails = () => {
                                 Items in Order ({order.orderItems.length})
                             </h2>
                             <div className="space-y-4">
-                                {order.orderItems.map((item, index) => (
+                                {order.orderItems.map((item, index) => {
+                                    const itemMeta = itemReturnMetaById[String(item._id)] || {
+                                        orderedQty: Math.max(1, Number(item?.qty || item?.quantity || 1)),
+                                        consumedQty: 0,
+                                        hasAnyReturnRequest: false,
+                                        remainingQty: Math.max(1, Number(item?.qty || item?.quantity || 1)),
+                                        latestRejectedReason: ''
+                                    };
+                                    const hasPartialRequest = itemMeta.consumedQty > 0 && itemMeta.consumedQty < itemMeta.orderedQty;
+                                    const derivedStatus = hasPartialRequest
+                                        ? `${itemMeta.consumedQty}/${itemMeta.orderedQty} units in return flow`
+                                        : (item.status && item.status !== order.status ? item.status : '');
+
+                                    return (
                                     <div key={index} className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200">
                                         <div className="w-20 h-20 bg-white rounded-lg border border-gray-200 p-2 flex-shrink-0">
                                             <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
@@ -585,28 +664,31 @@ const OrderDetails = () => {
                                                 </span>
                                                         </div>
                                                     )}
-                                            <p className="text-xs text-gray-500 mt-1">Quantity: {item.qty}</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Quantity: {item.qty}
+                                                {itemMeta.consumedQty > 0 ? ` | Requested: ${itemMeta.consumedQty}` : ''}
+                                            </p>
                                             <p className="text-lg font-extrabold text-gray-900 mt-1">
-                                                ₹{item.price.toLocaleString()}
+                                                Rs. {item.price.toLocaleString()}
                                             </p>
 
                                             {/* Item Status Badge */}
-                                            {item.status && item.status !== order.status && (
+                                            {derivedStatus && (
                                                 <>
-                                                    <div className={`mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${getStatusColor(item.status)}`}>
-                                                        <span className="material-icons text-[14px]">{getStatusIcon(item.status)}</span>
-                                                        {item.status}
+                                                    <div className={`mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${hasPartialRequest ? 'bg-blue-50 text-blue-700 border-blue-200' : getStatusColor(derivedStatus)}`}>
+                                                        <span className="material-icons text-[14px]">{hasPartialRequest ? 'inventory_2' : getStatusIcon(derivedStatus)}</span>
+                                                        {derivedStatus}
                                                     </div>
-                                                    {item.status === 'Return Rejected' && rejectedReasonByProduct[item.name] && (
+                                                    {!!itemMeta.latestRejectedReason && (
                                                         <p className="mt-2 text-xs text-red-700 font-semibold">
-                                                            Reject reason: {rejectedReasonByProduct[item.name]}
+                                                            Reject reason: {itemMeta.latestRejectedReason}
                                                         </p>
                                                     )}
                                                 </>
                                             )}
                                         </div>
                                     </div>
-                                ))}
+                                )})}
                             </div>
                         </div>
 
@@ -746,7 +828,11 @@ const OrderDetails = () => {
                         </div>
 
                         {/* Request Return Button */}
-                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && isWithinReturnWindow && order.orderItems.some((item) => isEligibleForNewReturnRequest(item.status)) && (
+                        {(order.status === 'Delivered' || order.status === 'Partially Returned') && isWithinReturnWindow && order.orderItems.some((item) => {
+                            const itemMeta = itemReturnMetaById[String(item._id)];
+                            const remainingQty = itemMeta?.remainingQty ?? Math.max(1, Number(item?.qty || item?.quantity || 1));
+                            return remainingQty > 0 && !itemMeta?.hasAnyReturnRequest && isEligibleForNewReturnRequest(item.status);
+                        }) && (
                             <button
                                 onClick={() => navigate(`/my-orders/${order._id}/return`)}
                                 className="w-full bg-white border border-blue-200 text-blue-700 px-6 py-4 rounded-xl font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
