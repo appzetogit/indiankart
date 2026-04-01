@@ -6,7 +6,6 @@ import Dashboard from '../pages/Dashboard';
 import CategoryList from '../pages/Categories/CategoryList';
 import CategoryPageBuilder from '../pages/Categories/CategoryPageBuilder';
 import SubCategoryList from '../pages/SubCategories/SubCategoryList';
-import BannerManager from '../pages/Homepage/BannerManager';
 import PlayManager from '../pages/Play/PlayManager';
 import CouponManager from '../pages/Coupons/CouponManager';
 import OrderList from '../pages/Orders/OrderList';
@@ -21,10 +20,6 @@ import UserDetail from '../pages/Users/UserDetail';
 import SellerRequests from '../pages/Users/SellerRequests';
 import PageManager from '../pages/PageManager';
 import SupportRequests from '../pages/Support/SupportRequests';
-import HomeContentManager from '../pages/Content/HomeContentManager'; // Can be removed later if unused
-import HomeLayoutEditor from '../pages/Content/HomeLayoutEditor';
-import HomeSections from '../pages/Content/HomeSections';
-import HomeBanners from '../pages/Content/HomeBanners';
 import HelpCenterContentManager from '../pages/Content/HelpCenterContentManager';
 import ReviewList from '../pages/Reviews/ReviewList';
 import PinCodeManager from '../pages/PinCodes/PinCodeManager';
@@ -38,6 +33,8 @@ import NotificationManager from '../pages/Notifications/NotificationManager';
 import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
 import B2BManager from '../pages/B2B/B2BManager';
+
+const HOME_PAGE_BUILDER_REDIRECT = '/admin/categories/page-builder?categoryName=For%20You';
 
 const AdminRoutes = () => {
     return (
@@ -74,17 +71,16 @@ const AdminRoutes = () => {
                 <Route path="offers" element={<OfferList />} />
                 <Route path="offers/edit/:id" element={<OfferForm />} />
                 <Route path="play" element={<PlayManager />} />
-                <Route path="homepage" element={<BannerManager />} />
+                <Route path="homepage" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
                 <Route path="users" element={<UserList />} />
                 <Route path="users/:id" element={<UserDetail />} />
                 <Route path="seller-requests" element={<SellerRequests />} />
                 <Route path="pages" element={<PageManager />} />
-                <Route path="content/layout" element={<HomeLayoutEditor />} />
-                <Route path="content/sections" element={<HomeSections />} />
-                <Route path="content/banners" element={<HomeBanners />} />
+                <Route path="content/layout" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
+                <Route path="content/sections" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
+                <Route path="content/banners" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
                 <Route path="content/help-center" element={<HelpCenterContentManager />} />
-                {/* Legacy redirect or keep for backward compat for a moment if needed, but sidebar changes will shift traffic */}
-                <Route path="content/home" element={<HomeLayoutEditor />} />
+                <Route path="content/home" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
                 <Route path="pincodes" element={<PinCodeManager />} />
                 <Route path="bank-offers" element={<BankOfferManager />} />
                 <Route path="support" element={<SupportRequests />} />

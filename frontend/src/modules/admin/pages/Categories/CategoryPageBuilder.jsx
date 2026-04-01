@@ -21,6 +21,7 @@ const CUSTOM_LINK_VALUE = '__custom__';
 const SELECTED_CATEGORY_STORAGE_KEY = 'category-page-builder-selected-category-v1';
 
 const normalizeText = (value) => String(value || '').trim();
+const isForYouCategoryName = (value) => normalizeText(value).toLowerCase() === 'for you';
 
 const buildCategoryPageRoute = (categoryName, subCategoryName = '') => {
     const base = `/category/${encodeURIComponent(normalizeText(categoryName))}`;
@@ -215,10 +216,14 @@ const enforceSectionItemRules = (items = [], sectionKind = 'image', mediaDisplay
 
 const isLockedSection = (section) => String(section?.id) === DEFAULT_SUBCATEGORIES_SECTION_ID || section?.locked;
 
-const withDefaultSections = (sections = []) => {
+const withDefaultSections = (sections = [], categoryName = '') => {
+    const shouldIncludeDefaultSubcategories = !isForYouCategoryName(categoryName);
     const filtered = Array.isArray(sections) ? sections.filter(Boolean) : [];
+    const filteredWithoutLocked = shouldIncludeDefaultSubcategories
+        ? filtered
+        : filtered.filter((section) => !isLockedSection(section));
     const lockedSection = filtered.find((section) => isLockedSection(section));
-    const normalized = filtered.map((section, index) => ({
+    const normalized = filteredWithoutLocked.map((section, index) => ({
         ...section,
         desktopImageItemsPerRow: normalizeDesktopImageItemsPerRow(section?.desktopImageItemsPerRow),
         mediaDisplay: isLockedSection(section)
@@ -226,6 +231,10 @@ const withDefaultSections = (sections = []) => {
             : normalizeDisplayModeForSectionKind(section?.sectionKind, section?.mediaDisplay),
         order: Number(section?.order) || index + 1
     }));
+
+    if (!shouldIncludeDefaultSubcategories) {
+        return normalized.map((section, index) => ({ ...section, order: index + 1 }));
+    }
 
     if (!lockedSection) {
         return [buildDefaultSubcategoriesSection(), ...normalized]
@@ -253,6 +262,13 @@ const withDefaultSections = (sections = []) => {
     return deduped.map((section, index) => ({ ...section, order: index + 1 }));
 };
 
+const normalizeCatalogSections = (catalog = []) => (
+    (Array.isArray(catalog) ? catalog : []).map((item) => ({
+        ...item,
+        pageSections: withDefaultSections(item?.pageSections, item?.name)
+    }))
+);
+
 const SortableWrap = ({ id, children }) => {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
     return (
@@ -270,7 +286,7 @@ const CategoryPageBuilder = () => {
     const fetchCategories = useCategoryStore((state) => state.fetchCategories);
     const { sectionId: routeSectionId } = useParams();
     const [searchParams] = useSearchParams();
-    const [catalog, setCatalog] = useState(() => readCategoryPageCatalog());
+    const [catalog, setCatalog] = useState(() => normalizeCatalogSections(readCategoryPageCatalog()));
     const [categoryId, setCategoryId] = useState(() => {
         if (typeof window === 'undefined') return String(readCategoryPageCatalog()?.[0]?.id || '');
         const savedCategoryId = String(window.localStorage.getItem(SELECTED_CATEGORY_STORAGE_KEY) || '').trim();
@@ -294,6 +310,7 @@ const CategoryPageBuilder = () => {
     const isSectionFormPage = Boolean(routeSectionId);
     const isCreatingSection = routeSectionId === 'new';
     const requestedCategoryId = String(searchParams.get('categoryId') || '').trim();
+    const requestedCategoryName = String(searchParams.get('categoryName') || '').trim().toLowerCase();
 
     const category = useMemo(() => catalog.find((item) => item.id === categoryId) || catalog[0] || null, [catalog, categoryId]);
     const { products: allProducts = [], loading: productsLoading } = useProducts({ enabled: isSectionFormPage });
@@ -350,7 +367,7 @@ const CategoryPageBuilder = () => {
         readCategoryPageCatalogAsync()
             .then((storedCatalog) => {
                 if (!active || !Array.isArray(storedCatalog)) return;
-                setCatalog(storedCatalog);
+                setCatalog(normalizeCatalogSections(storedCatalog));
             })
             .catch(() => {
                 // Keep the sync fallback state if async hydration fails.
@@ -364,10 +381,7 @@ const CategoryPageBuilder = () => {
     useEffect(() => {
         if (!categories || categories.length === 0) return;
 
-        setCatalog((prev) => mergeCategoryPageCatalogWithCategories(prev, categories).map((item) => ({
-            ...item,
-            pageSections: withDefaultSections(item.pageSections)
-        })));
+        setCatalog((prev) => normalizeCatalogSections(mergeCategoryPageCatalogWithCategories(prev, categories)));
     }, [categories]);
 
     useEffect(() => {
@@ -380,6 +394,14 @@ const CategoryPageBuilder = () => {
         if (requestedCategoryId && catalog.some((item) => String(item.id) === requestedCategoryId) && requestedCategoryId !== categoryId) {
             setCategoryId(requestedCategoryId);
             return;
+        }
+
+        if (requestedCategoryName) {
+            const matchedCategory = catalog.find((item) => String(item?.name || '').trim().toLowerCase() === requestedCategoryName);
+            if (matchedCategory && matchedCategory.id !== categoryId) {
+                setCategoryId(matchedCategory.id);
+                return;
+            }
         }
 
         const activeCategory = catalog.find((item) => item.id === categoryId) || catalog[0];
@@ -405,7 +427,7 @@ const CategoryPageBuilder = () => {
 
         if (sectionId && activeCategory.pageSections.some((item) => item.id === sectionId)) return;
         setSectionId(activeCategory.pageSections?.[0]?.id || '');
-    }, [catalog, categoryId, sectionId, isCreatingSection, isSectionFormPage, requestedCategoryId, routeSectionId]);
+    }, [catalog, categoryId, sectionId, isCreatingSection, isSectionFormPage, requestedCategoryId, requestedCategoryName, routeSectionId]);
 
     useEffect(() => {
         if (!isCreatingSection) {
@@ -474,7 +496,7 @@ const CategoryPageBuilder = () => {
             const updated = updater(item);
             return {
                 ...updated,
-                pageSections: withDefaultSections(updated.pageSections)
+                pageSections: withDefaultSections(updated.pageSections, updated?.name || item?.name)
             };
         });
         markDirty(changeType);
@@ -597,7 +619,7 @@ const CategoryPageBuilder = () => {
         updateCategory((item) => {
             const oldIndex = item.pageSections.findIndex((entry) => entry.id === active.id);
             const newIndex = item.pageSections.findIndex((entry) => entry.id === over.id);
-            return { ...item, pageSections: withDefaultSections(arrayMove(item.pageSections, oldIndex, newIndex)) };
+            return { ...item, pageSections: withDefaultSections(arrayMove(item.pageSections, oldIndex, newIndex), item?.name) };
         }, 'layout');
     };
 
@@ -760,7 +782,7 @@ const CategoryPageBuilder = () => {
                     if (item.id !== categoryId) return item;
                     return {
                         ...item,
-                        pageSections: withDefaultSections([...(item.pageSections || []), draftSection])
+                        pageSections: withDefaultSections([...(item.pageSections || []), draftSection], item?.name)
                     };
                 })
                 : catalog;
@@ -852,8 +874,10 @@ const CategoryPageBuilder = () => {
                     <select
                         value={categoryId}
                         onChange={(e) => {
-                            setCategoryId(e.target.value);
+                            const nextCategoryId = e.target.value;
+                            setCategoryId(nextCategoryId);
                             setSectionId('');
+                            navigate(`/admin/categories/page-builder?categoryId=${encodeURIComponent(nextCategoryId)}`, { replace: true });
                         }}
                         className="max-w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 outline-none"
                     >

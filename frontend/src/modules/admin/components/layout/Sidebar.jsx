@@ -17,7 +17,6 @@ import {
     MdViewAgenda,
     MdRateReview,
     MdLocationOn,
-    MdLayers,
     MdHelpCenter,
     MdViewCompact,
     MdNotifications,
@@ -71,19 +70,11 @@ const Sidebar = () => {
             ]
         },
         {
-            title: 'Homepage',
-            items: [
-                { name: 'Home Layout', icon: MdLayers, path: '/admin/content/layout' },
-                { name: 'Home Sections', icon: MdViewAgenda, path: '/admin/content/sections' },
-                { name: 'Home Banners', icon: MdViewAgenda, path: '/admin/content/banners' },
-                { name: 'Homepage Footer', icon: MdViewCompact, path: '/admin/footer-settings' },
-            ]
-        },
-        {
             title: 'Content',
             items: [
                 { name: 'Static Pages', icon: MdDescription, path: '/admin/pages' },
                 { name: 'Help Center Content', icon: MdHelpCenter, path: '/admin/content/help-center' },
+                { name: 'Homepage Footer', icon: MdViewCompact, path: '/admin/footer-settings' },
             ]
         },
         {

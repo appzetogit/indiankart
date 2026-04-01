@@ -519,6 +519,7 @@ const CategoryLandingSections = ({ categoryName }) => {
             .sort((a, b) => (a.order || 0) - (b.order || 0)),
         [categoryConfig]
     );
+    const isForYouCategory = String(categoryName || '').trim().toLowerCase() === 'for you';
     const hasSubcategoriesSection = sections.some((section) => section.sectionKind === 'subcategories');
 
     if (!categoryConfig) return null;
@@ -599,7 +600,7 @@ const CategoryLandingSections = ({ categoryName }) => {
                     );
                 })}
 
-                {quickLinks.length > 0 && !hasSubcategoriesSection && (
+                {quickLinks.length > 0 && !hasSubcategoriesSection && !isForYouCategory && (
                     <div className="mt-3">
                         <CategoryQuickLinkGrid categoryName={categoryName} items={quickLinks} />
                     </div>
