@@ -54,6 +54,58 @@ const createBankOffer = async (req, res) => {
     }
 };
 
+// @desc    Update a bank offer
+// @route   PUT /api/bank-offers/:id
+// @access  Private/Admin
+const updateBankOffer = async (req, res) => {
+    const {
+        offerName,
+        description,
+        bankName,
+        partnerName,
+        paymentPlatform,
+        integrationProvider,
+        discountType,
+        discountValue,
+        minOrderValue,
+        maxDiscount,
+        isUniversal,
+        applicableCategories,
+        applicableSubCategories,
+        applicableProducts,
+        razorpayOfferId
+    } = req.body;
+
+    if (!offerName || !bankName || !discountValue) {
+        return res.status(400).json({ message: 'Please provide required fields' });
+    }
+
+    const offer = await BankOffer.findById(req.params.id);
+
+    if (!offer) {
+        return res.status(404).json({ message: 'Offer not found' });
+    }
+
+    offer.offerName = offerName;
+    offer.description = description || '';
+    offer.bankName = bankName;
+    offer.partnerName = partnerName || '';
+    offer.paymentPlatform = paymentPlatform || 'bank';
+    offer.integrationProvider = integrationProvider || 'custom';
+    offer.discountType = discountType || 'percentage';
+    offer.discountValue = discountValue;
+    offer.minOrderValue = minOrderValue || 0;
+    offer.maxDiscount = maxDiscount || 0;
+    offer.isUniversal = Boolean(isUniversal);
+    offer.applicableCategories = applicableCategories || [];
+    offer.applicableSubCategories = applicableSubCategories || [];
+    offer.applicableProducts = applicableProducts || [];
+    offer.razorpayOfferId = razorpayOfferId || '';
+
+    const updatedOffer = await offer.save();
+    res.json(updatedOffer);
+};
+
 // @desc    Get all bank offers
 // @route   GET /api/bank-offers
 // @access  Private/Admin (or Public if needed for checkout)
@@ -175,6 +227,7 @@ const getBankOffersForProduct = async (req, res) => {
 
 export {
     createBankOffer,
+    updateBankOffer,
     getBankOffers,
     getActiveBankOffers,
     deleteBankOffer,

@@ -38,6 +38,23 @@ const useCouponStore = create((set) => ({
             throw error;
         }
     },
+
+    updateCoupon: async (id, couponData) => {
+        const payload = { ...couponData, isOffer: false };
+        try {
+            const { data } = await API.put(`/coupons/update/${id}`, payload);
+            set((state) => ({
+                coupons: state.coupons.map((coupon) => (coupon._id === id ? data : coupon))
+            }));
+            toast.success('Coupon updated');
+            return data;
+        } catch (error) {
+            console.error(error);
+            const message = error.response?.data?.message || 'Failed to update coupon';
+            toast.error(message);
+            throw error;
+        }
+    },
     
     addOffer: async (offerData) => {
         const payload = { ...offerData, isOffer: true };

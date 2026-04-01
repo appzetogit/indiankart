@@ -629,7 +629,7 @@ const ReturnOrder = () => {
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-sm font-bold text-gray-800 line-clamp-2">{item.name}</p>
-                                                        <p className="text-[11px] text-gray-500 mt-1">Qty: {item.quantity} â€¢ Rs. {item.price?.toLocaleString?.() || item.price}</p>
+                                                        <p className="text-[11px] text-gray-500 mt-1">Qty: {item.quantity} | Rs. {item.price?.toLocaleString?.() || item.price}</p>
                                                         {isSelected && maxQty > 1 && (
                                                             <div
                                                                 className="mt-3 flex items-center gap-3"
@@ -1009,7 +1009,7 @@ const ReturnOrder = () => {
                                         <div className="flex-1 min-w-0 pt-1">
                                             <p className="text-xs font-bold text-gray-800 line-clamp-2 leading-snug tracking-tight uppercase mb-1">{item.name}</p>
                                             <p className="text-[10px] text-gray-400 font-black tracking-widest leading-none">
-                                                Price: Rs. {item.price.toLocaleString()} • Selected Qty: {selectedItemQuantities[String(item.id)] || 1}{item.quantity > 1 ? ` / ${item.quantity}` : ''}
+                                                Price: Rs. {item.price.toLocaleString()} | Selected Qty: {selectedItemQuantities[String(item.id)] || 1}{item.quantity > 1 ? ` / ${item.quantity}` : ''}
                                             </p>
                                             {item.variant && Object.entries(item.variant).length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">
@@ -1127,4 +1127,6 @@ const ReturnOrder = () => {
 };
 
 export default ReturnOrder;
+
+
 

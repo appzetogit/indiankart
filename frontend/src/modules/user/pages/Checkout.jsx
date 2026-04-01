@@ -203,7 +203,7 @@ const Checkout = () => {
 
     const [couponInput, setCouponInput] = useState('');
     const [couponError, setCouponError] = useState('');
-    const visibleCoupons = coupons.filter((c) => Boolean(c?.code));
+    const visibleCoupons = coupons.filter((coupon) => Boolean(coupon?.code) && !isCouponExpired(coupon));
     const couponInputPlaceholder = appliedCoupon ? `Applied: ${appliedCoupon.code}` : 'Enter Coupon Code';
 
     const handleApplyCoupon = (codeOverride = null) => {

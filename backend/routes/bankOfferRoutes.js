@@ -2,6 +2,7 @@ import express from 'express';
 const router = express.Router();
 import {
     createBankOffer,
+    updateBankOffer,
     getBankOffers,
     getActiveBankOffers,
     deleteBankOffer,
@@ -21,6 +22,7 @@ router.route('/product/:productId')
     .get(getBankOffersForProduct); // Public check
 
 router.route('/:id')
+    .put(protect, admin, updateBankOffer)
     .delete(protect, admin, deleteBankOffer);
 
 router.route('/:id/status')

@@ -1,39 +1,42 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { MdLocalOffer, MdDelete, MdAdd, MdCheckCircle, MdCancel } from 'react-icons/md';
+import { MdLocalOffer, MdDelete, MdAdd, MdCheckCircle, MdCancel, MdEdit } from 'react-icons/md';
 import useBankOfferStore from '../../store/bankOfferStore';
 import useCategoryStore from '../../store/categoryStore';
 import useSubCategoryStore from '../../store/subCategoryStore';
 import useProductStore from '../../store/productStore';
-import API from '../../../../services/api';
 import { toast } from 'react-hot-toast';
 
+const getInitialFormData = () => ({
+    offerName: '',
+    description: '',
+    bankName: '',
+    partnerName: '',
+    paymentPlatform: 'bank',
+    integrationProvider: 'custom',
+    discountType: 'percentage',
+    discountValue: '',
+    minOrderValue: '',
+    maxDiscount: '',
+    isUniversal: false,
+    applicableCategories: [],
+    applicableSubCategories: [],
+    applicableProducts: [],
+    razorpayOfferId: ''
+});
+
 const BankOfferManager = () => {
-    const { offers, fetchOffers, createOffer, deleteOffer, toggleOfferStatus, isLoading } = useBankOfferStore();
+    const { offers, fetchOffers, createOffer, updateOffer, deleteOffer, toggleOfferStatus, isLoading } = useBankOfferStore();
     const { categories, fetchCategories } = useCategoryStore();
     const { subCategories, fetchSubCategories } = useSubCategoryStore();
     const { products, fetchProducts } = useProductStore();
     
-    const [formData, setFormData] = useState({
-        offerName: '',
-        description: '',
-        bankName: '',
-        partnerName: '',
-        paymentPlatform: 'bank',
-        integrationProvider: 'custom',
-        discountType: 'percentage',
-        discountValue: '',
-        minOrderValue: '',
-        maxDiscount: '',
-        isUniversal: false,
-        applicableCategories: [],
-        applicableSubCategories: [],
-        applicableProducts: [],
-        razorpayOfferId: ''
-    });
+    const [formData, setFormData] = useState(getInitialFormData);
+    const [editingOfferId, setEditingOfferId] = useState(null);
 
     const [catSearch, setCatSearch] = useState('');
     const [subCatSearch, setSubCatSearch] = useState('');
     const [prodSearch, setProdSearch] = useState('');
+    const isEditing = Boolean(editingOfferId);
 
     const suggestedOffers = [
         { name: '10% Instant Discount on HDFC', bank: 'HDFC Bank', type: 'percentage', value: 10, desc: 'Maximum discount up to ₹1500 on HDFC Credit Cards' },
@@ -62,6 +65,14 @@ const BankOfferManager = () => {
         fetchSubCategories();
         fetchProducts();
     }, [fetchOffers, fetchCategories, fetchSubCategories, fetchProducts]);
+
+    const resetForm = () => {
+        setFormData(getInitialFormData());
+        setEditingOfferId(null);
+        setCatSearch('');
+        setSubCatSearch('');
+        setProdSearch('');
+    };
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -92,26 +103,43 @@ const BankOfferManager = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const success = await createOffer(formData);
+        const payload = {
+            ...formData,
+            discountValue: Number(formData.discountValue),
+            minOrderValue: formData.minOrderValue ? Number(formData.minOrderValue) : 0,
+            maxDiscount: formData.maxDiscount ? Number(formData.maxDiscount) : 0
+        };
+        const success = isEditing
+            ? await updateOffer(editingOfferId, payload)
+            : await createOffer(payload);
         if (success) {
-            setFormData({
-                offerName: '',
-                description: '',
-                bankName: '',
-                partnerName: '',
-                paymentPlatform: 'bank',
-                integrationProvider: 'custom',
-                discountType: 'percentage',
-                discountValue: '',
-                minOrderValue: '',
-                maxDiscount: '',
-                isUniversal: false,
-                applicableCategories: [],
-                applicableSubCategories: [],
-                applicableProducts: [],
-                razorpayOfferId: ''
-            });
+            resetForm();
         }
+    };
+
+    const handleEdit = (offer) => {
+        setFormData({
+            offerName: offer.offerName || '',
+            description: offer.description || '',
+            bankName: offer.bankName || '',
+            partnerName: offer.partnerName || '',
+            paymentPlatform: offer.paymentPlatform || 'bank',
+            integrationProvider: offer.integrationProvider || 'custom',
+            discountType: offer.discountType || 'percentage',
+            discountValue: offer.discountValue ?? '',
+            minOrderValue: offer.minOrderValue ?? '',
+            maxDiscount: offer.maxDiscount ?? '',
+            isUniversal: Boolean(offer.isUniversal),
+            applicableCategories: Array.isArray(offer.applicableCategories) ? offer.applicableCategories.map((item) => item?._id || item?.id || item) : [],
+            applicableSubCategories: Array.isArray(offer.applicableSubCategories) ? offer.applicableSubCategories.map((item) => item?._id || item?.id || item) : [],
+            applicableProducts: Array.isArray(offer.applicableProducts) ? offer.applicableProducts.map((item) => item?._id || item?.id || item) : [],
+            razorpayOfferId: offer.razorpayOfferId || ''
+        });
+        setEditingOfferId(offer._id);
+        setCatSearch('');
+        setSubCatSearch('');
+        setProdSearch('');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     // Helper to get name
@@ -186,7 +214,7 @@ const BankOfferManager = () => {
                 
                 <h2 className="text-xl font-black text-gray-900 mb-8 flex items-center gap-3 relative">
                     <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm">1</div>
-                    Offer Configuration
+                    {isEditing ? 'Edit Offer Configuration' : 'Offer Configuration'}
                 </h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-8 relative">
@@ -465,19 +493,30 @@ const BankOfferManager = () => {
                         )}
                         
                         <div className="mt-8 flex justify-end">
-                            <button type="submit" disabled={isLoading} className="px-12 py-4 bg-gray-900 text-white font-black rounded-2xl hover:bg-gray-800 transition shadow-2xl shadow-gray-200 disabled:opacity-70 flex items-center gap-2">
+                            <div className="flex items-center gap-3">
+                                {isEditing && (
+                                    <button
+                                        type="button"
+                                        onClick={resetForm}
+                                        className="px-6 py-4 bg-white text-gray-700 font-black rounded-2xl border border-gray-200 hover:bg-gray-50 transition"
+                                    >
+                                        Cancel Edit
+                                    </button>
+                                )}
+                                <button type="submit" disabled={isLoading} className="px-12 py-4 bg-gray-900 text-white font-black rounded-2xl hover:bg-gray-800 transition shadow-2xl shadow-gray-200 disabled:opacity-70 flex items-center gap-2">
                                 {isLoading ? (
                                     <>
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                        Saving Offer...
+                                        {isEditing ? 'Updating Offer...' : 'Saving Offer...'}
                                     </>
                                 ) : (
                                     <>
-                                        <MdAdd size={20} />
-                                        Launch Bank Offer
+                                        {isEditing ? <MdEdit size={20} /> : <MdAdd size={20} />}
+                                        {isEditing ? 'Update Bank Offer' : 'Launch Bank Offer'}
                                     </>
                                 )}
-                            </button>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -501,6 +540,9 @@ const BankOfferManager = () => {
                             <div className="flex gap-2">
                                 <button onClick={() => toggleOfferStatus(offer._id)} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${offer.isActive ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
                                     {offer.isActive ? <MdCheckCircle size={20} /> : <MdCancel size={20} />}
+                                </button>
+                                <button onClick={() => handleEdit(offer)} className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white flex items-center justify-center transition-all">
+                                    <MdEdit size={18} />
                                 </button>
                                 <button onClick={() => deleteOffer(offer._id)} className="w-8 h-8 rounded-full bg-red-50 text-red-400 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all">
                                     <MdDelete size={18} />

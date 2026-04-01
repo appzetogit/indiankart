@@ -1,26 +1,65 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { MdAdd, MdClose, MdDelete, MdToggleOn, MdToggleOff, MdContentCopy } from 'react-icons/md';
+import { MdAdd, MdClose, MdDelete, MdToggleOn, MdToggleOff, MdContentCopy, MdEdit } from 'react-icons/md';
 import useCouponStore from '../../store/couponStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
+const getInitialCouponData = () => ({
+    code: '',
+    title: '',
+    description: '',
+    type: 'percentage',
+    value: '',
+    minPurchase: '',
+    maxDiscount: '',
+    expiryDate: '',
+    userSegment: 'all',
+    applicableCategory: 'all'
+});
+
 const CouponManager = () => {
-    const { coupons, addCoupon, deleteCoupon, toggleCouponStatus, fetchCoupons } = useCouponStore();
+    const { coupons, addCoupon, updateCoupon, deleteCoupon, toggleCouponStatus, fetchCoupons } = useCouponStore();
 
     useEffect(() => {
         fetchCoupons();
     }, [fetchCoupons]);
 
     const [showForm, setShowForm] = useState(false);
-
-    const [couponData, setCouponData] = useState({
-        code: '', title: '', description: '', type: 'percentage', value: '',
-        minPurchase: '', maxDiscount: '', expiryDate: '',
-        userSegment: 'all', applicableCategory: 'all'
-    });
+    const [editingCouponId, setEditingCouponId] = useState(null);
+    const [couponData, setCouponData] = useState(getInitialCouponData);
 
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const isEditing = Boolean(editingCouponId);
+
+    const resetForm = () => {
+        setCouponData(getInitialCouponData());
+        setEditingCouponId(null);
+        setShowForm(false);
+    };
+
+    const openCreateForm = () => {
+        setCouponData(getInitialCouponData());
+        setEditingCouponId(null);
+        setShowForm(true);
+    };
+
+    const handleEdit = (coupon) => {
+        setCouponData({
+            code: coupon.code || '',
+            title: coupon.title || '',
+            description: coupon.description || '',
+            type: coupon.type || 'percentage',
+            value: coupon.value ?? '',
+            minPurchase: coupon.minPurchase ?? '',
+            maxDiscount: coupon.maxDiscount ?? '',
+            expiryDate: coupon.expiryDate || '',
+            userSegment: coupon.userSegment || 'all',
+            applicableCategory: coupon.applicableCategory || 'all'
+        });
+        setEditingCouponId(coupon._id);
+        setShowForm(true);
+    };
 
     const handleCouponSubmit = async (e) => {
         e.preventDefault();
@@ -38,21 +77,23 @@ const CouponManager = () => {
             toast.error('Expiry date must be greater than creation date');
             return;
         }
+
         try {
-            await addCoupon({
+            const payload = {
                 ...couponData,
                 code: normalizedCode,
                 value: Number(couponData.value),
                 minPurchase: Number(couponData.minPurchase),
                 maxDiscount: couponData.maxDiscount ? Number(couponData.maxDiscount) : 0
-            });
+            };
 
-            setShowForm(false);
-            setCouponData({
-                code: '', title: '', description: '', type: 'percentage', value: '',
-                minPurchase: '', maxDiscount: '', expiryDate: '',
-                userSegment: 'all', applicableCategory: 'all'
-            });
+            if (isEditing) {
+                await updateCoupon(editingCouponId, payload);
+            } else {
+                await addCoupon(payload);
+            }
+
+            resetForm();
         } catch {
             // Store shows the backend error toast; keep the form open so admins can fix the values.
         }
@@ -89,7 +130,7 @@ const CouponManager = () => {
                     <p className="text-gray-500 text-sm">Manage discount codes</p>
                 </div>
                 <button
-                    onClick={() => setShowForm(true)}
+                    onClick={openCreateForm}
                     className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700 transition shadow-sm font-medium"
                 >
                     <MdAdd size={20} /> Create Coupon
@@ -102,7 +143,7 @@ const CouponManager = () => {
                         No active coupons found. Create one to get started!
                     </div>
                 ) : (
-                    coupons.map(coupon => (
+                    coupons.map((coupon) => (
                         <div key={coupon._id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden relative group hover:shadow-md transition">
                             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${coupon.active ? 'bg-green-500' : 'bg-gray-300'}`}></div>
 
@@ -171,12 +212,22 @@ const CouponManager = () => {
                                     <div className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded">
                                         Used {coupon.usageCount} times
                                     </div>
-                                    <button
-                                        onClick={() => handleDelete(coupon._id)}
-                                        className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition"
-                                    >
-                                        <MdDelete size={18} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleEdit(coupon)}
+                                            className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50 transition"
+                                            title="Edit coupon"
+                                        >
+                                            <MdEdit size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(coupon._id)}
+                                            className="text-red-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition"
+                                            title="Delete coupon"
+                                        >
+                                            <MdDelete size={18} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -192,9 +243,10 @@ const CouponManager = () => {
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                <MdAdd className="text-pink-500" /> New Coupon
+                                {isEditing ? <MdEdit className="text-blue-500" /> : <MdAdd className="text-pink-500" />}
+                                {isEditing ? 'Edit Coupon' : 'New Coupon'}
                             </h2>
-                            <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-200 rounded-full transition">
+                            <button onClick={resetForm} className="p-1 hover:bg-gray-200 rounded-full transition">
                                 <MdClose size={22} className="text-gray-500" />
                             </button>
                         </div>
@@ -284,7 +336,7 @@ const CouponManager = () => {
                                             type="date"
                                             value={couponData.expiryDate}
                                             onChange={(e) => setCouponData({ ...couponData, expiryDate: e.target.value })}
-                                            min={tomorrowStr}
+                                            min={isEditing ? todayStr : tomorrowStr}
                                             className="w-full px-2 py-1.5 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm font-normal text-gray-800"
                                             required
                                         />
@@ -334,7 +386,7 @@ const CouponManager = () => {
                                 type="submit"
                                 className="w-full bg-pink-600 text-white font-bold py-3 rounded-xl hover:bg-pink-700 transition mt-2 shadow-sm"
                             >
-                                Publish Coupon
+                                {isEditing ? 'Update Coupon' : 'Publish Coupon'}
                             </button>
                         </form>
                     </div>

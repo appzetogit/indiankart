@@ -35,6 +35,23 @@ const useBankOfferStore = create((set) => ({
         }
     },
 
+    updateOffer: async (id, offerData) => {
+        set({ isLoading: true });
+        try {
+            const { data } = await API.put(`/bank-offers/${id}`, offerData);
+            set((state) => ({
+                offers: state.offers.map((offer) => (offer._id === id ? data : offer)),
+                isLoading: false
+            }));
+            toast.success('Bank Offer updated');
+            return true;
+        } catch (error) {
+            set({ isLoading: false });
+            toast.error(error.response?.data?.message || 'Failed to update offer');
+            return false;
+        }
+    },
+
     deleteOffer: async (id) => {
         if (!window.confirm('Are you sure you want to delete this offer?')) return;
         try {
