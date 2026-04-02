@@ -872,7 +872,7 @@ const OrderDetails = () => {
                         )}
 
                         {/* Cancel Order Button */}
-                        {['Pending', 'Confirmed'].includes(normalizedOrderStatus) && (
+                        {normalizedOrderStatus === 'Pending' && (
                             <button
                                 onClick={handleCancelOrder}
                                 className="w-full bg-red-50 border border-red-200 text-red-700 px-6 py-4 rounded-xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2"

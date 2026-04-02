@@ -357,10 +357,10 @@ export const createReturnRequest = async (req, res) => {
             return res.status(201).json(createdReturn);
         } else {
             // CANCELLATION Flow
-            // Safety Check: Only Pending or Confirmed orders can be cancelled
-            const eligibleForCancellation = ['Pending', 'Confirmed'].includes(order.status);
+            // Safety Check: User cancellation is allowed only while the order is pending
+            const eligibleForCancellation = order.status === 'Pending';
             if (!eligibleForCancellation) {
-                return res.status(400).json({ message: `Order cannot be cancelled in its current status: ${order.status}` });
+                return res.status(400).json({ message: `Order can be cancelled only when its status is Pending. Current status: ${order.status}` });
             }
 
             const isOnlinePaid = Boolean(order.isPaid) && String(order.paymentMethod || '').trim().toUpperCase() !== 'COD';

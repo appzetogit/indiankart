@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../../services/api';
+import Pagination from '../../../components/Pagination';
 
 const MyOrders = () => {
     const navigate = useNavigate();
@@ -8,6 +9,9 @@ const MyOrders = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const ordersPerPage = 5;
 
     useEffect(() => {
         fetchOrders();
@@ -18,6 +22,7 @@ const MyOrders = () => {
             setLoading(true);
             const { data } = await API.get('/orders/myorders');
             setOrders(data);
+            setCurrentPage(1);
             setError(null);
         } catch (err) {
             console.error('Fetch orders error:', err);
@@ -71,6 +76,15 @@ const MyOrders = () => {
             'Return Rejected': 'cancel'
         };
         return icons[status] || 'info';
+    };
+
+    const totalPages = Math.ceil(orders.length / ordersPerPage);
+    const startIndex = (currentPage - 1) * ordersPerPage;
+    const paginatedOrders = orders.slice(startIndex, startIndex + ordersPerPage);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     if (loading) {
@@ -133,7 +147,16 @@ const MyOrders = () => {
                     </div>
                 ) : (
                     <div className="space-y-4 px-4 md:px-0">
-                        {orders.map((order) => (
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-gray-800">Order History</h2>
+                                <p className="text-sm text-gray-500">
+                                    Showing {startIndex + 1}-{Math.min(startIndex + paginatedOrders.length, orders.length)} of {orders.length} orders
+                                </p>
+                            </div>
+                        </div>
+
+                        {paginatedOrders.map((order) => (
                             <div 
                                 key={order._id} 
                                 className="bg-white rounded-lg shadow-md border-2 border-blue-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1"
@@ -252,6 +275,12 @@ const MyOrders = () => {
                                 </div>
                             </div>
                         ))}
+
+                        <Pagination
+                            pages={totalPages}
+                            page={currentPage}
+                            changePage={handlePageChange}
+                        />
                     </div>
                 )}
             </div>

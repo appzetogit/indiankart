@@ -227,13 +227,13 @@ export const getMyOrders = async (req, res) => {
 // @access  Private
 export const getOrderById = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id).populate('user', 'name email phone');
+        const order = await Order.findById(req.params.id);
         
         if (order) {
-            // Check if user is still attached to the order
-            // If population failed (e.g. user deleted or admin), order.user might be null if we accessed it as an object
-            // However, we can try to get the raw user ID if populate didn't work as expected
-            const orderUserId = order.user?._id?.toString() || order.user?.toString();
+            // Authorize against the raw stored owner id before attempting population.
+            // This keeps ownership checks working even for special/bypass users
+            // whose referenced user document may not exist in the Users collection.
+            const orderUserId = order.user?.toString();
             const currentUserId = req.user?._id?.toString();
             const isAdmin = req.user && (req.user.isAdmin || ['admin', 'superadmin', 'editor', 'moderator'].includes(req.user.role));
 
@@ -241,6 +241,7 @@ export const getOrderById = async (req, res) => {
 
             // Check if it's the owner or an admin
             if (orderUserId === currentUserId || isAdmin) {
+                await order.populate('user', 'name email phone');
                 res.json(order);
             } else {
                 res.status(401).json({ 

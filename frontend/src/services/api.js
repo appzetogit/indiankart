@@ -18,32 +18,10 @@ API.interceptors.request.use((config) => {
     try {
         const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
         const requestPath = config.url || '';
-        const requestMethod = String(config.method || 'get').toLowerCase();
         const currentPath =
             typeof window !== 'undefined' ? window.location.pathname : '';
         const isAdminContext = currentPath.startsWith('/admin');
         const isAdminApiCall = requestUrl.includes('/admin');
-        const requiresAdminToken = [
-            '/coupons',
-            '/bank-offers',
-            '/categories',
-            '/subcategories',
-            '/products',
-            '/orders',
-            '/returns',
-            '/reels',
-            '/banners',
-            '/home-sections',
-            '/pages',
-            '/home-layout',
-            '/pincodes',
-            '/settings',
-            '/offers',
-            '/notifications',
-            '/footer',
-            '/header',
-            '/seller-requests'
-        ].some((path) => requestPath.startsWith(path)) && requestMethod !== 'get';
 
         const adminStorageState = parseStoredState('admin-auth-storage');
         const userStorageState = parseStoredState('user-auth-storage');
@@ -62,7 +40,7 @@ API.interceptors.request.use((config) => {
 
         // Keep admin/user sessions isolated:
         // admin pages -> admin token, user pages -> user token.
-        if ((isAdminContext || isAdminApiCall || requiresAdminToken) && adminToken) {
+        if ((isAdminContext || isAdminApiCall) && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
         } else if (userToken) {
             config.headers.Authorization = `Bearer ${userToken}`;
