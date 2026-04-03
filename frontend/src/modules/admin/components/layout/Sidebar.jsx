@@ -21,7 +21,8 @@ import {
     MdViewCompact,
     MdNotifications,
     MdBusinessCenter,
-    MdPlayCircle
+    MdPlayCircle,
+    MdVisibility
 } from 'react-icons/md';
 
 import logo from '../../../../assets/indiankart-logo.png';
@@ -46,6 +47,7 @@ const Sidebar = () => {
             title: 'Catalog',
             items: [
                 { name: 'Products', icon: MdInventory, path: '/admin/products' },
+                { name: 'Product Views', icon: MdVisibility, path: '/admin/product-views' },
                 { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
                 { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
                 { name: 'Category Page Builder', icon: MdViewAgenda, path: '/admin/categories/page-builder' },

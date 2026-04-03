@@ -434,6 +434,32 @@ const ProductDetails = () => {
     }, [id]);
 
     useEffect(() => {
+        if (!id || !product) return;
+
+        const sessionKey = `ik-product-viewed:${id}`;
+        if (sessionStorage.getItem(sessionKey)) return;
+
+        sessionStorage.setItem(sessionKey, 'pending');
+
+        let active = true;
+        const trackView = async () => {
+            try {
+                await API.post(`/products/${id}/view`);
+                if (active) sessionStorage.setItem(sessionKey, '1');
+            } catch (error) {
+                sessionStorage.removeItem(sessionKey);
+                console.error('Error tracking product view:', error);
+            }
+        };
+
+        trackView();
+
+        return () => {
+            active = false;
+        };
+    }, [id, product]);
+
+    useEffect(() => {
         if (currentImageIndex >= productImages.length) {
             setCurrentImageIndex(0);
         }

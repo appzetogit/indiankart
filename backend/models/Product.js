@@ -9,6 +9,7 @@ const productSchema = mongoose.Schema({
     discount: { type: String },
     rating: { type: Number, default: 5, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
+    viewCount: { type: Number, default: 0, min: 0 },
     image: { type: String }, // Primary image
     images: [{ type: String }], // Gallery images
     category: { type: String, required: true }, // Main category name (Legacy/Display)

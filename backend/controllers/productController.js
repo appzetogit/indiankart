@@ -39,7 +39,7 @@ const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
-    return 'id name brand price originalPrice discount rating ratingCount image category categoryId tags ram skus stock createdAt';
+    return 'id name brand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock createdAt';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -767,5 +767,30 @@ export const updateProductStock = async (req, res) => {
     } catch (error) {
         console.error('Update Stock Error:', error);
         res.status(400).json({ message: error.message });
+    }
+};
+
+// @desc    Increment product view count
+// @route   POST /api/products/:id/view
+// @access  Public
+export const incrementProductView = async (req, res) => {
+    try {
+        const product = await Product.findOneAndUpdate(
+            { id: req.params.id },
+            { $inc: { viewCount: 1 } },
+            { new: true, select: 'id viewCount name' }
+        );
+
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        res.json({
+            id: product.id,
+            name: product.name,
+            viewCount: product.viewCount
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
