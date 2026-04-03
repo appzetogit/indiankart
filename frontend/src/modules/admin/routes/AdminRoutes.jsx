@@ -107,7 +107,8 @@ const AdminRoutes = () => {
                 <Route path="bank-offers" element={<BankOfferManager />} />
                 <Route path="support" element={<SupportRequests />} />
                 <Route path="settings" element={<SettingsPage />} />
-                <Route path="razorpay-credentials" element={<RazorpayCredentials />} />
+                <Route path="razorpay-credentials" element={<Navigate to="/admin/api-credentials" replace />} />
+                <Route path="api-credentials" element={<RazorpayCredentials />} />
                 <Route path="shipping-charges" element={<ShippingCharges />} />
                 <Route path="footer-settings" element={<FooterManager />} />
                 <Route path="notifications" element={<AdminNotifications />} />

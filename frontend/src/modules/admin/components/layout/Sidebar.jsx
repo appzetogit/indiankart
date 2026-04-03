@@ -84,7 +84,7 @@ const Sidebar = () => {
         {
             title: 'Configuration',
             items: [
-                { name: 'Razorpay Credentials', icon: MdSettings, path: '/admin/razorpay-credentials' },
+                { name: 'API Credentials', icon: MdSettings, path: '/admin/api-credentials' },
                 { name: 'Store Settings', icon: MdSettings, path: '/admin/settings' },
             ]
         }
