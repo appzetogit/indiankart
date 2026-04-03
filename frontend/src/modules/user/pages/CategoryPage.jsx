@@ -69,6 +69,25 @@ const FilterRadioRow = ({ checked, onChange, label, name }) => (
     </label>
 );
 
+const getDistinctValues = (items = [], picker) => {
+    const seen = new Set();
+    const values = [];
+
+    items.forEach((item) => {
+        const rawValue = typeof picker === 'function' ? picker(item) : item?.[picker];
+        const trimmedValue = String(rawValue || '').trim();
+        if (!trimmedValue) return;
+
+        const normalizedValue = trimmedValue.toLowerCase();
+        if (seen.has(normalizedValue)) return;
+
+        seen.add(normalizedValue);
+        values.push(trimmedValue);
+    });
+
+    return values.sort((a, b) => a.localeCompare(b));
+};
+
 const CategoryPage = () => {
     const PAGE_SIZE = 12;
     const navigate = useNavigate();
@@ -207,10 +226,27 @@ const CategoryPage = () => {
         setCurrentPage(1);
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, categoryProducts]);
 
-    const availableBrands = [...new Set(categoryProducts.map((product) => String(product.brand || '').trim()).filter(Boolean))];
-    const availableRam = [...new Set(categoryProducts.map((product) => String(product.ram || '').trim()).filter(Boolean))];
-    const availableCategories = [...new Set(categoryProducts.flatMap((product) => product.tags || []).map((tag) => String(tag || '').trim()).filter((tag) => normalizeText(tag) !== normalizeText(categoryData?.name)).filter(Boolean))];
-    const filteredBrands = availableBrands.filter((brand) => brand.toLowerCase().includes(brandSearch.toLowerCase()));
+    const availableBrands = useMemo(() => getDistinctValues(categoryProducts, (product) => product?.brand), [categoryProducts]);
+    const fallbackBrandName = routeHasExplicitSubPath
+        ? String(routeSegments[routeSegments.length - 1] || '').trim()
+        : '';
+    const effectiveAvailableBrands = useMemo(() => {
+        if (availableBrands.length > 0) return availableBrands;
+        if (fallbackBrandName && categoryProducts.length > 0) return [fallbackBrandName];
+        return [];
+    }, [availableBrands, fallbackBrandName, categoryProducts.length]);
+    const availableRam = useMemo(() => getDistinctValues(categoryProducts, (product) => product?.ram), [categoryProducts]);
+    const availableCategories = useMemo(
+        () => getDistinctValues(
+            categoryProducts.flatMap((product) => product?.tags || []),
+            (tag) => {
+                const trimmedTag = String(tag || '').trim();
+                return normalizeText(trimmedTag) === normalizeText(categoryData?.name) ? '' : trimmedTag;
+            }
+        ),
+        [categoryProducts, categoryData?.name]
+    );
+    const filteredBrands = effectiveAvailableBrands.filter((brand) => brand.toLowerCase().includes(brandSearch.toLowerCase()));
     const displayedBrands = showAllBrands ? filteredBrands : filteredBrands.slice(0, 6);
     const displayedRam = showAllRam ? availableRam : availableRam.slice(0, 6);
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
@@ -282,7 +318,7 @@ const CategoryPage = () => {
                                 </div>
                                 {activeFilterChips.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{activeFilterChips.slice(0, 5).map((chip) => <span key={chip} className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">{chip}</span>)}{activeFilterChips.length > 5 && <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[10px] font-bold text-gray-500">+{activeFilterChips.length - 5} more</span>}</div>}
                             </div>
-                            <div className="max-h-[calc(100vh-180px)] divide-y divide-gray-100 overflow-y-auto no-scrollbar">
+                            <div className="divide-y divide-gray-100">
                                 <FilterSection sectionKey="sort" title="Sort" badge={sortBy === 'popularity' ? 'Default' : sortBy.replace('-', ' ')} collapsedSections={collapsedSections} toggleSection={toggleSection}>
                                     <div className="space-y-2">{SORT_OPTIONS.map((option) => <FilterRadioRow key={option.id} name="desktop-sort" checked={sortBy === option.id} onChange={() => setSortBy(option.id)} label={option.label} />)}</div>
                                 </FilterSection>
@@ -305,7 +341,7 @@ const CategoryPage = () => {
                                 <FilterSection sectionKey="discount" title="Discount" badge={selectedDiscount ? `${selectedDiscount}%+` : null} collapsedSections={collapsedSections} toggleSection={toggleSection}>
                                     <div className="space-y-2">{DISCOUNT_OPTIONS.map((discount) => <FilterRadioRow key={discount} name="desktop-discount" checked={selectedDiscount === discount} onChange={() => setSelectedDiscount(discount)} label={`${discount}% or more`} />)}<button type="button" onClick={() => setSelectedDiscount(null)} className="px-3 text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-blue-600">Clear Discount</button></div>
                                 </FilterSection>
-                                {availableBrands.length > 0 && <FilterSection sectionKey="brand" title="Brand" badge={selectedBrands.length > 0 ? selectedBrands.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-3"><input type="text" value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Search brand" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500" /><div className="space-y-1">{displayedBrands.map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div>{filteredBrands.length > 6 && <button type="button" onClick={() => setShowAllBrands((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllBrands ? 'Show Less' : `Show ${filteredBrands.length - 6} More`}</button>}</div></FilterSection>}
+                                {effectiveAvailableBrands.length > 0 && <FilterSection sectionKey="brand" title="Brand" badge={selectedBrands.length > 0 ? selectedBrands.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-3"><input type="text" value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Search brand" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-500" /><div className="space-y-1">{displayedBrands.map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div>{filteredBrands.length > 6 && <button type="button" onClick={() => setShowAllBrands((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllBrands ? 'Show Less' : `Show ${filteredBrands.length - 6} More`}</button>}</div></FilterSection>}
                                 {availableRam.length > 0 && <FilterSection sectionKey="ram" title="RAM" badge={selectedRam.length > 0 ? selectedRam.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-1">{displayedRam.map((ram) => <FilterCheckRow key={ram} checked={selectedRam.includes(ram)} onChange={() => toggleRam(ram)} label={ram} />)}{availableRam.length > 6 && <button type="button" onClick={() => setShowAllRam((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllRam ? 'Show Less' : `Show ${availableRam.length - 6} More`}</button>}</div></FilterSection>}
                                 {availableCategories.length > 0 && <FilterSection sectionKey="category" title="Category" badge={selectedCategories.length > 0 ? selectedCategories.length : null} collapsedSections={collapsedSections} toggleSection={toggleSection}><div className="space-y-1">{displayedCategories.map((category) => <FilterCheckRow key={category} checked={selectedCategories.includes(category)} onChange={() => toggleCategory(category)} label={category} />)}{availableCategories.length > 6 && <button type="button" onClick={() => setShowAllCategories((prev) => !prev)} className="px-3 text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700">{showAllCategories ? 'Show Less' : `Show ${availableCategories.length - 6} More`}</button>}</div></FilterSection>}
                             </div>
@@ -332,7 +368,7 @@ const CategoryPage = () => {
             {!isSubCategoryLandingView && <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 z-40 flex h-14 border-t bg-white lg:hidden"><button onClick={() => setShowSortModal(true)} className="flex-1 border-r text-xs font-black uppercase tracking-widest">Sort By</button><button onClick={() => setShowFilterModal(true)} className="flex-1 text-xs font-black uppercase tracking-widest">Filters</button></div>}
             <BottomNav />
             {showSortModal && <div className="fixed inset-0 z-[100] flex items-end"><div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)} /><div className="relative w-full rounded-t-2xl bg-white p-6 animate-in slide-in-from-bottom duration-300"><div className="mb-4 flex items-center justify-between border-b pb-4"><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Sort By</h3><button onClick={() => setShowSortModal(false)} className="material-icons text-gray-400">close</button></div><div className="space-y-1">{SORT_OPTIONS.map((option) => <button key={option.id} onClick={() => { setSortBy(option.id); setShowSortModal(false); }} className={`w-full rounded-xl px-4 py-4 text-left text-sm font-bold ${sortBy === option.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}>{option.label}</button>)}</div></div></div>}
-            {showFilterModal && <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300"><div className="flex h-full flex-col"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Filters</h3></div><button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600">Clear all</button></div><div className="flex-1 overflow-y-auto p-5"><h4 className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Min</span><div className="text-sm font-black">₹{filterRange[0]}</div></div><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Max</span><div className="text-sm font-black">₹{filterRange[1]}</div></div></div><div className="mt-6 space-y-4"><div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Customer Ratings</h4><div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="mobile-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={`${rating}★ & above`} />)}</div></div>{availableBrands.length > 0 && <div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Brand</h4><div className="space-y-2">{availableBrands.slice(0, 8).map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div></div>}</div></div><div className="border-t p-4"><button onClick={() => setShowFilterModal(false)} className="w-full rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white">Apply Filters</button></div></div></div>}
+            {showFilterModal && <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300"><div className="flex h-full flex-col"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Filters</h3></div><button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600">Clear all</button></div><div className="flex-1 overflow-y-auto p-5"><h4 className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Min</span><div className="text-sm font-black">₹{filterRange[0]}</div></div><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Max</span><div className="text-sm font-black">₹{filterRange[1]}</div></div></div><div className="mt-6 space-y-4"><div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Customer Ratings</h4><div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="mobile-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={`${rating}★ & above`} />)}</div></div>{effectiveAvailableBrands.length > 0 && <div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Brand</h4><div className="space-y-2">{effectiveAvailableBrands.slice(0, 8).map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div></div>}</div></div><div className="border-t p-4"><button onClick={() => setShowFilterModal(false)} className="w-full rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white">Apply Filters</button></div></div></div>}
         </div>
     );
 };

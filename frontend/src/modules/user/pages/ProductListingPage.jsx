@@ -4,6 +4,25 @@ import { useProducts, useCategories } from '../../../hooks/useData';
 import ProductCard from '../components/product/ProductCard';
 import { MdArrowBack, MdFilterList, MdSort, MdClose, MdExpandMore } from 'react-icons/md';
 
+const getDistinctValues = (items = [], picker) => {
+    const seen = new Set();
+    const values = [];
+
+    items.forEach((item) => {
+        const rawValue = typeof picker === 'function' ? picker(item) : item?.[picker];
+        const trimmedValue = String(rawValue || '').trim();
+        if (!trimmedValue) return;
+
+        const normalizedValue = trimmedValue.toLowerCase();
+        if (seen.has(normalizedValue)) return;
+
+        seen.add(normalizedValue);
+        values.push(trimmedValue);
+    });
+
+    return values.sort((a, b) => a.localeCompare(b));
+};
+
 const ProductListingPage = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -58,6 +77,7 @@ const ProductListingPage = () => {
                 (p.subCategories && p.subCategories.some(sub => (sub.name || '').toLowerCase() === subcategory.toLowerCase())) ||
                 (p.subCategory?.name || p.subcategory || '').toLowerCase() === subcategory.toLowerCase() ||
                 p.tags?.some(t => t.toLowerCase() === subcategory.toLowerCase()) ||
+                (p.brand || '').toLowerCase() === subcategory.toLowerCase() ||
                 p.name?.toLowerCase().includes(subcategory.toLowerCase())
             );
         }
@@ -100,9 +120,13 @@ const ProductListingPage = () => {
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, filteredProducts]);
 
     // Unique options
-    const availableBrands = [...new Set(filteredProducts.map(p => p.brand).filter(Boolean))];
-    const availableRam = [...new Set(filteredProducts.map(p => p.ram).filter(Boolean))];
-    const availableCategories = [...new Set(filteredProducts.map(p => p.category).filter(Boolean))];
+    const availableBrands = getDistinctValues(filteredProducts, (product) => product?.brand);
+    const fallbackBrandName = String(subcategory || '').trim();
+    const effectiveAvailableBrands = availableBrands.length > 0
+        ? availableBrands
+        : (fallbackBrandName && filteredProducts.length > 0 ? [fallbackBrandName] : []);
+    const availableRam = getDistinctValues(filteredProducts, (product) => product?.ram);
+    const availableCategories = getDistinctValues(filteredProducts, (product) => product?.category);
 
     const toggleBrand = (brand) => {
         setSelectedBrands(prev => prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]);
@@ -297,11 +321,11 @@ const ProductListingPage = () => {
                             )}
 
                             {/* Brand Filter */}
-                            {availableBrands.length > 0 && (
+                            {effectiveAvailableBrands.length > 0 && (
                                 <div>
                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[2px] mb-4">Brand</h4>
                                     <div className="flex flex-wrap gap-2">
-                                        {availableBrands.map((brand) => (
+                                        {effectiveAvailableBrands.map((brand) => (
                                             <button
                                                 key={brand}
                                                 onClick={() => toggleBrand(brand)}
