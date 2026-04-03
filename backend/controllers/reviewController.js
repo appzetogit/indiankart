@@ -1,6 +1,25 @@
 import Review from '../models/Review.js';
 import Product from '../models/Product.js';
 
+const syncProductRating = async (productObjectId) => {
+    if (!productObjectId) return;
+
+    const approvedReviews = await Review.find({
+        product: productObjectId,
+        status: 'approved'
+    }).select('rating');
+
+    const ratingCount = approvedReviews.length;
+    const averageRating = ratingCount > 0
+        ? Number((approvedReviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / ratingCount).toFixed(1))
+        : 5;
+
+    await Product.findByIdAndUpdate(productObjectId, {
+        rating: averageRating,
+        ratingCount
+    });
+};
+
 // @desc    Create a new review
 // @route   POST /api/reviews
 // @access  Private
@@ -77,6 +96,7 @@ export const updateReviewStatus = async (req, res) => {
         if (review) {
             review.status = status;
             const updatedReview = await review.save();
+            await syncProductRating(review.product);
             res.json(updatedReview);
         } else {
             res.status(404).json({ message: 'Review not found' });

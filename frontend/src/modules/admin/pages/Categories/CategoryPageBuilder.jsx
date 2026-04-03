@@ -18,6 +18,7 @@ import {
 const makeId = (prefix) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 const DEFAULT_SUBCATEGORIES_SECTION_ID = 'default-subcategories-section';
 const CUSTOM_LINK_VALUE = '__custom__';
+const SELECT_LINK_VALUE = '__select__';
 const SELECTED_CATEGORY_STORAGE_KEY = 'category-page-builder-selected-category-v1';
 
 const normalizeText = (value) => String(value || '').trim();
@@ -89,7 +90,7 @@ const buildProductRouteOptions = (products = []) => {
 
 const resolveLinkSelectValue = (link, options = []) => {
     const normalizedLink = normalizeText(link);
-    if (!normalizedLink) return '';
+    if (!normalizedLink) return SELECT_LINK_VALUE;
     return options.some((option) => option.value === normalizedLink) ? normalizedLink : CUSTOM_LINK_VALUE;
 };
 
@@ -305,6 +306,8 @@ const CategoryPageBuilder = () => {
     const [productPickerSearch, setProductPickerSearch] = useState('');
     const [productPickerCategory, setProductPickerCategory] = useState('All');
     const [productPickerSelectedIds, setProductPickerSelectedIds] = useState([]);
+    const [sectionUsesCustomLink, setSectionUsesCustomLink] = useState(false);
+    const [itemCustomLinkModes, setItemCustomLinkModes] = useState({});
     const navigate = useNavigate();
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
     const isSectionFormPage = Boolean(routeSectionId);
@@ -344,7 +347,8 @@ const CategoryPageBuilder = () => {
             return normalizeText(rootCategoryName).toLowerCase() === selectedCategoryName;
         });
 
-        return currentCategoryOptions.length > 0 ? currentCategoryOptions : allPageRouteOptions;
+        const scopedOptions = currentCategoryOptions.length > 0 ? currentCategoryOptions : allPageRouteOptions;
+        return scopedOptions.filter((option) => normalizeText(option.label).toLowerCase() !== 'for you');
     }, [allPageRouteOptions, category]);
     const productRouteOptions = useMemo(
         () => buildProductRouteOptions(category?.products),
@@ -459,6 +463,7 @@ const CategoryPageBuilder = () => {
     useEffect(() => {
         if (!section?.items?.length) {
             setOpenItems({});
+            setItemCustomLinkModes({});
             return;
         }
 
@@ -470,6 +475,18 @@ const CategoryPageBuilder = () => {
             return next;
         });
     }, [section?.id, section?.items]);
+
+    useEffect(() => {
+        setSectionUsesCustomLink(resolveLinkSelectValue(section?.sectionLink, pageRouteOptions) === CUSTOM_LINK_VALUE);
+    }, [section?.id, pageRouteOptions]);
+
+    useEffect(() => {
+        const nextModes = {};
+        (section?.items || []).forEach((item) => {
+            nextModes[item.id] = resolveLinkSelectValue(item.link, itemLinkOptions) === CUSTOM_LINK_VALUE;
+        });
+        setItemCustomLinkModes(nextModes);
+    }, [section?.id, itemLinkOptions]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1129,18 +1146,31 @@ const CategoryPageBuilder = () => {
                                     <label className="space-y-2 text-sm font-semibold text-gray-700">
                                         <span>Section Link</span>
                                         <select
-                                            value={resolveLinkSelectValue(section.sectionLink, pageRouteOptions)}
-                                            onChange={(e) => updateSection({ sectionLink: e.target.value === CUSTOM_LINK_VALUE ? section.sectionLink : e.target.value })}
+                                            value={sectionUsesCustomLink ? CUSTOM_LINK_VALUE : resolveLinkSelectValue(section.sectionLink, pageRouteOptions)}
+                                            onChange={(e) => {
+                                                const nextValue = e.target.value;
+                                                if (nextValue === CUSTOM_LINK_VALUE) {
+                                                    setSectionUsesCustomLink(true);
+                                                    return;
+                                                }
+                                                if (nextValue === SELECT_LINK_VALUE) {
+                                                    setSectionUsesCustomLink(false);
+                                                    updateSection({ sectionLink: '' });
+                                                    return;
+                                                }
+                                                setSectionUsesCustomLink(false);
+                                                updateSection({ sectionLink: nextValue });
+                                            }}
                                             className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
                                         >
-                                            <option value="">No link</option>
+                                            <option value={SELECT_LINK_VALUE}>Select link</option>
+                                            <option value={CUSTOM_LINK_VALUE}>Custom Link</option>
                                             {pageRouteOptions.map((option) => (
                                                 <option key={option.value} value={option.value}>{option.label}</option>
                                             ))}
-                                            <option value={CUSTOM_LINK_VALUE}>Custom URL</option>
                                         </select>
                                     </label>
-                                    {resolveLinkSelectValue(section.sectionLink, pageRouteOptions) === CUSTOM_LINK_VALUE && (
+                                    {sectionUsesCustomLink && (
                                         <label className="space-y-2 text-sm font-semibold text-gray-700">
                                             <span>Custom Section URL</span>
                                             <input
@@ -1280,24 +1310,40 @@ const CategoryPageBuilder = () => {
                                                         <label className="min-w-0 space-y-2 lg:col-span-2">
                                                             <span className="block text-sm font-semibold text-gray-700">Item Link</span>
                                                             <select
-                                                                value={resolveLinkSelectValue(item.link, itemLinkOptions)}
-                                                                onChange={(e) => updateSectionItem(item.id, { link: e.target.value === CUSTOM_LINK_VALUE ? item.link || '' : e.target.value })}
+                                                                value={itemCustomLinkModes[item.id] ? CUSTOM_LINK_VALUE : resolveLinkSelectValue(item.link, itemLinkOptions)}
+                                                                onChange={(e) => {
+                                                                    const nextValue = e.target.value;
+                                                                    if (nextValue === CUSTOM_LINK_VALUE) {
+                                                                        setItemCustomLinkModes((prev) => ({ ...prev, [item.id]: true }));
+                                                                        return;
+                                                                    }
+                                                                    if (nextValue === SELECT_LINK_VALUE) {
+                                                                        setItemCustomLinkModes((prev) => ({ ...prev, [item.id]: false }));
+                                                                        updateSectionItem(item.id, { link: '' });
+                                                                        return;
+                                                                    }
+                                                                    setItemCustomLinkModes((prev) => ({ ...prev, [item.id]: false }));
+                                                                    updateSectionItem(item.id, { link: nextValue });
+                                                                }}
                                                                 className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
                                                             >
-                                                                <option value="">No link</option>
+                                                                <option value={SELECT_LINK_VALUE}>Select link</option>
+                                                                <option value={CUSTOM_LINK_VALUE}>Custom Link</option>
                                                                 {itemLinkOptions.map((option) => (
                                                                     <option key={option.value} value={option.value}>{option.label}</option>
                                                                 ))}
-                                                                <option value={CUSTOM_LINK_VALUE}>Custom URL</option>
                                                             </select>
                                                         </label>
-                                                        {resolveLinkSelectValue(item.link, itemLinkOptions) === CUSTOM_LINK_VALUE && (
-                                                            <input
-                                                                value={item.link || ''}
-                                                                onChange={(e) => updateSectionItem(item.id, { link: e.target.value })}
-                                                                className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none lg:col-span-2"
-                                                                placeholder="/category/Mobiles/VIVO"
-                                                            />
+                                                        {itemCustomLinkModes[item.id] && (
+                                                            <label className="min-w-0 space-y-2 lg:col-span-2">
+                                                                <span className="block text-sm font-semibold text-gray-700">Custom Item URL</span>
+                                                                <input
+                                                                    value={item.link || ''}
+                                                                    onChange={(e) => updateSectionItem(item.id, { link: e.target.value })}
+                                                                    className="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none"
+                                                                    placeholder="/category/Mobiles/VIVO"
+                                                                />
+                                                            </label>
                                                         )}
                                                     </div>
                                                 ) : (

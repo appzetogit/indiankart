@@ -7,6 +7,7 @@ import { optimizeImage } from '../../../../utils/imageUtils';
 
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
+    const displayRating = Number(product?.rating) > 0 ? Number(product.rating).toFixed(1) : '5.0';
 
     const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const cleanedProductName = React.useMemo(() => {
@@ -70,11 +71,9 @@ const ProductCard = ({ product, footerText }) => {
                 />
 
                 {/* Rating Badge - Bottom Left */}
-                {Number(product.rating) > 0 && (
-                    <div className="absolute bottom-2 left-2 bg-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm border border-black/5 leading-none">
-                        {product.rating} <span className="material-icons text-green-700 md:text-[12px]" style={{ fontSize: '9px' }}>star</span>
-                    </div>
-                )}
+                <div className="absolute bottom-2 left-2 bg-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm border border-black/5 leading-none">
+                    {displayRating} <span className="material-icons text-green-700 md:text-[12px]" style={{ fontSize: '9px' }}>star</span>
+                </div>
 
                 {/* AD Badge - Top Right (Conditional or dynamic based on ID) */}
                 {(product.id % 4 === 0) && (
