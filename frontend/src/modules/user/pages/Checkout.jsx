@@ -997,6 +997,16 @@ const Checkout = () => {
                                         <span className="text-gray-700 font-medium">Delivery Charges</span>
                                         <span className={delivery === 0 ? "text-green-600 font-black" : "text-gray-900"}>{delivery === 0 ? "FREE" : `₹${delivery}`}</span>
                                     </div>
+                                    <div className="flex justify-between items-start gap-4">
+                                        <span className="text-gray-700 font-medium">Estimated Delivery</span>
+                                        <span className={`text-right font-semibold leading-tight ${!isPincodeServiceable && !isPincodeChecking ? 'text-red-600' : 'text-gray-900'}`}>
+                                            {isPincodeChecking
+                                                ? 'Checking...'
+                                                : (isPincodeServiceable
+                                                    ? (estimatedDeliveryText || 'Not available')
+                                                    : 'Not deliverable')}
+                                        </span>
+                                    </div>
                                     <div className="flex justify-between font-black text-[15px] border-t border-dashed pt-4 mt-2">
                                         <span className="text-gray-900 tracking-tight">Total Amount</span>
                                         <span className="text-gray-900 font-black">₹{finalAmount.toLocaleString()}</span>
@@ -1128,6 +1138,16 @@ const Checkout = () => {
                                 <div className="flex justify-between">
                                     <span className="text-gray-700 font-medium">Delivery Charges</span>
                                     <span className={delivery === 0 ? "text-green-600 font-black" : "text-gray-900"}>{delivery === 0 ? "FREE" : `₹${delivery}`}</span>
+                                </div>
+                                <div className="flex justify-between items-start gap-4">
+                                    <span className="text-gray-700 font-medium">Estimated Delivery</span>
+                                    <span className={`text-right font-semibold leading-tight ${!isPincodeServiceable && !isPincodeChecking ? 'text-red-600' : 'text-gray-900'}`}>
+                                        {isPincodeChecking
+                                            ? 'Checking...'
+                                            : (isPincodeServiceable
+                                                ? (estimatedDeliveryText || 'Not available')
+                                                : 'Not deliverable')}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between font-black text-[15px] border-t border-dashed pt-4 mt-2">
                                     <span className="text-gray-900 tracking-tight">Total Amount</span>

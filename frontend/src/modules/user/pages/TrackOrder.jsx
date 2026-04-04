@@ -1,114 +1,239 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useCartStore } from '../store/cartStore';
+import { toast } from 'react-hot-toast';
+import API from '../../../services/api';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
+
+const normalizeOrderStatus = (status = '') => {
+    const value = String(status || '').trim();
+    if (value === 'Shipped') return 'Dispatched';
+    return value;
+};
+
+const formatTrackingDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
+const getOrderSteps = () => ([
+    { status: 'Pending', title: 'Order Placed', desc: 'Your order has been received successfully' },
+    { status: 'Confirmed', title: 'Confirmed', desc: 'Your order has been confirmed by the admin team' },
+    { status: 'Processing', title: 'Processing', desc: 'Delhivery is processing the shipment after confirmation' },
+    { status: 'Not Picked', title: 'Not Picked', desc: 'Shipment is created but pickup is still pending' },
+    { status: 'Picked Up', title: 'Picked Up', desc: 'Shipment has been picked up by Delhivery' },
+    { status: 'Dispatched', title: 'Dispatched', desc: 'Shipment has been handed over to Delhivery' },
+    { status: 'In Transit', title: 'In Transit', desc: 'Shipment is moving through the courier network' },
+    { status: 'Out for Delivery', title: 'Out for Delivery', desc: 'Courier partner is delivering your order today' },
+    { status: 'Delivered', title: 'Delivered', desc: 'Order has been delivered successfully' }
+]);
+
+const EXCEPTION_STATUSES = new Set(['Cancelled', 'RTO', 'DTO', 'Collected']);
+
+const getReturnSteps = () => ([
+    { status: 'RETURN_REQUESTED', title: 'Return Requested', desc: 'We have received your return request' },
+    { status: 'RETURN_PICKED_UP', title: 'Picked Up', desc: 'Item has been picked up by the courier partner' },
+    { status: 'REFUND_PROCESSED', title: 'Refund Processed', desc: 'Refund has been initiated successfully' }
+]);
+
+const getReplacementSteps = () => ([
+    { status: 'REPLACEMENT_REQUESTED', title: 'Replacement Requested', desc: 'Replacement request is being processed' },
+    { status: 'REPLACEMENT_PICKED_UP', title: 'Item Picked Up', desc: 'Old item has been picked up' },
+    { status: 'REPLACEMENT_SHIPPED', title: 'Replacement Shipped', desc: 'New replacement item is on its way' },
+    { status: 'REPLACEMENT_DELIVERED', title: 'Replacement Delivered', desc: 'Replacement item has been delivered' }
+]);
 
 const TrackOrder = () => {
     const { orderId, productId } = useParams();
     const navigate = useNavigate();
-    const orders = useCartStore(state => state.orders);
-    const startSimulation = useCartStore(state => state.startSimulation);
-    const order = orders.find(o => o.id === orderId);
-    const targetItem = productId ? order?.items.find(i => String(i.id) === String(productId)) : order?.items[0];
+    const [order, setOrder] = React.useState(null);
+    const [loading, setLoading] = React.useState(true);
+    const [error, setError] = React.useState('');
+    const [trackingData, setTrackingData] = React.useState(null);
+    const [trackingLoading, setTrackingLoading] = React.useState(false);
+    const [trackingError, setTrackingError] = React.useState('');
+
+    const fetchOrder = async () => {
+        try {
+            setLoading(true);
+            const { data } = await API.get(`/orders/${orderId}`);
+            setOrder(data);
+            setError('');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Order not found.');
+            setOrder(null);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     React.useEffect(() => {
-        if (order) {
-            const isActiveOrder = order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && !order.status.startsWith('RETURN');
-            const isActiveItem = productId && targetItem?.status && (
-                (targetItem.status.startsWith('RETURN') && targetItem.status !== 'REFUND_PROCESSED') ||
-                (targetItem.status.startsWith('REPLACEMENT') && targetItem.status !== 'DELIVERED')
-            );
+        fetchOrder();
+    }, [orderId]);
 
-            if (isActiveOrder || isActiveItem) {
-                startSimulation(order.id);
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const fetchTracking = async () => {
+            if (!order?.delhivery?.waybill) {
+                setTrackingData(null);
+                setTrackingError('');
+                setTrackingLoading(false);
+                return;
             }
+
+            setTrackingLoading(true);
+            setTrackingError('');
+
+            try {
+                const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                if (cancelled) return;
+                setTrackingData(data?.tracking || null);
+            } catch (err) {
+                if (cancelled) return;
+                setTrackingData(null);
+                setTrackingError(err.response?.data?.message || 'Unable to fetch live courier status');
+            } finally {
+                if (!cancelled) {
+                    setTrackingLoading(false);
+                }
+            }
+        };
+
+        fetchTracking();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [order?.delhivery?.waybill, orderId]);
+
+    const targetItem = (() => {
+        if (!productId || !Array.isArray(order?.orderItems)) {
+            return order?.orderItems?.[0] || null;
         }
-    }, [order?.id, productId, targetItem?.status]);
 
-    if (!order) {
-        return <div className="p-10 text-center">Order not found.</div>;
-    }
+        return order.orderItems.find((item) => (
+            String(item?._id) === String(productId) ||
+            String(item?.product) === String(productId)
+        )) || order.orderItems[0] || null;
+    })();
 
-    // Determine the target item and status
-    const currentStatus = productId ? targetItem?.status : order.status;
+    const currentStatus = productId ? targetItem?.status : order?.status;
+    const normalizedCurrentStatus = normalizeOrderStatus(currentStatus);
+    const rawCourierStatus = String(trackingData?.currentStatus || '').trim();
+    const mappedCourierStep = String(trackingData?.mappedCurrentStep || '').trim();
+    const hasCourierException = EXCEPTION_STATUSES.has(mappedCourierStep || rawCourierStatus);
 
-    // Explicitly define statuses for each flow to prevent incorrect detection
     const returnStatuses = ['RETURN_REQUESTED', 'RETURN_PICKED_UP', 'REFUND_PROCESSED'];
     const replacementStatuses = ['REPLACEMENT_REQUESTED', 'REPLACEMENT_PICKED_UP', 'REPLACEMENT_SHIPPED', 'REPLACEMENT_DELIVERED'];
 
-    // Check for specific flows based on history or current status
-    const isReturnFlow = returnStatuses.includes(currentStatus) ||
-        targetItem?.trackingHistory?.some(t => returnStatuses.includes(t.status));
-
-    const isReplacementFlow = replacementStatuses.includes(currentStatus) ||
-        targetItem?.trackingHistory?.some(t => replacementStatuses.includes(t.status));
+    const isReturnFlow = returnStatuses.includes(currentStatus);
+    const isReplacementFlow = replacementStatuses.includes(currentStatus);
 
     const steps = isReturnFlow
-        ? [
-            { status: 'RETURN_REQUESTED', title: 'Return Requested', desc: 'We have received your return request' },
-            { status: 'RETURN_PICKED_UP', title: 'Picked Up', desc: 'Item has been picked up by our courier' },
-            { status: 'REFUND_PROCESSED', title: 'Refund Processed', desc: 'Refund has been initiated' }
-        ]
+        ? getReturnSteps()
         : isReplacementFlow
-            ? [
-                { status: 'REPLACEMENT_REQUESTED', title: 'Replacement Requested', desc: 'Replacement request is being processed' },
-                { status: 'REPLACEMENT_PICKED_UP', title: 'Item Picked Up', desc: 'Old item has been picked up' },
-                { status: 'REPLACEMENT_SHIPPED', title: 'New Item Shipped', desc: 'Replacement item is on its way' },
-                { status: 'REPLACEMENT_DELIVERED', title: 'New Item Delivered', desc: 'Replacement has been delivered' }
-            ]
-            : [
-                { status: 'PLACED', title: 'Order Placed', desc: 'Your order has been placed', time: order.date },
-                { status: 'PACKED', title: 'Packed', desc: 'We are processing your order' },
-                { status: 'SHIPPED', title: 'Shipped', desc: 'Order has been handed over to courier' },
-                { status: 'OUT_FOR_DELIVERY', title: 'Out for Delivery', desc: 'Your order is arriving today' },
-                { status: 'DELIVERED', title: 'Delivered', desc: 'Order has been delivered' }
-            ];
+            ? getReplacementSteps()
+            : getOrderSteps();
 
-    // Map DELIVERED to REPLACEMENT_DELIVERED if in replacement flow to fix legacy/corner cases
-    const effectiveStatus = (isReplacementFlow && (currentStatus === 'DELIVERED')) ? 'REPLACEMENT_DELIVERED' : (currentStatus || order.status);
-    const currentStatusIdx = steps.findIndex(s => s.status === effectiveStatus);
+    const effectiveStatus = (() => {
+        if (isReplacementFlow && normalizedCurrentStatus === 'Delivered') {
+            return 'REPLACEMENT_DELIVERED';
+        }
 
-    // Auto-cancellation for testing purposes
-    const updateStatus = useCartStore(state => state.updateOrderStatus);
+        if (isReturnFlow || isReplacementFlow) {
+            return normalizedCurrentStatus;
+        }
+
+        if (hasCourierException) {
+            return mappedCourierStep || rawCourierStatus;
+        }
+
+        if (mappedCourierStep) {
+            return mappedCourierStep;
+        }
+
+        if (normalizedCurrentStatus === 'Delivered') return 'Delivered';
+        if (normalizedCurrentStatus === 'Confirmed') return 'Confirmed';
+        return 'Pending';
+    })();
+
+    const currentStatusIdx = steps.findIndex((step) => step.status === effectiveStatus);
+
+    const getStepTime = (stepStatus, stepIndex) => {
+        if (isReturnFlow || isReplacementFlow) {
+            return '';
+        }
+
+        if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt || order?.date);
+        if (stepStatus === 'Confirmed') return formatTrackingDate(order?.delhivery?.syncedAt);
+        if (trackingData?.stepTimes?.[stepStatus]) {
+            return formatTrackingDate(trackingData.stepTimes[stepStatus]);
+        }
+        if (stepStatus === 'Delivered') return formatTrackingDate(order?.deliveredAt);
+
+        return stepIndex < currentStatusIdx ? '' : '';
+    };
+
     const handleCancel = () => {
         confirmToast({
             message: 'Are you sure you want to cancel this order?',
             type: 'danger',
             icon: 'cancel',
             confirmText: 'Cancel Order',
-            onConfirm: () => updateStatus(order.id, 'CANCELLED')
+            onConfirm: async () => {
+                try {
+                    toast.loading('Cancelling order...', { id: 'track-order-cancel' });
+                    await API.post('/returns', {
+                        orderId,
+                        type: 'Cancellation',
+                        reason: 'User requested cancellation'
+                    });
+                    toast.success('Cancellation request submitted', { id: 'track-order-cancel' });
+                    await fetchOrder();
+                } catch (err) {
+                    toast.error(err.response?.data?.message || 'Unable to cancel order', { id: 'track-order-cancel' });
+                }
+            }
         });
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white md:bg-[#f1f3f6] flex items-center justify-center">
+                <div className="w-14 h-14 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    if (!order) {
+        return <div className="p-10 text-center">{error || 'Order not found.'}</div>;
+    }
+
     return (
         <div className="bg-white min-h-screen md:bg-[#f1f3f6] md:py-6">
-
-            {/* Mobile Header - Hidden on Desktop */}
             <div className="bg-blue-600 text-white px-4 py-4 flex items-center gap-4 sticky top-0 z-50 shadow-md md:hidden">
                 <button
-                    onClick={() => {
-                        // If it's a specific product track, go back to order details, otherwise go to my orders
-                        if (productId) {
-                            navigate(`/my-orders/${orderId}`);
-                        } else {
-                            navigate('/my-orders');
-                        }
-                    }}
+                    onClick={() => navigate(productId ? `/my-orders/${orderId}` : '/my-orders')}
                     className="material-icons p-1 -ml-1 active:bg-white/10 rounded-full transition-colors cursor-pointer relative z-[60]"
                     style={{ pointerEvents: 'auto' }}
                 >
                     arrow_back
                 </button>
                 <div className="flex flex-col">
-                    <h1 className="text-sm font-bold uppercase tracking-tight">Tracking {productId ? (currentStatus?.includes('RETURN') ? 'Return' : 'Replacement') : 'Order'}</h1>
-                    <span className="text-[10px] text-white/80 uppercase">#{order.displayId || order.id}</span>
+                    <h1 className="text-sm font-bold uppercase tracking-tight">Tracking {productId ? 'Item' : 'Order'}</h1>
+                    <span className="text-[10px] text-white/80 uppercase">#{order.displayId || order._id}</span>
                 </div>
             </div>
 
-            {/* Desktop Container */}
-            <div className="md:max-w-[800px] md:mx-auto">
-
-                {/* Desktop Breadcrumbs */}
+            <div className="md:max-w-[900px] md:mx-auto">
                 <div className="hidden md:flex items-center gap-2 text-xs text-gray-500 mb-4 px-4">
                     <span onClick={() => navigate('/')} className="cursor-pointer hover:text-blue-600">Home</span>
                     <span className="material-icons text-[10px]">chevron_right</span>
@@ -117,10 +242,7 @@ const TrackOrder = () => {
                     <span className="text-gray-800 font-bold">Track Order</span>
                 </div>
 
-                {/* Main Card (Desktop) / Wrapper (Mobile) */}
                 <div className="md:bg-white md:rounded-lg md:shadow-sm md:overflow-hidden md:border md:border-gray-200">
-
-                    {/* Product Info Header */}
                     <div className="p-4 border-b md:bg-gray-50">
                         <div className="flex gap-4">
                             <div className="w-16 h-16 bg-gray-50 rounded border p-1 md:bg-white">
@@ -128,57 +250,58 @@ const TrackOrder = () => {
                             </div>
                             <div className="flex-1">
                                 <h2 className="text-sm font-bold text-gray-800 line-clamp-1 md:text-base">{targetItem?.name}</h2>
-                                <p className="text-xs text-gray-500 mt-1 md:text-sm">Status: <span className="text-blue-600 font-bold uppercase tracking-tighter">{currentStatus?.replace(/_/g, ' ')}</span></p>
-                                <p className="text-[10px] text-gray-400 mt-1 hidden md:block">Order ID: {order.displayId || order.id}</p>
+                                <p className="text-xs text-gray-500 mt-1 md:text-sm">
+                                    Status: <span className="text-blue-600 font-bold uppercase tracking-tighter">{String(effectiveStatus || currentStatus || order.status || '').replace(/_/g, ' ')}</span>
+                                </p>
+                                <p className="text-[10px] text-gray-400 mt-1 hidden md:block">Order ID: {order.displayId || order._id}</p>
                             </div>
                         </div>
                     </div>
 
                     <div className="p-6 md:p-8">
                         <div className="relative md:pl-4">
-                            {/* Vertical Line Background */}
                             <div className="absolute left-[9px] md:left-[25px] top-2 bottom-2 w-0.5 bg-gray-100">
-                                {/* Dynamic Green Line */}
-                                {order.status !== 'CANCELLED' && (
+                                {order.status !== 'Cancelled' && currentStatusIdx > 0 ? (
                                     <div
                                         className="w-full bg-green-600 transition-all duration-1000 ease-in-out"
                                         style={{
-                                            height: `${currentStatusIdx <= 0 ? 0 : (currentStatusIdx / (steps.length - 1)) * 100}%`
+                                            height: `${(currentStatusIdx / Math.max(steps.length - 1, 1)) * 100}%`
                                         }}
-                                    ></div>
-                                )}
+                                    />
+                                ) : null}
                             </div>
 
                             <div className="space-y-10">
-                                {order.status === 'CANCELLED' ? (
+                                {order.status === 'Cancelled' || hasCourierException ? (
                                     <div className="flex gap-6 relative">
                                         <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center z-10 md:w-6 md:h-6">
                                             <span className="material-icons text-white text-[12px] md:text-[14px]">close</span>
                                         </div>
                                         <div className="flex-1 -mt-1 md:mt-0">
-                                            <h3 className="text-sm font-bold text-red-600 md:text-base">Order Cancelled</h3>
-                                            <p className="text-xs text-gray-500 mt-0.5 md:text-sm">This order was cancelled.</p>
-                                            {order.tracking?.find(t => t.status === 'CANCELLED') && (
-                                                <p className="text-[10px] text-gray-400 mt-1 md:text-xs">{new Date(order.tracking.find(t => t.status === 'CANCELLED').time).toLocaleString()}</p>
-                                            )}
+                                            <h3 className="text-sm font-bold text-red-600 md:text-base">
+                                                {hasCourierException ? `Courier Status: ${mappedCourierStep || rawCourierStatus}` : 'Order Cancelled'}
+                                            </h3>
+                                            <p className="text-xs text-gray-500 mt-0.5 md:text-sm">
+                                                {hasCourierException ? 'This update came directly from Delhivery tracking.' : 'This order was cancelled.'}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400 mt-1 md:text-xs">
+                                                {formatTrackingDate(trackingData?.lastUpdatedAt || order.updatedAt || order.createdAt)}
+                                            </p>
                                         </div>
                                     </div>
                                 ) : (
                                     steps.map((step, idx) => {
-                                        const isCompleted = idx < currentStatusIdx;
-                                        const isCurrent = idx === currentStatusIdx;
-                                        const trackingEntry = (productId && targetItem?.trackingHistory?.some(t => t.status === step.status))
-                                            ? targetItem.trackingHistory.find(t => t.status === step.status)
-                                            : order.tracking?.find(t => t.status === step.status);
+                                        const timestamp = getStepTime(step.status, idx);
+                                        const isCompleted = Boolean(timestamp) || currentStatusIdx > idx;
+                                        const isCurrent = currentStatusIdx === idx;
 
                                         return (
-                                            <div key={idx} className="flex gap-6 relative">
+                                            <div key={step.status} className="flex gap-6 relative">
                                                 <div className="relative">
-                                                    {isCurrent && (
-                                                        <div className="absolute -inset-1 bg-green-400 rounded-full animate-ping opacity-40"></div>
-                                                    )}
-                                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center z-10 relative md:w-6 md:h-6 ${isCompleted || isCurrent ? 'bg-green-600' : 'bg-gray-200'
-                                                        }`}>
+                                                    {isCurrent ? (
+                                                        <div className="absolute -inset-1 bg-green-400 rounded-full animate-ping opacity-40" />
+                                                    ) : null}
+                                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center z-10 relative md:w-6 md:h-6 ${isCompleted || isCurrent ? 'bg-green-600' : 'bg-gray-200'}`}>
                                                         <span className="material-icons text-white text-[12px] md:text-[14px]">
                                                             {isCompleted ? 'check' : isCurrent ? 'radio_button_checked' : 'radio_button_unchecked'}
                                                         </span>
@@ -189,13 +312,11 @@ const TrackOrder = () => {
                                                         {step.title}
                                                     </h3>
                                                     <p className="text-xs text-gray-500 mt-0.5 md:text-sm">{step.desc}</p>
-                                                    {trackingEntry ? (
-                                                        <p className="text-[10px] text-gray-400 mt-1 animate-in fade-in duration-500 md:text-xs">
-                                                            {new Date(trackingEntry.time).toLocaleString()}
-                                                        </p>
+                                                    {timestamp ? (
+                                                        <p className="text-[10px] text-gray-400 mt-1 md:text-xs">{timestamp}</p>
                                                     ) : isCurrent ? (
                                                         <div className="flex items-center gap-1.5 mt-1">
-                                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                                                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                                                             <p className="text-[10px] text-blue-500 font-bold uppercase tracking-wider md:text-xs">In Progress...</p>
                                                         </div>
                                                     ) : null}
@@ -207,7 +328,7 @@ const TrackOrder = () => {
                             </div>
                         </div>
 
-                        {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
+                        {!productId && !['Delivered', 'Cancelled'].includes(normalizeOrderStatus(order.status)) && !hasCourierException ? (
                             <div className="mt-10 pt-6 border-t md:hidden">
                                 <button
                                     onClick={handleCancel}
@@ -217,9 +338,101 @@ const TrackOrder = () => {
                                     Cancel Order
                                 </button>
                             </div>
-                        )}
+                        ) : null}
                     </div>
                 </div>
+
+                {(order.delhivery?.waybill || trackingLoading || trackingError) ? (
+                    <div className="m-4 p-4 bg-white rounded-xl border border-gray-200 md:mx-0 md:mt-6 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-sm font-bold text-gray-900">Live Courier Tracking</p>
+                                <p className="text-[11px] text-gray-500">Real-time status from Delhivery API after confirmation</p>
+                            </div>
+                            {order.delhivery?.waybill ? (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        try {
+                                            setTrackingLoading(true);
+                                            setTrackingError('');
+                                            const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                                            setTrackingData(data?.tracking || null);
+                                        } catch (err) {
+                                            setTrackingData(null);
+                                            setTrackingError(err.response?.data?.message || 'Unable to refresh courier status');
+                                        } finally {
+                                            setTrackingLoading(false);
+                                        }
+                                    }}
+                                    className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-blue-600"
+                                >
+                                    {trackingLoading ? 'Refreshing...' : 'Refresh'}
+                                </button>
+                            ) : null}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Waybill</p>
+                                <p className="mt-1 text-sm font-black text-gray-900">{order.delhivery?.waybill || 'Pending'}</p>
+                            </div>
+                            <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Courier Step</p>
+                                <p className="mt-1 text-sm font-black text-emerald-700 uppercase">{mappedCourierStep || 'Awaiting live update'}</p>
+                            </div>
+                            <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Last Updated</p>
+                                <p className="mt-1 text-sm font-black text-gray-900">{formatTrackingDate(trackingData?.lastUpdatedAt) || 'Pending'}</p>
+                            </div>
+                        </div>
+
+                        {rawCourierStatus ? (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Raw Delhivery Status</p>
+                                <p className="mt-1 text-sm font-semibold text-blue-900">{rawCourierStatus}</p>
+                            </div>
+                        ) : null}
+
+                        {trackingData?.currentLocation ? (
+                            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700">Current Location</p>
+                                <p className="mt-1 text-sm font-semibold text-emerald-900">{trackingData.currentLocation}</p>
+                            </div>
+                        ) : null}
+
+                        {trackingLoading ? (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-600">
+                                Fetching live Delhivery status...
+                            </div>
+                        ) : null}
+
+                        {trackingError ? (
+                            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm font-semibold text-amber-700">
+                                {trackingError}
+                            </div>
+                        ) : null}
+
+                        {trackingData?.scans?.length ? (
+                            <div className="space-y-3">
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-500">Tracking Updates</p>
+                                <div className="space-y-2">
+                                    {trackingData.scans.slice(0, 6).map((scan, index) => (
+                                        <div key={`${scan.time || scan.status}-${index}`} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <p className="text-sm font-black text-gray-900 uppercase">{scan.status || 'Update received'}</p>
+                                                    <p className="mt-1 text-xs text-gray-600">{scan.location || 'Location not available'}</p>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 font-bold text-right">{formatTrackingDate(scan.time) || 'Pending'}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
 
                 <div className="m-4 p-4 bg-blue-50 rounded-xl border border-blue-100 md:mx-0 md:mt-6">
                     <div className="flex items-center gap-3">
@@ -235,11 +448,11 @@ const TrackOrder = () => {
                 </div>
 
                 <div className="px-6 py-4 mt-4 border-t md:bg-white md:rounded-lg md:shadow-sm md:border md:border-gray-200 md:px-6 md:py-6">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Couriers details</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Courier details</h4>
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-bold text-gray-800">Ekart Logistics</p>
-                            <p className="text-xs text-gray-500 uppercase mt-0.5">AWB: {order.id.slice(2)}</p>
+                            <p className="text-sm font-bold text-gray-800">Delhivery</p>
+                            <p className="text-xs text-gray-500 uppercase mt-0.5">AWB: {order.delhivery?.waybill || 'Pending'}</p>
                         </div>
                         <span className="material-icons text-gray-400">chevron_right</span>
                     </div>

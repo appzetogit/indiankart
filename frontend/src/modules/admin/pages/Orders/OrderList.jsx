@@ -45,11 +45,12 @@ const OrderList = () => {
 
                 const { data } = await API.get('/orders', { params });
 
-                const transformOrder = (order) => {
+                const transformOrder = (order, liveStatus = '') => {
                     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
+                    const effectiveStatus = String(liveStatus || normalizedOrderStatus || '').trim() || 'Pending';
                     const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
                     const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
-                    const paymentStatus = normalizedOrderStatus === 'Delivered'
+                    const paymentStatus = effectiveStatus === 'Delivered'
                         ? 'Completed'
                         : (order.isPaid || isPaymentSuccessByGateway ? 'Paid' : 'Pending');
 
@@ -69,16 +70,47 @@ const OrderList = () => {
                             method: order.paymentMethod || 'COD',
                             status: paymentStatus
                         },
-                        status: normalizedOrderStatus
+                        status: effectiveStatus,
+                        baseStatus: normalizedOrderStatus
                     };
                 };
 
                 if (data.orders) {
-                    setLocalOrders(data.orders.map(transformOrder));
+                    const liveStatuses = await Promise.all(
+                        data.orders.map(async (order) => {
+                            if (!order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                                return '';
+                            }
+
+                            try {
+                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
+                            } catch (error) {
+                                return '';
+                            }
+                        })
+                    );
+
+                    setLocalOrders(data.orders.map((order, index) => transformOrder(order, liveStatuses[index])));
                     setTotalPages(data.pages);
                     setTotalOrders(data.total);
                 } else {
-                    setLocalOrders(Array.isArray(data) ? data.map(transformOrder) : []);
+                    const liveStatuses = await Promise.all(
+                        (Array.isArray(data) ? data : []).map(async (order) => {
+                            if (!order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                                return '';
+                            }
+
+                            try {
+                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
+                            } catch (error) {
+                                return '';
+                            }
+                        })
+                    );
+
+                    setLocalOrders(Array.isArray(data) ? data.map((order, index) => transformOrder(order, liveStatuses[index])) : []);
                 }
             } catch (error) {
                 console.error(error);
@@ -100,8 +132,11 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'Confirmed': return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'Packed': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+            case 'Manifested': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
+            case 'Not Picked': return 'bg-sky-50 text-sky-600 border-sky-100';
+            case 'Scheduled': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
             case 'Dispatched': return 'bg-purple-50 text-purple-600 border-purple-100';
+            case 'In Transit': return 'bg-violet-50 text-violet-600 border-violet-100';
             case 'Out for Delivery': return 'bg-orange-50 text-orange-600 border-orange-100';
             case 'Delivered': return 'bg-green-50 text-green-600 border-green-100';
             case 'Cancelled': return 'bg-red-50 text-red-600 border-red-100';
@@ -113,8 +148,11 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return <MdPendingActions size={14} />;
             case 'Confirmed': return <MdCheckCircle size={14} />;
-            case 'Packed': return <MdPendingActions size={14} />;
+            case 'Manifested': return <MdLocalShipping size={14} />;
+            case 'Not Picked': return <MdPendingActions size={14} />;
+            case 'Scheduled': return <MdPendingActions size={14} />;
             case 'Dispatched': return <MdLocalShipping size={14} />;
+            case 'In Transit': return <MdLocalShipping size={14} />;
             case 'Out for Delivery': return <MdLocalShipping size={14} />;
             case 'Delivered': return <MdCheckCircle size={14} />;
             case 'Cancelled': return <MdCancel size={14} />;
@@ -134,7 +172,7 @@ const OrderList = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
                 <div>
                     <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight">Order Management</h1>
-                    <p className="text-xs md:text-sm text-gray-500 font-medium italic">Monitor sales and update fulfillment status ({filteredOrders.length} total)</p>
+                    <p className="text-xs md:text-sm text-gray-500 font-medium italic">Monitor sales and live fulfillment progress ({filteredOrders.length} total)</p>
                 </div>
             </div>
 
@@ -166,8 +204,11 @@ const OrderList = () => {
                         <option value="All">All Statuses</option>
                         <option value="Pending">Pending</option>
                         <option value="Confirmed">Confirmed</option>
-                        <option value="Packed">Packed</option>
+                        <option value="Manifested">Manifested</option>
+                        <option value="Not Picked">Not Picked</option>
+                        <option value="Scheduled">Scheduled</option>
                         <option value="Dispatched">Dispatched</option>
+                        <option value="In Transit">In Transit</option>
                         <option value="Out for Delivery">Out for Delivery</option>
                         <option value="Delivered">Delivered</option>
                         <option value="Cancelled">Cancelled</option>

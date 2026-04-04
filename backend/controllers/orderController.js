@@ -4,6 +4,20 @@ import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
+import { createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
+
+const isOrderAccessibleByUser = (order, user) => {
+    const orderUserId = order?.user?.toString();
+    const currentUserId = user?._id?.toString();
+    const isAdmin = Boolean(user && (user.isAdmin || ['admin', 'superadmin', 'editor', 'moderator'].includes(user.role)));
+
+    return {
+        orderUserId,
+        currentUserId,
+        isAdmin,
+        isAllowed: orderUserId === currentUserId || isAdmin
+    };
+};
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -233,14 +247,12 @@ export const getOrderById = async (req, res) => {
             // Authorize against the raw stored owner id before attempting population.
             // This keeps ownership checks working even for special/bypass users
             // whose referenced user document may not exist in the Users collection.
-            const orderUserId = order.user?.toString();
-            const currentUserId = req.user?._id?.toString();
-            const isAdmin = req.user && (req.user.isAdmin || ['admin', 'superadmin', 'editor', 'moderator'].includes(req.user.role));
+            const { orderUserId, currentUserId, isAdmin, isAllowed } = isOrderAccessibleByUser(order, req.user);
 
             console.log(`Checking Order Auth: OrderOwner=${orderUserId}, RequestUser=${currentUserId}, isAdmin=${isAdmin}`);
 
             // Check if it's the owner or an admin
-            if (orderUserId === currentUserId || isAdmin) {
+            if (isAllowed) {
                 await order.populate('user', 'name email phone');
                 res.json(order);
             } else {
@@ -258,6 +270,41 @@ export const getOrderById = async (req, res) => {
             return res.status(400).json({ message: 'Invalid order ID format' });
         }
         res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get live Delhivery tracking for an order
+// @route   GET /api/orders/:id/delhivery-tracking
+// @access  Private
+export const getOrderDelhiveryTracking = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const { isAllowed } = isOrderAccessibleByUser(order, req.user);
+        if (!isAllowed) {
+            return res.status(401).json({ message: 'Not authorized to view this order tracking' });
+        }
+
+        if (!order.delhivery?.waybill) {
+            return res.status(400).json({ message: 'Delhivery shipment has not been created for this order yet.' });
+        }
+
+        const tracking = await fetchDelhiveryTracking(order);
+
+        return res.json({
+            orderId: order._id,
+            displayId: order.displayId,
+            status: order.status,
+            waybill: order.delhivery.waybill,
+            tracking
+        });
+    } catch (error) {
+        console.error(`Get order Delhivery tracking error [ID: ${req.params.id}]:`, error);
+        return res.status(500).json({ message: error.message || 'Failed to fetch Delhivery tracking' });
     }
 };
 
@@ -381,6 +428,7 @@ export const updateOrderStatus = async (req, res) => {
                 }
             }
 
+            const wasConfirmedBefore = order.status === 'Confirmed';
             order.status = status;
             if (status === 'Delivered') {
                 order.isDelivered = true;
@@ -401,6 +449,33 @@ export const updateOrderStatus = async (req, res) => {
 
             if (status === 'Cancelled') {
                 await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
+            }
+
+            if (status === 'Confirmed' && !wasConfirmedBefore && !order.delhivery?.waybill) {
+                try {
+                    const shipment = await createDelhiveryShipment(order);
+                    order.delhivery = {
+                        ...order.delhivery,
+                        waybill: shipment.waybill || '',
+                        providerOrderId: shipment.providerOrderId,
+                        pickupLocation: shipment.pickupLocation,
+                        syncedAt: new Date(),
+                        requestPayload: shipment.requestPayload,
+                        responsePayload: shipment.responsePayload,
+                        lastError: ''
+                    };
+                } catch (error) {
+                    order.delhivery = {
+                        ...order.delhivery,
+                        waybill: '',
+                        lastError: error.message || 'Failed to create Delhivery shipment'
+                    };
+                    order.status = 'Pending';
+                    await order.save();
+                    return res.status(400).json({
+                        message: error.message || 'Failed to create Delhivery shipment'
+                    });
+                }
             }
 
             const updatedOrder = await order.save();

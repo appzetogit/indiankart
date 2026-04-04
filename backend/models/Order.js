@@ -102,6 +102,15 @@ const orderSchema = mongoose.Schema({
         default: 'Pending',
         enum: ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Requested']
     },
+    delhivery: {
+        waybill: { type: String, default: '' },
+        providerOrderId: { type: String, default: '' },
+        pickupLocation: { type: String, default: '' },
+        syncedAt: { type: Date },
+        requestPayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        responsePayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        lastError: { type: String, default: '' }
+    }
 }, {
     timestamps: true,
 });

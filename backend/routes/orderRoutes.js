@@ -5,7 +5,8 @@ import {
     getOrders,
     getMyOrders,
     getOrderById,
-    updateOrderStatus
+    updateOrderStatus,
+    getOrderDelhiveryTracking
 } from '../controllers/orderController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
@@ -17,6 +18,8 @@ router.route('/myorders').get(protect, getMyOrders); // User's own orders
 
 router.route('/:id')
     .get(protect, getOrderById); // Get specific order
+
+router.route('/:id/delhivery-tracking').get(protect, getOrderDelhiveryTracking);
 
 router.route('/:id/status').put(protect, admin, updateOrderStatus);
 

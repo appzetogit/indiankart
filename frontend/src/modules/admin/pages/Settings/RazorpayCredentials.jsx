@@ -8,7 +8,10 @@ const RazorpayCredentials = () => {
     const [form, setForm] = useState({
         razorpayKeyId: '',
         razorpayKeySecret: '',
-        deliveryApi: ''
+        deliveryApi: '',
+        delhiveryClientName: '',
+        delhiveryPickupLocation: '',
+        delhiveryToken: ''
     });
 
     useEffect(() => {
@@ -18,7 +21,10 @@ const RazorpayCredentials = () => {
                 setForm({
                     razorpayKeyId: data?.razorpayKeyId || '',
                     razorpayKeySecret: '',
-                    deliveryApi: data?.deliveryApi || ''
+                    deliveryApi: data?.deliveryApi || 'https://track.delhivery.com',
+                    delhiveryClientName: data?.delhiveryClientName || '',
+                    delhiveryPickupLocation: data?.delhiveryPickupLocation || '',
+                    delhiveryToken: ''
                 });
             } catch (error) {
                 console.error('Failed to fetch API credentials:', error);
@@ -45,6 +51,9 @@ const RazorpayCredentials = () => {
             data.append('razorpayKeyId', form.razorpayKeyId.trim());
             data.append('razorpayKeySecret', form.razorpayKeySecret);
             data.append('deliveryApi', form.deliveryApi.trim());
+            data.append('delhiveryClientName', form.delhiveryClientName.trim());
+            data.append('delhiveryPickupLocation', form.delhiveryPickupLocation.trim());
+            data.append('delhiveryToken', form.delhiveryToken);
 
             const res = await API.put('/settings', data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
@@ -53,7 +62,10 @@ const RazorpayCredentials = () => {
             setForm({
                 razorpayKeyId: res.data?.razorpayKeyId || '',
                 razorpayKeySecret: '',
-                deliveryApi: res.data?.deliveryApi || ''
+                deliveryApi: res.data?.deliveryApi || 'https://track.delhivery.com',
+                delhiveryClientName: res.data?.delhiveryClientName || '',
+                delhiveryPickupLocation: res.data?.delhiveryPickupLocation || '',
+                delhiveryToken: ''
             });
             toast.success('API credentials updated');
         } catch (error) {
@@ -71,9 +83,13 @@ const RazorpayCredentials = () => {
     return (
         <div className="p-6 md:p-8 bg-gray-50 min-h-screen">
             <h1 className="text-2xl md:text-3xl font-black text-gray-900 mb-2 tracking-tight">API Credentials</h1>
-            <p className="text-gray-500 mb-8 font-medium">Manage payment and delivery integration credentials from one place.</p>
+            <p className="text-gray-500 mb-8 font-medium">Manage payment and Delhivery shipping integration credentials from one place.</p>
 
             <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 max-w-2xl space-y-6">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-800">Razorpay</h2>
+                    <p className="mt-1 text-xs text-gray-500">Online payment keys for checkout.</p>
+                </div>
                 <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
                         Razorpay Key ID
@@ -107,7 +123,7 @@ const RazorpayCredentials = () => {
 
                 <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Delivery API
+                        Delhivery API Base URL
                     </label>
                     <input
                         type="text"
@@ -115,8 +131,58 @@ const RazorpayCredentials = () => {
                         value={form.deliveryApi}
                         onChange={handleChange}
                         className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="Enter delivery API URL or key"
+                        placeholder="https://track.delhivery.com"
                     />
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-800">Delhivery Shipping</h2>
+                    <p className="mt-1 text-xs text-gray-500">Shipment will be created when admin marks an order as Confirmed.</p>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
+                        Delhivery Client Name
+                    </label>
+                    <input
+                        type="text"
+                        name="delhiveryClientName"
+                        value={form.delhiveryClientName}
+                        onChange={handleChange}
+                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
+                        placeholder="Your Delhivery client / seller name"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
+                        Delhivery Pickup Location
+                    </label>
+                    <input
+                        type="text"
+                        name="delhiveryPickupLocation"
+                        value={form.delhiveryPickupLocation}
+                        onChange={handleChange}
+                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
+                        placeholder="Exact pickup location name from Delhivery panel"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
+                        Delhivery Token
+                    </label>
+                    <input
+                        type="password"
+                        name="delhiveryToken"
+                        value={form.delhiveryToken}
+                        onChange={handleChange}
+                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
+                        placeholder="Leave blank to keep existing Delhivery token"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                        Stored token is hidden for security. Enter only when you want to update it.
+                    </p>
                 </div>
 
                 <div className="pt-2">

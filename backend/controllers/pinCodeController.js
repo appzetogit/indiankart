@@ -6,11 +6,11 @@ import { Readable } from 'stream';
 // @route   POST /api/pincodes
 // @access  Private/Admin
 const addPinCode = async (req, res) => {
-    const { code, deliveryTime, unit, isCOD } = req.body;
+    const { code, isCOD } = req.body;
 
     // Validate inputs
-    if (!code || !deliveryTime || !unit) {
-        return res.status(400).json({ message: 'Please provide all fields' });
+    if (!code) {
+        return res.status(400).json({ message: 'Please provide pincode' });
     }
 
     const pinCodeExists = await PinCode.findOne({ code });
@@ -21,8 +21,6 @@ const addPinCode = async (req, res) => {
 
     const pinCode = await PinCode.create({
         code,
-        deliveryTime,
-        unit,
         isCOD: isCOD !== undefined ? isCOD : true
     });
 
@@ -66,10 +64,8 @@ const checkPinCode = async (req, res) => {
         if (pinCode && pinCode.isActive) {
             res.json({
                 isServiceable: true,
-                deliveryTime: pinCode.deliveryTime,
-                unit: pinCode.unit,
                 isCOD: pinCode.isCOD,
-                message: `Delivered in ${pinCode.deliveryTime} ${pinCode.unit}`
+                message: 'Deliverable to this location'
             });
         } else {
             res.json({
@@ -87,13 +83,11 @@ const checkPinCode = async (req, res) => {
 // @route   PUT /api/pincodes/:id
 // @access  Private/Admin
 const updatePinCode = async (req, res) => {
-    const { code, deliveryTime, unit, isCOD } = req.body;
+    const { code, isCOD } = req.body;
     const pinCode = await PinCode.findById(req.params.id);
 
     if (pinCode) {
         pinCode.code = code || pinCode.code;
-        pinCode.deliveryTime = deliveryTime || pinCode.deliveryTime;
-        pinCode.unit = unit || pinCode.unit;
         if (isCOD !== undefined) pinCode.isCOD = isCOD;
 
         const updatedPinCode = await pinCode.save();
@@ -202,26 +196,12 @@ const bulkImportPinCodes = async (req, res) => {
 
             // Flexible column matching
             const pincode = getValueFromRow(row, ['Pincode', 'pincode', 'code', 'Code', 'PIN', 'pin']);
-            const deliveryTime = getValueFromRow(row, ['DeliveryTime', 'deliveryTime', 'Delivery Time', 'delivery_time', 'Time']);
-            const unit = getValueFromRow(row, ['Unit', 'unit', 'Units']) || 'days';
             const isCODVal = getValueFromRow(row, ['isCOD', 'COD', 'cod', 'CashOnDelivery']);
             const isCOD = ['false', 'no', '0'].includes(String(isCODVal).toLowerCase()) ? false : true;
 
             // Validate row data
-            if (!pincode || !deliveryTime) {
-                results.errors.push(`Row ${rowNumber}: Missing pincode or delivery time`);
-                continue;
-            }
-
-            const deliveryTimeNumber = Number(deliveryTime);
-            if (!Number.isFinite(deliveryTimeNumber) || deliveryTimeNumber <= 0) {
-                results.errors.push(`Row ${rowNumber}: Invalid delivery time`);
-                continue;
-            }
-
-            const normalizedUnit = String(unit).toLowerCase();
-            if (!['minutes', 'hours', 'days'].includes(normalizedUnit)) {
-                results.errors.push(`Row ${rowNumber}: Unit must be minutes, hours, or days`);
+            if (!pincode) {
+                results.errors.push(`Row ${rowNumber}: Missing pincode`);
                 continue;
             }
 
@@ -235,8 +215,6 @@ const bulkImportPinCodes = async (req, res) => {
             try {
                 await PinCode.create({
                     code: String(pincode).trim(),
-                    deliveryTime: deliveryTimeNumber,
-                    unit: normalizedUnit,
                     isCOD: isCOD
                 });
                 results.successful++;

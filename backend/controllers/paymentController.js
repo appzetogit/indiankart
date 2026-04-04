@@ -149,7 +149,7 @@ export const testRazorpayCredentials = async (req, res) => {
                 success: false,
                 message: 'Razorpay credentials are missing',
                 keyId: keyId || '',
-                hint: 'Save Razorpay Key ID and Key Secret in Admin > Razorpay Credentials'
+                hint: 'Save Razorpay Key ID and Key Secret in Admin > API Credentials'
             });
         }
 
@@ -186,7 +186,7 @@ export const testRazorpayCredentials = async (req, res) => {
             message: "Razorpay credentials are invalid or there's an API issue",
             error: error.message,
             keyId,
-            hint: 'Please check your Razorpay keys in Admin > Razorpay Credentials'
+            hint: 'Please check your Razorpay keys in Admin > API Credentials'
         });
     }
 };

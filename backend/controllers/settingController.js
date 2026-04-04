@@ -41,6 +41,9 @@ const updateSettings = async (req, res) => {
             razorpayKeyId,
             razorpayKeySecret,
             deliveryApi,
+            delhiveryClientName,
+            delhiveryPickupLocation,
+            delhiveryToken,
             shippingCharge,
             freeShippingThreshold,
             minShippingOrderAmount,
@@ -88,6 +91,15 @@ const updateSettings = async (req, res) => {
             if (deliveryApi !== undefined) {
                 settings.deliveryApi = String(deliveryApi || '').trim();
             }
+            if (delhiveryClientName !== undefined) {
+                settings.delhiveryClientName = String(delhiveryClientName || '').trim();
+            }
+            if (delhiveryPickupLocation !== undefined) {
+                settings.delhiveryPickupLocation = String(delhiveryPickupLocation || '').trim();
+            }
+            if (typeof delhiveryToken === 'string' && delhiveryToken.trim()) {
+                settings.delhiveryToken = delhiveryToken.trim();
+            }
             if (shippingCharge !== undefined) {
                 const parsed = Number(shippingCharge);
                 if (Number.isFinite(parsed) && parsed >= 0) settings.shippingCharge = parsed;
@@ -130,6 +142,9 @@ const updateSettings = async (req, res) => {
                 razorpayKeyId: razorpayKeyId || '',
                 razorpayKeySecret: (typeof razorpayKeySecret === 'string' ? razorpayKeySecret.trim() : '') || '',
                 deliveryApi: typeof deliveryApi === 'string' ? deliveryApi.trim() : '',
+                delhiveryClientName: typeof delhiveryClientName === 'string' ? delhiveryClientName.trim() : '',
+                delhiveryPickupLocation: typeof delhiveryPickupLocation === 'string' ? delhiveryPickupLocation.trim() : '',
+                delhiveryToken: (typeof delhiveryToken === 'string' ? delhiveryToken.trim() : '') || '',
                 shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
                 freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
                 minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,

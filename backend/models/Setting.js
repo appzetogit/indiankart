@@ -17,6 +17,9 @@ const settingSchema = mongoose.Schema({
     razorpayKeyId: { type: String, default: '' },
     razorpayKeySecret: { type: String, default: '', select: false },
     deliveryApi: { type: String, default: '' },
+    delhiveryClientName: { type: String, default: '' },
+    delhiveryPickupLocation: { type: String, default: '' },
+    delhiveryToken: { type: String, default: '', select: false },
     categoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, {
     timestamps: true,

@@ -7,6 +7,7 @@ const MyOrders = () => {
     const navigate = useNavigate();
     
     const [orders, setOrders] = useState([]);
+    const [liveStatuses, setLiveStatuses] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
@@ -22,6 +23,21 @@ const MyOrders = () => {
             setLoading(true);
             const { data } = await API.get('/orders/myorders');
             setOrders(data);
+            const liveStatusEntries = await Promise.all(
+                (Array.isArray(data) ? data : []).map(async (order) => {
+                    if (!order?.delhivery?.waybill) {
+                        return [String(order?._id || ''), ''];
+                    }
+
+                    try {
+                        const { data: trackingResponse } = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                        return [String(order._id), String(trackingResponse?.tracking?.currentStatus || '').trim()];
+                    } catch (trackingError) {
+                        return [String(order._id), ''];
+                    }
+                })
+            );
+            setLiveStatuses(Object.fromEntries(liveStatusEntries));
             setCurrentPage(1);
             setError(null);
         } catch (err) {
@@ -36,11 +52,18 @@ const MyOrders = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
-            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+            'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+            'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
+            'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+            'Scheduled': 'bg-sky-100 text-sky-800 border-sky-200',
             'Dispatched': 'bg-purple-100 text-purple-800 border-purple-200',
+            'In Transit': 'bg-violet-100 text-violet-800 border-violet-200',
             'Out for Delivery': 'bg-orange-100 text-orange-800 border-orange-200',
             'Delivered': 'bg-green-100 text-green-800 border-green-200',
+            'Collected': 'bg-green-100 text-green-800 border-green-200',
             'Cancelled': 'bg-red-100 text-red-800 border-red-200',
+            'RTO': 'bg-red-100 text-red-800 border-red-200',
+            'DTO': 'bg-red-100 text-red-800 border-red-200',
             'Return Requested': 'bg-orange-100 text-orange-800 border-orange-200',
             'Replacement Requested': 'bg-orange-100 text-orange-800 border-orange-200',
             'Approved': 'bg-teal-100 text-teal-800 border-teal-200',
@@ -59,11 +82,18 @@ const MyOrders = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
-            'Packed': 'inventory_2',
+            'Manifested': 'inventory_2',
+            'Not Picked': 'schedule',
+            'Picked Up': 'inventory_2',
+            'Scheduled': 'event',
             'Dispatched': 'local_shipping',
+            'In Transit': 'sync_alt',
             'Out for Delivery': 'delivery_dining',
             'Delivered': 'done_all',
+            'Collected': 'done_all',
             'Cancelled': 'cancel',
+            'RTO': 'keyboard_return',
+            'DTO': 'assignment_return',
             'Return Requested': 'assignment_return',
             'Replacement Requested': 'sync',
             'Approved': 'thumb_up',
@@ -76,6 +106,11 @@ const MyOrders = () => {
             'Return Rejected': 'cancel'
         };
         return icons[status] || 'info';
+    };
+
+    const getEffectiveOrderStatus = (order) => {
+        const liveStatus = String(liveStatuses[String(order?._id || '')] || '').trim();
+        return liveStatus || String(order?.status || '').trim();
     };
 
     const totalPages = Math.ceil(orders.length / ordersPerPage);
@@ -156,7 +191,9 @@ const MyOrders = () => {
                             </div>
                         </div>
 
-                        {paginatedOrders.map((order) => (
+                        {paginatedOrders.map((order) => {
+                            const effectiveStatus = getEffectiveOrderStatus(order);
+                            return (
                             <div 
                                 key={order._id} 
                                 className="bg-white rounded-lg shadow-md border-2 border-blue-100 overflow-hidden hover:shadow-xl transition-all cursor-pointer transform hover:-translate-y-1"
@@ -183,9 +220,9 @@ const MyOrders = () => {
                                                     })}
                                                 </p>
                                             </div>
-                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(order.status)}`}>
-                                                <span className="material-icons text-sm">{getStatusIcon(order.status)}</span>
-                                                {order.status}
+                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(effectiveStatus)}`}>
+                                                <span className="material-icons text-sm">{getStatusIcon(effectiveStatus)}</span>
+                                                {effectiveStatus}
                                             </span>
                                         </div>
                                     </div>
@@ -215,7 +252,7 @@ const MyOrders = () => {
                                                     </p>
 
                                                     {/* Serial Number / IMEI - Only if Delivered */}
-                                                    {(item.serialNumber && (order.status === 'Delivered' || order.isDelivered)) && (
+                                                    {(item.serialNumber && (effectiveStatus === 'Delivered' || order.isDelivered)) && (
                                                         <div className="mt-2">
                                                             <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-bold font-mono border border-blue-200 shadow-sm flex items-center gap-1 w-max">
                                                                 <span className="text-blue-400 select-none">{item.serialType === 'IMEI' ? 'IMEI:' : 'SN:'}</span> {item.serialNumber}
@@ -224,7 +261,7 @@ const MyOrders = () => {
                                                     )}
 
                                                     {/* Item Status Badge */}
-                                                    {item.status && item.status !== order.status && (
+                                                    {item.status && item.status !== effectiveStatus && (
                                                         <div className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(item.status)}`}>
                                                             <span className="material-icons text-[12px]">{getStatusIcon(item.status)}</span>
                                                             {item.status}
@@ -274,7 +311,7 @@ const MyOrders = () => {
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                        )})}
 
                         <Pagination
                             pages={totalPages}

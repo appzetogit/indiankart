@@ -8,15 +8,6 @@ const pinCodeSchema = mongoose.Schema({
         trim: true,
         index: true
     },
-    deliveryTime: {
-        type: Number,
-        required: true
-    },
-    unit: {
-        type: String,
-        enum: ['hours', 'days', 'minutes'],
-        default: 'days'
-    },
     isActive: {
         type: Boolean,
         default: true

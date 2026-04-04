@@ -109,6 +109,30 @@ const formatReturnTimelineDate = (value) => {
     });
 };
 
+const formatTrackingDate = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
+const formatExpectedDeliveryText = (value) => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return `Estimated delivery by ${parsed.toLocaleDateString('en-IN', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short'
+    })}`;
+};
+
 const isEligibleForNewReturnRequest = (status) => {
     const normalized = String(status || '').trim().toLowerCase();
 
@@ -137,6 +161,8 @@ const normalizeOrderStatus = (status = '') => {
     return value;
 };
 
+const EXCEPTION_STATUSES = new Set(['Cancelled', 'RTO', 'DTO', 'Collected']);
+
 const OrderDetails = () => {
     const { orderId } = useParams();
     const navigate = useNavigate();
@@ -145,6 +171,7 @@ const OrderDetails = () => {
     const [error, setError] = useState(null);
     const [settings, setSettings] = useState(null);
     const [myReturns, setMyReturns] = useState([]);
+    const [trackingData, setTrackingData] = useState(null);
     const [deliveryEstimate, setDeliveryEstimate] = useState({
         loading: false,
         isServiceable: null,
@@ -169,57 +196,48 @@ const OrderDetails = () => {
     }, []);
 
     useEffect(() => {
-        const delivered = normalizeOrderStatus(order?.status) === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
+        let cancelled = false;
+
+        const fetchTracking = async () => {
+            if (!order?.delhivery?.waybill) {
+                setTrackingData(null);
+                return;
+            }
+
+            try {
+                const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                if (cancelled) return;
+                setTrackingData(data?.tracking || null);
+            } catch (err) {
+                if (cancelled) return;
+                setTrackingData(null);
+            }
+        };
+
+        fetchTracking();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [order?.delhivery?.waybill, orderId]);
+
+    useEffect(() => {
+        const delivered = String(trackingData?.currentStatus || '').trim() === 'Delivered'
+            || normalizeOrderStatus(order?.status) === 'Delivered'
+            || Boolean(order?.isDelivered);
+
         if (delivered) {
             setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
             return;
         }
 
-        const shippingPincode = order?.shippingAddress?.postalCode || order?.shippingAddress?.pincode;
-        if (!shippingPincode) {
-            setDeliveryEstimate({ loading: false, isServiceable: null, text: '' });
-            return;
-        }
-
-        let cancelled = false;
-        const fetchEstimatedDelivery = async () => {
-            setDeliveryEstimate({ loading: true, isServiceable: null, text: '' });
-            try {
-                const { data } = await API.get(`/pincodes/check/${shippingPincode}`);
-                if (cancelled) return;
-
-                if (data?.isServiceable) {
-                    const estimatedText =
-                        buildEstimatedDeliveryText(data.deliveryTime, data.unit) ||
-                        data.message ||
-                        `Delivered in ${data.deliveryTime} ${data.unit}`;
-                    setDeliveryEstimate({
-                        loading: false,
-                        isServiceable: true,
-                        text: estimatedText
-                    });
-                } else {
-                    setDeliveryEstimate({
-                        loading: false,
-                        isServiceable: false,
-                        text: data?.message || 'Delivery not available for this pincode'
-                    });
-                }
-            } catch (err) {
-                if (cancelled) return;
-                setDeliveryEstimate({
-                    loading: false,
-                    isServiceable: null,
-                    text: 'Unable to fetch estimated delivery time'
-                });
-            }
-        };
-
-        fetchEstimatedDelivery();
-        return () => {
-            cancelled = true;
-        };
-    }, [order?.shippingAddress?.postalCode, order?.shippingAddress?.pincode]);
+        const expectedDeliveryText = formatExpectedDeliveryText(trackingData?.expectedDeliveryDate);
+        setDeliveryEstimate({
+            loading: false,
+            isServiceable: expectedDeliveryText ? true : null,
+            text: expectedDeliveryText
+        });
+    }, [trackingData?.expectedDeliveryDate, trackingData?.currentStatus, order?.status, order?.isDelivered]);
 
     const fetchSettings = async () => {
         try {
@@ -272,8 +290,12 @@ const OrderDetails = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
-            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+            'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+            'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
+            'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+            'Scheduled': 'bg-sky-100 text-sky-800 border-sky-200',
             'Dispatched': 'bg-purple-100 text-purple-800 border-purple-200',
+            'In Transit': 'bg-violet-100 text-violet-800 border-violet-200',
             'Out for Delivery': 'bg-orange-100 text-orange-800 border-orange-200',
             'Delivered': 'bg-green-100 text-green-800 border-green-200',
             'Cancelled': 'bg-red-100 text-red-800 border-red-200',
@@ -298,8 +320,12 @@ const OrderDetails = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
-            'Packed': 'inventory_2',
+            'Manifested': 'inventory_2',
+            'Not Picked': 'schedule',
+            'Picked Up': 'inventory_2',
+            'Scheduled': 'event',
             'Dispatched': 'local_shipping',
+            'In Transit': 'sync_alt',
             'Out for Delivery': 'delivery_dining',
             'Delivered': 'done_all',
             'Cancelled': 'cancel',
@@ -320,25 +346,46 @@ const OrderDetails = () => {
         return icons[status] || 'info';
     };
 
-    const getStatusStep = (currentStatus) => {
-        const steps = ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
-        return steps.indexOf(currentStatus);
-    };
-
     const steps = [
-        { name: 'Order Placed', status: 'Pending', icon: 'shopping_cart' },
+        { name: 'Pending', status: 'Pending', icon: 'shopping_cart' },
         { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
-        { name: 'Packed', status: 'Packed', icon: 'inventory_2' },
+        { name: 'Manifested', status: 'Manifested', icon: 'inventory_2' },
+        { name: 'Not Picked', status: 'Not Picked', icon: 'schedule' },
+        { name: 'Picked Up', status: 'Picked Up', icon: 'inventory_2' },
+        { name: 'Scheduled', status: 'Scheduled', icon: 'event' },
         { name: 'Dispatched', status: 'Dispatched', icon: 'local_shipping' },
+        { name: 'In Transit', status: 'In Transit', icon: 'sync_alt' },
         { name: 'Out for Delivery', status: 'Out for Delivery', icon: 'delivery_dining' },
         { name: 'Delivered', status: 'Delivered', icon: 'done_all' }
     ];
-    const currentStep = getStatusStep(order?.status);
+    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
+    const rawCourierStatus = String(trackingData?.currentStatus || '').trim();
+    const hasCourierException = EXCEPTION_STATUSES.has(rawCourierStatus);
+    const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
+    const scanTimeByStatus = rawTrackingScans.reduce((acc, scan) => {
+        const key = String(scan?.status || '').trim();
+        if (!key || !scan?.time || acc[key]) return acc;
+        acc[key] = scan.time;
+        return acc;
+    }, {});
+    const liveDeliveredAt = scanTimeByStatus.Delivered
+        || (rawCourierStatus === 'Delivered' ? trackingData?.lastUpdatedAt || null : null);
+    const displayOrderStatus = (() => {
+        if (normalizedOrderStatus === 'Cancelled' || normalizedOrderStatus === 'Cancellation Requested') {
+            return normalizedOrderStatus;
+        }
+        if (hasCourierException) return rawCourierStatus;
+        if (rawCourierStatus) return rawCourierStatus;
+        if (normalizedOrderStatus === 'Delivered') return 'Delivered';
+        if (normalizedOrderStatus === 'Confirmed') return 'Confirmed';
+        return 'Pending';
+    })();
+    const currentStep = steps.findIndex((step) => step.status === displayOrderStatus);
     const orderProgress = steps.length > 1 && currentStep >= 0
         ? (currentStep / (steps.length - 1)) * 100
         : 0;
-    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
-    const isDeliveredOrder = normalizedOrderStatus === 'Delivered' || Boolean(order?.deliveredAt) || Boolean(order?.isDelivered);
+    const effectiveDeliveredAt = liveDeliveredAt || order?.deliveredAt || null;
+    const isDeliveredOrder = displayOrderStatus === 'Delivered' || Boolean(effectiveDeliveredAt) || Boolean(order?.isDelivered);
     const itemReturnMetaById = useMemo(() => {
         const out = {};
         const orderKey = String(order?._id || '');
@@ -396,17 +443,26 @@ const OrderDetails = () => {
     const isOnlinePaidOrder = Boolean(order?.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
     const paymentInfoStatus = isOnlinePaidOrder
         ? 'Completed'
-        : (order?.isPaid || ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'].includes(normalizedOrderStatus)
+        : (order?.isPaid || ['Confirmed', 'Manifested', 'Not Picked', 'Picked Up', 'Scheduled', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered'].includes(displayOrderStatus)
             ? 'Completed'
             : 'Pending');
     const isWithinReturnWindow = useMemo(() => {
-        const deliveredAt = order?.deliveredAt ? new Date(order.deliveredAt) : null;
+        const deliveredAt = effectiveDeliveredAt ? new Date(effectiveDeliveredAt) : null;
         if (!deliveredAt || Number.isNaN(deliveredAt.getTime())) return false;
 
         const diffMs = Date.now() - deliveredAt.getTime();
         const diffDays = diffMs / (1000 * 60 * 60 * 24);
         return diffDays <= RETURN_WINDOW_DAYS;
-    }, [order?.deliveredAt]);
+    }, [effectiveDeliveredAt]);
+
+    const getStepTimestamp = (stepStatus, stepIndex) => {
+        if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt);
+        if (stepStatus === 'Confirmed') return formatTrackingDate(order?.delhivery?.syncedAt);
+        if (scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
+        if (stepStatus === 'Delivered') return formatTrackingDate(effectiveDeliveredAt);
+        if (stepIndex < currentStep) return '';
+        return '';
+    };
 
     if (loading) {
         return (
@@ -449,29 +505,68 @@ const OrderDetails = () => {
                         <h1 className="text-lg font-bold text-gray-900">Order Details</h1>
                         <p className="text-xs text-gray-500">#{order.displayId || order._id.slice(-8).toUpperCase()}</p>
                     </div>
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(normalizedOrderStatus)}`}>
-                        <span className="material-icons text-sm">{getStatusIcon(normalizedOrderStatus)}</span>
-                        {normalizedOrderStatus}
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 ${getStatusColor(displayOrderStatus)}`}>
+                        <span className="material-icons text-sm">{getStatusIcon(displayOrderStatus)}</span>
+                        {displayOrderStatus}
                     </span>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="max-w-6xl mx-auto px-4 py-6">
+            <div className="max-w-7xl mx-auto px-3 md:px-2 lg:px-1 py-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Column */}
                     <div className="lg:col-span-2 space-y-6">
                         {/* Order Status Timeline */}
-                        {order.status !== 'Cancelled' && order.status !== 'Cancellation Requested' && (
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                        {order.status !== 'Cancelled' && order.status !== 'Cancellation Requested' && !hasCourierException && (
+                            <div className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-gray-200">
                                 <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
                                     <span className="material-icons text-gray-700">local_shipping</span>
                                     Track Your Order
                                 </h2>
-                                <div className="pb-2">
-                                    <div className="relative w-full">
+                                <div className="md:hidden">
+                                    <div className="relative pl-4">
+                                        <div className="absolute left-[33px] top-3 bottom-3 w-0.5 -translate-x-1/2 bg-blue-100">
+                                            {currentStep > 0 ? (
+                                                <div
+                                                    className="w-full bg-blue-600 transition-all duration-500"
+                                                    style={{ height: `${(currentStep / Math.max(steps.length - 1, 1)) * 100}%` }}
+                                                />
+                                            ) : null}
+                                        </div>
+                                        <div className="space-y-6">
+                                            {steps.map((step, index) => {
+                                                const stepTimestamp = getStepTimestamp(step.status, index);
+                                                const isCompleted = Boolean(stepTimestamp) || index <= currentStep;
+                                                const isCurrent = index === currentStep;
+
+                                                return (
+                                                    <div key={step.status} className="relative flex gap-4 z-10">
+                                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${isCompleted
+                                                            ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
+                                                            : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
+                                                            } ${isCurrent ? 'ring-4 ring-blue-200' : ''}`}>
+                                                            <span className="material-icons text-base">{step.icon}</span>
+                                                        </div>
+                                                        <div className="pt-0.5">
+                                                            <p className={`text-sm font-bold leading-tight ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                                {step.name}
+                                                            </p>
+                                                            {stepTimestamp ? (
+                                                                <span className="mt-1 block text-[10px] text-gray-500 font-semibold leading-tight">{stepTimestamp}</span>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="hidden md:block pb-1">
+                                    <div className="relative w-full rounded-2xl border border-blue-50 bg-white px-3 py-4 md:px-3 md:py-4">
                                         {/* Progress Bar */}
-                                        <div className="absolute left-[calc(100%/12)] right-[calc(100%/12)] top-5 h-1.5 -translate-y-1/2 rounded-full bg-blue-100">
+                                        <div className="absolute left-[42px] right-[42px] top-[34px] h-0.5 rounded-full bg-blue-100">
                                             <div
                                                 className="h-full rounded-full bg-blue-600 transition-all duration-500"
                                                 style={{ width: `${orderProgress}%` }}
@@ -479,29 +574,45 @@ const OrderDetails = () => {
                                         </div>
 
                                         {/* Steps */}
-                                        <div className="grid grid-cols-6 gap-0">
+                                        <div className="grid grid-cols-10 gap-x-1">
                                         {steps.map((step, index) => {
-                                            const isCompleted = index <= currentStep;
+                                            const stepTimestamp = getStepTimestamp(step.status, index);
+                                            const isCompleted = Boolean(stepTimestamp) || index <= currentStep;
                                             const isCurrent = index === currentStep;
                                             return (
-                                                <div key={step.status} className="flex flex-col items-center relative z-10 px-1">
-                                                    <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isCompleted
+                                                <div key={step.status} className="flex flex-col items-center relative z-10 px-0.5 min-w-0">
+                                                    <div className={`w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${isCompleted
                                                             ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)]'
                                                             : 'bg-white border-2 border-blue-100 text-gray-400 shadow-sm'
                                                         } ${isCurrent ? 'ring-4 ring-blue-200 scale-110' : ''}`}>
-                                                        <span className="material-icons text-base md:text-lg">{step.icon}</span>
+                                                        <span className="material-icons text-sm md:text-base">{step.icon}</span>
                                                     </div>
-                                                    <p className={`text-[10px] md:text-xs font-bold text-center leading-tight ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
+                                                    <p className={`text-[9px] md:text-[11px] font-bold text-center leading-tight ${isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>
                                                         {step.name}
                                                     </p>
-                                                    {isCurrent && (
-                                                        <span className="text-[10px] text-blue-600 font-bold mt-1">Current</span>
-                                                    )}
+                                                    {stepTimestamp ? (
+                                                        <span className="mt-1 text-[9px] text-gray-500 font-semibold text-center leading-tight">{stepTimestamp}</span>
+                                                    ) : null}
                                                 </div>
                                             );
                                         })}
                                     </div>
+                                    </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {hasCourierException && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-red-100">
+                                <h2 className="text-lg font-bold text-red-700 mb-3 flex items-center gap-2">
+                                    <span className="material-icons text-red-600">warning</span>
+                                    Courier Exception
+                                </h2>
+                                <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-red-700">Live Delhivery Status</p>
+                                    <p className="mt-2 text-xl font-black text-red-800 uppercase">{rawCourierStatus}</p>
+                                    <p className="mt-2 text-sm text-red-700">This update came directly from Delhivery tracking.</p>
+                                    <p className="mt-2 text-xs font-semibold text-red-800">{formatTrackingDate(trackingData?.lastUpdatedAt || order?.updatedAt)}</p>
                                 </div>
                             </div>
                         )}
@@ -831,19 +942,15 @@ const OrderDetails = () => {
                                     <div>
                                         <span className="text-gray-600">Estimated Delivery</span>
                                         <p className={`font-semibold ${deliveryEstimate.isServiceable === false ? 'text-red-600' : 'text-gray-800'}`}>
-                                            {deliveryEstimate.loading ? 'Checking delivery estimate...' : (deliveryEstimate.text || 'Not available')}
+                                            {deliveryEstimate.text || 'Not available'}
                                         </p>
                                     </div>
                                 )}
-                                {order.deliveredAt && (
+                                {effectiveDeliveredAt && (
                                     <div>
                                         <span className="text-gray-600">Delivered On</span>
                                         <p className="font-semibold text-green-600">
-                                            {new Date(order.deliveredAt).toLocaleDateString('en-IN', {
-                                                day: 'numeric',
-                                                month: 'long',
-                                                year: 'numeric'
-                                            })}
+                                            {formatTrackingDate(effectiveDeliveredAt)}
                                         </p>
                                     </div>
                                 )}

@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { MdLocationOn, MdDelete, MdAdd, MdTimer, MdUpload, MdDownload } from 'react-icons/md';
+import { MdLocationOn, MdDelete, MdAdd, MdUpload, MdDownload } from 'react-icons/md';
 import usePinCodeStore from '../../store/pinCodeStore';
 
 const PinCodeManager = () => {
     const { pinCodes, fetchPinCodes, addPinCode, deletePinCode, bulkImportPinCodes, updatePinCode, isLoading } = usePinCodeStore();
     const [formData, setFormData] = useState({
         code: '',
-        deliveryTime: '',
-        unit: 'days',
         isCOD: false
     });
     const [importResults, setImportResults] = useState(null);
@@ -31,7 +29,7 @@ const PinCodeManager = () => {
         e.preventDefault();
         const success = await addPinCode(formData);
         if (success) {
-            setFormData({ code: '', deliveryTime: '', unit: 'days', isCOD: false });
+            setFormData({ code: '', isCOD: false });
         }
     };
 
@@ -51,7 +49,7 @@ const PinCodeManager = () => {
     };
 
     const downloadTemplate = () => {
-        const csvContent = "Pincode,DeliveryTime,Unit\n110001,2,days\n400001,3,days\n560001,4,days";
+        const csvContent = "Pincode,isCOD\n110001,true\n400001,false\n560001,true";
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -69,7 +67,7 @@ const PinCodeManager = () => {
                 </div>
                 <div>
                     <h1 className="text-lg md:text-2xl font-bold text-gray-800">Delivery PIN Codes</h1>
-                    <p className="text-gray-500 text-sm">Manage serviceable areas and delivery estimates</p>
+                    <p className="text-gray-500 text-sm">Manage serviceable areas and COD availability</p>
                 </div>
             </div>
 
@@ -78,7 +76,7 @@ const PinCodeManager = () => {
                 <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <MdAdd className="text-blue-500" /> Add New Serviceable Area
                 </h2>
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-4 items-end">
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-4 items-end">
                     <div className="space-y-1.5 md:col-span-1">
                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">PIN Code</label>
                         <input
@@ -90,32 +88,6 @@ const PinCodeManager = () => {
                             placeholder="e.g. 110001"
                             className="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none font-bold text-gray-700"
                         />
-                    </div>
-                    <div className="space-y-1.5 md:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Est. Time</label>
-                        <input
-                            type="number"
-                            name="deliveryTime"
-                            value={formData.deliveryTime}
-                            onChange={handleChange}
-                            required
-                            min="0"
-                            placeholder="e.g. 2"
-                            className="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none font-bold text-gray-700"
-                        />
-                    </div>
-                    <div className="space-y-1.5 md:col-span-1">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Unit</label>
-                        <select
-                            name="unit"
-                            value={formData.unit}
-                            onChange={handleChange}
-                            className="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none text-gray-700 font-medium"
-                        >
-                            <option value="hours">Hours</option>
-                            <option value="days">Days</option>
-                            <option value="minutes">Minutes</option>
-                        </select>
                     </div>
                     <div className="space-y-1.5 md:col-span-1">
                         <label className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-2">COD Available</label>
@@ -130,7 +102,7 @@ const PinCodeManager = () => {
                             <span className="text-sm font-bold text-gray-700">{formData.isCOD ? 'Yes' : 'No'}</span>
                         </label>
                     </div>
-                    <div className="md:col-span-4 mt-2">
+                    <div className="md:col-span-2 mt-2">
                         <button
                             type="submit"
                             disabled={isLoading}
@@ -171,7 +143,7 @@ const PinCodeManager = () => {
                 </h2>
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                     <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">Upload an Excel/CSV file (.xlsx, .csv) with columns: <span className="font-mono font-bold">Pincode, DeliveryTime, Unit</span></p>
+                        <p className="text-sm text-gray-600 mb-2">Upload an Excel/CSV file (.xlsx, .csv) with columns: <span className="font-mono font-bold">Pincode, isCOD</span></p>
                         <label className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-lg shadow-purple-200 cursor-pointer">
                             <MdUpload size={20} />
                             {isImporting ? 'Importing...' : 'Choose Excel File'}
@@ -211,10 +183,6 @@ const PinCodeManager = () => {
                             <div key={pin._id} className="p-2 md:p-4 flex items-center justify-between hover:bg-blue-50/30 transition-colors group">
                                 <div className="flex items-center gap-2 md:gap-6">
                                     <span className="text-sm md:text-lg font-black text-gray-800 font-mono tracking-wider">{pin.code}</span>
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 md:px-3 md:py-1 rounded-full bg-green-50 text-green-700 text-[10px] md:text-xs font-bold border border-green-100">
-                                        <MdTimer className="text-green-500" />
-                                        {pin.deliveryTime} {pin.unit}
-                                    </div>
                                     <button
                                         onClick={() => toggleCOD(pin._id, pin.isCOD !== false)}
                                         className={`flex items-center gap-1.5 px-2 py-1 md:px-3 md:py-1.5 rounded-full transition-all border shadow-sm active:scale-95 ${pin.isCOD !== false ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200'}`}

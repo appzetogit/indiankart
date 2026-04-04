@@ -6,6 +6,34 @@ import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator from '../../components/orders/InvoiceGenerator';
 import API from '../../../../services/api';
 
+const formatTrackingDate = (value) => {
+    if (!value) return 'N/A';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return 'N/A';
+    return parsed.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
+const ADMIN_TIMELINE_STATUSES = [
+    'Pending',
+    'Confirmed',
+    'Manifested',
+    'Not Picked',
+    'Picked Up',
+    'Scheduled',
+    'Dispatched',
+    'In Transit',
+    'Out for Delivery',
+    'Delivered'
+];
+
+const ADMIN_TIMELINE_STATUS_SET = new Set(ADMIN_TIMELINE_STATUSES);
+
 const OrderDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -22,6 +50,9 @@ const OrderDetail = () => {
     // Initialize selected status when modal opens
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [settings, setSettings] = useState(null);
+    const [trackingData, setTrackingData] = useState(null);
+    const [trackingLoading, setTrackingLoading] = useState(false);
+    const [trackingError, setTrackingError] = useState('');
     const fulfillmentStatuses = ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
 
     const normalizeFulfillmentStatus = (status = '') => {
@@ -45,6 +76,42 @@ const OrderDetail = () => {
         };
         fetchSettings();
     }, [id, order, getOrderDetails]);
+
+    React.useEffect(() => {
+        let cancelled = false;
+
+        const fetchTracking = async () => {
+            if (!order?.delhivery?.waybill) {
+                setTrackingData(null);
+                setTrackingError('');
+                setTrackingLoading(false);
+                return;
+            }
+
+            setTrackingLoading(true);
+            setTrackingError('');
+
+            try {
+                const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
+                if (cancelled) return;
+                setTrackingData(data?.tracking || null);
+            } catch (error) {
+                if (cancelled) return;
+                setTrackingError(error.response?.data?.message || 'Unable to fetch live Delhivery status');
+                setTrackingData(null);
+            } finally {
+                if (!cancelled) {
+                    setTrackingLoading(false);
+                }
+            }
+        };
+
+        fetchTracking();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [id, order?.delhivery?.waybill, order?.status]);
 
     if (isLoading && !order) {
         return (
@@ -150,70 +217,64 @@ const OrderDetail = () => {
         setUpdating(false);
     };
 
-    const getStatusStepStatus = (stepStatus) => {
-        const statuses = ['Pending', 'Confirmed', 'Shipped', 'Delivered'];
-        const currentIdx = statuses.indexOf(order.status);
-        const stepIdx = statuses.indexOf(stepStatus);
-
-        if (order.status === 'Cancelled') return 'cancelled';
-        if (currentIdx >= stepIdx) return 'completed';
-        return 'upcoming';
-    };
-
-    const orderedTimeline = Array.isArray(order.timeline)
-        ? [...order.timeline].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())
-        : [];
-    const timelineFlow = ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
     const normalizedCurrentStatus = normalizeFulfillmentStatus(order.status);
-    const displayOrderStatus = normalizedCurrentStatus || order.status;
-    const currentFlowIndex = timelineFlow.indexOf(normalizedCurrentStatus);
-    const timelineByStatus = orderedTimeline.reduce((acc, event) => {
-        const normalizedStatus = normalizeFulfillmentStatus(event.status);
-        if (!acc[normalizedStatus]) {
-            acc[normalizedStatus] = event;
-        }
+    const liveApiStatus = String(trackingData?.currentStatus || '').trim();
+    const effectiveAdminStatus = liveApiStatus || normalizedCurrentStatus || order.status;
+    const displayOrderStatus = effectiveAdminStatus;
+    const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
+    const currentRawApiStatus = String(trackingData?.currentStatus || '').trim();
+    const currentRawApiLastUpdatedAt = trackingData?.lastUpdatedAt || null;
+    const scanTimeByStatus = rawTrackingScans.reduce((acc, scan) => {
+        const key = String(scan?.status || '').trim();
+        if (!key || !scan?.time || acc[key]) return acc;
+        acc[key] = scan.time;
         return acc;
     }, {});
-    const createdTimeMs = new Date(order.createdAt || order.date || Date.now()).getTime();
-    const currentStatusTimeMs = new Date(
-        timelineByStatus[normalizedCurrentStatus]?.time || order.updatedAt || order.createdAt || order.date || Date.now()
-    ).getTime();
-    const explicitTimelineFlowIndex = orderedTimeline.reduce((highestIdx, event) => {
-        const eventIdx = timelineFlow.indexOf(normalizeFulfillmentStatus(event.status));
-        return eventIdx > highestIdx ? eventIdx : highestIdx;
-    }, -1);
-    const inferredCancelledFlowIndex = (() => {
-        if (explicitTimelineFlowIndex >= 0) return explicitTimelineFlowIndex;
-        if (order.isDelivered || order.deliveredAt) return timelineFlow.indexOf('Delivered');
-        const hasPackedSignal = Array.isArray(order.items) && order.items.some(item => item.serialNumber);
-        return hasPackedSignal ? timelineFlow.indexOf('Packed') : timelineFlow.indexOf('Pending');
-    })();
-    const effectiveFlowIndex = normalizedCurrentStatus === 'Cancelled'
-        ? inferredCancelledFlowIndex
-        : currentFlowIndex;
-    const completedCount = effectiveFlowIndex >= 0 ? effectiveFlowIndex + 1 : 0;
-    const fallbackTimeByStatus = {};
-    if (completedCount > 0) {
-        for (let i = 0; i < completedCount; i += 1) {
-            const status = timelineFlow[i];
-            const existingTime = timelineByStatus[status]?.time;
-            if (existingTime) {
-                fallbackTimeByStatus[status] = new Date(existingTime);
-                continue;
-            }
-            if (i === 0) {
-                fallbackTimeByStatus[status] = new Date(createdTimeMs);
-                continue;
-            }
-            if (i === effectiveFlowIndex) {
-                fallbackTimeByStatus[status] = new Date(currentStatusTimeMs);
-                continue;
-            }
-            const ratio = effectiveFlowIndex > 0 ? i / effectiveFlowIndex : 0;
-            const syntheticMs = createdTimeMs + ((currentStatusTimeMs - createdTimeMs) * ratio);
-            fallbackTimeByStatus[status] = new Date(syntheticMs);
+    const scanLocationByStatus = rawTrackingScans.reduce((acc, scan) => {
+        const key = String(scan?.status || '').trim();
+        if (!key || acc[key]) return acc;
+        acc[key] = scan.location || '';
+        return acc;
+    }, {});
+    const adminTimelineEntries = ADMIN_TIMELINE_STATUSES.map((status) => {
+        let time = null;
+        let type = 'api';
+
+        if (status === 'Pending') {
+            time = order.createdAt || order.date || null;
+            type = 'system';
+        } else if (status === 'Confirmed') {
+            time = order.delhivery?.syncedAt || null;
+            type = 'system';
+        } else if (status === 'Delivered') {
+            time = scanTimeByStatus[status] || order.deliveredAt || null;
+        } else {
+            time = scanTimeByStatus[status] || null;
         }
-    }
+
+        if (!time && status === currentRawApiStatus) {
+            time = currentRawApiLastUpdatedAt;
+        }
+
+        return {
+            key: status,
+            status,
+            time,
+            location: scanLocationByStatus[status] || '',
+            type
+        };
+    });
+
+    const timelineApiStatus = ADMIN_TIMELINE_STATUS_SET.has(currentRawApiStatus)
+        ? currentRawApiStatus
+        : '';
+    const timelineOrderStatus = ADMIN_TIMELINE_STATUS_SET.has(normalizedCurrentStatus)
+        ? normalizedCurrentStatus
+        : '';
+    const currentTimelineStatus = timelineApiStatus
+        || (order.delhivery?.syncedAt ? 'Confirmed' : '')
+        || timelineOrderStatus;
+    const currentTimelineIndex = adminTimelineEntries.findIndex((entry) => entry.status === currentTimelineStatus);
     const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
     const paymentMethodValue = String(order.payment?.method || order.paymentMethod || '').trim().toUpperCase();
     const isOnlinePaidOrder = Boolean(order.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
@@ -243,10 +304,13 @@ const OrderDetail = () => {
                     <div>
                         <div className="flex items-center gap-2 md:gap-3 mb-1">
                             <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">{order.displayId || order.id}</h1>
-                            <span className={`px-2 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-sm ${displayOrderStatus === 'Delivered' ? 'bg-green-100 text-green-600' :
-                                displayOrderStatus === 'Cancelled' ? 'bg-red-100 text-red-600' :
-                                    'bg-blue-100 text-blue-600 animate-pulse'
-                                }`}>
+                            <span className={`px-2 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-sm ${
+                                ['Delivered', 'Collected'].includes(displayOrderStatus)
+                                    ? 'bg-green-100 text-green-600'
+                                    : ['Cancelled', 'RTO', 'DTO'].includes(displayOrderStatus)
+                                        ? 'bg-red-100 text-red-600'
+                                        : 'bg-blue-100 text-blue-600 animate-pulse'
+                            }`}>
                                 {displayOrderStatus}
                             </span>
                         </div>
@@ -267,7 +331,7 @@ const OrderDetail = () => {
                     />
 
                     {/* Separate Serial/IMEI Button */}
-                    {order.status !== 'Cancelled' && (
+                    {effectiveAdminStatus !== 'Cancelled' && (
                         <button
                             onClick={openSerialModal}
                             className="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-6 md:py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 font-black text-[10px] md:text-xs rounded-xl md:rounded-2xl hover:bg-indigo-100 transition-all shadow-sm uppercase tracking-widest"
@@ -276,7 +340,7 @@ const OrderDetail = () => {
                         </button>
                     )}
 
-                    {order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                    {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' && (
                         <button
                             onClick={openUpdateModal}
                             className="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-6 md:py-3 bg-blue-600 text-white font-black text-[10px] md:text-xs rounded-xl md:rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest"
@@ -349,28 +413,29 @@ const OrderDetail = () => {
                             <MdSchedule className="text-blue-500" size={18} /> Order Timeline
                         </h2>
                         <div className="space-y-4 md:space-y-5">
-                            {timelineFlow.map((status, idx) => {
-                                const statusEvent = timelineByStatus[status];
-                                const isCompleted = effectiveFlowIndex >= idx;
-                                const isCurrent = normalizedCurrentStatus === status;
-                                const isUpcoming = effectiveFlowIndex !== -1 ? idx > effectiveFlowIndex : !statusEvent;
-                                const displayTime = statusEvent?.time ? new Date(statusEvent.time) : fallbackTimeByStatus[status];
+                            {adminTimelineEntries.map((entry, idx) => {
+                                const isLast = idx === adminTimelineEntries.length - 1;
+                                const isCurrent = entry.status === currentTimelineStatus;
+                                const isCompleted = currentTimelineIndex >= 0
+                                    ? idx < currentTimelineIndex
+                                    : Boolean(entry.time);
+                                const displayTime = entry.time ? new Date(entry.time) : null;
                                 return (
-                                <div key={status} className="flex items-start gap-3 md:gap-4">
+                                <div key={entry.key} className="flex items-start gap-3 md:gap-4">
                                     <div className="flex flex-col items-center pt-1">
                                         <div className={`w-3 h-3 rounded-full ${isCurrent
                                             ? 'bg-blue-600 ring-4 ring-blue-100'
-                                            : isCompleted
+                                            : isCompleted || displayTime
                                                 ? 'bg-green-500'
                                                 : 'bg-gray-300'
                                             }`}></div>
-                                        {idx < timelineFlow.length - 1 && (
-                                            <div className="w-[2px] h-10 md:h-12 bg-gray-200 mt-1"></div>
+                                        {!isLast && (
+                                            <div className={`w-[2px] h-10 md:h-12 mt-1 ${currentTimelineIndex >= 0 && idx < currentTimelineIndex ? 'bg-green-200' : 'bg-gray-200'}`}></div>
                                         )}
                                     </div>
                                     <div className="flex-1 border-b border-gray-100 pb-3 md:pb-4">
-                                        <h4 className={`text-sm md:text-base font-black uppercase tracking-wide ${isUpcoming ? 'text-gray-400' : 'text-gray-900'}`}>
-                                            {status}
+                                        <h4 className={`text-sm md:text-base font-black uppercase tracking-wide ${displayTime ? 'text-gray-900' : 'text-gray-400'}`}>
+                                            {entry.status}
                                         </h4>
                                         {displayTime ? (
                                             <p className="text-[11px] md:text-xs text-gray-500 font-bold mt-1">
@@ -385,35 +450,18 @@ const OrderDetail = () => {
                                         ) : (
                                             <p className="text-[11px] md:text-xs text-gray-400 font-bold mt-1">Pending update</p>
                                         )}
-                                        {isCurrent && (
-                                            <p className="text-[10px] text-blue-600 font-black uppercase tracking-wider mt-1">Current status</p>
-                                        )}
-                                        {statusEvent?.note && <p className="text-xs text-gray-500 font-medium italic">"{statusEvent.note}"</p>}
+                                        {entry.location ? (
+                                            <p className="text-[11px] md:text-xs text-gray-500 font-semibold mt-1">{entry.location}</p>
+                                        ) : null}
+                                        {isCurrent && entry.type !== 'api' ? (
+                                            <p className="text-[10px] text-blue-600 font-black uppercase tracking-wider mt-1">
+                                                Current status
+                                            </p>
+                                        ) : null}
                                     </div>
                                 </div>
                                 );
                             })}
-                            {normalizedCurrentStatus === 'Cancelled' && (
-                                <div className="flex items-start gap-3 md:gap-4">
-                                    <div className="flex flex-col items-center pt-1">
-                                        <div className="w-3 h-3 rounded-full bg-red-500 ring-4 ring-red-100"></div>
-                                    </div>
-                                    <div className="flex-1 border-b border-gray-100 pb-3 md:pb-4">
-                                        <h4 className="text-sm md:text-base font-black uppercase tracking-wide text-red-600">
-                                            Cancelled
-                                        </h4>
-                                        <p className="text-[11px] md:text-xs text-gray-500 font-bold mt-1">
-                                            {new Date((timelineByStatus.Cancelled || orderedTimeline[orderedTimeline.length - 1])?.time || order.updatedAt || Date.now()).toLocaleString('en-IN', {
-                                                day: '2-digit',
-                                                month: 'short',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -509,6 +557,84 @@ const OrderDetail = () => {
                             )}
                         </div>
                     </div>
+
+                    <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm space-y-4 md:space-y-6">
+                        <div className="flex items-center justify-between gap-3">
+                            <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Delhivery Shipment</h2>
+                            {order.delhivery?.waybill ? (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        try {
+                                            setTrackingLoading(true);
+                                            setTrackingError('');
+                                            const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
+                                            setTrackingData(data?.tracking || null);
+                                        } catch (error) {
+                                            setTrackingError(error.response?.data?.message || 'Unable to refresh live Delhivery status');
+                                            setTrackingData(null);
+                                        } finally {
+                                            setTrackingLoading(false);
+                                        }
+                                    }}
+                                    className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-600 transition-all hover:bg-blue-100"
+                                >
+                                    {trackingLoading ? 'Refreshing...' : 'Refresh Live Status'}
+                                </button>
+                            ) : null}
+                        </div>
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Waybill</span>
+                                <span className="font-black text-gray-900">{order.delhivery?.waybill || 'Not created yet'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Pickup Location</span>
+                                <span className="font-black text-gray-900">{order.delhivery?.pickupLocation || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Synced At</span>
+                                <span className="font-black text-gray-900">
+                                    {order.delhivery?.syncedAt ? new Date(order.delhivery.syncedAt).toLocaleString() : 'Pending'}
+                                </span>
+                            </div>
+                            {trackingLoading ? (
+                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs font-semibold text-blue-600">
+                                    Fetching live Delhivery tracking...
+                                </div>
+                            ) : null}
+                            {trackingData ? (
+                                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 space-y-3">
+                                    <div className="flex justify-between items-center gap-4 text-xs">
+                                        <span className="text-emerald-700 font-bold uppercase tracking-widest text-[9px]">Raw API Status</span>
+                                        <span className="font-black text-emerald-900 uppercase text-right break-words">
+                                            {trackingData.currentStatus || 'Status unavailable'}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 text-xs">
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 mb-1">Current Location</p>
+                                            <p className="font-bold text-gray-900 break-words">{trackingData.currentLocation || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 mb-1">Last Updated</p>
+                                            <p className="font-bold text-gray-900 break-words">{formatTrackingDate(trackingData.lastUpdatedAt)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+                            {trackingError ? (
+                                <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs font-semibold text-amber-700">
+                                    {trackingError}
+                                </div>
+                            ) : null}
+                            {order.delhivery?.lastError ? (
+                                <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs font-semibold text-red-600">
+                                    {order.delhivery.lastError}
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -524,38 +650,27 @@ const OrderDetail = () => {
                                 </div>
 
                                 <div className="space-y-3">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Select New Status</p>
-                                    <div className="space-y-2">
-                                        <div className="relative">
-                                            <select
-                                                value={selectedStatus}
-                                                onChange={(e) => setSelectedStatus(e.target.value)}
-                                                className="w-full bg-gray-50 text-gray-900 border-2 border-transparent focus:border-blue-500 rounded-2xl p-4 outline-none text-sm font-bold appearance-none cursor-pointer"
-                                            >
-                                                <option value="" disabled>Select Status</option>
-                                                {fulfillmentStatuses.map(status => (
-                                                    <option key={status} value={status} disabled={normalizeFulfillmentStatus(order.status) === status}>
-                                                        {status}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
+                                    {effectiveAdminStatus === 'Pending' ? (
+                                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Next Action</p>
+                                            <p className="mt-2 text-sm font-semibold text-blue-900">
+                                                Confirm this order to create the Delhivery shipment and start live courier tracking.
+                                            </p>
                                         </div>
-                                        <p className="text-[11px] font-bold text-gray-500 px-1">
-                                            Selected: <span className="text-gray-800">{selectedStatus || 'None'}</span>
-                                        </p>
-                                    </div>
+                                    ) : (
+                                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Live Courier Controlled</p>
+                                            <p className="mt-2 text-sm font-semibold text-emerald-900">
+                                                Fulfillment status is now driven by Delhivery live tracking. You can update Serial/IMEI details here.
+                                            </p>
+                                        </div>
+                                    )}
 
-                                    {/* Serial Number Input for Packed Status and above (Edit Mode) */}
-                                    {(selectedStatus === 'Packed' || order.status === 'Confirmed' || order.status === 'Packed' || order.status === 'Dispatched' || order.status === 'Out for Delivery') && (
+                                    {effectiveAdminStatus !== 'Pending' && (
                                         <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-top-2">
                                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                                 <MdLocalShipping size={14} />
-                                                {order.status === 'Confirmed' ? 'Enter Serial/IMEI for Items' : 'Edit Serial/IMEI Numbers'}
+                                                Edit Serial/IMEI Numbers
                                             </p>
                                             <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100 max-h-60 overflow-y-auto">
                                                 {order.items.map(item => (
@@ -590,19 +705,41 @@ const OrderDetail = () => {
                                             </div>
                                         </div>
                                     )}
-                                    <button
-                                        onClick={() => setShowCancelConfirm(true)}
-                                        className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
-                                    >
-                                        Cancel Order
-                                    </button>
+                                    {effectiveAdminStatus === 'Pending' ? (
+                                        <>
+                                            <button
+                                                onClick={() => setShowCancelConfirm(true)}
+                                                className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
+                                            >
+                                                Cancel Order
+                                            </button>
 
-                                    <button
-                                        onClick={handleUpdateClick}
-                                        className="w-full mt-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all"
-                                    >
-                                        Update Status
-                                    </button>
+                                            <button
+                                                onClick={() => handleStatusUpdate('Confirmed')}
+                                                className="w-full mt-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all"
+                                            >
+                                                Confirm Order
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                                <button
+                                                    onClick={() => setShowCancelConfirm(true)}
+                                                    className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
+                                                >
+                                                    Cancel Order
+                                                </button>
+                                            ) : null}
+
+                                            <button
+                                                onClick={handleSerialSave}
+                                                className="w-full mt-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all"
+                                            >
+                                                Save Serial / IMEI
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         ) : (
