@@ -6,6 +6,14 @@ import Notification from '../models/Notification.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 
+const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered'
+]);
+
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
@@ -428,7 +436,6 @@ export const updateOrderStatus = async (req, res) => {
                 }
             }
 
-            const wasConfirmedBefore = order.status === 'Confirmed';
             order.status = status;
             if (status === 'Delivered') {
                 order.isDelivered = true;
@@ -451,7 +458,11 @@ export const updateOrderStatus = async (req, res) => {
                 await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
             }
 
-            if (status === 'Confirmed' && !wasConfirmedBefore && !order.delhivery?.waybill) {
+            const shouldCreateDelhiveryShipment =
+                DELHIVERY_SYNC_TRIGGER_STATUSES.has(String(status || '').trim()) &&
+                !order.delhivery?.waybill;
+
+            if (shouldCreateDelhiveryShipment) {
                 try {
                     const shipment = await createDelhiveryShipment(order);
                     order.delhivery = {

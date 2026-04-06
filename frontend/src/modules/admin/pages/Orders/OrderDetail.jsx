@@ -134,10 +134,22 @@ const OrderDetail = () => {
         );
     }
 
+    const populateSerialFields = () => {
+        const initialInputs = {};
+        const initialTypes = {};
+        order.items.forEach(item => {
+            if (item.serialNumber) initialInputs[item._id] = item.serialNumber;
+            if (item.serialType) initialTypes[item._id] = item.serialType;
+        });
+        setSerialInputs(initialInputs);
+        setSerialTypes(initialTypes);
+    };
+
     const openUpdateModal = () => {
         setUpdating(true);
         setShowCancelConfirm(false);
         setActionNote('');
+        populateSerialFields();
         // Set next logical status or current status
         const normalizedOrderStatus = normalizeFulfillmentStatus(order.status);
         const currentIdx = fulfillmentStatuses.indexOf(normalizedOrderStatus);
@@ -149,15 +161,7 @@ const OrderDetail = () => {
     };
 
     const openSerialModal = () => {
-        // Pre-fill serial inputs
-        const initialInputs = {};
-        const initialTypes = {};
-        order.items.forEach(item => {
-            if (item.serialNumber) initialInputs[item._id] = item.serialNumber;
-            if (item.serialType) initialTypes[item._id] = item.serialType;
-        });
-        setSerialInputs(initialInputs);
-        setSerialTypes(initialTypes);
+        populateSerialFields();
         setShowSerialModal(true);
     };
 
@@ -697,45 +701,42 @@ const OrderDetail = () => {
                                         </div>
                                     )}
 
-                                    {effectiveAdminStatus !== 'Pending' && (
-                                        <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-top-2">
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                                <MdLocalShipping size={14} />
-                                                Edit Serial/IMEI Numbers
-                                            </p>
-                                            <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100 max-h-60 overflow-y-auto">
-                                                {order.items.map(item => (
-                                                    <div key={item._id} className="space-y-1">
-                                                        <label className="text-xs font-bold text-gray-700 truncate block">{item.name}</label>
-                                                        <div className="flex gap-2">
-                                                            <select
-                                                                className="bg-white border border-gray-200 focus:border-blue-500 rounded-xl px-3 py-3 text-xs font-bold outline-none transition-all text-gray-700 shadow-sm w-1/3 appearance-none"
-                                                                value={serialTypes[item._id] || (item.serialType || 'Serial Number')}
-                                                                onChange={(e) => setSerialTypes(prev => ({ ...prev, [item._id]: e.target.value }))}
-                                                            >
-                                                                <option>Serial Number</option>
-                                                                <option>IMEI</option>
-                                                            </select>
-                                                            <input
-                                                                type="text"
-                                                                list={`serials-${item._id}`}
-                                                                placeholder={`Enter Number...`}
-                                                                className="flex-1 bg-white border border-gray-200 focus:border-blue-500 rounded-xl px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 font-mono text-gray-900 shadow-sm"
-                                                                value={serialInputs[item._id] !== undefined ? serialInputs[item._id] : (item.serialNumber || '')}
-                                                                onChange={(e) => setSerialInputs(prev => ({ ...prev, [item._id]: e.target.value }))}
-                                                            />
-                                                        </div>
-                                                        <datalist id={`serials-${item._id}`}>
-                                                            {/* Placeholder for future inventory integration */}
-                                                            <option value="SN-EXAMPLE-01" />
-                                                            <option value="SN-EXAMPLE-02" />
-                                                            <option value="IMEI-TEST-123456789012345" />
-                                                        </datalist>
+                                    <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-top-2">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                            <MdLocalShipping size={14} />
+                                            {effectiveAdminStatus === 'Pending' ? 'Add Serial/IMEI Before Confirming' : 'Edit Serial/IMEI Numbers'}
+                                        </p>
+                                        <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100 max-h-60 overflow-y-auto">
+                                            {order.items.map(item => (
+                                                <div key={item._id} className="space-y-1">
+                                                    <label className="text-xs font-bold text-gray-700 truncate block">{item.name}</label>
+                                                    <div className="flex gap-2">
+                                                        <select
+                                                            className="bg-white border border-gray-200 focus:border-blue-500 rounded-xl px-3 py-3 text-xs font-bold outline-none transition-all text-gray-700 shadow-sm w-1/3 appearance-none"
+                                                            value={serialTypes[item._id] || (item.serialType || 'Serial Number')}
+                                                            onChange={(e) => setSerialTypes(prev => ({ ...prev, [item._id]: e.target.value }))}
+                                                        >
+                                                            <option>Serial Number</option>
+                                                            <option>IMEI</option>
+                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            list={`serials-${item._id}`}
+                                                            placeholder="Enter Number..."
+                                                            className="flex-1 bg-white border border-gray-200 focus:border-blue-500 rounded-xl px-4 py-3 text-sm outline-none transition-all placeholder:text-gray-400 font-mono text-gray-900 shadow-sm"
+                                                            value={serialInputs[item._id] !== undefined ? serialInputs[item._id] : (item.serialNumber || '')}
+                                                            onChange={(e) => setSerialInputs(prev => ({ ...prev, [item._id]: e.target.value }))}
+                                                        />
                                                     </div>
-                                                ))}
-                                            </div>
+                                                    <datalist id={`serials-${item._id}`}>
+                                                        <option value="SN-EXAMPLE-01" />
+                                                        <option value="SN-EXAMPLE-02" />
+                                                        <option value="IMEI-TEST-123456789012345" />
+                                                    </datalist>
+                                                </div>
+                                            ))}
                                         </div>
-                                    )}
+                                    </div>
                                     {effectiveAdminStatus === 'Pending' ? (
                                         <>
                                             <button
