@@ -161,24 +161,36 @@ const OrderDetail = () => {
         setShowSerialModal(true);
     };
 
-    const handleSerialSave = () => {
+    const handleSerialSave = async () => {
         const serialNumbers = order.items.map(item => ({
             itemId: item._id,
-            serial: serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber,
+            serial: (serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber)?.trim(),
             type: serialTypes[item._id] !== undefined ? serialTypes[item._id] : (item.serialType || 'Serial Number')
         })).filter(s => s.serial);
 
-        // Update with CURRENT status to just save serials
-        updateOrderStatus(id, order.status, '', serialNumbers);
-        setShowSerialModal(false);
-        setSerialInputs({});
+        if (!serialNumbers.length) {
+            toast.error('Enter at least one Serial Number or IMEI before saving.');
+            return;
+        }
+
+        try {
+            // Update with CURRENT status to just save serials
+            await updateOrderStatus(id, order.status, '', serialNumbers);
+            toast.success('Serial / IMEI saved successfully');
+            setShowSerialModal(false);
+            setUpdating(false);
+            setSerialInputs({});
+            setSerialTypes({});
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to save Serial / IMEI');
+        }
     };
 
     const handleUpdateClick = () => {
         handleStatusUpdate(selectedStatus);
     };
 
-    const handleStatusUpdate = (newStatus) => {
+    const handleStatusUpdate = async (newStatus) => {
         // Validation for Packed status
         if (newStatus === 'Packed') {
             // Check if serial is present in input OR already exists in item
@@ -191,29 +203,48 @@ const OrderDetail = () => {
             const serialNumbers = order.items.map(item => ({
                 itemId: item._id,
                 // Use input value if present, otherwise fallback to existing value
-                serial: serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber,
+                serial: (serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber)?.trim(),
                 type: serialTypes[item._id] !== undefined ? serialTypes[item._id] : (item.serialType || 'Serial Number')
             })).filter(s => s.serial); // Only send if we have a serial number
 
-            updateOrderStatus(id, newStatus, actionNote, serialNumbers);
+            try {
+                await updateOrderStatus(id, newStatus, actionNote, serialNumbers);
+                toast.success(`Order marked as ${newStatus}`);
+            } catch (error) {
+                toast.error(error.response?.data?.message || 'Failed to update order status');
+                return;
+            }
         } else {
             // Also send serial numbers if they were edited in other statuses
             const hasEdits = Object.keys(serialInputs).length > 0 || Object.keys(serialTypes).length > 0;
             if (hasEdits) {
                 const serialNumbers = order.items.map(item => ({
                     itemId: item._id,
-                    serial: serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber,
+                    serial: (serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber)?.trim(),
                     type: serialTypes[item._id] !== undefined ? serialTypes[item._id] : (item.serialType || 'Serial Number')
                 })).filter(s => s.serial); // Only send valid ones
 
-                updateOrderStatus(id, newStatus, actionNote, serialNumbers);
+                try {
+                    await updateOrderStatus(id, newStatus, actionNote, serialNumbers);
+                    toast.success(`Order marked as ${newStatus}`);
+                } catch (error) {
+                    toast.error(error.response?.data?.message || 'Failed to update order status');
+                    return;
+                }
             } else {
-                updateOrderStatus(id, newStatus, actionNote);
+                try {
+                    await updateOrderStatus(id, newStatus, actionNote);
+                    toast.success(`Order marked as ${newStatus}`);
+                } catch (error) {
+                    toast.error(error.response?.data?.message || 'Failed to update order status');
+                    return;
+                }
             }
         }
 
         setActionNote('');
         setSerialInputs({});
+        setSerialTypes({});
         setUpdating(false);
     };
 

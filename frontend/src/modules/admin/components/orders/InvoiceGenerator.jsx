@@ -202,11 +202,11 @@ export const InvoiceDisplay = React.forwardRef(
               <tr>
                 <th style={{ width: "40px", textAlign: "center", fontSize: "14px" }}>STD</th>
                 <th>
-                  <div style={{ fontSize: "8px" }}>E-Kart Logistics</div>
+                  <div style={{ fontSize: "8px" }}>IndiaKart</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{order.displayId || order.id || order._id}</div>
                 </th>
                 <th style={{ width: "100px" }}>
-                  <div style={{ fontSize: "8px" }}>↑FRAGILE</div>
+                  <div style={{ fontSize: "8px" }}>↑SURFACE</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>PREPAID</div>
                 </th>
                 <th style={{ width: "30px", fontSize: "18px", textAlign: "center" }}>E</th>
@@ -216,7 +216,7 @@ export const InvoiceDisplay = React.forwardRef(
               <tr>
                 <td colSpan="4" style={{ padding: "8px 5px" }}>
                    <div style={{ fontSize: "9px", marginBottom: "3px" }}>Ordered through</div>
-                   <div className="brand">IndianKart <span style={{ fontSize: "14px", transform: "scaleX(-1)", display: "inline-block" }}>f</span></div>
+                   <div className="brand">IndianKart <span style={{ fontSize: "14px", transform: "scaleX(-1)", display: "inline-block" }}></span></div>
                 </td>
               </tr>
               <tr>
@@ -224,13 +224,13 @@ export const InvoiceDisplay = React.forwardRef(
                   <div style={{ marginBottom: "3px" }}><b>Shipping/Customer address:</b></div>
                   <div>Name: <b>{order.shippingAddress?.name || order.address?.name || order.user?.name || 'Customer Name'}</b></div>
                   <div style={{ maxWidth: "250px" }}>{order.address?.line || order.shippingAddress?.address || order.shippingAddress?.street || 'Address Not Available'}</div>
-                  <div>{order.address?.city || order.shippingAddress?.city || 'N/A'}, {order.address?.state || order.shippingAddress?.state || 'N/A'} - <b>{order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || 'N/A'}</b>, IN-WB</div>
+                  <div>{order.address?.city || order.shippingAddress?.city || 'N/A'}, {order.address?.state || order.shippingAddress?.state || 'N/A'} - <b>{order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || 'N/A'}</b></div>
                 </td>
               </tr>
               <tr style={{ height: "35px" }}>
                 <td colSpan="2" style={{ borderRight: "1px solid black" }}>
-                  <div>HBD: {new Date(order.date || order.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
-                  <div>CPD: {new Date().toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
+                  <div> {new Date(order.date || order.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
+                  <div>{new Date().toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
                 </td>
                 <td colSpan="2">
                   <div style={{ fontSize: "8px" }}>Sold By:<b>{settings.sellerName}</b>, {settings.sellerAddress}</div>

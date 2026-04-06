@@ -117,11 +117,14 @@ const useOrderStore = create((set) => ({
                 orders: state.orders.map(o => o.id === id ? transformedOrder : o),
                 isLoading: false
             }));
+            return transformedOrder;
         } catch (error) {
+            const errorMessage = error.response?.data?.message || error.message;
             set({ 
-                error: error.response?.data?.message || error.message, 
+                error: errorMessage, 
                 isLoading: false 
             });
+            throw error;
         }
     },
 
@@ -175,11 +178,14 @@ const useOrderStore = create((set) => ({
                 orders: state.orders.map(o => o.id === id ? transformedOrder : o),
                 isLoading: false
             }));
+            return transformedOrder;
         } catch (error) {
+            const errorMessage = error.response?.data?.message || error.message;
             set({ 
-                error: error.response?.data?.message || error.message, 
+                error: errorMessage, 
                 isLoading: false 
             });
+            throw error;
         }
     },
 
