@@ -26,6 +26,7 @@ const formatTrackingDate = (value) => {
 const getOrderSteps = () => ([
     { status: 'Pending', title: 'Order Placed', desc: 'Your order has been received successfully' },
     { status: 'Confirmed', title: 'Confirmed', desc: 'Your order has been confirmed by the admin team' },
+    { status: 'Packed', title: 'Packed', desc: 'Your order has been packed and is ready for dispatch' },
     { status: 'Processing', title: 'Processing', desc: 'Delhivery is processing the shipment after confirmation' },
     { status: 'Not Picked', title: 'Not Picked', desc: 'Shipment is created but pickup is still pending' },
     { status: 'Picked Up', title: 'Picked Up', desc: 'Shipment has been picked up by Delhivery' },
@@ -59,6 +60,8 @@ const TrackOrder = () => {
     const [trackingData, setTrackingData] = React.useState(null);
     const [trackingLoading, setTrackingLoading] = React.useState(false);
     const [trackingError, setTrackingError] = React.useState('');
+    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+    const isDelhiveryMode = fulfillmentMode === 'delhivery';
 
     const fetchOrder = async () => {
         try {
@@ -82,7 +85,7 @@ const TrackOrder = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!order?.delhivery?.waybill) {
+            if (!isDelhiveryMode || !order?.delhivery?.waybill) {
                 setTrackingData(null);
                 setTrackingError('');
                 setTrackingLoading(false);
@@ -112,7 +115,7 @@ const TrackOrder = () => {
         return () => {
             cancelled = true;
         };
-    }, [order?.delhivery?.waybill, orderId]);
+    }, [isDelhiveryMode, order?.delhivery?.waybill, orderId]);
 
     const targetItem = (() => {
         if (!productId || !Array.isArray(order?.orderItems)) {
@@ -156,12 +159,12 @@ const TrackOrder = () => {
             return mappedCourierStep || rawCourierStatus;
         }
 
-        if (mappedCourierStep) {
+        if (isDelhiveryMode && mappedCourierStep) {
             return mappedCourierStep;
         }
 
         if (normalizedCurrentStatus === 'Delivered') return 'Delivered';
-        if (normalizedCurrentStatus === 'Confirmed') return 'Confirmed';
+        if (steps.some((step) => step.status === normalizedCurrentStatus)) return normalizedCurrentStatus;
         return 'Pending';
     })();
 
@@ -173,11 +176,12 @@ const TrackOrder = () => {
         }
 
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt || order?.date);
-        if (stepStatus === 'Confirmed') return formatTrackingDate(order?.delhivery?.syncedAt);
-        if (trackingData?.stepTimes?.[stepStatus]) {
+        if (stepStatus === 'Confirmed') return formatTrackingDate(isDelhiveryMode ? order?.delhivery?.syncedAt : (normalizedCurrentStatus !== 'Pending' ? order?.updatedAt : null));
+        if (isDelhiveryMode && trackingData?.stepTimes?.[stepStatus]) {
             return formatTrackingDate(trackingData.stepTimes[stepStatus]);
         }
         if (stepStatus === 'Delivered') return formatTrackingDate(order?.deliveredAt);
+        if (!isDelhiveryMode && normalizedCurrentStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
 
         return stepIndex < currentStatusIdx ? '' : '';
     };
@@ -342,7 +346,7 @@ const TrackOrder = () => {
                     </div>
                 </div>
 
-                {(order.delhivery?.waybill || trackingLoading || trackingError) ? (
+                {(isDelhiveryMode && (order.delhivery?.waybill || trackingLoading || trackingError)) ? (
                     <div className="m-4 p-4 bg-white rounded-xl border border-gray-200 md:mx-0 md:mt-6 shadow-sm space-y-4">
                         <div className="flex items-center justify-between gap-3">
                             <div>
@@ -448,11 +452,13 @@ const TrackOrder = () => {
                 </div>
 
                 <div className="px-6 py-4 mt-4 border-t md:bg-white md:rounded-lg md:shadow-sm md:border md:border-gray-200 md:px-6 md:py-6">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">Courier details</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">{isDelhiveryMode ? 'Courier details' : 'Fulfillment details'}</h4>
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-bold text-gray-800">Delhivery</p>
-                            <p className="text-xs text-gray-500 uppercase mt-0.5">AWB: {order.delhivery?.waybill || 'Pending'}</p>
+                            <p className="text-sm font-bold text-gray-800">{isDelhiveryMode ? 'Delhivery' : 'Manual fulfillment'}</p>
+                            <p className="text-xs text-gray-500 uppercase mt-0.5">
+                                {isDelhiveryMode ? `AWB: ${order.delhivery?.waybill || 'Pending'}` : 'Status updated by admin team'}
+                            </p>
                         </div>
                         <span className="material-icons text-gray-400">chevron_right</span>
                     </div>

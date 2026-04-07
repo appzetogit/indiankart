@@ -25,7 +25,8 @@ const MyOrders = () => {
             setOrders(data);
             const liveStatusEntries = await Promise.all(
                 (Array.isArray(data) ? data : []).map(async (order) => {
-                    if (!order?.delhivery?.waybill) {
+                    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+                    if (fulfillmentMode !== 'delhivery' || !order?.delhivery?.waybill) {
                         return [String(order?._id || ''), ''];
                     }
 
@@ -52,6 +53,7 @@ const MyOrders = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
             'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -82,6 +84,7 @@ const MyOrders = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
+            'Packed': 'inventory_2',
             'Manifested': 'inventory_2',
             'Not Picked': 'schedule',
             'Picked Up': 'inventory_2',
@@ -110,6 +113,10 @@ const MyOrders = () => {
 
     const getEffectiveOrderStatus = (order) => {
         const liveStatus = String(liveStatuses[String(order?._id || '')] || '').trim();
+        const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+        if (fulfillmentMode !== 'delhivery') {
+            return String(order?.status || '').trim();
+        }
         return liveStatus || String(order?.status || '').trim();
     };
 

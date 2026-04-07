@@ -14,6 +14,17 @@ const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Delivered'
 ]);
 
+const MANUAL_TRACKING_STATUSES = new Set([
+    'Pending',
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered',
+    'Cancelled',
+    'Cancellation Requested'
+]);
+
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
@@ -25,6 +36,15 @@ const isOrderAccessibleByUser = (order, user) => {
         isAdmin,
         isAllowed: orderUserId === currentUserId || isAdmin
     };
+};
+
+const getFulfillmentMode = (order) => {
+    const explicitMode = String(order?.fulfillment?.mode || '').trim();
+    if (explicitMode) {
+        return explicitMode;
+    }
+
+    return order?.delhivery?.waybill ? 'delhivery' : 'unassigned';
 };
 
 // @desc    Create new order
@@ -316,6 +336,81 @@ export const getOrderDelhiveryTracking = async (req, res) => {
     }
 };
 
+// @desc    Assign order fulfillment mode
+// @route   PUT /api/orders/:id/fulfillment
+// @access  Private/Admin
+export const assignOrderFulfillment = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+        const requestedMode = String(req.body?.mode || '').trim().toLowerCase();
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        if (!['manual', 'delhivery'].includes(requestedMode)) {
+            return res.status(400).json({ message: 'Invalid fulfillment mode' });
+        }
+
+        const currentMode = getFulfillmentMode(order);
+        if (currentMode === requestedMode) {
+            await order.populate('user', 'name email phone');
+            return res.json(order);
+        }
+
+        order.fulfillment = {
+            ...order.fulfillment,
+            mode: requestedMode,
+            assignedAt: new Date(),
+            assignedBy: req.user?._id || null
+        };
+
+        if (requestedMode === 'delhivery') {
+            if (!order.delhivery?.waybill) {
+                try {
+                    const shipment = await createDelhiveryShipment(order);
+                    order.delhivery = {
+                        ...order.delhivery,
+                        waybill: shipment.waybill || '',
+                        providerOrderId: shipment.providerOrderId,
+                        pickupLocation: shipment.pickupLocation,
+                        syncedAt: new Date(),
+                        requestPayload: shipment.requestPayload,
+                        responsePayload: shipment.responsePayload,
+                        lastError: ''
+                    };
+                } catch (error) {
+                    order.delhivery = {
+                        ...order.delhivery,
+                        waybill: '',
+                        lastError: error.message || 'Failed to create Delhivery shipment'
+                    };
+                    await order.save();
+                    return res.status(400).json({
+                        message: error.message || 'Failed to create Delhivery shipment'
+                    });
+                }
+            }
+
+            if (String(order.status || '').trim() === 'Pending') {
+                order.status = 'Confirmed';
+            }
+        } else {
+            order.delhivery = {
+                ...order.delhivery,
+                lastError: ''
+            };
+        }
+
+        const updatedOrder = await order.save();
+        await updatedOrder.populate('user', 'name email phone');
+        return res.json(updatedOrder);
+    } catch (error) {
+        console.error('Assign order fulfillment error:', error);
+        return res.status(500).json({ message: error.message || 'Failed to assign fulfillment mode' });
+    }
+};
+
 // @desc    Get all orders
 // @route   GET /api/orders
 // @access  Private/Admin
@@ -426,6 +521,16 @@ export const updateOrderStatus = async (req, res) => {
         const { status, serialNumbers } = req.body;
 
         if (order) {
+            const fulfillmentMode = getFulfillmentMode(order);
+
+            if (fulfillmentMode === 'unassigned' && status !== 'Cancelled' && String(status || '').trim() !== String(order.status || '').trim()) {
+                return res.status(400).json({ message: 'Assign this order to Delhivery or Manual before updating fulfillment.' });
+            }
+
+            if (fulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(String(status || '').trim())) {
+                return res.status(400).json({ message: 'Invalid manual fulfillment status' });
+            }
+
             if (status === 'Cancelled') {
                 if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
                     return res.status(400).json({ message: 'Delivered order cannot be cancelled' });
@@ -459,6 +564,7 @@ export const updateOrderStatus = async (req, res) => {
             }
 
             const shouldCreateDelhiveryShipment =
+                fulfillmentMode === 'delhivery' &&
                 DELHIVERY_SYNC_TRIGGER_STATUSES.has(String(status || '').trim()) &&
                 !order.delhivery?.waybill;
 
@@ -490,6 +596,7 @@ export const updateOrderStatus = async (req, res) => {
             }
 
             const updatedOrder = await order.save();
+            await updatedOrder.populate('user', 'name email phone');
             res.json(updatedOrder);
         } else {
             res.status(404).json({ message: 'Order not found' });

@@ -102,6 +102,19 @@ const orderSchema = mongoose.Schema({
         default: 'Pending',
         enum: ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Requested']
     },
+    fulfillment: {
+        mode: {
+            type: String,
+            enum: ['unassigned', 'manual', 'delhivery'],
+            default: 'unassigned'
+        },
+        assignedAt: { type: Date },
+        assignedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null
+        }
+    },
     delhivery: {
         waybill: { type: String, default: '' },
         providerOrderId: { type: String, default: '' },

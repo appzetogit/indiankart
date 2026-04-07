@@ -177,6 +177,8 @@ const OrderDetails = () => {
         isServiceable: null,
         text: ''
     });
+    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+    const isDelhiveryMode = fulfillmentMode === 'delhivery';
 
     useEffect(() => {
         fetchOrderDetails();
@@ -199,7 +201,7 @@ const OrderDetails = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!order?.delhivery?.waybill) {
+            if (!isDelhiveryMode || !order?.delhivery?.waybill) {
                 setTrackingData(null);
                 return;
             }
@@ -219,7 +221,7 @@ const OrderDetails = () => {
         return () => {
             cancelled = true;
         };
-    }, [order?.delhivery?.waybill, orderId]);
+    }, [isDelhiveryMode, order?.delhivery?.waybill, orderId]);
 
     useEffect(() => {
         const delivered = String(trackingData?.currentStatus || '').trim() === 'Delivered'
@@ -290,6 +292,7 @@ const OrderDetails = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
             'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -320,6 +323,7 @@ const OrderDetails = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
+            'Packed': 'inventory_2',
             'Manifested': 'inventory_2',
             'Not Picked': 'schedule',
             'Picked Up': 'inventory_2',
@@ -349,6 +353,7 @@ const OrderDetails = () => {
     const steps = [
         { name: 'Pending', status: 'Pending', icon: 'shopping_cart' },
         { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
+        { name: 'Packed', status: 'Packed', icon: 'inventory_2' },
         { name: 'Manifested', status: 'Manifested', icon: 'inventory_2' },
         { name: 'Not Picked', status: 'Not Picked', icon: 'schedule' },
         { name: 'Picked Up', status: 'Picked Up', icon: 'inventory_2' },
@@ -360,7 +365,7 @@ const OrderDetails = () => {
     ];
     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
     const rawCourierStatus = String(trackingData?.currentStatus || '').trim();
-    const hasCourierException = EXCEPTION_STATUSES.has(rawCourierStatus);
+    const hasCourierException = isDelhiveryMode && EXCEPTION_STATUSES.has(rawCourierStatus);
     const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
     const scanTimeByStatus = rawTrackingScans.reduce((acc, scan) => {
         const key = String(scan?.status || '').trim();
@@ -375,10 +380,9 @@ const OrderDetails = () => {
             return normalizedOrderStatus;
         }
         if (hasCourierException) return rawCourierStatus;
-        if (rawCourierStatus) return rawCourierStatus;
-        if (normalizedOrderStatus === 'Delivered') return 'Delivered';
-        if (normalizedOrderStatus === 'Confirmed') return 'Confirmed';
-        return 'Pending';
+        if (isDelhiveryMode && rawCourierStatus) return rawCourierStatus;
+        if (steps.some((step) => step.status === normalizedOrderStatus)) return normalizedOrderStatus;
+        return normalizedOrderStatus || 'Pending';
     })();
     const currentStep = steps.findIndex((step) => step.status === displayOrderStatus);
     const orderProgress = steps.length > 1 && currentStep >= 0
@@ -443,7 +447,7 @@ const OrderDetails = () => {
     const isOnlinePaidOrder = Boolean(order?.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
     const paymentInfoStatus = isOnlinePaidOrder
         ? 'Completed'
-        : (order?.isPaid || ['Confirmed', 'Manifested', 'Not Picked', 'Picked Up', 'Scheduled', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered'].includes(displayOrderStatus)
+        : (order?.isPaid || ['Confirmed', 'Packed', 'Manifested', 'Not Picked', 'Picked Up', 'Scheduled', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered'].includes(displayOrderStatus)
             ? 'Completed'
             : 'Pending');
     const isWithinReturnWindow = useMemo(() => {
@@ -457,9 +461,10 @@ const OrderDetails = () => {
 
     const getStepTimestamp = (stepStatus, stepIndex) => {
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt);
-        if (stepStatus === 'Confirmed') return formatTrackingDate(order?.delhivery?.syncedAt);
-        if (scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
+        if (stepStatus === 'Confirmed') return formatTrackingDate(isDelhiveryMode ? order?.delhivery?.syncedAt : (normalizedOrderStatus !== 'Pending' ? order?.updatedAt : null));
+        if (isDelhiveryMode && scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
         if (stepStatus === 'Delivered') return formatTrackingDate(effectiveDeliveredAt);
+        if (!isDelhiveryMode && normalizedOrderStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
         if (stepIndex < currentStep) return '';
         return '';
     };

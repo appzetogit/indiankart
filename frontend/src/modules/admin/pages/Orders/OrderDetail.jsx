@@ -33,11 +33,12 @@ const ADMIN_TIMELINE_STATUSES = [
 ];
 
 const ADMIN_TIMELINE_STATUS_SET = new Set(ADMIN_TIMELINE_STATUSES);
+const MANUAL_FULFILLMENT_STATUSES = ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
 
 const OrderDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { orders, updateOrderStatus, cancelOrder, getOrderDetails, isLoading } = useOrderStore();
+    const { orders, updateOrderStatus, cancelOrder, getOrderDetails, assignOrderFulfillment, isLoading } = useOrderStore();
     const order = orders.find(o => o.id === id);
 
     const [updating, setUpdating] = useState(false);
@@ -53,8 +54,6 @@ const OrderDetail = () => {
     const [trackingData, setTrackingData] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
     const [trackingError, setTrackingError] = useState('');
-    const fulfillmentStatuses = ['Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered'];
-
     const normalizeFulfillmentStatus = (status = '') => {
         const value = String(status || '').trim();
         if (value === 'Shipped') return 'Dispatched';
@@ -81,7 +80,7 @@ const OrderDetail = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!order?.delhivery?.waybill) {
+            if ((order?.fulfillment?.mode || 'unassigned') !== 'delhivery' || !order?.delhivery?.waybill) {
                 setTrackingData(null);
                 setTrackingError('');
                 setTrackingLoading(false);
@@ -111,7 +110,7 @@ const OrderDetail = () => {
         return () => {
             cancelled = true;
         };
-    }, [id, order?.delhivery?.waybill, order?.status]);
+    }, [id, order?.delhivery?.waybill, order?.fulfillment?.mode, order?.status]);
 
     if (isLoading && !order) {
         return (
@@ -152,11 +151,11 @@ const OrderDetail = () => {
         populateSerialFields();
         // Set next logical status or current status
         const normalizedOrderStatus = normalizeFulfillmentStatus(order.status);
-        const currentIdx = fulfillmentStatuses.indexOf(normalizedOrderStatus);
-        if (currentIdx !== -1 && currentIdx < fulfillmentStatuses.length - 1) {
-            setSelectedStatus(fulfillmentStatuses[currentIdx + 1]);
+        const currentIdx = MANUAL_FULFILLMENT_STATUSES.indexOf(normalizedOrderStatus);
+        if (currentIdx !== -1 && currentIdx < MANUAL_FULFILLMENT_STATUSES.length - 1) {
+            setSelectedStatus(MANUAL_FULFILLMENT_STATUSES[currentIdx + 1]);
         } else {
-            setSelectedStatus(fulfillmentStatuses.includes(normalizedOrderStatus) ? normalizedOrderStatus : '');
+            setSelectedStatus(MANUAL_FULFILLMENT_STATUSES.includes(normalizedOrderStatus) ? normalizedOrderStatus : 'Confirmed');
         }
     };
 
@@ -192,6 +191,15 @@ const OrderDetail = () => {
 
     const handleUpdateClick = () => {
         handleStatusUpdate(selectedStatus);
+    };
+
+    const handleAssignFulfillment = async (mode) => {
+        try {
+            await assignOrderFulfillment(id, mode);
+            toast.success(mode === 'delhivery' ? 'Order assigned to Delhivery' : 'Order assigned to manual fulfillment');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to assign fulfillment mode');
+        }
     };
 
     const handleStatusUpdate = async (newStatus) => {
@@ -253,8 +261,12 @@ const OrderDetail = () => {
     };
 
     const normalizedCurrentStatus = normalizeFulfillmentStatus(order.status);
+    const fulfillmentMode = String(order.fulfillment?.mode || (order.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+    const isDelhiveryMode = fulfillmentMode === 'delhivery';
+    const isManualMode = fulfillmentMode === 'manual';
+    const isFulfillmentAssigned = isDelhiveryMode || isManualMode;
     const liveApiStatus = String(trackingData?.currentStatus || '').trim();
-    const effectiveAdminStatus = liveApiStatus || normalizedCurrentStatus || order.status;
+    const effectiveAdminStatus = (isDelhiveryMode ? liveApiStatus : '') || normalizedCurrentStatus || order.status;
     const displayOrderStatus = effectiveAdminStatus;
     const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
     const currentRawApiStatus = String(trackingData?.currentStatus || '').trim();
@@ -279,15 +291,15 @@ const OrderDetail = () => {
             time = order.createdAt || order.date || null;
             type = 'system';
         } else if (status === 'Confirmed') {
-            time = order.delhivery?.syncedAt || null;
+            time = isDelhiveryMode ? (order.delhivery?.syncedAt || null) : (normalizedCurrentStatus !== 'Pending' ? (order.updatedAt || null) : null);
             type = 'system';
         } else if (status === 'Delivered') {
-            time = scanTimeByStatus[status] || order.deliveredAt || null;
+            time = (isDelhiveryMode ? scanTimeByStatus[status] : null) || order.deliveredAt || null;
         } else {
-            time = scanTimeByStatus[status] || null;
+            time = isDelhiveryMode ? (scanTimeByStatus[status] || null) : (normalizedCurrentStatus === status ? (order.updatedAt || null) : null);
         }
 
-        if (!time && status === currentRawApiStatus) {
+        if (isDelhiveryMode && !time && status === currentRawApiStatus) {
             time = currentRawApiLastUpdatedAt;
         }
 
@@ -306,8 +318,8 @@ const OrderDetail = () => {
     const timelineOrderStatus = ADMIN_TIMELINE_STATUS_SET.has(normalizedCurrentStatus)
         ? normalizedCurrentStatus
         : '';
-    const currentTimelineStatus = timelineApiStatus
-        || (order.delhivery?.syncedAt ? 'Confirmed' : '')
+    const currentTimelineStatus = (isDelhiveryMode ? timelineApiStatus : '')
+        || (isDelhiveryMode && order.delhivery?.syncedAt ? 'Confirmed' : '')
         || timelineOrderStatus;
     const currentTimelineIndex = adminTimelineEntries.findIndex((entry) => entry.status === currentTimelineStatus);
     const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
@@ -375,7 +387,25 @@ const OrderDetail = () => {
                         </button>
                     )}
 
-                    {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' && (
+                    {effectiveAdminStatus !== 'Cancelled' ? (
+                        <div className="min-w-[170px]">
+                            <select
+                                value={isFulfillmentAssigned ? fulfillmentMode : ''}
+                                onChange={(e) => {
+                                    if (!e.target.value) return;
+                                    handleAssignFulfillment(e.target.value);
+                                }}
+                                disabled={effectiveAdminStatus === 'Delivered'}
+                                className="w-full bg-white border border-gray-200 focus:border-blue-500 rounded-xl md:rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-[10px] md:text-xs font-black outline-none transition-all text-gray-900 shadow-sm uppercase tracking-widest"
+                            >
+                                <option value="">Choose Delivery Type</option>
+                                <option value="manual">Manual</option>
+                                <option value="delhivery">Delhivery</option>
+                            </select>
+                        </div>
+                    ) : null}
+
+                    {isManualMode && effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' && (
                         <button
                             onClick={openUpdateModal}
                             className="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-6 md:py-3 bg-blue-600 text-white font-black text-[10px] md:text-xs rounded-xl md:rounded-2xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 uppercase tracking-widest"
@@ -595,8 +625,8 @@ const OrderDetail = () => {
 
                     <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between gap-3">
-                            <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Delhivery Shipment</h2>
-                            {order.delhivery?.waybill ? (
+                            <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Fulfillment</h2>
+                            {isDelhiveryMode && order.delhivery?.waybill ? (
                                 <button
                                     type="button"
                                     onClick={async () => {
@@ -620,19 +650,32 @@ const OrderDetail = () => {
                         </div>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-xs">
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Mode</span>
+                                <span className={`font-black uppercase tracking-wider ${isDelhiveryMode ? 'text-blue-700' : isManualMode ? 'text-amber-700' : 'text-gray-500'}`}>
+                                    {isDelhiveryMode ? 'Delhivery' : isManualMode ? 'Manual' : 'Not assigned'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Waybill</span>
-                                <span className="font-black text-gray-900">{order.delhivery?.waybill || 'Not created yet'}</span>
+                                <span className="font-black text-gray-900">{isDelhiveryMode ? (order.delhivery?.waybill || 'Not created yet') : 'Not applicable'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Pickup Location</span>
-                                <span className="font-black text-gray-900">{order.delhivery?.pickupLocation || 'N/A'}</span>
+                                <span className="font-black text-gray-900">{isDelhiveryMode ? (order.delhivery?.pickupLocation || 'N/A') : 'Not applicable'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Synced At</span>
                                 <span className="font-black text-gray-900">
-                                    {order.delhivery?.syncedAt ? new Date(order.delhivery.syncedAt).toLocaleString() : 'Pending'}
+                                    {isDelhiveryMode
+                                        ? (order.delhivery?.syncedAt ? new Date(order.delhivery.syncedAt).toLocaleString() : 'Pending')
+                                        : 'Manual updates'}
                                 </span>
                             </div>
+                            {isManualMode ? (
+                                <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-4 text-xs font-semibold text-amber-800">
+                                    This order is on manual fulfillment. Customer tracking will use admin-updated statuses instead of live Delhivery events.
+                                </div>
+                            ) : null}
                             {trackingLoading ? (
                                 <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs font-semibold text-blue-600">
                                     Fetching live Delhivery tracking...
@@ -685,26 +728,50 @@ const OrderDetail = () => {
                                 </div>
 
                                 <div className="space-y-3">
-                                    {effectiveAdminStatus === 'Pending' ? (
+                                    {!isFulfillmentAssigned ? (
                                         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                                            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Next Action</p>
+                                            <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Assign Fulfillment First</p>
                                             <p className="mt-2 text-sm font-semibold text-blue-900">
-                                                Confirm this order to create the Delhivery shipment and start live courier tracking.
+                                                Pick Delhivery for API-based tracking or Manual if your team will update each status here.
                                             </p>
                                         </div>
-                                    ) : (
+                                    ) : isDelhiveryMode ? (
                                         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                                             <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Live Courier Controlled</p>
                                             <p className="mt-2 text-sm font-semibold text-emerald-900">
                                                 Fulfillment status is now driven by Delhivery live tracking. You can update Serial/IMEI details here.
                                             </p>
                                         </div>
+                                    ) : (
+                                        <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                                            <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Manual Fulfillment</p>
+                                            <p className="mt-2 text-sm font-semibold text-amber-900">
+                                                This order will follow admin-updated statuses. Choose the next manual step below.
+                                            </p>
+                                        </div>
                                     )}
 
                                     <div className="space-y-3 mt-4 animate-in fade-in slide-in-from-top-2">
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Delivery Type</p>
+                                            <select
+                                                value={isFulfillmentAssigned ? fulfillmentMode : ''}
+                                                onChange={(e) => {
+                                                    if (!e.target.value) return;
+                                                    handleAssignFulfillment(e.target.value);
+                                                }}
+                                                disabled={effectiveAdminStatus === 'Delivered' || effectiveAdminStatus === 'Cancelled'}
+                                                className="w-full bg-white border border-gray-200 focus:border-blue-500 rounded-2xl px-4 py-3 text-sm font-bold outline-none transition-all text-gray-900 shadow-sm"
+                                            >
+                                                <option value="">Choose delivery type</option>
+                                                <option value="manual">Manual</option>
+                                                <option value="delhivery">Delhivery</option>
+                                            </select>
+                                        </div>
+
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                             <MdLocalShipping size={14} />
-                                            {effectiveAdminStatus === 'Pending' ? 'Add Serial/IMEI Before Confirming' : 'Edit Serial/IMEI Numbers'}
+                                            {!isFulfillmentAssigned ? 'Add Serial/IMEI Before Assignment' : 'Edit Serial/IMEI Numbers'}
                                         </p>
                                         <div className="bg-gray-50 rounded-2xl p-4 space-y-3 border border-gray-100 max-h-60 overflow-y-auto">
                                             {order.items.map(item => (
@@ -737,20 +804,48 @@ const OrderDetail = () => {
                                             ))}
                                         </div>
                                     </div>
-                                    {effectiveAdminStatus === 'Pending' ? (
+                                    {isManualMode ? (
+                                        <>
+                                            {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Manual Status</p>
+                                                        <select
+                                                            value={selectedStatus}
+                                                            onChange={(e) => setSelectedStatus(e.target.value)}
+                                                            className="w-full bg-white border border-gray-200 focus:border-blue-500 rounded-2xl px-4 py-3 text-sm font-bold outline-none transition-all text-gray-900 shadow-sm"
+                                                        >
+                                                            {MANUAL_FULFILLMENT_STATUSES.map((status) => (
+                                                                <option key={status} value={status}>{status}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={handleUpdateClick}
+                                                        className="w-full mt-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all"
+                                                    >
+                                                        Update Manual Status
+                                                    </button>
+                                                </>
+                                            ) : null}
+
+                                            {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                                <button
+                                                    onClick={() => setShowCancelConfirm(true)}
+                                                    className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
+                                                >
+                                                    Cancel Order
+                                                </button>
+                                            ) : null}
+                                        </>
+                                    ) : !isFulfillmentAssigned ? (
                                         <>
                                             <button
                                                 onClick={() => setShowCancelConfirm(true)}
                                                 className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
                                             >
                                                 Cancel Order
-                                            </button>
-
-                                            <button
-                                                onClick={() => handleStatusUpdate('Confirmed')}
-                                                className="w-full mt-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-200 hover:shadow-xl hover:scale-[1.02] transition-all"
-                                            >
-                                                Confirm Order
                                             </button>
                                         </>
                                     ) : (
