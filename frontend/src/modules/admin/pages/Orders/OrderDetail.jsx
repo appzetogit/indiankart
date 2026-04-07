@@ -164,6 +164,13 @@ const OrderDetail = () => {
         setShowSerialModal(true);
     };
 
+    const openCancelModal = () => {
+        setUpdating(true);
+        setShowCancelConfirm(true);
+        setActionNote('');
+        populateSerialFields();
+    };
+
     const handleSerialSave = async () => {
         const serialNumbers = order.items.map(item => ({
             itemId: item._id,
@@ -626,27 +633,38 @@ const OrderDetail = () => {
                     <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm space-y-4 md:space-y-6">
                         <div className="flex items-center justify-between gap-3">
                             <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Fulfillment</h2>
-                            {isDelhiveryMode && order.delhivery?.waybill ? (
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        try {
-                                            setTrackingLoading(true);
-                                            setTrackingError('');
-                                            const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
-                                            setTrackingData(data?.tracking || null);
-                                        } catch (error) {
-                                            setTrackingError(error.response?.data?.message || 'Unable to refresh live Delhivery status');
-                                            setTrackingData(null);
-                                        } finally {
-                                            setTrackingLoading(false);
-                                        }
-                                    }}
-                                    className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-600 transition-all hover:bg-blue-100"
-                                >
-                                    {trackingLoading ? 'Refreshing...' : 'Refresh Live Status'}
-                                </button>
-                            ) : null}
+                            <div className="flex items-center gap-2">
+                                {isDelhiveryMode && effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                    <button
+                                        type="button"
+                                        onClick={openCancelModal}
+                                        className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-100"
+                                    >
+                                        Cancel Order
+                                    </button>
+                                ) : null}
+                                {isDelhiveryMode && order.delhivery?.waybill ? (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                setTrackingLoading(true);
+                                                setTrackingError('');
+                                                const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
+                                                setTrackingData(data?.tracking || null);
+                                            } catch (error) {
+                                                setTrackingError(error.response?.data?.message || 'Unable to refresh live Delhivery status');
+                                                setTrackingData(null);
+                                            } finally {
+                                                setTrackingLoading(false);
+                                            }
+                                        }}
+                                        className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-blue-600 transition-all hover:bg-blue-100"
+                                    >
+                                        {trackingLoading ? 'Refreshing...' : 'Refresh Live Status'}
+                                    </button>
+                                ) : null}
+                            </div>
                         </div>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-xs">

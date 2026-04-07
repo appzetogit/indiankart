@@ -140,6 +140,18 @@ const ProductDetails = () => {
     const [pincodeStatus, setPincodeStatus] = useState(null); // { message: '', isServiceable: bool, deliveryDate: '' }
     const [checkingPincode, setCheckingPincode] = useState(false);
 
+    const formatDeliveryEstimate = (time, unit) => {
+        const numericTime = Number(time);
+        const normalizedUnit = String(unit || '').trim().toLowerCase();
+        if (!Number.isFinite(numericTime) || numericTime <= 0 || !normalizedUnit) {
+            return '';
+        }
+
+        const singularUnit = normalizedUnit.endsWith('s') ? normalizedUnit.slice(0, -1) : normalizedUnit;
+        const displayUnit = numericTime === 1 ? singularUnit : `${singularUnit}s`;
+        return `${numericTime} ${displayUnit}`;
+    };
+
     const handleCheckPincode = async (codeOverride = null) => {
         const codeToCheck = codeOverride || pincode;
         if (!codeToCheck || codeToCheck.length < 6) {
@@ -150,11 +162,11 @@ const ProductDetails = () => {
         try {
             const { data } = await API.get(`/pincodes/check/${codeToCheck}`);
             if (data.isServiceable) {
+                const deliveryEstimate = formatDeliveryEstimate(data.deliveryTime, data.deliveryUnit);
                 setPincodeStatus({
                     isServiceable: true,
-                    message: data.message || `Delivered in ${data.deliveryTime} ${data.unit}`,
-
-                    deliveryDate: data.deliveryTime + ' ' + data.unit,
+                    message: deliveryEstimate ? `Delivery in ${deliveryEstimate}` : (data.message || 'Deliverable to this location'),
+                    deliveryDate: deliveryEstimate,
                     isCOD: data.isCOD
                 });
             } else {

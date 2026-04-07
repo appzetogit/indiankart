@@ -15,6 +15,16 @@ const pinCodeSchema = mongoose.Schema({
     isCOD: {
         type: Boolean,
         default: true
+    },
+    deliveryTime: {
+        type: Number,
+        default: 3,
+        min: 1
+    },
+    deliveryUnit: {
+        type: String,
+        enum: ['minutes', 'hours', 'days'],
+        default: 'days'
     }
 }, {
     timestamps: true

@@ -4,7 +4,7 @@ import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
-import { createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
+import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Confirmed',
@@ -534,6 +534,27 @@ export const updateOrderStatus = async (req, res) => {
             if (status === 'Cancelled') {
                 if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
                     return res.status(400).json({ message: 'Delivered order cannot be cancelled' });
+                }
+
+                if (fulfillmentMode === 'delhivery' && order.delhivery?.waybill) {
+                    try {
+                        const cancellation = await cancelDelhiveryShipment(order);
+                        order.delhivery = {
+                            ...order.delhivery,
+                            cancelledAt: new Date(),
+                            cancelResponsePayload: cancellation.responsePayload,
+                            lastError: ''
+                        };
+                    } catch (error) {
+                        order.delhivery = {
+                            ...order.delhivery,
+                            lastError: error.message || 'Failed to cancel Delhivery shipment'
+                        };
+                        await order.save();
+                        return res.status(400).json({
+                            message: error.message || 'Failed to cancel Delhivery shipment'
+                        });
+                    }
                 }
 
                 if (order.status !== 'Cancelled') {

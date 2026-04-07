@@ -120,8 +120,10 @@ const orderSchema = mongoose.Schema({
         providerOrderId: { type: String, default: '' },
         pickupLocation: { type: String, default: '' },
         syncedAt: { type: Date },
+        cancelledAt: { type: Date },
         requestPayload: { type: mongoose.Schema.Types.Mixed, default: null },
         responsePayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        cancelResponsePayload: { type: mongoose.Schema.Types.Mixed, default: null },
         lastError: { type: String, default: '' }
     }
 }, {
