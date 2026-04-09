@@ -17,6 +17,12 @@ const NON_REJECTED_RETURN_STATUSES = new Set([
     'Completed'
 ]);
 
+const replacementUsesRefundFlow = (returnRequest) => {
+    if (String(returnRequest?.type || '').trim() !== 'Replacement') return false;
+    const timeline = Array.isArray(returnRequest?.timeline) ? returnRequest.timeline : [];
+    return timeline.some((entry) => String(entry?.status || '').trim() === 'Refund Initiated');
+};
+
 const getNormalizedQuantity = (value) => Math.max(1, Number.parseInt(value, 10) || 1);
 const normalizeVariant = (value) => (value && typeof value === 'object' ? value : {});
 const isSameVariant = (first = {}, second = {}) => JSON.stringify(first || {}) === JSON.stringify(second || {});
@@ -66,14 +72,14 @@ const getAggregateReturnStatusForOrderItem = (returnRequests = [], orderItem) =>
         }
 
         if (normalizedStatus === 'Completed') {
-            if (returnRequest.type === 'Replacement') completedReplacementQty += requestQty;
+            if (returnRequest.type === 'Replacement' && !replacementUsesRefundFlow(returnRequest)) completedReplacementQty += requestQty;
             else completedReturnQty += requestQty;
             return;
         }
 
         if (!NON_REJECTED_RETURN_STATUSES.has(normalizedStatus)) return;
 
-        if (returnRequest.type === 'Replacement') activeReplacementQty += requestQty;
+        if (returnRequest.type === 'Replacement' && !replacementUsesRefundFlow(returnRequest)) activeReplacementQty += requestQty;
         else activeReturnQty += requestQty;
     });
 
@@ -508,19 +514,37 @@ export const updateReturnStatus = async (req, res) => {
         }
 
         if (returnRequest) {
-            const oldStatus = returnRequest.status;
-            returnRequest.status = nextStatus || returnRequest.status;
-            
-            // Push to timeline
+            const order = await Order.findById(returnRequest.orderId);
+            let resolvedStatus = nextStatus || returnRequest.status;
+            let resolvedNote = note || `Status updated to ${resolvedStatus}`;
+
+            if (order && returnRequest.type === 'Replacement' && nextStatus === 'Refund Initiated') {
+                const refundResult = await refundCancelledRazorpayOrder(order, 'Admin initiated refund for replacement request');
+
+                if (refundResult.attempted && !refundResult.success) {
+                    return res.status(400).json({
+                        message: refundResult.error || 'Unable to initiate refund for this replacement request'
+                    });
+                }
+
+                if (refundResult.attempted && refundResult.success) {
+                    resolvedNote = note || 'Razorpay refund initiated for replacement request';
+                } else if (refundResult.reason === 'not_required') {
+                    resolvedNote = note || 'Marked for manual refund processing';
+                } else if (refundResult.reason === 'already_processed') {
+                    resolvedNote = note || 'Refund was already processed earlier';
+                }
+            }
+
+            returnRequest.status = resolvedStatus;
             returnRequest.timeline.push({
-                status: nextStatus,
-                note: note || `Status updated to ${nextStatus}`
+                status: resolvedStatus,
+                note: resolvedNote
             });
-            
+
             const updatedReturn = await returnRequest.save();
 
             // Sync with Order Status
-            const order = await Order.findById(returnRequest.orderId);
             if (order) {
                 if (returnRequest.type === 'Cancellation') {
                     // CANCELLATION ACTION

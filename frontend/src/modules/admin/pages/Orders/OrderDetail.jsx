@@ -377,6 +377,7 @@ const OrderDetail = () => {
                         order={order}
                         items={order.items}
                         settings={settings}
+                        trackingData={trackingData}
                         customTrigger={
                             <button className="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-6 md:py-3 bg-white border border-gray-100 text-gray-600 font-black text-[10px] md:text-xs rounded-xl md:rounded-2xl hover:bg-gray-50 transition-all shadow-sm uppercase tracking-widest">
                                 <MdPrint size={16} className="md:w-[18px] md:h-[18px]" /> <span className="hidden md:inline">Print Invoice</span><span className="md:hidden">Invoice</span>
@@ -451,7 +452,7 @@ const OrderDetail = () => {
                                             </div>
                                         )}
                                         <div className="mt-3">
-                                            <InvoiceGenerator order={order} item={item} settings={settings} />
+                                            <InvoiceGenerator order={order} item={item} settings={settings} trackingData={trackingData} />
                                         </div>
                                     </div>
                                     <div className="text-right">
