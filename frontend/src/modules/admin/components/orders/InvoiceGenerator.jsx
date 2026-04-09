@@ -2,6 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier } from "../../../../utils/shippingProvider";
+
+const normalizeOrderStatus = (status = "") => {
+  const value = String(status || "").trim();
+  if (value === "Shipped") return "Dispatched";
+  return value;
+};
 
 const BarcodeSvg = ({ value, height = 118 }) => {
   const svgRef = useRef(null);
@@ -129,32 +136,35 @@ export const InvoiceDisplay = React.forwardRef(
     };
 
     const format = (n) => toNumber(n).toFixed(2);
-    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? "delhivery" : "unassigned")).trim();
-    const isDelhiveryMode = fulfillmentMode === "delhivery";
-    const delhiveryWaybill = String(order?.delhivery?.waybill || "").trim();
-    const liveTrackingStatus = String(trackingData?.currentStatus || trackingData?.mappedCurrentStep || "").trim();
-    const shipmentSyncedAt = order?.delhivery?.syncedAt || trackingData?.lastUpdatedAt || null;
+    const fulfillmentMode = getFulfillmentMode(order);
+    const isCourierMode = fulfillmentMode === "delhivery" || fulfillmentMode === "ekart";
+    const trackingId = getTrackingIdentifier(order, fulfillmentMode);
+    const providerLabel = getShippingProviderLabel(fulfillmentMode);
+    const liveTrackingStatus = String(trackingData?.mappedCurrentStep || trackingData?.currentStatus || "").trim();
+    const manualStatus = normalizeOrderStatus(order?.status || "");
+    const effectiveShipmentStatus = liveTrackingStatus || manualStatus || "Pending";
+    const shipmentSyncedAt = order?.delhivery?.syncedAt || order?.ekart?.syncedAt || trackingData?.lastUpdatedAt || null;
     const labelOrderId = String(order.displayId || order.id || order._id || "").trim();
     const customerName = order.shippingAddress?.name || order.address?.name || order.user?.name || "Customer Name";
     const customerStreet = order.address?.line || order.shippingAddress?.address || order.shippingAddress?.street || "Address Not Available";
     const customerCity = order.address?.city || order.shippingAddress?.city || "N/A";
     const customerState = order.address?.state || order.shippingAddress?.state || "N/A";
     const customerPin = order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || "N/A";
-    const awbDisplayValue = delhiveryWaybill || labelOrderId;
+    const awbDisplayValue = trackingId || labelOrderId;
     const appBaseUrl = (
       (typeof import.meta !== "undefined" && import.meta.env?.VITE_PUBLIC_APP_URL)
       || (typeof window !== "undefined" && window.location?.origin)
       || ""
     ).replace(/\/$/, "");
-    const delhiveryRedirectUrl = delhiveryWaybill && appBaseUrl
-      ? `${appBaseUrl}/r/delhivery/${encodeURIComponent(delhiveryWaybill)}`
+    const delhiveryRedirectUrl = trackingId && appBaseUrl
+      ? `${appBaseUrl}/r/${encodeURIComponent(fulfillmentMode)}/${encodeURIComponent(trackingId)}`
       : "";
     const barcodeValue = delhiveryRedirectUrl || awbDisplayValue;
     const qrPayload = delhiveryRedirectUrl || [
       `Order ID: ${labelOrderId}`,
       awbDisplayValue ? `Tracking ID: ${awbDisplayValue}` : "",
       customerName ? `Customer: ${customerName}` : "",
-      liveTrackingStatus ? `Status: ${liveTrackingStatus}` : "",
+      effectiveShipmentStatus ? `Status: ${effectiveShipmentStatus}` : "",
       `Address: ${customerStreet}, ${customerCity}, ${customerState} - ${customerPin}`,
     ].filter(Boolean).join("\n");
 
@@ -384,7 +394,7 @@ export const InvoiceDisplay = React.forwardRef(
                     </div>
                     <div className="barcode-meta">
                       {awbDisplayValue
-                        ? (isDelhiveryMode && delhiveryWaybill ? `Open Tracking | ${awbDisplayValue}` : `AWB No. ${awbDisplayValue}`)
+                        ? (isCourierMode && trackingId ? `Open Tracking | ${awbDisplayValue}` : `AWB No. ${awbDisplayValue}`)
                         : "TRACKING ID"}
                     </div>
                   </div>
@@ -393,7 +403,7 @@ export const InvoiceDisplay = React.forwardRef(
                   <div className="qr-wrap">
                     <QrCodeImage value={qrPayload} size={116} />
                     <div className="mini-note" style={{ fontWeight: "bold", textAlign: "center" }}>
-                      {isDelhiveryMode && delhiveryWaybill ? `Delhivery Tracking: ${delhiveryWaybill}` : `Order ID: ${labelOrderId}`}
+                      {isCourierMode && trackingId ? `${getShippingProviderLabel(fulfillmentMode)} Tracking: ${trackingId}` : `Order ID: ${labelOrderId}`}
                     </div>
                   </div>
                 </td>
@@ -410,9 +420,9 @@ export const InvoiceDisplay = React.forwardRef(
                 <td colSpan="2" style={{ borderRight: "1px solid black" }}>
                   <div><b>HBD:</b> {formatShortDate(order.date || order.createdAt) || "N/A"}</div>
                   <div><b>CPD:</b> {formatShortDate(shipmentSyncedAt || printedAt) || "N/A"}</div>
-                  {liveTrackingStatus ? (
-                    <div className="mini-note" style={{ marginTop: "2px" }}><b>Status:</b> {liveTrackingStatus}</div>
-                  ) : null}
+                  <div className="mini-note" style={{ marginTop: "2px" }}>
+                    <b>{isCourierMode ? `${providerLabel} Status:` : "Manual Status:"}</b> {effectiveShipmentStatus}
+                  </div>
                 </td>
                 <td colSpan="2">
                   <div style={{ fontSize: "8px" }}>Sold By:<b>{settings.sellerName}</b>, {settings.sellerAddress}</div>
@@ -473,6 +483,8 @@ export const InvoiceDisplay = React.forwardRef(
               <span style={{ fontSize: "7px" }}>{new Date().toLocaleString()}</span>
             </div>
             <div className="tax-header-item text-right">
+              <div>Fulfillment: {providerLabel}</div>
+              <div>Status: {effectiveShipmentStatus}</div>
               GST: {settings.gstNumber}<br />
               PAN: {settings.panNumber}
             </div>
@@ -573,12 +585,12 @@ export const InvoiceDisplay = React.forwardRef(
             <div className="invoice-barcode">
               <BarcodeSvg value={barcodeValue} height={46} />
               <div style={{ fontSize: "8px", fontWeight: "bold", marginTop: "3px" }}>
-                {isDelhiveryMode && delhiveryWaybill ? `Delhivery AWB: ${awbDisplayValue}` : `Order ID: ${awbDisplayValue}`}
+                {isCourierMode && trackingId ? `${getShippingProviderLabel(fulfillmentMode)} Tracking: ${awbDisplayValue}` : `Order ID: ${awbDisplayValue}`}
               </div>
             </div>
             <div className="invoice-barcode-note">
               <div><b>Scan to open tracking</b></div>
-              <div>{isDelhiveryMode && delhiveryWaybill ? "Redirects to Delhivery tracking" : "Order reference barcode"}</div>
+              <div>{isCourierMode && trackingId ? `Redirects to ${getShippingProviderLabel(fulfillmentMode)} tracking` : "Order reference barcode"}</div>
             </div>
           </div>
 

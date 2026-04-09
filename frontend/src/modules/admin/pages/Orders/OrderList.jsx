@@ -5,6 +5,7 @@ import useOrderStore from '../../store/orderStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { getFulfillmentMode } from '../../../../utils/shippingProvider';
 
 const OrderList = () => {
     const navigate = useNavigate();
@@ -47,8 +48,8 @@ const OrderList = () => {
 
                 const transformOrder = (order, liveStatus = '') => {
                     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
-                    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
-                    const effectiveStatus = String((fulfillmentMode === 'delhivery' ? liveStatus : '') || normalizedOrderStatus || '').trim() || 'Pending';
+                    const fulfillmentMode = getFulfillmentMode(order);
+                    const effectiveStatus = String((fulfillmentMode !== 'manual' && fulfillmentMode !== 'unassigned' ? liveStatus : '') || normalizedOrderStatus || '').trim() || 'Pending';
                     const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
                     const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
                     const paymentStatus = effectiveStatus === 'Delivered'
@@ -79,13 +80,16 @@ const OrderList = () => {
                 if (data.orders) {
                     const liveStatuses = await Promise.all(
                         data.orders.map(async (order) => {
-                            const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
-                            if (fulfillmentMode !== 'delhivery' || !order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                            const fulfillmentMode = getFulfillmentMode(order);
+                            const trackingIdentifier = fulfillmentMode === 'delhivery'
+                                ? order?.delhivery?.waybill
+                                : order?.ekart?.trackingNumber;
+                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
                                 return '';
                             }
 
                             try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
                             } catch (error) {
                                 return '';
@@ -99,13 +103,16 @@ const OrderList = () => {
                 } else {
                     const liveStatuses = await Promise.all(
                         (Array.isArray(data) ? data : []).map(async (order) => {
-                            const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
-                            if (fulfillmentMode !== 'delhivery' || !order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                            const fulfillmentMode = getFulfillmentMode(order);
+                            const trackingIdentifier = fulfillmentMode === 'delhivery'
+                                ? order?.delhivery?.waybill
+                                : order?.ekart?.trackingNumber;
+                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
                                 return '';
                             }
 
                             try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
                             } catch (error) {
                                 return '';

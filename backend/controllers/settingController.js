@@ -44,6 +44,16 @@ const updateSettings = async (req, res) => {
             delhiveryClientName,
             delhiveryPickupLocation,
             delhiveryToken,
+            ekartBaseUrl,
+            ekartTrackingBaseUrl,
+            ekartClientName,
+            ekartPickupLocation,
+            ekartUsername,
+            ekartPassword,
+            ekartApiKey,
+            ekartCreateShipmentPath,
+            ekartTrackingPath,
+            ekartCancelPath,
             shippingCharge,
             freeShippingThreshold,
             minShippingOrderAmount,
@@ -100,6 +110,36 @@ const updateSettings = async (req, res) => {
             if (typeof delhiveryToken === 'string' && delhiveryToken.trim()) {
                 settings.delhiveryToken = delhiveryToken.trim();
             }
+            if (ekartBaseUrl !== undefined) {
+                settings.ekartBaseUrl = String(ekartBaseUrl || '').trim();
+            }
+            if (ekartTrackingBaseUrl !== undefined) {
+                settings.ekartTrackingBaseUrl = String(ekartTrackingBaseUrl || '').trim();
+            }
+            if (ekartClientName !== undefined) {
+                settings.ekartClientName = String(ekartClientName || '').trim();
+            }
+            if (ekartPickupLocation !== undefined) {
+                settings.ekartPickupLocation = String(ekartPickupLocation || '').trim();
+            }
+            if (ekartUsername !== undefined) {
+                settings.ekartUsername = String(ekartUsername || '').trim();
+            }
+            if (typeof ekartPassword === 'string' && ekartPassword.trim()) {
+                settings.ekartPassword = ekartPassword.trim();
+            }
+            if (typeof ekartApiKey === 'string' && ekartApiKey.trim()) {
+                settings.ekartApiKey = ekartApiKey.trim();
+            }
+            if (ekartCreateShipmentPath !== undefined) {
+                settings.ekartCreateShipmentPath = String(ekartCreateShipmentPath || '').trim();
+            }
+            if (ekartTrackingPath !== undefined) {
+                settings.ekartTrackingPath = String(ekartTrackingPath || '').trim();
+            }
+            if (ekartCancelPath !== undefined) {
+                settings.ekartCancelPath = String(ekartCancelPath || '').trim();
+            }
             if (shippingCharge !== undefined) {
                 const parsed = Number(shippingCharge);
                 if (Number.isFinite(parsed) && parsed >= 0) settings.shippingCharge = parsed;
@@ -145,6 +185,16 @@ const updateSettings = async (req, res) => {
                 delhiveryClientName: typeof delhiveryClientName === 'string' ? delhiveryClientName.trim() : '',
                 delhiveryPickupLocation: typeof delhiveryPickupLocation === 'string' ? delhiveryPickupLocation.trim() : '',
                 delhiveryToken: (typeof delhiveryToken === 'string' ? delhiveryToken.trim() : '') || '',
+                ekartBaseUrl: typeof ekartBaseUrl === 'string' ? ekartBaseUrl.trim() : '',
+                ekartTrackingBaseUrl: typeof ekartTrackingBaseUrl === 'string' ? ekartTrackingBaseUrl.trim() : '',
+                ekartClientName: typeof ekartClientName === 'string' ? ekartClientName.trim() : '',
+                ekartPickupLocation: typeof ekartPickupLocation === 'string' ? ekartPickupLocation.trim() : '',
+                ekartUsername: typeof ekartUsername === 'string' ? ekartUsername.trim() : '',
+                ekartPassword: (typeof ekartPassword === 'string' ? ekartPassword.trim() : '') || '',
+                ekartApiKey: (typeof ekartApiKey === 'string' ? ekartApiKey.trim() : '') || '',
+                ekartCreateShipmentPath: typeof ekartCreateShipmentPath === 'string' ? ekartCreateShipmentPath.trim() : '/api/v1/shipments',
+                ekartTrackingPath: typeof ekartTrackingPath === 'string' ? ekartTrackingPath.trim() : '/api/v1/shipments/tracking',
+                ekartCancelPath: typeof ekartCancelPath === 'string' ? ekartCancelPath.trim() : '/api/v1/shipments/cancel',
                 shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
                 freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
                 minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,

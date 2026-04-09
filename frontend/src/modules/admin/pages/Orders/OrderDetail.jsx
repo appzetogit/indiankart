@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator from '../../components/orders/InvoiceGenerator';
 import API from '../../../../services/api';
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getTrackingIdentifierLabel, getShippingError, getShippingPickupLocation, getShippingSyncedAt, isCourierMode } from '../../../../utils/shippingProvider';
 
 const formatTrackingDate = (value) => {
     if (!value) return 'N/A';
@@ -80,7 +81,8 @@ const OrderDetail = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if ((order?.fulfillment?.mode || 'unassigned') !== 'delhivery' || !order?.delhivery?.waybill) {
+            const fulfillmentMode = getFulfillmentMode(order);
+            if (!isCourierMode(fulfillmentMode) || !getTrackingIdentifier(order, fulfillmentMode)) {
                 setTrackingData(null);
                 setTrackingError('');
                 setTrackingLoading(false);
@@ -91,12 +93,12 @@ const OrderDetail = () => {
             setTrackingError('');
 
             try {
-                const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
+                const { data } = await API.get(`/orders/${id}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
             } catch (error) {
                 if (cancelled) return;
-                setTrackingError(error.response?.data?.message || 'Unable to fetch live Delhivery status');
+                setTrackingError(error.response?.data?.message || 'Unable to fetch live courier status');
                 setTrackingData(null);
             } finally {
                 if (!cancelled) {
@@ -110,7 +112,7 @@ const OrderDetail = () => {
         return () => {
             cancelled = true;
         };
-    }, [id, order?.delhivery?.waybill, order?.fulfillment?.mode, order?.status]);
+    }, [id, order?.delhivery?.waybill, order?.ekart?.trackingNumber, order?.fulfillment?.mode, order?.status]);
 
     if (isLoading && !order) {
         return (
@@ -203,7 +205,11 @@ const OrderDetail = () => {
     const handleAssignFulfillment = async (mode) => {
         try {
             await assignOrderFulfillment(id, mode);
-            toast.success(mode === 'delhivery' ? 'Order assigned to Delhivery' : 'Order assigned to manual fulfillment');
+            toast.success(
+                mode === 'manual'
+                    ? 'Order assigned to manual fulfillment'
+                    : `Order assigned to ${getShippingProviderLabel(mode)}`
+            );
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to assign fulfillment mode');
         }
@@ -268,12 +274,12 @@ const OrderDetail = () => {
     };
 
     const normalizedCurrentStatus = normalizeFulfillmentStatus(order.status);
-    const fulfillmentMode = String(order.fulfillment?.mode || (order.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
-    const isDelhiveryMode = fulfillmentMode === 'delhivery';
+    const fulfillmentMode = getFulfillmentMode(order);
     const isManualMode = fulfillmentMode === 'manual';
-    const isFulfillmentAssigned = isDelhiveryMode || isManualMode;
+    const hasCourierFulfillment = isCourierMode(fulfillmentMode);
+    const isFulfillmentAssigned = hasCourierFulfillment || isManualMode;
     const liveApiStatus = String(trackingData?.currentStatus || '').trim();
-    const effectiveAdminStatus = (isDelhiveryMode ? liveApiStatus : '') || normalizedCurrentStatus || order.status;
+    const effectiveAdminStatus = (hasCourierFulfillment ? liveApiStatus : '') || normalizedCurrentStatus || order.status;
     const displayOrderStatus = effectiveAdminStatus;
     const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
     const currentRawApiStatus = String(trackingData?.currentStatus || '').trim();
@@ -298,15 +304,15 @@ const OrderDetail = () => {
             time = order.createdAt || order.date || null;
             type = 'system';
         } else if (status === 'Confirmed') {
-            time = isDelhiveryMode ? (order.delhivery?.syncedAt || null) : (normalizedCurrentStatus !== 'Pending' ? (order.updatedAt || null) : null);
+            time = hasCourierFulfillment ? (getShippingSyncedAt(order, fulfillmentMode) || null) : (normalizedCurrentStatus !== 'Pending' ? (order.updatedAt || null) : null);
             type = 'system';
         } else if (status === 'Delivered') {
-            time = (isDelhiveryMode ? scanTimeByStatus[status] : null) || order.deliveredAt || null;
+            time = (hasCourierFulfillment ? scanTimeByStatus[status] : null) || order.deliveredAt || null;
         } else {
-            time = isDelhiveryMode ? (scanTimeByStatus[status] || null) : (normalizedCurrentStatus === status ? (order.updatedAt || null) : null);
+            time = hasCourierFulfillment ? (scanTimeByStatus[status] || null) : (normalizedCurrentStatus === status ? (order.updatedAt || null) : null);
         }
 
-        if (isDelhiveryMode && !time && status === currentRawApiStatus) {
+        if (hasCourierFulfillment && !time && status === currentRawApiStatus) {
             time = currentRawApiLastUpdatedAt;
         }
 
@@ -325,8 +331,8 @@ const OrderDetail = () => {
     const timelineOrderStatus = ADMIN_TIMELINE_STATUS_SET.has(normalizedCurrentStatus)
         ? normalizedCurrentStatus
         : '';
-    const currentTimelineStatus = (isDelhiveryMode ? timelineApiStatus : '')
-        || (isDelhiveryMode && order.delhivery?.syncedAt ? 'Confirmed' : '')
+    const currentTimelineStatus = (hasCourierFulfillment ? timelineApiStatus : '')
+        || (hasCourierFulfillment && getShippingSyncedAt(order, fulfillmentMode) ? 'Confirmed' : '')
         || timelineOrderStatus;
     const currentTimelineIndex = adminTimelineEntries.findIndex((entry) => entry.status === currentTimelineStatus);
     const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
@@ -409,6 +415,7 @@ const OrderDetail = () => {
                                 <option value="">Choose Delivery Type</option>
                                 <option value="manual">Manual</option>
                                 <option value="delhivery">Delhivery</option>
+                                <option value="ekart">Ekart</option>
                             </select>
                         </div>
                     ) : null}
@@ -635,7 +642,7 @@ const OrderDetail = () => {
                         <div className="flex items-center justify-between gap-3">
                             <h2 className="text-xs font-black text-gray-700 uppercase tracking-widest">Fulfillment</h2>
                             <div className="flex items-center gap-2">
-                                {isDelhiveryMode && effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                {hasCourierFulfillment && effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
                                     <button
                                         type="button"
                                         onClick={openCancelModal}
@@ -644,17 +651,17 @@ const OrderDetail = () => {
                                         Cancel Order
                                     </button>
                                 ) : null}
-                                {isDelhiveryMode && order.delhivery?.waybill ? (
+                                {hasCourierFulfillment && getTrackingIdentifier(order, fulfillmentMode) ? (
                                     <button
                                         type="button"
                                         onClick={async () => {
                                             try {
                                                 setTrackingLoading(true);
                                                 setTrackingError('');
-                                                const { data } = await API.get(`/orders/${id}/delhivery-tracking`);
+                                                const { data } = await API.get(`/orders/${id}/shipping-tracking`);
                                                 setTrackingData(data?.tracking || null);
                                             } catch (error) {
-                                                setTrackingError(error.response?.data?.message || 'Unable to refresh live Delhivery status');
+                                                setTrackingError(error.response?.data?.message || 'Unable to refresh live courier status');
                                                 setTrackingData(null);
                                             } finally {
                                                 setTrackingLoading(false);
@@ -670,34 +677,34 @@ const OrderDetail = () => {
                         <div className="space-y-4">
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Mode</span>
-                                <span className={`font-black uppercase tracking-wider ${isDelhiveryMode ? 'text-blue-700' : isManualMode ? 'text-amber-700' : 'text-gray-500'}`}>
-                                    {isDelhiveryMode ? 'Delhivery' : isManualMode ? 'Manual' : 'Not assigned'}
+                                <span className={`font-black uppercase tracking-wider ${hasCourierFulfillment ? 'text-blue-700' : isManualMode ? 'text-amber-700' : 'text-gray-500'}`}>
+                                    {getShippingProviderLabel(fulfillmentMode)}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
-                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Waybill</span>
-                                <span className="font-black text-gray-900">{isDelhiveryMode ? (order.delhivery?.waybill || 'Not created yet') : 'Not applicable'}</span>
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">{getTrackingIdentifierLabel(fulfillmentMode)}</span>
+                                <span className="font-black text-gray-900">{hasCourierFulfillment ? (getTrackingIdentifier(order, fulfillmentMode) || 'Not created yet') : 'Not applicable'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Pickup Location</span>
-                                <span className="font-black text-gray-900">{isDelhiveryMode ? (order.delhivery?.pickupLocation || 'N/A') : 'Not applicable'}</span>
+                                <span className="font-black text-gray-900">{hasCourierFulfillment ? (getShippingPickupLocation(order, fulfillmentMode) || 'N/A') : 'Not applicable'}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Synced At</span>
                                 <span className="font-black text-gray-900">
-                                    {isDelhiveryMode
-                                        ? (order.delhivery?.syncedAt ? new Date(order.delhivery.syncedAt).toLocaleString() : 'Pending')
+                                    {hasCourierFulfillment
+                                        ? (getShippingSyncedAt(order, fulfillmentMode) ? new Date(getShippingSyncedAt(order, fulfillmentMode)).toLocaleString() : 'Pending')
                                         : 'Manual updates'}
                                 </span>
                             </div>
                             {isManualMode ? (
                                 <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-4 text-xs font-semibold text-amber-800">
-                                    This order is on manual fulfillment. Customer tracking will use admin-updated statuses instead of live Delhivery events.
+                                    This order is on manual fulfillment. Customer tracking will use admin-updated statuses instead of live courier events.
                                 </div>
                             ) : null}
                             {trackingLoading ? (
                                 <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs font-semibold text-blue-600">
-                                    Fetching live Delhivery tracking...
+                                    Fetching live {getShippingProviderLabel(fulfillmentMode)} tracking...
                                 </div>
                             ) : null}
                             {trackingData ? (
@@ -725,9 +732,9 @@ const OrderDetail = () => {
                                     {trackingError}
                                 </div>
                             ) : null}
-                            {order.delhivery?.lastError ? (
+                            {getShippingError(order, fulfillmentMode) ? (
                                 <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-xs font-semibold text-red-600">
-                                    {order.delhivery.lastError}
+                                    {getShippingError(order, fulfillmentMode)}
                                 </div>
                             ) : null}
                         </div>
@@ -751,14 +758,14 @@ const OrderDetail = () => {
                                         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
                                             <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Assign Fulfillment First</p>
                                             <p className="mt-2 text-sm font-semibold text-blue-900">
-                                                Pick Delhivery for API-based tracking or Manual if your team will update each status here.
+                                                Pick Delhivery or Ekart for API-based tracking, or Manual if your team will update each status here.
                                             </p>
                                         </div>
-                                    ) : isDelhiveryMode ? (
+                                    ) : hasCourierFulfillment ? (
                                         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                                             <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Live Courier Controlled</p>
                                             <p className="mt-2 text-sm font-semibold text-emerald-900">
-                                                Fulfillment status is now driven by Delhivery live tracking. You can update Serial/IMEI details here.
+                                                Fulfillment status is now driven by {getShippingProviderLabel(fulfillmentMode)} live tracking. You can update Serial/IMEI details here.
                                             </p>
                                         </div>
                                     ) : (
@@ -785,6 +792,7 @@ const OrderDetail = () => {
                                                 <option value="">Choose delivery type</option>
                                                 <option value="manual">Manual</option>
                                                 <option value="delhivery">Delhivery</option>
+                                                <option value="ekart">Ekart</option>
                                             </select>
                                         </div>
 

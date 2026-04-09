@@ -4,6 +4,7 @@ import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getShippingSyncedAt } from '../../../utils/shippingProvider';
 
 const RETURN_WINDOW_DAYS = 7;
 const RETURN_CONSUMING_STATUSES = new Set([
@@ -177,8 +178,8 @@ const OrderDetails = () => {
         isServiceable: null,
         text: ''
     });
-    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
-    const isDelhiveryMode = fulfillmentMode === 'delhivery';
+    const fulfillmentMode = getFulfillmentMode(order);
+    const isCourierMode = fulfillmentMode === 'delhivery' || fulfillmentMode === 'ekart';
 
     useEffect(() => {
         fetchOrderDetails();
@@ -201,13 +202,13 @@ const OrderDetails = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!isDelhiveryMode || !order?.delhivery?.waybill) {
+            if (!isCourierMode || !getTrackingIdentifier(order, fulfillmentMode)) {
                 setTrackingData(null);
                 return;
             }
 
             try {
-                const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                const { data } = await API.get(`/orders/${orderId}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
             } catch (err) {
@@ -221,7 +222,7 @@ const OrderDetails = () => {
         return () => {
             cancelled = true;
         };
-    }, [isDelhiveryMode, order?.delhivery?.waybill, orderId]);
+    }, [fulfillmentMode, isCourierMode, order?.delhivery?.waybill, order?.ekart?.trackingNumber, orderId]);
 
     useEffect(() => {
         const delivered = String(trackingData?.currentStatus || '').trim() === 'Delivered'
@@ -365,7 +366,8 @@ const OrderDetails = () => {
     ];
     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
     const rawCourierStatus = String(trackingData?.currentStatus || '').trim();
-    const hasCourierException = isDelhiveryMode && EXCEPTION_STATUSES.has(rawCourierStatus);
+    const mappedCourierStep = String(trackingData?.mappedCurrentStep || '').trim();
+    const hasCourierException = isCourierMode && EXCEPTION_STATUSES.has(rawCourierStatus);
     const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
     const scanTimeByStatus = rawTrackingScans.reduce((acc, scan) => {
         const key = String(scan?.status || '').trim();
@@ -380,7 +382,8 @@ const OrderDetails = () => {
             return normalizedOrderStatus;
         }
         if (hasCourierException) return rawCourierStatus;
-        if (isDelhiveryMode && rawCourierStatus) return rawCourierStatus;
+        if (isCourierMode && mappedCourierStep) return mappedCourierStep;
+        if (isCourierMode && rawCourierStatus && steps.some((step) => step.status === rawCourierStatus)) return rawCourierStatus;
         if (steps.some((step) => step.status === normalizedOrderStatus)) return normalizedOrderStatus;
         return normalizedOrderStatus || 'Pending';
     })();
@@ -461,10 +464,10 @@ const OrderDetails = () => {
 
     const getStepTimestamp = (stepStatus, stepIndex) => {
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt);
-        if (stepStatus === 'Confirmed') return formatTrackingDate(isDelhiveryMode ? order?.delhivery?.syncedAt : (normalizedOrderStatus !== 'Pending' ? order?.updatedAt : null));
-        if (isDelhiveryMode && scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
+        if (stepStatus === 'Confirmed') return formatTrackingDate(isCourierMode ? getShippingSyncedAt(order, fulfillmentMode) : (normalizedOrderStatus !== 'Pending' ? order?.updatedAt : null));
+        if (isCourierMode && scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
         if (stepStatus === 'Delivered') return formatTrackingDate(effectiveDeliveredAt);
-        if (!isDelhiveryMode && normalizedOrderStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
+        if (!isCourierMode && normalizedOrderStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
         if (stepIndex < currentStep) return '';
         return '';
     };
@@ -614,9 +617,9 @@ const OrderDetails = () => {
                                     Courier Exception
                                 </h2>
                                 <div className="rounded-xl border border-red-100 bg-red-50 p-4">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-red-700">Live Delhivery Status</p>
+                                    <p className="text-xs font-bold uppercase tracking-widest text-red-700">Live {getShippingProviderLabel(fulfillmentMode)} Status</p>
                                     <p className="mt-2 text-xl font-black text-red-800 uppercase">{rawCourierStatus}</p>
-                                    <p className="mt-2 text-sm text-red-700">This update came directly from Delhivery tracking.</p>
+                                    <p className="mt-2 text-sm text-red-700">This update came directly from {getShippingProviderLabel(fulfillmentMode)} tracking.</p>
                                     <p className="mt-2 text-xs font-semibold text-red-800">{formatTrackingDate(trackingData?.lastUpdatedAt || order?.updatedAt)}</p>
                                 </div>
                             </div>

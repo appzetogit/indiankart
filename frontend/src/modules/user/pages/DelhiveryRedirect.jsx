@@ -2,8 +2,8 @@ import React from 'react';
 import { useParams } from 'react-router-dom';
 
 const DelhiveryRedirect = () => {
-    const { waybill } = useParams();
-    const safeWaybill = String(waybill || '').trim();
+    const { waybill, trackingId } = useParams();
+    const safeWaybill = String(waybill || trackingId || '').trim();
     const targetUrl = safeWaybill
         ? `https://www.delhivery.com/tracking?waybill=${encodeURIComponent(safeWaybill)}`
         : 'https://www.delhivery.com/tracking';

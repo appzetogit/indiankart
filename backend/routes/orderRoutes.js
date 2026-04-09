@@ -7,6 +7,7 @@ import {
     getOrderById,
     updateOrderStatus,
     getOrderDelhiveryTracking,
+    getOrderShippingTracking,
     assignOrderFulfillment
 } from '../controllers/orderController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
@@ -21,6 +22,7 @@ router.route('/:id')
     .get(protect, getOrderById); // Get specific order
 
 router.route('/:id/delhivery-tracking').get(protect, getOrderDelhiveryTracking);
+router.route('/:id/shipping-tracking').get(protect, getOrderShippingTracking);
 
 router.route('/:id/fulfillment').put(protect, admin, assignOrderFulfillment);
 

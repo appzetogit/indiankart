@@ -1,18 +1,106 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import API from '../../../../services/api';
 import toast from 'react-hot-toast';
+
+const DEFAULT_FORM = {
+    razorpayKeyId: '',
+    razorpayKeySecret: '',
+    deliveryApi: '',
+    delhiveryClientName: '',
+    delhiveryPickupLocation: '',
+    delhiveryToken: '',
+    ekartBaseUrl: '',
+    ekartTrackingBaseUrl: '',
+    ekartClientName: '',
+    ekartPickupLocation: '',
+    ekartUsername: '',
+    ekartPassword: '',
+    ekartApiKey: '',
+    ekartCreateShipmentPath: '/api/v1/shipments',
+    ekartTrackingPath: '/api/v1/shipments/tracking',
+    ekartCancelPath: '/api/v1/shipments/cancel'
+};
+
+const SECTION_STYLES = {
+    razorpay: {
+        accent: 'from-slate-900 via-slate-800 to-slate-700',
+        pill: 'bg-slate-100 text-slate-700',
+        border: 'border-slate-200',
+        focus: 'focus:ring-slate-500/20 focus:border-slate-500',
+        soft: 'bg-slate-50'
+    },
+    delhivery: {
+        accent: 'from-blue-700 via-blue-600 to-cyan-500',
+        pill: 'bg-blue-100 text-blue-700',
+        border: 'border-blue-200',
+        focus: 'focus:ring-blue-500/20 focus:border-blue-500',
+        soft: 'bg-blue-50'
+    },
+    ekart: {
+        accent: 'from-emerald-700 via-emerald-600 to-lime-500',
+        pill: 'bg-emerald-100 text-emerald-700',
+        border: 'border-emerald-200',
+        focus: 'focus:ring-emerald-500/20 focus:border-emerald-500',
+        soft: 'bg-emerald-50'
+    }
+};
+
+const InputField = ({ label, hint, section, ...props }) => {
+    const styles = SECTION_STYLES[section];
+
+    return (
+        <label className="block">
+            <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.18em] text-gray-600">
+                {label}
+            </span>
+            <input
+                {...props}
+                className={`w-full rounded-2xl border bg-white px-4 py-3.5 text-sm font-medium text-gray-900 outline-none transition-all placeholder:text-gray-400 ${styles.border} ${styles.focus}`}
+            />
+            {hint ? (
+                <span className="mt-2 block text-xs leading-relaxed text-gray-500">{hint}</span>
+            ) : null}
+        </label>
+    );
+};
+
+const SectionCard = ({ id, eyebrow, title, description, activeSection, setActiveSection, children }) => {
+    const styles = SECTION_STYLES[id];
+    const isActive = activeSection === id;
+
+    return (
+        <section
+            id={id}
+            className={`overflow-hidden rounded-[28px] border bg-white shadow-sm transition-all ${isActive ? `${styles.border} shadow-lg shadow-black/5` : 'border-gray-200'}`}
+        >
+            <button
+                type="button"
+                onClick={() => setActiveSection(id)}
+                className={`w-full bg-gradient-to-r px-6 py-6 text-left text-white md:px-8 ${styles.accent}`}
+            >
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                    <div>
+                        <div className="text-[10px] font-black uppercase tracking-[0.24em] text-white/70">{eyebrow}</div>
+                        <h2 className="mt-2 text-2xl font-black tracking-tight">{title}</h2>
+                        <p className="mt-2 max-w-2xl text-sm font-medium text-white/80">{description}</p>
+                    </div>
+                    <div className="text-xs font-black uppercase tracking-[0.22em] text-white/70">
+                        {isActive ? 'Editing now' : 'Open section'}
+                    </div>
+                </div>
+            </button>
+            <div className="p-6 md:p-8">
+                {children}
+            </div>
+        </section>
+    );
+};
 
 const RazorpayCredentials = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [form, setForm] = useState({
-        razorpayKeyId: '',
-        razorpayKeySecret: '',
-        deliveryApi: '',
-        delhiveryClientName: '',
-        delhiveryPickupLocation: '',
-        delhiveryToken: ''
-    });
+    const [activeSection, setActiveSection] = useState('razorpay');
+    const [form, setForm] = useState(DEFAULT_FORM);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -24,7 +112,17 @@ const RazorpayCredentials = () => {
                     deliveryApi: data?.deliveryApi || 'https://track.delhivery.com',
                     delhiveryClientName: data?.delhiveryClientName || '',
                     delhiveryPickupLocation: data?.delhiveryPickupLocation || '',
-                    delhiveryToken: ''
+                    delhiveryToken: '',
+                    ekartBaseUrl: data?.ekartBaseUrl || '',
+                    ekartTrackingBaseUrl: data?.ekartTrackingBaseUrl || '',
+                    ekartClientName: data?.ekartClientName || '',
+                    ekartPickupLocation: data?.ekartPickupLocation || '',
+                    ekartUsername: data?.ekartUsername || '',
+                    ekartPassword: '',
+                    ekartApiKey: '',
+                    ekartCreateShipmentPath: data?.ekartCreateShipmentPath || '/api/v1/shipments',
+                    ekartTrackingPath: data?.ekartTrackingPath || '/api/v1/shipments/tracking',
+                    ekartCancelPath: data?.ekartCancelPath || '/api/v1/shipments/cancel'
                 });
             } catch (error) {
                 console.error('Failed to fetch API credentials:', error);
@@ -54,6 +152,16 @@ const RazorpayCredentials = () => {
             data.append('delhiveryClientName', form.delhiveryClientName.trim());
             data.append('delhiveryPickupLocation', form.delhiveryPickupLocation.trim());
             data.append('delhiveryToken', form.delhiveryToken);
+            data.append('ekartBaseUrl', form.ekartBaseUrl.trim());
+            data.append('ekartTrackingBaseUrl', form.ekartTrackingBaseUrl.trim());
+            data.append('ekartClientName', form.ekartClientName.trim());
+            data.append('ekartPickupLocation', form.ekartPickupLocation.trim());
+            data.append('ekartUsername', form.ekartUsername.trim());
+            data.append('ekartPassword', form.ekartPassword);
+            data.append('ekartApiKey', form.ekartApiKey);
+            data.append('ekartCreateShipmentPath', form.ekartCreateShipmentPath.trim());
+            data.append('ekartTrackingPath', form.ekartTrackingPath.trim());
+            data.append('ekartCancelPath', form.ekartCancelPath.trim());
 
             const res = await API.put('/settings', data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
@@ -65,7 +173,17 @@ const RazorpayCredentials = () => {
                 deliveryApi: res.data?.deliveryApi || 'https://track.delhivery.com',
                 delhiveryClientName: res.data?.delhiveryClientName || '',
                 delhiveryPickupLocation: res.data?.delhiveryPickupLocation || '',
-                delhiveryToken: ''
+                delhiveryToken: '',
+                ekartBaseUrl: res.data?.ekartBaseUrl || '',
+                ekartTrackingBaseUrl: res.data?.ekartTrackingBaseUrl || '',
+                ekartClientName: res.data?.ekartClientName || '',
+                ekartPickupLocation: res.data?.ekartPickupLocation || '',
+                ekartUsername: res.data?.ekartUsername || '',
+                ekartPassword: '',
+                ekartApiKey: '',
+                ekartCreateShipmentPath: res.data?.ekartCreateShipmentPath || '/api/v1/shipments',
+                ekartTrackingPath: res.data?.ekartTrackingPath || '/api/v1/shipments/tracking',
+                ekartCancelPath: res.data?.ekartCancelPath || '/api/v1/shipments/cancel'
             });
             toast.success('API credentials updated');
         } catch (error) {
@@ -76,125 +194,283 @@ const RazorpayCredentials = () => {
         }
     };
 
+    const sectionStats = useMemo(() => ([
+        {
+            id: 'razorpay',
+            title: 'Razorpay',
+            subtitle: 'Payments',
+            blurb: 'Checkout keys for online payment collection.'
+        },
+        {
+            id: 'delhivery',
+            title: 'Delhivery',
+            subtitle: 'Courier API',
+            blurb: 'Live shipment creation and tracking for Delhivery.'
+        },
+        {
+            id: 'ekart',
+            title: 'Ekart',
+            subtitle: 'Courier API',
+            blurb: 'Separate Ekart account endpoints and auth settings.'
+        }
+    ]), []);
+
     if (loading) {
         return <div className="p-8 text-center text-gray-500 font-medium">Loading API credentials...</div>;
     }
 
     return (
-        <div className="p-6 md:p-8 bg-gray-50 min-h-screen">
-            <h1 className="text-2xl md:text-3xl font-black text-gray-900 mb-2 tracking-tight">API Credentials</h1>
-            <p className="text-gray-500 mb-8 font-medium">Manage payment and Delhivery shipping integration credentials from one place.</p>
+        <div className="min-h-screen bg-[linear-gradient(180deg,#f6f8fb_0%,#eef4f7_100%)] p-4 md:p-8">
+            <div className="mx-auto max-w-7xl">
+                <div className="rounded-[32px] border border-white/70 bg-white/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur md:p-8">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-slate-600">
+                                Admin Settings
+                            </div>
+                            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 md:text-5xl">
+                                API Credentials
+                            </h1>
+                            <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-600 md:text-base">
+                                Keep each provider in its own lane. Payment keys, Delhivery config, and Ekart config are now split into separate, cleaner sections.
+                            </p>
+                        </div>
 
-            <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-gray-100 max-w-2xl space-y-6">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-800">Razorpay</h2>
-                    <p className="mt-1 text-xs text-gray-500">Online payment keys for checkout.</p>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Razorpay Key ID
-                    </label>
-                    <input
-                        type="text"
-                        name="razorpayKeyId"
-                        value={form.razorpayKeyId}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="rzp_live_xxxxx or rzp_test_xxxxx"
-                    />
-                </div>
+                        <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-4">
+                            <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                                Save State
+                            </div>
+                            <div className="mt-2 text-lg font-black text-slate-900">
+                                {saving ? 'Saving changes...' : 'Ready to update'}
+                            </div>
+                            <div className="mt-1 text-xs font-medium text-slate-500">
+                                Secrets stay hidden unless you re-enter them.
+                            </div>
+                        </div>
+                    </div>
 
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Razorpay Key Secret
-                    </label>
-                    <input
-                        type="password"
-                        name="razorpayKeySecret"
-                        value={form.razorpayKeySecret}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="Leave blank to keep existing secret"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">
-                        For security, the stored secret is never returned by the API.
-                    </p>
-                </div>
+                    <div className="mt-8 grid gap-4 md:grid-cols-3">
+                        {sectionStats.map((section) => {
+                            const styles = SECTION_STYLES[section.id];
+                            const isActive = activeSection === section.id;
 
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Delhivery API Base URL
-                    </label>
-                    <input
-                        type="text"
-                        name="deliveryApi"
-                        value={form.deliveryApi}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="https://track.delhivery.com"
-                    />
+                            return (
+                                <button
+                                    key={section.id}
+                                    type="button"
+                                    onClick={() => setActiveSection(section.id)}
+                                    className={`rounded-[26px] border p-5 text-left transition-all ${isActive ? `${styles.border} ${styles.soft} shadow-lg shadow-black/5` : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'}`}
+                                >
+                                    <div className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${styles.pill}`}>
+                                        {section.subtitle}
+                                    </div>
+                                    <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-900">{section.title}</h2>
+                                    <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">{section.blurb}</p>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
-                <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
-                    <h2 className="text-sm font-black uppercase tracking-widest text-gray-800">Delhivery Shipping</h2>
-                    <p className="mt-1 text-xs text-gray-500">Shipment will be created when admin marks an order as Confirmed.</p>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Delhivery Client Name
-                    </label>
-                    <input
-                        type="text"
-                        name="delhiveryClientName"
-                        value={form.delhiveryClientName}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="Your Delhivery client / seller name"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Delhivery Pickup Location
-                    </label>
-                    <input
-                        type="text"
-                        name="delhiveryPickupLocation"
-                        value={form.delhiveryPickupLocation}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="Exact pickup location name from Delhivery panel"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-2 tracking-wider">
-                        Delhivery Token
-                    </label>
-                    <input
-                        type="password"
-                        name="delhiveryToken"
-                        value={form.delhiveryToken}
-                        onChange={handleChange}
-                        className="w-full border border-gray-200 rounded-xl p-3.5 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-medium text-gray-900 bg-gray-50/50 transition-all"
-                        placeholder="Leave blank to keep existing Delhivery token"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">
-                        Stored token is hidden for security. Enter only when you want to update it.
-                    </p>
-                </div>
-
-                <div className="pt-2">
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${saving ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                <form onSubmit={handleSubmit} className="mt-8 grid gap-6">
+                    <SectionCard
+                        id="razorpay"
+                        eyebrow="Payments"
+                        title="Razorpay Credentials"
+                        description="This section stays focused on checkout and payment authentication only."
+                        activeSection={activeSection}
+                        setActiveSection={setActiveSection}
                     >
-                        {saving ? 'Saving...' : 'Save API Credentials'}
-                    </button>
-                </div>
-            </form>
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <InputField
+                                section="razorpay"
+                                label="Razorpay Key ID"
+                                name="razorpayKeyId"
+                                value={form.razorpayKeyId}
+                                onChange={handleChange}
+                                placeholder="rzp_live_xxxxx or rzp_test_xxxxx"
+                            />
+                            <InputField
+                                section="razorpay"
+                                label="Razorpay Key Secret"
+                                type="password"
+                                name="razorpayKeySecret"
+                                value={form.razorpayKeySecret}
+                                onChange={handleChange}
+                                placeholder="Leave blank to keep existing secret"
+                                hint="For security, the stored secret is never returned by the API."
+                            />
+                        </div>
+                    </SectionCard>
+
+                    <SectionCard
+                        id="delhivery"
+                        eyebrow="Courier Partner"
+                        title="Delhivery Settings"
+                        description="Shipment creation and live tracking details for orders assigned to Delhivery."
+                        activeSection={activeSection}
+                        setActiveSection={setActiveSection}
+                    >
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <InputField
+                                section="delhivery"
+                                label="API Base URL"
+                                name="deliveryApi"
+                                value={form.deliveryApi}
+                                onChange={handleChange}
+                                placeholder="https://track.delhivery.com"
+                            />
+                            <InputField
+                                section="delhivery"
+                                label="Client Name"
+                                name="delhiveryClientName"
+                                value={form.delhiveryClientName}
+                                onChange={handleChange}
+                                placeholder="Your Delhivery client or seller name"
+                            />
+                            <InputField
+                                section="delhivery"
+                                label="Pickup Location"
+                                name="delhiveryPickupLocation"
+                                value={form.delhiveryPickupLocation}
+                                onChange={handleChange}
+                                placeholder="Exact pickup location from Delhivery"
+                            />
+                            <InputField
+                                section="delhivery"
+                                label="Token"
+                                type="password"
+                                name="delhiveryToken"
+                                value={form.delhiveryToken}
+                                onChange={handleChange}
+                                placeholder="Leave blank to keep existing token"
+                                hint="Only enter this when you want to replace the current token."
+                            />
+                        </div>
+                    </SectionCard>
+
+                    <SectionCard
+                        id="ekart"
+                        eyebrow="Courier Partner"
+                        title="Ekart Settings"
+                        description="Keep Ekart credentials, paths, and endpoint configuration in their own dedicated block."
+                        activeSection={activeSection}
+                        setActiveSection={setActiveSection}
+                    >
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <InputField
+                                section="ekart"
+                                label="Base URL"
+                                name="ekartBaseUrl"
+                                value={form.ekartBaseUrl}
+                                onChange={handleChange}
+                                placeholder="https://api.ekart.example.com"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Tracking Base URL"
+                                name="ekartTrackingBaseUrl"
+                                value={form.ekartTrackingBaseUrl}
+                                onChange={handleChange}
+                                placeholder="Leave blank to reuse Base URL"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Client Name"
+                                name="ekartClientName"
+                                value={form.ekartClientName}
+                                onChange={handleChange}
+                                placeholder="Seller or client name used by Ekart"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Pickup Location"
+                                name="ekartPickupLocation"
+                                value={form.ekartPickupLocation}
+                                onChange={handleChange}
+                                placeholder="Warehouse or pickup location"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Username"
+                                name="ekartUsername"
+                                value={form.ekartUsername}
+                                onChange={handleChange}
+                                placeholder="Leave blank if API key is enough"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Password"
+                                type="password"
+                                name="ekartPassword"
+                                value={form.ekartPassword}
+                                onChange={handleChange}
+                                placeholder="Leave blank to keep existing password"
+                            />
+                        </div>
+
+                        <div className="mt-6">
+                            <InputField
+                                section="ekart"
+                                label="API Key"
+                                type="password"
+                                name="ekartApiKey"
+                                value={form.ekartApiKey}
+                                onChange={handleChange}
+                                placeholder="Leave blank to keep existing API key"
+                                hint="Use either API key auth or username/password, depending on what your Ekart account provides."
+                            />
+                        </div>
+
+                        <div className="mt-6 grid gap-6 md:grid-cols-3">
+                            <InputField
+                                section="ekart"
+                                label="Create Path"
+                                name="ekartCreateShipmentPath"
+                                value={form.ekartCreateShipmentPath}
+                                onChange={handleChange}
+                                placeholder="/api/v1/shipments"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Tracking Path"
+                                name="ekartTrackingPath"
+                                value={form.ekartTrackingPath}
+                                onChange={handleChange}
+                                placeholder="/api/v1/shipments/tracking"
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Cancel Path"
+                                name="ekartCancelPath"
+                                value={form.ekartCancelPath}
+                                onChange={handleChange}
+                                placeholder="/api/v1/shipments/cancel"
+                            />
+                        </div>
+                    </SectionCard>
+
+                    <div className="sticky bottom-4 z-20 flex justify-end">
+                        <div className="flex items-center gap-4 rounded-full border border-slate-200 bg-white/95 px-4 py-3 shadow-xl shadow-slate-200/50 backdrop-blur">
+                            <div className="hidden text-right md:block">
+                                <div className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
+                                    Final Step
+                                </div>
+                                <div className="text-sm font-bold text-slate-900">
+                                    Save all credential changes
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className={`rounded-full px-6 py-3 text-xs font-black uppercase tracking-[0.22em] transition-all ${saving ? 'cursor-not-allowed bg-slate-300 text-slate-600' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                            >
+                                {saving ? 'Saving...' : 'Save Credentials'}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 };

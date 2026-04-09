@@ -105,7 +105,7 @@ const orderSchema = mongoose.Schema({
     fulfillment: {
         mode: {
             type: String,
-            enum: ['unassigned', 'manual', 'delhivery'],
+            enum: ['unassigned', 'manual', 'delhivery', 'ekart'],
             default: 'unassigned'
         },
         assignedAt: { type: Date },
@@ -117,6 +117,17 @@ const orderSchema = mongoose.Schema({
     },
     delhivery: {
         waybill: { type: String, default: '' },
+        providerOrderId: { type: String, default: '' },
+        pickupLocation: { type: String, default: '' },
+        syncedAt: { type: Date },
+        cancelledAt: { type: Date },
+        requestPayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        responsePayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        cancelResponsePayload: { type: mongoose.Schema.Types.Mixed, default: null },
+        lastError: { type: String, default: '' }
+    },
+    ekart: {
+        trackingNumber: { type: String, default: '' },
         providerOrderId: { type: String, default: '' },
         pickupLocation: { type: String, default: '' },
         syncedAt: { type: Date },

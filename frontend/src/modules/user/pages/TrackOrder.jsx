@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import API from '../../../services/api';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getTrackingIdentifierLabel } from '../../../utils/shippingProvider';
 
 const normalizeOrderStatus = (status = '') => {
     const value = String(status || '').trim();
@@ -27,10 +28,10 @@ const getOrderSteps = () => ([
     { status: 'Pending', title: 'Order Placed', desc: 'Your order has been received successfully' },
     { status: 'Confirmed', title: 'Confirmed', desc: 'Your order has been confirmed by the admin team' },
     { status: 'Packed', title: 'Packed', desc: 'Your order has been packed and is ready for dispatch' },
-    { status: 'Processing', title: 'Processing', desc: 'Delhivery is processing the shipment after confirmation' },
+    { status: 'Processing', title: 'Processing', desc: 'Courier partner is processing the shipment after confirmation' },
     { status: 'Not Picked', title: 'Not Picked', desc: 'Shipment is created but pickup is still pending' },
-    { status: 'Picked Up', title: 'Picked Up', desc: 'Shipment has been picked up by Delhivery' },
-    { status: 'Dispatched', title: 'Dispatched', desc: 'Shipment has been handed over to Delhivery' },
+    { status: 'Picked Up', title: 'Picked Up', desc: 'Shipment has been picked up by the courier partner' },
+    { status: 'Dispatched', title: 'Dispatched', desc: 'Shipment has been handed over to the courier partner' },
     { status: 'In Transit', title: 'In Transit', desc: 'Shipment is moving through the courier network' },
     { status: 'Out for Delivery', title: 'Out for Delivery', desc: 'Courier partner is delivering your order today' },
     { status: 'Delivered', title: 'Delivered', desc: 'Order has been delivered successfully' }
@@ -60,8 +61,10 @@ const TrackOrder = () => {
     const [trackingData, setTrackingData] = React.useState(null);
     const [trackingLoading, setTrackingLoading] = React.useState(false);
     const [trackingError, setTrackingError] = React.useState('');
-    const fulfillmentMode = String(order?.fulfillment?.mode || (order?.delhivery?.waybill ? 'delhivery' : 'unassigned')).trim();
+    const fulfillmentMode = getFulfillmentMode(order);
     const isDelhiveryMode = fulfillmentMode === 'delhivery';
+    const isEkartMode = fulfillmentMode === 'ekart';
+    const isCourierMode = isDelhiveryMode || isEkartMode;
 
     const fetchOrder = async () => {
         try {
@@ -85,7 +88,8 @@ const TrackOrder = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!isDelhiveryMode || !order?.delhivery?.waybill) {
+            const trackingIdentifier = getTrackingIdentifier(order, fulfillmentMode);
+            if (!isCourierMode || !trackingIdentifier) {
                 setTrackingData(null);
                 setTrackingError('');
                 setTrackingLoading(false);
@@ -96,7 +100,7 @@ const TrackOrder = () => {
             setTrackingError('');
 
             try {
-                const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                const { data } = await API.get(`/orders/${orderId}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
             } catch (err) {
@@ -115,7 +119,7 @@ const TrackOrder = () => {
         return () => {
             cancelled = true;
         };
-    }, [isDelhiveryMode, order?.delhivery?.waybill, orderId]);
+    }, [fulfillmentMode, isCourierMode, order?.delhivery?.waybill, order?.ekart?.trackingNumber, orderId]);
 
     const targetItem = (() => {
         if (!productId || !Array.isArray(order?.orderItems)) {
@@ -159,7 +163,7 @@ const TrackOrder = () => {
             return mappedCourierStep || rawCourierStatus;
         }
 
-        if (isDelhiveryMode && mappedCourierStep) {
+        if (isCourierMode && mappedCourierStep) {
             return mappedCourierStep;
         }
 
@@ -176,12 +180,12 @@ const TrackOrder = () => {
         }
 
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt || order?.date);
-        if (stepStatus === 'Confirmed') return formatTrackingDate(isDelhiveryMode ? order?.delhivery?.syncedAt : (normalizedCurrentStatus !== 'Pending' ? order?.updatedAt : null));
-        if (isDelhiveryMode && trackingData?.stepTimes?.[stepStatus]) {
+        if (stepStatus === 'Confirmed') return formatTrackingDate(isCourierMode ? (order?.delhivery?.syncedAt || order?.ekart?.syncedAt) : (normalizedCurrentStatus !== 'Pending' ? order?.updatedAt : null));
+        if (isCourierMode && trackingData?.stepTimes?.[stepStatus]) {
             return formatTrackingDate(trackingData.stepTimes[stepStatus]);
         }
         if (stepStatus === 'Delivered') return formatTrackingDate(order?.deliveredAt);
-        if (!isDelhiveryMode && normalizedCurrentStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
+        if (!isCourierMode && normalizedCurrentStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
 
         return stepIndex < currentStatusIdx ? '' : '';
     };
@@ -286,7 +290,7 @@ const TrackOrder = () => {
                                                 {hasCourierException ? `Courier Status: ${mappedCourierStep || rawCourierStatus}` : 'Order Cancelled'}
                                             </h3>
                                             <p className="text-xs text-gray-500 mt-0.5 md:text-sm">
-                                                {hasCourierException ? 'This update came directly from Delhivery tracking.' : 'This order was cancelled.'}
+                                                {hasCourierException ? `This update came directly from ${getShippingProviderLabel(fulfillmentMode)} tracking.` : 'This order was cancelled.'}
                                             </p>
                                             <p className="text-[10px] text-gray-400 mt-1 md:text-xs">
                                                 {formatTrackingDate(trackingData?.lastUpdatedAt || order.updatedAt || order.createdAt)}
@@ -346,21 +350,21 @@ const TrackOrder = () => {
                     </div>
                 </div>
 
-                {(isDelhiveryMode && (order.delhivery?.waybill || trackingLoading || trackingError)) ? (
+                {(isCourierMode && (getTrackingIdentifier(order, fulfillmentMode) || trackingLoading || trackingError)) ? (
                     <div className="m-4 p-4 bg-white rounded-xl border border-gray-200 md:mx-0 md:mt-6 shadow-sm space-y-4">
                         <div className="flex items-center justify-between gap-3">
                             <div>
                                 <p className="text-sm font-bold text-gray-900">Live Courier Tracking</p>
-                                <p className="text-[11px] text-gray-500">Real-time status from Delhivery API after confirmation</p>
+                                <p className="text-[11px] text-gray-500">Real-time status from {getShippingProviderLabel(fulfillmentMode)} after confirmation</p>
                             </div>
-                            {order.delhivery?.waybill ? (
+                            {getTrackingIdentifier(order, fulfillmentMode) ? (
                                 <button
                                     type="button"
                                     onClick={async () => {
                                         try {
                                             setTrackingLoading(true);
                                             setTrackingError('');
-                                            const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                                            const { data } = await API.get(`/orders/${orderId}/shipping-tracking`);
                                             setTrackingData(data?.tracking || null);
                                         } catch (err) {
                                             setTrackingData(null);
@@ -378,12 +382,12 @@ const TrackOrder = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Waybill</p>
-                                <p className="mt-1 text-sm font-black text-gray-900">{order.delhivery?.waybill || 'Pending'}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{getTrackingIdentifierLabel(fulfillmentMode)}</p>
+                                <p className="mt-1 text-sm font-black text-gray-900">{getTrackingIdentifier(order, fulfillmentMode) || 'Pending'}</p>
                             </div>
                             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Courier Step</p>
-                                <p className="mt-1 text-sm font-black text-emerald-700 uppercase">{mappedCourierStep || 'Awaiting live update'}</p>
+                                <p className="mt-1 text-sm font-black text-emerald-700 uppercase">{mappedCourierStep || rawCourierStatus || 'Awaiting live update'}</p>
                             </div>
                             <div className="rounded-xl bg-gray-50 border border-gray-100 p-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Last Updated</p>
@@ -393,7 +397,7 @@ const TrackOrder = () => {
 
                         {rawCourierStatus ? (
                             <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Raw Delhivery Status</p>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">Raw {getShippingProviderLabel(fulfillmentMode)} Status</p>
                                 <p className="mt-1 text-sm font-semibold text-blue-900">{rawCourierStatus}</p>
                             </div>
                         ) : null}
@@ -407,7 +411,7 @@ const TrackOrder = () => {
 
                         {trackingLoading ? (
                             <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-600">
-                                Fetching live Delhivery status...
+                                Fetching live {getShippingProviderLabel(fulfillmentMode)} status...
                             </div>
                         ) : null}
 
@@ -452,12 +456,12 @@ const TrackOrder = () => {
                 </div>
 
                 <div className="px-6 py-4 mt-4 border-t md:bg-white md:rounded-lg md:shadow-sm md:border md:border-gray-200 md:px-6 md:py-6">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">{isDelhiveryMode ? 'Courier details' : 'Fulfillment details'}</h4>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-4 tracking-widest">{isCourierMode ? 'Courier details' : 'Fulfillment details'}</h4>
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm font-bold text-gray-800">{isDelhiveryMode ? 'Delhivery' : 'Manual fulfillment'}</p>
+                            <p className="text-sm font-bold text-gray-800">{isCourierMode ? getShippingProviderLabel(fulfillmentMode) : 'Manual fulfillment'}</p>
                             <p className="text-xs text-gray-500 uppercase mt-0.5">
-                                {isDelhiveryMode ? `AWB: ${order.delhivery?.waybill || 'Pending'}` : 'Status updated by admin team'}
+                                {isCourierMode ? `${getTrackingIdentifierLabel(fulfillmentMode)}: ${getTrackingIdentifier(order, fulfillmentMode) || 'Pending'}` : 'Status updated by admin team'}
                             </p>
                         </div>
                         <span className="material-icons text-gray-400">chevron_right</span>
