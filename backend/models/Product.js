@@ -55,6 +55,7 @@ const productSchema = mongoose.Schema({
 
     // Inventory & Variants
     stock: { type: Number, default: 0, min: 0 },
+    maxOrderQuantity: { type: Number, default: 1, min: 1 },
     variantLabel: { type: String }, // 'Size', 'Color' etc.
     variantHeadings: [{
         id: { type: Number },

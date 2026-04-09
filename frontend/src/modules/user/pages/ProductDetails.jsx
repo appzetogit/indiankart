@@ -256,6 +256,15 @@ const ProductDetails = () => {
         return product.stock || 0;
     }, [product, selectedVariants, displayVariantHeadings]);
 
+    const maxAllowedQuantity = React.useMemo(() => {
+        if (!product) return 0;
+        const configuredLimit = Number(product.maxOrderQuantity);
+        if (!Number.isFinite(configuredLimit) || configuredLimit <= 0) {
+            return Math.min(Math.max(0, Number(currentStock) || 0), 1);
+        }
+        return Math.min(Math.max(0, Number(currentStock) || 0), Math.floor(configuredLimit));
+    }, [product, currentStock]);
+
     const selectedSku = React.useMemo(() => {
         if (!product || !product.skus || product.skus.length === 0 || displayVariantHeadings.length === 0) {
             return null;
@@ -327,7 +336,8 @@ const ProductDetails = () => {
         const productForCart = {
             ...product,
             price: selectedPrice,
-            originalPrice: selectedOriginalPrice
+            originalPrice: selectedOriginalPrice,
+            maxAllowedQuantity
         };
         addToCart(productForCart, selectedVariants);
         setShowToast(true);
@@ -352,15 +362,16 @@ const ProductDetails = () => {
         const productForCheckout = {
             ...product,
             price: selectedPrice,
-            originalPrice: selectedOriginalPrice
+            originalPrice: selectedOriginalPrice,
+            maxAllowedQuantity
         };
         // Instead of adding to cart, pass item directly to checkout via state
         navigate('/checkout', {
             state: {
-                buyNowItem: {
-                    ...productForCheckout,
-                    variant: selectedVariants,
-                    quantity: 1
+                    buyNowItem: {
+                        ...productForCheckout,
+                        variant: selectedVariants,
+                        quantity: 1
                 }
             }
         });
@@ -674,25 +685,25 @@ const ProductDetails = () => {
                                 <>
                                     <button
                                         onClick={handleAddToCart}
-                                        disabled={currentStock <= 0}
-                                        className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${currentStock > 0
+                                        disabled={maxAllowedQuantity <= 0}
+                                        className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${maxAllowedQuantity > 0
                                             ? 'bg-[#ff9f00] text-white hover:bg-[#f39801]'
                                             : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
                                             }`}
                                     >
-                                        <span className="material-icons text-[20px]">{currentStock > 0 ? 'shopping_cart' : 'info'}</span>
-                                        {currentStock > 0 ? addToCartText : outOfStockText}
+                                        <span className="material-icons text-[20px]">{maxAllowedQuantity > 0 ? 'shopping_cart' : 'info'}</span>
+                                        {maxAllowedQuantity > 0 ? addToCartText : outOfStockText}
                                     </button>
                                     <button
                                         onClick={handleBuyNow}
-                                        disabled={currentStock <= 0}
-                                        className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${currentStock > 0
+                                        disabled={maxAllowedQuantity <= 0}
+                                        className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${maxAllowedQuantity > 0
                                             ? 'bg-[#fb641b] text-white hover:bg-[#e85d19]'
                                             : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
                                             }`}
                                     >
-                                        <span className="material-icons text-[20px]">{currentStock > 0 ? 'flash_on' : 'remove_shopping_cart'}</span>
-                                        {currentStock > 0 ? buyNowText : outOfStockText}
+                                        <span className="material-icons text-[20px]">{maxAllowedQuantity > 0 ? 'flash_on' : 'remove_shopping_cart'}</span>
+                                        {maxAllowedQuantity > 0 ? buyNowText : outOfStockText}
                                     </button>
                                 </>
                             )}
@@ -728,6 +739,10 @@ const ProductDetails = () => {
                                 </>
                             )}
                         </div>
+
+                        <p className="text-sm font-semibold text-amber-700 mb-4">
+                            Max purchase quantity: {maxAllowedQuantity}
+                        </p>
 
                         {/* Dynamic Variants Desktop */}
                         {displayVariantHeadings.length > 0 && (
@@ -1597,23 +1612,23 @@ const ProductDetails = () => {
                     <>
                         <button
                             onClick={handleAddToCart}
-                            disabled={currentStock <= 0}
-                            className={`flex-1 font-bold py-3.5 rounded-xl text-sm active:scale-[0.98] transition-all ${currentStock > 0
+                            disabled={maxAllowedQuantity <= 0}
+                            className={`flex-1 font-bold py-3.5 rounded-xl text-sm active:scale-[0.98] transition-all ${maxAllowedQuantity > 0
                                 ? 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
                                 : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
                                 }`}
                         >
-                            {currentStock > 0 ? addToCartText : outOfStockText}
+                            {maxAllowedQuantity > 0 ? addToCartText : outOfStockText}
                         </button>
                         <button
                             onClick={handleBuyNow}
-                            disabled={currentStock <= 0}
-                            className={`flex-1 font-bold py-3.5 rounded-xl text-sm shadow-sm active:scale-[0.98] transition-all ${currentStock > 0
+                            disabled={maxAllowedQuantity <= 0}
+                            className={`flex-1 font-bold py-3.5 rounded-xl text-sm shadow-sm active:scale-[0.98] transition-all ${maxAllowedQuantity > 0
                                 ? 'bg-[#ffc200] text-black hover:bg-[#ffb300]'
                                 : 'bg-gray-100 text-gray-300 shadow-none cursor-not-allowed'
                                 }`}
                         >
-                            {currentStock > 0 ? buyNowText : outOfStockText}
+                            {maxAllowedQuantity > 0 ? buyNowText : outOfStockText}
                         </button>
                     </>
                 )}

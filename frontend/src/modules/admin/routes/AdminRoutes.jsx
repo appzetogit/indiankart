@@ -16,6 +16,7 @@ import ProtectedAdminRoute from './ProtectedAdminRoute';
 import ProductManager from '../pages/Products/ProductManager';
 import ProductForm from '../pages/Products/ProductForm';
 import ProductViews from '../pages/Products/ProductViews';
+import MaxSellingQuantityManager from '../pages/Products/MaxSellingQuantityManager';
 import UserList from '../pages/Users/UserList';
 import UserDetail from '../pages/Users/UserDetail';
 import SellerRequests from '../pages/Users/SellerRequests';
@@ -56,6 +57,7 @@ const AdminRoutes = () => {
 
                 {/* Modules */}
                 <Route path="products" element={<ProductManager />} />
+                <Route path="products/max-selling-quantity" element={<MaxSellingQuantityManager />} />
                 <Route path="product-views" element={<ProductViews />} />
                 <Route path="b2b" element={<B2BManager />} />
                 <Route path="products/new" element={<ProductForm />} />

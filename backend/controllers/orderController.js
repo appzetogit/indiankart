@@ -25,6 +25,17 @@ const MANUAL_TRACKING_STATUSES = new Set([
     'Cancellation Requested'
 ]);
 
+const getEffectivePurchaseLimit = (product, availableStock) => {
+    const stockLimit = Math.max(0, Number(availableStock) || 0);
+    const configuredLimit = Number(product?.maxOrderQuantity);
+
+    if (!Number.isFinite(configuredLimit) || configuredLimit <= 0) {
+        return stockLimit;
+    }
+
+    return Math.min(stockLimit, configuredLimit);
+};
+
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
@@ -134,18 +145,24 @@ export const addOrderItems = async (req, res) => {
                     if (itemKeys.length !== combKeys.length) return false;
                     return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
                 });
+                const purchaseLimit = getEffectivePurchaseLimit(product, sku?.stock);
                 
-                if (!sku || sku.stock < item.qty) {
+                if (!sku || purchaseLimit < item.qty) {
                     return res.status(400).json({ 
-                        message: `Insufficient stock for ${item.name} (${Object.values(item.variant).join(', ')})`,
-                        available: sku ? sku.stock : 0
+                        message: purchaseLimit <= 0
+                            ? `Insufficient stock for ${item.name} (${Object.values(item.variant).join(', ')})`
+                            : `Maximum allowed quantity for ${item.name} is ${purchaseLimit}`,
+                        available: purchaseLimit
                     });
                 }
-            } else if (product.stock < item.qty) {
+            } else if (getEffectivePurchaseLimit(product, product.stock) < item.qty) {
                 // Check Overall Stock
+                const purchaseLimit = getEffectivePurchaseLimit(product, product.stock);
                 return res.status(400).json({ 
-                    message: `Insufficient stock for ${item.name}`,
-                    available: product.stock
+                    message: purchaseLimit <= 0
+                        ? `Insufficient stock for ${item.name}`
+                        : `Maximum allowed quantity for ${item.name} is ${purchaseLimit}`,
+                    available: purchaseLimit
                 });
             }
         }

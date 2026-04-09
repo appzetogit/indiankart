@@ -39,7 +39,7 @@ const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
-    return 'id name brand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock createdAt';
+    return 'id name brand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock maxOrderQuantity createdAt';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -54,6 +54,13 @@ const normalizeSubCategoryIds = (value) => {
             .map((id) => String(id || '').trim())
             .filter(Boolean)
     )];
+};
+
+const normalizeMaxOrderQuantity = (value) => {
+    if (value === undefined || value === null || value === '') return 1;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 1;
+    return Math.floor(parsed);
 };
 
 // @desc    Fetch all products
@@ -434,6 +441,7 @@ export const createProduct = async (req, res) => {
             highlights: parseJSON(body.highlights),
             description,
             stock: derivedSkuValues ? derivedSkuValues.stock : Number(body.stock),
+            maxOrderQuantity: normalizeMaxOrderQuantity(body.maxOrderQuantity),
             variantHeadings,
             skus: parsedSkus,
             deliveryDays: Number(body.deliveryDays),
@@ -633,6 +641,9 @@ export const updateProduct = async (req, res) => {
             if (updateData.originalPrice !== undefined) updateData.originalPrice = safeNum(updateData.originalPrice, product.originalPrice);
             if (updateData.stock !== undefined) updateData.stock = safeNum(updateData.stock, product.stock);
             if (updateData.deliveryDays !== undefined) updateData.deliveryDays = safeNum(updateData.deliveryDays, product.deliveryDays);
+            if (updateData.maxOrderQuantity !== undefined) {
+                updateData.maxOrderQuantity = normalizeMaxOrderQuantity(updateData.maxOrderQuantity);
+            }
             if (updateData.b2bEnabled !== undefined) {
                 updateData.b2bEnabled = String(updateData.b2bEnabled).toLowerCase() === 'true';
             }
@@ -738,7 +749,7 @@ export const updateProductStock = async (req, res) => {
         const product = await Product.findOne({ id: req.params.id });
 
         if (product) {
-            const { stock, skus } = req.body;
+            const { stock, skus, maxOrderQuantity } = req.body;
 
             if (stock !== undefined) {
                 product.stock = Math.max(0, Number(stock) || 0);
@@ -757,6 +768,10 @@ export const updateProductStock = async (req, res) => {
 
                 // Keep parent stock in sync with variant stock sum.
                 product.stock = normalizedSkus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
+            }
+
+            if (maxOrderQuantity !== undefined) {
+                product.maxOrderQuantity = normalizeMaxOrderQuantity(maxOrderQuantity);
             }
 
             const updatedProduct = await product.save();

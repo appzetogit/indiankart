@@ -50,6 +50,7 @@ const ProductForm = () => {
         price: '',
         originalPrice: '',
         deliveryDays: 5,
+        maxOrderQuantity: 1,
         // Dynamic Variant System
         variantHeadings: [], // { name: 'Color', hasImage: true, options: [{ name: 'Red', image: '' }] }
         skus: [], // { combination: { Color: 'Red', Size: 'M' }, price: 999, originalPrice: 1299, stock: 10 }
@@ -105,6 +106,7 @@ const ProductForm = () => {
                 galleryImages: initGallery,
                 price: product.price || '',
                 originalPrice: product.originalPrice || '',
+                maxOrderQuantity: product.maxOrderQuantity || 1,
                 variantHeadings: (product.variantHeadings || []).map(vh => ({
                     ...vh,
                     options: (vh.options || []).map(opt => ({
@@ -543,6 +545,7 @@ const ProductForm = () => {
         if (discount) data.append('discount', discount);
 
         data.append('deliveryDays', String(Number(formData.deliveryDays) > 0 ? Number(formData.deliveryDays) : 5));
+        data.append('maxOrderQuantity', String(Math.max(1, Number(formData.maxOrderQuantity) || 1)));
 
         // Complex objects
         data.append('categoryPath', JSON.stringify(formData.categoryPath));
@@ -852,6 +855,21 @@ const ProductForm = () => {
                                         className="w-full px-3 py-2 md:px-4 md:py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-500 text-sm md:text-base"
                                         placeholder="Full product name..."
                                     />
+                                </div>
+                                <div className="space-y-1 md:space-y-1.5">
+                                    <label className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">Max Selling Quantity</label>
+                                    <input
+                                        type="number"
+                                        name="maxOrderQuantity"
+                                        min="1"
+                                        value={formData.maxOrderQuantity}
+                                        onChange={handleChange}
+                                        className="w-full px-3 py-2 md:px-4 md:py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 caret-black placeholder:text-gray-500 text-sm md:text-base"
+                                        placeholder="1"
+                                    />
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        Every product starts at `1`. Increase it here if users should be able to buy more.
+                                    </p>
                                 </div>
                             </div>
 
