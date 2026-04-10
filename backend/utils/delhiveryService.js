@@ -344,3 +344,47 @@ export const fetchDelhiveryTracking = async (orderOrWaybill) => {
 
     return normalizeTrackingResponse(data, waybill);
 };
+
+export const cancelDelhiveryShipment = async (order) => {
+    const { baseUrl, token } = await getDelhiverySettings();
+    const waybill = String(order?.delhivery?.waybill || '').trim();
+
+    if (!token) {
+        throw new Error('Delhivery token is missing. Please save it in Admin > API Credentials.');
+    }
+
+    if (!waybill) {
+        throw new Error('Delhivery waybill is not available for this order yet.');
+    }
+
+    const payload = {
+        waybill,
+        cancellation: 'true'
+    };
+
+    const { data } = await axios.post(
+        `${baseUrl}/api/p/edit`,
+        payload,
+        {
+            headers: {
+                Authorization: `Token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 20000
+        }
+    );
+
+    const hasSuccessFlag = data?.success === true || data?.Success === true;
+    const acknowledged = data?.acknowledged === true || data?.Acknowledged === true;
+    const statusText = sanitizeText(data?.status || data?.message || data?.rmk || data?.remark || '');
+    const looksSuccessful = hasSuccessFlag || acknowledged || /cancel/i.test(statusText);
+
+    if (!looksSuccessful) {
+        throw new Error(statusText || 'Delhivery shipment cancellation failed.');
+    }
+
+    return {
+        requestPayload: payload,
+        responsePayload: data
+    };
+};

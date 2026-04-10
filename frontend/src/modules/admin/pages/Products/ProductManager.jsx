@@ -278,6 +278,7 @@ const ProductManager = () => {
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Category</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Subcategory</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Stock Status</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Max Qty</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
                                     </tr>
                                 </thead>
@@ -339,6 +340,11 @@ const ProductManager = () => {
                                                         ></div>
                                                     </div>
                                                 </div>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-center">
+                                                <span className="inline-block px-2.5 py-1 rounded-full bg-amber-50 text-[10px] font-black text-amber-700 uppercase">
+                                                    {Number(product.maxOrderQuantity) > 0 ? product.maxOrderQuantity : 1}
+                                                </span>
                                             </td>
                                             <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-right">
                                                 {pickerMode ? (
@@ -429,6 +435,9 @@ const ProductManager = () => {
                                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                                             <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Stock Level</p>
                                             <p className={`text-xs font-bold ${selectedProduct.stock <= 5 ? 'text-amber-500' : 'text-gray-800'}`}>{selectedProduct.stock || 0} Units</p>
+                                            <p className="text-[11px] font-semibold text-gray-500 mt-1">
+                                                Max Qty: {Number(selectedProduct.maxOrderQuantity) > 0 ? selectedProduct.maxOrderQuantity : 1}
+                                            </p>
                                         </div>
                                     </div>
 

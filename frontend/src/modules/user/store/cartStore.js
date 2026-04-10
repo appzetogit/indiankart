@@ -6,6 +6,30 @@ const isSameItem = (item, product, variant = product?.variant || {}) => (
     JSON.stringify(item.variant || {}) === JSON.stringify(variant || {})
 );
 
+const getItemPurchaseLimit = (item) => {
+    const maxAllowedQuantity = Number(item?.maxAllowedQuantity);
+    if (Number.isFinite(maxAllowedQuantity) && maxAllowedQuantity > 0) {
+        return Math.floor(maxAllowedQuantity);
+    }
+
+    const configuredLimit = Number(item?.maxOrderQuantity);
+    const stockLimit = Number(item?.stock);
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0 && Number.isFinite(stockLimit) && stockLimit > 0) {
+        return Math.min(Math.floor(configuredLimit), Math.floor(stockLimit));
+    }
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0) {
+        return Math.floor(configuredLimit);
+    }
+    return Number.isFinite(stockLimit) && stockLimit > 0 ? 1 : 0;
+};
+
+const clampQuantity = (item, quantity) => {
+    const nextQuantity = Math.max(1, Number(quantity) || 1);
+    return Math.min(nextQuantity, getItemPurchaseLimit(item));
+};
+
 export const useCartStore = create()(
     persist(
         (set, get) => ({
@@ -36,11 +60,13 @@ export const useCartStore = create()(
                     if (existingItem) {
                         return {
                             cart: state.cart.map((item) =>
-                                item === existingItem ? { ...item, quantity: item.quantity + 1 } : item
+                                item === existingItem
+                                    ? { ...item, quantity: clampQuantity(item, item.quantity + 1) }
+                                    : item
                             ),
                         };
                     }
-                    return { cart: [...state.cart, { ...cartItem, quantity: 1 }] };
+                    return { cart: [...state.cart, { ...cartItem, quantity: clampQuantity(cartItem, 1) }] };
                 });
             },
 
@@ -58,7 +84,7 @@ export const useCartStore = create()(
                     cart: state.cart.map((item) =>
                         (item.id === productId &&
                             JSON.stringify(item.variant) === JSON.stringify(variant))
-                            ? { ...item, quantity: Math.max(1, quantity) } : item
+                            ? { ...item, quantity: clampQuantity(item, quantity) } : item
                     ),
                 }));
             },
@@ -101,17 +127,17 @@ export const useCartStore = create()(
                             cart: existingCartItem
                                 ? state.cart.map((item) =>
                                     isSameItem(item, product)
-                                        ? { ...item, quantity: item.quantity + 1 }
+                                        ? { ...item, quantity: clampQuantity(item, item.quantity + 1) }
                                         : item
                                 )
-                                : [...state.cart, { ...product, quantity: 1 }]
+                                : [...state.cart, { ...product, quantity: clampQuantity(product, 1) }]
                         };
                     }
                     const isInWishlist = state.wishlist.find(item => item.id === product.id);
                     if (isInWishlist) {
                         return {
                             wishlist: state.wishlist.filter(item => item.id !== product.id),
-                            cart: [...state.cart, { ...product, quantity: 1 }]
+                            cart: [...state.cart, { ...product, quantity: clampQuantity(product, 1) }]
                         };
                     }
                     return state;

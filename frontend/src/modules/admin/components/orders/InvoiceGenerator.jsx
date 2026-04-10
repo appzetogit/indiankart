@@ -1,12 +1,93 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
+import JsBarcode from "jsbarcode";
+import QRCode from "qrcode";
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier } from "../../../../utils/shippingProvider";
+
+const normalizeOrderStatus = (status = "") => {
+  const value = String(status || "").trim();
+  if (value === "Shipped") return "Dispatched";
+  return value;
+};
+
+const BarcodeSvg = ({ value, height = 118 }) => {
+  const svgRef = useRef(null);
+
+  useEffect(() => {
+    if (!svgRef.current || !value) return;
+
+    try {
+      JsBarcode(svgRef.current, value, {
+        format: "CODE128",
+        width: 1.25,
+        height,
+        margin: 0,
+        displayValue: false,
+        lineColor: "#000000",
+        background: "transparent",
+      });
+    } catch (error) {
+      console.error("Barcode generation failed:", error);
+    }
+  }, [value, height]);
+
+  if (!value) return null;
+
+  return <svg ref={svgRef} style={{ width: "100%", height: `${height}px`, display: "block" }} />;
+};
+
+const QrCodeImage = ({ value, size = 120 }) => {
+  const [src, setSrc] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const generate = async () => {
+      if (!value) {
+        setSrc("");
+        return;
+      }
+
+      try {
+        const url = await QRCode.toDataURL(value, {
+          width: size,
+          margin: 0,
+          errorCorrectionLevel: "M",
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
+        });
+
+        if (active) {
+          setSrc(url);
+        }
+      } catch (error) {
+        console.error("QR generation failed:", error);
+        if (active) {
+          setSrc("");
+        }
+      }
+    };
+
+    generate();
+
+    return () => {
+      active = false;
+    };
+  }, [value, size]);
+
+  if (!src) return null;
+
+  return <img src={src} alt="Tracking QR" style={{ width: `${size}px`, height: `${size}px`, display: "block" }} />;
+};
 
 /* ============================================
    INVOICE DISPLAY
 ============================================ */
 
 export const InvoiceDisplay = React.forwardRef(
-  ({ order, item, items, settings: apiSettings, includeShippingLabel = true }, ref) => {
+  ({ order, item, items, settings: apiSettings, includeShippingLabel = true, trackingData = null }, ref) => {
     if (!order) return null;
 
     // Specific seller requirements - prioritize apiSettings from DB
@@ -55,6 +136,44 @@ export const InvoiceDisplay = React.forwardRef(
     };
 
     const format = (n) => toNumber(n).toFixed(2);
+    const fulfillmentMode = getFulfillmentMode(order);
+    const isCourierMode = fulfillmentMode === "delhivery" || fulfillmentMode === "ekart";
+    const trackingId = getTrackingIdentifier(order, fulfillmentMode);
+    const providerLabel = getShippingProviderLabel(fulfillmentMode);
+    const liveTrackingStatus = String(trackingData?.mappedCurrentStep || trackingData?.currentStatus || "").trim();
+    const manualStatus = normalizeOrderStatus(order?.status || "");
+    const effectiveShipmentStatus = liveTrackingStatus || manualStatus || "Pending";
+    const shipmentSyncedAt = order?.delhivery?.syncedAt || order?.ekart?.syncedAt || trackingData?.lastUpdatedAt || null;
+    const labelOrderId = String(order.displayId || order.id || order._id || "").trim();
+    const customerName = order.shippingAddress?.name || order.address?.name || order.user?.name || "Customer Name";
+    const customerStreet = order.address?.line || order.shippingAddress?.address || order.shippingAddress?.street || "Address Not Available";
+    const customerCity = order.address?.city || order.shippingAddress?.city || "N/A";
+    const customerState = order.address?.state || order.shippingAddress?.state || "N/A";
+    const customerPin = order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || "N/A";
+    const awbDisplayValue = trackingId || labelOrderId;
+    const appBaseUrl = (
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_PUBLIC_APP_URL)
+      || (typeof window !== "undefined" && window.location?.origin)
+      || ""
+    ).replace(/\/$/, "");
+    const delhiveryRedirectUrl = trackingId && appBaseUrl
+      ? `${appBaseUrl}/r/${encodeURIComponent(fulfillmentMode)}/${encodeURIComponent(trackingId)}`
+      : "";
+    const barcodeValue = delhiveryRedirectUrl || awbDisplayValue;
+    const qrPayload = delhiveryRedirectUrl || [
+      `Order ID: ${labelOrderId}`,
+      awbDisplayValue ? `Tracking ID: ${awbDisplayValue}` : "",
+      customerName ? `Customer: ${customerName}` : "",
+      effectiveShipmentStatus ? `Status: ${effectiveShipmentStatus}` : "",
+      `Address: ${customerStreet}, ${customerCity}, ${customerState} - ${customerPin}`,
+    ].filter(Boolean).join("\n");
+
+    const formatShortDate = (value) => {
+      if (!value) return "";
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return "";
+      return parsed.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit" });
+    };
 
     // Robust list selection: items prop > item prop > order.items/order.orderItems
     const rawList = (items && items.length > 0)
@@ -75,6 +194,7 @@ export const InvoiceDisplay = React.forwardRef(
     const couponDiscount = item ? 0 : toNumber(order?.coupon?.discount);
     const orderGrandTotal = toNumber(order?.totalPrice ?? order?.total ?? order?.itemsPrice ?? subtotal);
     const totalAmount = (item ? subtotal : orderGrandTotal) + handlingFee;
+    const printedAt = new Date();
 
     return (
       <div ref={ref} className="invoice-root">
@@ -115,6 +235,37 @@ export const InvoiceDisplay = React.forwardRef(
             font-weight: bold;
             font-size: 14px;
             border-top: 1px solid black;
+          }
+          .label .media-cell {
+            padding: 0;
+          }
+          .label .barcode-wrap {
+            height: 138px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 4px;
+          }
+          .label .barcode-meta {
+            font-size: 8px;
+            font-weight: bold;
+            text-align: center;
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            letter-spacing: 0.08em;
+          }
+          .label .qr-wrap {
+            min-height: 138px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 6px;
+            padding: 8px;
+          }
+          .label .mini-note {
+            font-size: 7px;
+            line-height: 1.25;
           }
           .label-footer {
             display: flex;
@@ -174,6 +325,22 @@ export const InvoiceDisplay = React.forwardRef(
             font-weight: bold;
             background: #fcfcfc;
           }
+          .invoice-barcode-block {
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 16px;
+          }
+          .invoice-barcode {
+            width: 230px;
+            max-width: 100%;
+          }
+          .invoice-barcode-note {
+            font-size: 7px;
+            line-height: 1.3;
+            text-align: right;
+          }
           .text-right { text-align: right !important; }
           .text-center { text-align: center !important; }
           .font-bold { font-weight: bold; }
@@ -202,11 +369,11 @@ export const InvoiceDisplay = React.forwardRef(
               <tr>
                 <th style={{ width: "40px", textAlign: "center", fontSize: "14px" }}>STD</th>
                 <th>
-                  <div style={{ fontSize: "8px" }}>E-Kart Logistics</div>
+                  <div style={{ fontSize: "8px" }}>IndiaKart</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{order.displayId || order.id || order._id}</div>
                 </th>
                 <th style={{ width: "100px" }}>
-                  <div style={{ fontSize: "8px" }}>↑FRAGILE</div>
+                  <div style={{ fontSize: "8px" }}>↑SURFACE</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>PREPAID</div>
                 </th>
                 <th style={{ width: "30px", fontSize: "18px", textAlign: "center" }}>E</th>
@@ -214,23 +381,48 @@ export const InvoiceDisplay = React.forwardRef(
             </thead>
             <tbody>
               <tr>
-                <td colSpan="4" style={{ padding: "8px 5px" }}>
-                   <div style={{ fontSize: "9px", marginBottom: "3px" }}>Ordered through</div>
-                   <div className="brand">IndianKart <span style={{ fontSize: "14px", transform: "scaleX(-1)", display: "inline-block" }}>f</span></div>
+                <td colSpan="4" style={{ padding: "6px 5px" }}>
+                   <div style={{ fontSize: "8px", marginBottom: "2px" }}>Ordered through</div>
+                   <div className="brand" style={{ fontSize: "13px" }}>IndianKart</div>
+                </td>
+              </tr>
+              <tr>
+                <td className="media-cell" style={{ width: "108px" }}>
+                  <div className="barcode-wrap">
+                    <div style={{ width: "86px" }}>
+                      <BarcodeSvg value={barcodeValue} height={110} />
+                    </div>
+                    <div className="barcode-meta">
+                      {awbDisplayValue
+                        ? (isCourierMode && trackingId ? `Open Tracking | ${awbDisplayValue}` : `AWB No. ${awbDisplayValue}`)
+                        : "TRACKING ID"}
+                    </div>
+                  </div>
+                </td>
+                <td colSpan="3" className="media-cell">
+                  <div className="qr-wrap">
+                    <QrCodeImage value={qrPayload} size={116} />
+                    <div className="mini-note" style={{ fontWeight: "bold", textAlign: "center" }}>
+                      {isCourierMode && trackingId ? `${getShippingProviderLabel(fulfillmentMode)} Tracking: ${trackingId}` : `Order ID: ${labelOrderId}`}
+                    </div>
+                  </div>
                 </td>
               </tr>
               <tr>
                 <td colSpan="4" className="addr">
                   <div style={{ marginBottom: "3px" }}><b>Shipping/Customer address:</b></div>
-                  <div>Name: <b>{order.shippingAddress?.name || order.address?.name || order.user?.name || 'Customer Name'}</b></div>
-                  <div style={{ maxWidth: "250px" }}>{order.address?.line || order.shippingAddress?.address || order.shippingAddress?.street || 'Address Not Available'}</div>
-                  <div>{order.address?.city || order.shippingAddress?.city || 'N/A'}, {order.address?.state || order.shippingAddress?.state || 'N/A'} - <b>{order.address?.pincode || order.shippingAddress?.pincode || order.shippingAddress?.postalCode || 'N/A'}</b>, IN-WB</div>
+                  <div>Name: <b>{customerName}</b></div>
+                  <div style={{ maxWidth: "250px" }}>{customerStreet}</div>
+                  <div>{customerCity}, {customerState} - <b>{customerPin}</b></div>
                 </td>
               </tr>
               <tr style={{ height: "35px" }}>
                 <td colSpan="2" style={{ borderRight: "1px solid black" }}>
-                  <div>HBD: {new Date(order.date || order.createdAt).toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
-                  <div>CPD: {new Date().toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit' })}</div>
+                  <div><b>HBD:</b> {formatShortDate(order.date || order.createdAt) || "N/A"}</div>
+                  <div><b>CPD:</b> {formatShortDate(shipmentSyncedAt || printedAt) || "N/A"}</div>
+                  <div className="mini-note" style={{ marginTop: "2px" }}>
+                    <b>{isCourierMode ? `${providerLabel} Status:` : "Manual Status:"}</b> {effectiveShipmentStatus}
+                  </div>
                 </td>
                 <td colSpan="2">
                   <div style={{ fontSize: "8px" }}>Sold By:<b>{settings.sellerName}</b>, {settings.sellerAddress}</div>
@@ -265,7 +457,7 @@ export const InvoiceDisplay = React.forwardRef(
           </table>
           <div className="label-footer">
             <span>Not for resale.</span>
-            <span>Printed at {new Date().getHours()}{String(new Date().getMinutes()).padStart(2, '0')} hrs, {new Date().toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
+            <span>Printed at {printedAt.getHours()}{String(printedAt.getMinutes()).padStart(2, '0')} hrs, {printedAt.toLocaleDateString("en-IN", { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
           </div>
         </div>
 
@@ -291,6 +483,8 @@ export const InvoiceDisplay = React.forwardRef(
               <span style={{ fontSize: "7px" }}>{new Date().toLocaleString()}</span>
             </div>
             <div className="tax-header-item text-right">
+              <div>Fulfillment: {providerLabel}</div>
+              <div>Status: {effectiveShipmentStatus}</div>
               GST: {settings.gstNumber}<br />
               PAN: {settings.panNumber}
             </div>
@@ -387,6 +581,19 @@ export const InvoiceDisplay = React.forwardRef(
              All values are in INR
           </div>
 
+              <div className="invoice-barcode-block">
+            <div className="invoice-barcode">
+              <BarcodeSvg value={barcodeValue} height={46} />
+              <div style={{ fontSize: "8px", fontWeight: "bold", marginTop: "3px" }}>
+                {isCourierMode && trackingId ? `${getShippingProviderLabel(fulfillmentMode)} Tracking: ${awbDisplayValue}` : `Order ID: ${awbDisplayValue}`}
+              </div>
+            </div>
+            <div className="invoice-barcode-note">
+              <div><b>Scan to open tracking</b></div>
+              <div>{isCourierMode && trackingId ? `Redirects to ${getShippingProviderLabel(fulfillmentMode)} tracking` : "Order reference barcode"}</div>
+            </div>
+          </div>
+
           <div style={{ marginTop: "25px", display: "flex", justifyBetween: "space-between", alignItems: "flex-end" }}>
             <div style={{ fontSize: "8px", lineHeight: "1.5", color: "#444" }}>
               <div style={{ marginBottom: "10px" }}>
@@ -425,7 +632,7 @@ export const InvoiceDisplay = React.forwardRef(
    INVOICE GENERATOR WRAPPER
 ============================================ */
 
-const InvoiceGenerator = ({ order, item, items, settings, customTrigger, includeShippingLabel = true }) => {
+const InvoiceGenerator = ({ order, item, items, settings, customTrigger, includeShippingLabel = true, trackingData = null }) => {
   const componentRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -460,6 +667,7 @@ const InvoiceGenerator = ({ order, item, items, settings, customTrigger, include
           items={items}
           settings={settings || {}}
           includeShippingLabel={includeShippingLabel}
+          trackingData={trackingData}
         />
       </div>
       {trigger}
@@ -471,7 +679,7 @@ const InvoiceGenerator = ({ order, item, items, settings, customTrigger, include
    BULK INVOICE GENERATOR
 ============================================ */
 
-export const BulkInvoiceGenerator = ({ orders, settings, customTrigger, includeShippingLabel = true }) => {
+export const BulkInvoiceGenerator = ({ orders, settings, customTrigger, includeShippingLabel = true, trackingData = null }) => {
   const componentRef = useRef(null);
 
   const handlePrint = useReactToPrint({
@@ -507,6 +715,7 @@ export const BulkInvoiceGenerator = ({ orders, settings, customTrigger, includeS
                 items={order.items || order.orderItems}
                 settings={settings || {}}
                 includeShippingLabel={includeShippingLabel}
+                trackingData={trackingData}
               />
             </div>
           ))}

@@ -26,6 +26,8 @@ import AllCategories from '../pages/AllCategories';
 import InfoPage from '../pages/InfoPage';
 import OfferPage from '../pages/OfferPage';
 import BecomeSeller from '../pages/BecomeSeller';
+import DelhiveryRedirect from '../pages/DelhiveryRedirect';
+import ShippingRedirect from '../pages/ShippingRedirect';
 
 const UserRoutes = () => {
     return (
@@ -60,6 +62,8 @@ const UserRoutes = () => {
                 <Route path="offers/:id" element={<OfferPage />} />
                 <Route path="info" element={<InfoPage />} />
                 <Route path="become-seller" element={<BecomeSeller />} />
+                <Route path="r/delhivery/:waybill" element={<DelhiveryRedirect />} />
+                <Route path="r/:provider/:trackingId" element={<ShippingRedirect />} />
             </Route>
         </Routes>
     );

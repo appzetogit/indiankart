@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../../services/api';
 import Pagination from '../../../components/Pagination';
+import { getFulfillmentMode } from '../../../utils/shippingProvider';
 
 const MyOrders = () => {
     const navigate = useNavigate();
@@ -25,12 +26,16 @@ const MyOrders = () => {
             setOrders(data);
             const liveStatusEntries = await Promise.all(
                 (Array.isArray(data) ? data : []).map(async (order) => {
-                    if (!order?.delhivery?.waybill) {
+                    const fulfillmentMode = getFulfillmentMode(order);
+                    const trackingIdentifier = fulfillmentMode === 'delhivery'
+                        ? order?.delhivery?.waybill
+                        : order?.ekart?.trackingNumber;
+                    if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier) {
                         return [String(order?._id || ''), ''];
                     }
 
                     try {
-                        const { data: trackingResponse } = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                        const { data: trackingResponse } = await API.get(`/orders/${order._id}/shipping-tracking`);
                         return [String(order._id), String(trackingResponse?.tracking?.currentStatus || '').trim()];
                     } catch (trackingError) {
                         return [String(order._id), ''];
@@ -52,6 +57,7 @@ const MyOrders = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
             'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -82,6 +88,7 @@ const MyOrders = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
+            'Packed': 'inventory_2',
             'Manifested': 'inventory_2',
             'Not Picked': 'schedule',
             'Picked Up': 'inventory_2',
@@ -110,6 +117,10 @@ const MyOrders = () => {
 
     const getEffectiveOrderStatus = (order) => {
         const liveStatus = String(liveStatuses[String(order?._id || '')] || '').trim();
+        const fulfillmentMode = getFulfillmentMode(order);
+        if (fulfillmentMode === 'manual' || fulfillmentMode === 'unassigned') {
+            return String(order?.status || '').trim();
+        }
         return liveStatus || String(order?.status || '').trim();
     };
 

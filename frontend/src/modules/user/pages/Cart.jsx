@@ -8,6 +8,25 @@ import { products } from '../data/mockData';
 import toast from 'react-hot-toast';
 import API from '../../../services/api';
 
+const getItemPurchaseLimit = (item) => {
+    const maxAllowedQuantity = Number(item?.maxAllowedQuantity);
+    if (Number.isFinite(maxAllowedQuantity) && maxAllowedQuantity > 0) {
+        return Math.floor(maxAllowedQuantity);
+    }
+
+    const configuredLimit = Number(item?.maxOrderQuantity);
+    const stockLimit = Number(item?.stock);
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0 && Number.isFinite(stockLimit) && stockLimit > 0) {
+        return Math.min(Math.floor(configuredLimit), Math.floor(stockLimit));
+    }
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0) {
+        return Math.floor(configuredLimit);
+    }
+    return Number.isFinite(stockLimit) && stockLimit > 0 ? 1 : 0;
+};
+
 const Cart = () => {
     const navigate = useNavigate();
     const {
@@ -221,6 +240,11 @@ const Cart = () => {
                                 <div className="bg-white md:rounded-lg md:shadow-lg border border-gray-200">
                                     {cart.map((item) => (
                                         <div key={`${item.id}-${JSON.stringify(item.selectedSize)}`} className="p-5 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-all">
+                                            {Number.isFinite(getItemPurchaseLimit(item)) && (
+                                                <p className="mb-3 text-xs text-amber-600 font-semibold">
+                                                    Max allowed quantity: {getItemPurchaseLimit(item)}
+                                                </p>
+                                            )}
                                             <div className="flex gap-4">
                                                 <div className="w-24 h-28 flex-shrink-0 bg-gray-50 rounded-lg border-2 border-gray-200 p-2 shadow-sm">
                                                     <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
@@ -253,8 +277,19 @@ const Cart = () => {
                                                     </button>
                                                     <span className="w-12 text-center text-base font-extrabold text-blue-600">{item.quantity}</span>
                                                     <button
-                                                        onClick={() => updateQuantity(item.id, item.quantity + 1, item.variant)}
-                                                        className="w-10 h-10 flex items-center justify-center active:bg-blue-600 hover:bg-blue-50 active:text-white transition-all"
+                                                        onClick={() => {
+                                                            const purchaseLimit = getItemPurchaseLimit(item);
+                                                            if (Number.isFinite(purchaseLimit) && item.quantity >= purchaseLimit) {
+                                                                toast.error(`You can only buy up to ${purchaseLimit} units of this product`);
+                                                                return;
+                                                            }
+                                                            updateQuantity(item.id, item.quantity + 1, item.variant);
+                                                        }}
+                                                        className={`w-10 h-10 flex items-center justify-center transition-all ${
+                                                            Number.isFinite(getItemPurchaseLimit(item)) && item.quantity >= getItemPurchaseLimit(item)
+                                                                ? 'text-gray-300 cursor-not-allowed'
+                                                                : 'active:bg-blue-600 hover:bg-blue-50 active:text-white'
+                                                        }`}
                                                     >
                                                         <span className="material-icons text-lg">add</span>
                                                     </button>

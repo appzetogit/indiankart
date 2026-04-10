@@ -54,6 +54,9 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
             case 'Received at Warehouse': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
             case 'Refund Initiated':
             case 'Replacement Dispatched': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
+            case 'Refunded':
+            case 'Returned':
+            case 'Replaced':
             case 'Completed': return 'bg-green-50 text-green-600 border-green-100';
             case 'Rejected': return 'bg-red-50 text-red-600 border-red-100';
             default: return 'bg-gray-50 text-gray-600 border-gray-100';
@@ -120,10 +123,23 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
         });
     };
 
+    const hasRefundFlow = (ret) => {
+        const timeline = Array.isArray(ret?.timeline) ? ret.timeline : [];
+        return timeline.some((entry) => String(entry?.status || '').trim() === 'Refund Initiated');
+    };
+
     const getLifecycleSteps = (type) => {
         if (type === 'Cancellation') return ['Pending', 'Approved', 'Completed'];
         if (type === 'Replacement') return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Replacement Dispatched', 'Completed'];
         return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
+    };
+
+    const getLifecycleStepsForRequest = (ret) => {
+        if (!ret) return [];
+        if (ret.type === 'Replacement' && hasRefundFlow(ret)) {
+            return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed'];
+        }
+        return getLifecycleSteps(ret.type);
     };
 
     const getFilterStatusOptions = () => {
@@ -131,15 +147,19 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
             return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Completed', 'Rejected'];
         }
         if (forcedType === 'Replacement') {
-            return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Replacement Dispatched', 'Completed', 'Rejected'];
+            return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Completed', 'Rejected'];
         }
         return ['Pending', 'Approved', 'Pickup Scheduled', 'Received at Warehouse', 'Refund Initiated', 'Replacement Dispatched', 'Completed', 'Rejected'];
     };
 
-    const getDisplayStatusLabel = (type, status) => {
+    const getDisplayStatusLabel = (type, status, ret = null) => {
         const normalizedType = String(type || '').trim();
+        const refundFlow = hasRefundFlow(ret);
         if (normalizedType === 'Return' && String(status || '').trim() === 'Completed') {
             return 'Returned';
+        }
+        if (normalizedType === 'Replacement' && String(status || '').trim() === 'Completed' && refundFlow) {
+            return 'Refunded';
         }
         if (normalizedType === 'Replacement' && String(status || '').trim() === 'Completed') {
             return 'Replaced';
@@ -155,7 +175,11 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
         const currentIndex = steps.indexOf(ret.status);
         if (currentIndex === -1) return [];
 
-        const forwardStatuses = steps.slice(currentIndex + 1);
+        let forwardStatuses = steps.slice(currentIndex + 1);
+
+        if (ret.type === 'Replacement' && ['Approved', 'Pickup Scheduled', 'Received at Warehouse'].includes(ret.status)) {
+            forwardStatuses = [...forwardStatuses.filter((status) => status !== 'Refund Initiated'), 'Refund Initiated'];
+        }
 
         if (ret.status === 'Pending') {
             return [...forwardStatuses, 'Rejected'];
@@ -164,7 +188,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
         return forwardStatuses;
     };
 
-    const getActionLabel = (status, type) => {
+    const getActionLabel = (status, type, ret = null) => {
         if (status === 'Approved') return type === 'Cancellation' ? 'Approve Cancellation' : 'Approve Request';
         if (status === 'Rejected') return type === 'Cancellation' ? 'Reject Cancellation' : 'Reject Request';
         if (status === 'Pickup Scheduled') return 'Schedule Pickup';
@@ -173,6 +197,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
         if (status === 'Replacement Dispatched') return 'Dispatch Replacement';
         if (status === 'Completed') {
             if (type === 'Return') return 'Mark as Returned';
+            if (type === 'Replacement' && hasRefundFlow(ret)) return 'Mark as Refunded';
             if (type === 'Replacement') return 'Mark as Replaced';
             return 'Mark as Completed';
         }
@@ -242,7 +267,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                             setCurrentPage(1);
                         }}
                     >
-                        <option value="All">All Statuses</option>
+                            <option value="All">All Statuses</option>
                         {getFilterStatusOptions().map((status) => (
                             <option key={status} value={status}>
                                 {getDisplayStatusLabel(forcedType === 'All' ? typeFilter : forcedType, status)}
@@ -302,8 +327,8 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                         </div>
                                     </td>
                                     <td className="px-5 py-3 text-center">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(getDisplayStatusLabel(ret.type, ret.status))}`}>
-                                            {getDisplayStatusLabel(ret.type, ret.status)}
+                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(getDisplayStatusLabel(ret.type, ret.status, ret))}`}>
+                                            {getDisplayStatusLabel(ret.type, ret.status, ret)}
                                         </span>
                                     </td>
                                     <td className="px-5 py-3 text-right">
@@ -514,7 +539,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
 
                             <div className="flex-1 overflow-y-auto p-8 space-y-8">
                                 {(() => {
-                                    const baseSteps = getLifecycleSteps(selectedReturn.type);
+                                    const baseSteps = getLifecycleStepsForRequest(selectedReturn);
                                     const lifecycleSteps = baseSteps.includes(selectedReturn.status)
                                         ? baseSteps
                                         : [...baseSteps, selectedReturn.status];
@@ -537,7 +562,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                                 const event = [...timelineEvents].reverse().find((entry) => entry.status === step);
                                                 const isCompleted = idx <= safeCurrentIndex;
                                                 const isCurrent = idx === safeCurrentIndex;
-                                                const stepLabel = getDisplayStatusLabel(selectedReturn.type, step);
+                                                const stepLabel = getDisplayStatusLabel(selectedReturn.type, step, selectedReturn);
                                                 return (
                                                     <div key={`${selectedReturn.id}-${step}`} className="relative flex gap-6 mb-8 last:mb-0">
                                                         <div className={`w-8 h-8 rounded-full flex items-center justify-center relative z-10 text-white transition-all ${isCompleted ? 'bg-blue-600 shadow-lg shadow-blue-100' : 'bg-gray-300'}`}>
@@ -587,7 +612,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                                 <option value="" disabled>Select next status</option>
                                                 {getStatusOptions(selectedReturn).map((status) => (
                                                     <option key={status} value={status}>
-                                                        {getDisplayStatusLabel(selectedReturn.type, status)}
+                                                        {getDisplayStatusLabel(selectedReturn.type, status, selectedReturn)}
                                                     </option>
                                                 ))}
                                             </select>
@@ -596,7 +621,7 @@ const ReturnRequests = ({ forcedType = 'All', pageTitle = 'Returns & Replacement
                                                 disabled={!nextStatus}
                                                 className="py-3 px-5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                             >
-                                                {getActionLabel(nextStatus, selectedReturn.type)}
+                                                {getActionLabel(nextStatus, selectedReturn.type, selectedReturn)}
                                             </button>
                                         </div>
                                     )}

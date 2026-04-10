@@ -4,6 +4,7 @@ import API from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
+import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getShippingSyncedAt } from '../../../utils/shippingProvider';
 
 const RETURN_WINDOW_DAYS = 7;
 const RETURN_CONSUMING_STATUSES = new Set([
@@ -177,6 +178,8 @@ const OrderDetails = () => {
         isServiceable: null,
         text: ''
     });
+    const fulfillmentMode = getFulfillmentMode(order);
+    const isCourierMode = fulfillmentMode === 'delhivery' || fulfillmentMode === 'ekart';
 
     useEffect(() => {
         fetchOrderDetails();
@@ -199,13 +202,13 @@ const OrderDetails = () => {
         let cancelled = false;
 
         const fetchTracking = async () => {
-            if (!order?.delhivery?.waybill) {
+            if (!isCourierMode || !getTrackingIdentifier(order, fulfillmentMode)) {
                 setTrackingData(null);
                 return;
             }
 
             try {
-                const { data } = await API.get(`/orders/${orderId}/delhivery-tracking`);
+                const { data } = await API.get(`/orders/${orderId}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
             } catch (err) {
@@ -219,7 +222,7 @@ const OrderDetails = () => {
         return () => {
             cancelled = true;
         };
-    }, [order?.delhivery?.waybill, orderId]);
+    }, [fulfillmentMode, isCourierMode, order?.delhivery?.waybill, order?.ekart?.trackingNumber, orderId]);
 
     useEffect(() => {
         const delivered = String(trackingData?.currentStatus || '').trim() === 'Delivered'
@@ -290,6 +293,7 @@ const OrderDetails = () => {
         const colors = {
             'Pending': 'bg-yellow-100 text-yellow-800 border-yellow-200',
             'Confirmed': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Packed': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Manifested': 'bg-indigo-100 text-indigo-800 border-indigo-200',
             'Not Picked': 'bg-slate-100 text-slate-800 border-slate-200',
             'Picked Up': 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -320,6 +324,7 @@ const OrderDetails = () => {
         const icons = {
             'Pending': 'pending',
             'Confirmed': 'check_circle',
+            'Packed': 'inventory_2',
             'Manifested': 'inventory_2',
             'Not Picked': 'schedule',
             'Picked Up': 'inventory_2',
@@ -349,6 +354,7 @@ const OrderDetails = () => {
     const steps = [
         { name: 'Pending', status: 'Pending', icon: 'shopping_cart' },
         { name: 'Confirmed', status: 'Confirmed', icon: 'check_circle' },
+        { name: 'Packed', status: 'Packed', icon: 'inventory_2' },
         { name: 'Manifested', status: 'Manifested', icon: 'inventory_2' },
         { name: 'Not Picked', status: 'Not Picked', icon: 'schedule' },
         { name: 'Picked Up', status: 'Picked Up', icon: 'inventory_2' },
@@ -360,7 +366,8 @@ const OrderDetails = () => {
     ];
     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
     const rawCourierStatus = String(trackingData?.currentStatus || '').trim();
-    const hasCourierException = EXCEPTION_STATUSES.has(rawCourierStatus);
+    const mappedCourierStep = String(trackingData?.mappedCurrentStep || '').trim();
+    const hasCourierException = isCourierMode && EXCEPTION_STATUSES.has(rawCourierStatus);
     const rawTrackingScans = Array.isArray(trackingData?.scans) ? trackingData.scans : [];
     const scanTimeByStatus = rawTrackingScans.reduce((acc, scan) => {
         const key = String(scan?.status || '').trim();
@@ -375,10 +382,10 @@ const OrderDetails = () => {
             return normalizedOrderStatus;
         }
         if (hasCourierException) return rawCourierStatus;
-        if (rawCourierStatus) return rawCourierStatus;
-        if (normalizedOrderStatus === 'Delivered') return 'Delivered';
-        if (normalizedOrderStatus === 'Confirmed') return 'Confirmed';
-        return 'Pending';
+        if (isCourierMode && mappedCourierStep) return mappedCourierStep;
+        if (isCourierMode && rawCourierStatus && steps.some((step) => step.status === rawCourierStatus)) return rawCourierStatus;
+        if (steps.some((step) => step.status === normalizedOrderStatus)) return normalizedOrderStatus;
+        return normalizedOrderStatus || 'Pending';
     })();
     const currentStep = steps.findIndex((step) => step.status === displayOrderStatus);
     const orderProgress = steps.length > 1 && currentStep >= 0
@@ -443,7 +450,7 @@ const OrderDetails = () => {
     const isOnlinePaidOrder = Boolean(order?.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
     const paymentInfoStatus = isOnlinePaidOrder
         ? 'Completed'
-        : (order?.isPaid || ['Confirmed', 'Manifested', 'Not Picked', 'Picked Up', 'Scheduled', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered'].includes(displayOrderStatus)
+        : (order?.isPaid || ['Confirmed', 'Packed', 'Manifested', 'Not Picked', 'Picked Up', 'Scheduled', 'Dispatched', 'In Transit', 'Out for Delivery', 'Delivered'].includes(displayOrderStatus)
             ? 'Completed'
             : 'Pending');
     const isWithinReturnWindow = useMemo(() => {
@@ -457,9 +464,10 @@ const OrderDetails = () => {
 
     const getStepTimestamp = (stepStatus, stepIndex) => {
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt);
-        if (stepStatus === 'Confirmed') return formatTrackingDate(order?.delhivery?.syncedAt);
-        if (scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
+        if (stepStatus === 'Confirmed') return formatTrackingDate(isCourierMode ? getShippingSyncedAt(order, fulfillmentMode) : (normalizedOrderStatus !== 'Pending' ? order?.updatedAt : null));
+        if (isCourierMode && scanTimeByStatus[stepStatus]) return formatTrackingDate(scanTimeByStatus[stepStatus]);
         if (stepStatus === 'Delivered') return formatTrackingDate(effectiveDeliveredAt);
+        if (!isCourierMode && normalizedOrderStatus === stepStatus) return formatTrackingDate(order?.updatedAt);
         if (stepIndex < currentStep) return '';
         return '';
     };
@@ -609,9 +617,9 @@ const OrderDetails = () => {
                                     Courier Exception
                                 </h2>
                                 <div className="rounded-xl border border-red-100 bg-red-50 p-4">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-red-700">Live Delhivery Status</p>
+                                    <p className="text-xs font-bold uppercase tracking-widest text-red-700">Live {getShippingProviderLabel(fulfillmentMode)} Status</p>
                                     <p className="mt-2 text-xl font-black text-red-800 uppercase">{rawCourierStatus}</p>
-                                    <p className="mt-2 text-sm text-red-700">This update came directly from Delhivery tracking.</p>
+                                    <p className="mt-2 text-sm text-red-700">This update came directly from {getShippingProviderLabel(fulfillmentMode)} tracking.</p>
                                     <p className="mt-2 text-xs font-semibold text-red-800">{formatTrackingDate(trackingData?.lastUpdatedAt || order?.updatedAt)}</p>
                                 </div>
                             </div>

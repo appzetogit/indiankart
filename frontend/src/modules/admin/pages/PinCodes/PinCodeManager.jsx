@@ -6,7 +6,9 @@ const PinCodeManager = () => {
     const { pinCodes, fetchPinCodes, addPinCode, deletePinCode, bulkImportPinCodes, updatePinCode, isLoading } = usePinCodeStore();
     const [formData, setFormData] = useState({
         code: '',
-        isCOD: false
+        isCOD: false,
+        deliveryTime: '3',
+        deliveryUnit: 'days'
     });
     const [importResults, setImportResults] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -29,7 +31,7 @@ const PinCodeManager = () => {
         e.preventDefault();
         const success = await addPinCode(formData);
         if (success) {
-            setFormData({ code: '', isCOD: false });
+            setFormData({ code: '', isCOD: false, deliveryTime: '3', deliveryUnit: 'days' });
         }
     };
 
@@ -49,7 +51,7 @@ const PinCodeManager = () => {
     };
 
     const downloadTemplate = () => {
-        const csvContent = "Pincode,isCOD\n110001,true\n400001,false\n560001,true";
+        const csvContent = "Pincode,isCOD,deliveryTime,deliveryUnit\n110001,true,30,minutes\n400001,false,24,hours\n560001,true,3,days";
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -102,6 +104,31 @@ const PinCodeManager = () => {
                             <span className="text-sm font-bold text-gray-700">{formData.isCOD ? 'Yes' : 'No'}</span>
                         </label>
                     </div>
+                    <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Time</label>
+                        <input
+                            type="number"
+                            min="1"
+                            name="deliveryTime"
+                            value={formData.deliveryTime}
+                            onChange={handleChange}
+                            required
+                            className="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none font-bold text-gray-700"
+                        />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-1">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Delivery Unit</label>
+                        <select
+                            name="deliveryUnit"
+                            value={formData.deliveryUnit}
+                            onChange={handleChange}
+                            className="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none font-bold text-gray-700"
+                        >
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                        </select>
+                    </div>
                     <div className="md:col-span-2 mt-2">
                         <button
                             type="submit"
@@ -143,7 +170,7 @@ const PinCodeManager = () => {
                 </h2>
                 <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
                     <div className="flex-1">
-                        <p className="text-sm text-gray-600 mb-2">Upload an Excel/CSV file (.xlsx, .csv) with columns: <span className="font-mono font-bold">Pincode, isCOD</span></p>
+                        <p className="text-sm text-gray-600 mb-2">Upload an Excel/CSV file (.xlsx, .csv) with columns: <span className="font-mono font-bold">Pincode, isCOD, deliveryTime, deliveryUnit</span></p>
                         <label className="inline-flex items-center gap-2 px-6 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition shadow-lg shadow-purple-200 cursor-pointer">
                             <MdUpload size={20} />
                             {isImporting ? 'Importing...' : 'Choose Excel File'}
@@ -191,6 +218,24 @@ const PinCodeManager = () => {
                                         <span className="material-icons text-[14px]">{pin.isCOD !== false ? 'payments' : 'money_off'}</span>
                                         <span className="text-xs font-bold">{pin.isCOD !== false ? 'COD ON' : 'COD OFF'}</span>
                                     </button>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={pin.deliveryTime || 3}
+                                            onChange={(e) => updatePinCode(pin._id, { deliveryTime: e.target.value })}
+                                            className="w-16 px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none text-sm font-bold text-gray-700"
+                                        />
+                                        <select
+                                            value={pin.deliveryUnit || 'days'}
+                                            onChange={(e) => updatePinCode(pin._id, { deliveryUnit: e.target.value })}
+                                            className="px-2 py-1 rounded-lg bg-gray-50 border border-gray-200 focus:border-blue-500 outline-none text-sm font-bold text-gray-700"
+                                        >
+                                            <option value="minutes">Minutes</option>
+                                            <option value="hours">Hours</option>
+                                            <option value="days">Days</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={() => deletePinCode(pin._id)}

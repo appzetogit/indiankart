@@ -5,6 +5,7 @@ import useOrderStore from '../../store/orderStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { getFulfillmentMode } from '../../../../utils/shippingProvider';
 
 const OrderList = () => {
     const navigate = useNavigate();
@@ -47,7 +48,8 @@ const OrderList = () => {
 
                 const transformOrder = (order, liveStatus = '') => {
                     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
-                    const effectiveStatus = String(liveStatus || normalizedOrderStatus || '').trim() || 'Pending';
+                    const fulfillmentMode = getFulfillmentMode(order);
+                    const effectiveStatus = String((fulfillmentMode !== 'manual' && fulfillmentMode !== 'unassigned' ? liveStatus : '') || normalizedOrderStatus || '').trim() || 'Pending';
                     const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
                     const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
                     const paymentStatus = effectiveStatus === 'Delivered'
@@ -78,12 +80,16 @@ const OrderList = () => {
                 if (data.orders) {
                     const liveStatuses = await Promise.all(
                         data.orders.map(async (order) => {
-                            if (!order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                            const fulfillmentMode = getFulfillmentMode(order);
+                            const trackingIdentifier = fulfillmentMode === 'delhivery'
+                                ? order?.delhivery?.waybill
+                                : order?.ekart?.trackingNumber;
+                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
                                 return '';
                             }
 
                             try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
                             } catch (error) {
                                 return '';
@@ -97,12 +103,16 @@ const OrderList = () => {
                 } else {
                     const liveStatuses = await Promise.all(
                         (Array.isArray(data) ? data : []).map(async (order) => {
-                            if (!order?.delhivery?.waybill || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
+                            const fulfillmentMode = getFulfillmentMode(order);
+                            const trackingIdentifier = fulfillmentMode === 'delhivery'
+                                ? order?.delhivery?.waybill
+                                : order?.ekart?.trackingNumber;
+                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
                                 return '';
                             }
 
                             try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/delhivery-tracking`);
+                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
                             } catch (error) {
                                 return '';
@@ -132,6 +142,7 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return 'bg-amber-50 text-amber-600 border-amber-100';
             case 'Confirmed': return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'Packed': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
             case 'Manifested': return 'bg-cyan-50 text-cyan-600 border-cyan-100';
             case 'Not Picked': return 'bg-sky-50 text-sky-600 border-sky-100';
             case 'Scheduled': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
@@ -148,6 +159,7 @@ const OrderList = () => {
         switch (status) {
             case 'Pending': return <MdPendingActions size={14} />;
             case 'Confirmed': return <MdCheckCircle size={14} />;
+            case 'Packed': return <MdPendingActions size={14} />;
             case 'Manifested': return <MdLocalShipping size={14} />;
             case 'Not Picked': return <MdPendingActions size={14} />;
             case 'Scheduled': return <MdPendingActions size={14} />;
@@ -204,6 +216,7 @@ const OrderList = () => {
                         <option value="All">All Statuses</option>
                         <option value="Pending">Pending</option>
                         <option value="Confirmed">Confirmed</option>
+                        <option value="Packed">Packed</option>
                         <option value="Manifested">Manifested</option>
                         <option value="Not Picked">Not Picked</option>
                         <option value="Scheduled">Scheduled</option>

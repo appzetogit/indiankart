@@ -47,6 +47,7 @@ const Sidebar = () => {
             title: 'Catalog',
             items: [
                 { name: 'Products', icon: MdInventory, path: '/admin/products' },
+                { name: 'Max Selling Qty', icon: MdInventory, path: '/admin/products/max-selling-quantity' },
                 { name: 'Product Views', icon: MdVisibility, path: '/admin/product-views' },
                 { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
                 { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
@@ -139,7 +140,7 @@ const Sidebar = () => {
                                         <NavLink
                                             key={item.path}
                                             to={item.path}
-                                            end={item.path === '/admin/categories'}
+                                            end={item.path === '/admin/categories' || item.path === '/admin/products'}
                                             className={({ isActive }) =>
                                                 `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${isActive
                                                     ? 'bg-blue-600 text-white'

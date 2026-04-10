@@ -4,7 +4,38 @@ import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
-import { createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
+import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
+import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
+
+const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered'
+]);
+
+const MANUAL_TRACKING_STATUSES = new Set([
+    'Pending',
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered',
+    'Cancelled',
+    'Cancellation Requested'
+]);
+
+const getEffectivePurchaseLimit = (product, availableStock) => {
+    const stockLimit = Math.max(0, Number(availableStock) || 0);
+    const configuredLimit = Number(product?.maxOrderQuantity);
+
+    if (!Number.isFinite(configuredLimit) || configuredLimit <= 0) {
+        return stockLimit;
+    }
+
+    return Math.min(stockLimit, configuredLimit);
+};
 
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
@@ -17,6 +48,152 @@ const isOrderAccessibleByUser = (order, user) => {
         isAdmin,
         isAllowed: orderUserId === currentUserId || isAdmin
     };
+};
+
+const getFulfillmentMode = (order) => {
+    const explicitMode = String(order?.fulfillment?.mode || '').trim();
+    if (explicitMode && explicitMode !== 'unassigned') {
+        return explicitMode;
+    }
+
+    if (order?.delhivery?.waybill) return 'delhivery';
+    if (order?.ekart?.trackingNumber) return 'ekart';
+    return explicitMode || 'unassigned';
+};
+
+const PROVIDER_SYNC_TRIGGER_STATUSES = new Set([
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered'
+]);
+
+const getProviderTrackingIdentifier = (order, provider) => {
+    if (provider === 'delhivery') return String(order?.delhivery?.waybill || '').trim();
+    if (provider === 'ekart') return String(order?.ekart?.trackingNumber || '').trim();
+    return '';
+};
+
+const clearInactiveProviderErrors = (order, activeProvider) => {
+    order.delhivery = {
+        ...order.delhivery,
+        lastError: activeProvider === 'delhivery' ? String(order?.delhivery?.lastError || '') : ''
+    };
+    order.ekart = {
+        ...order.ekart,
+        lastError: activeProvider === 'ekart' ? String(order?.ekart?.lastError || '') : ''
+    };
+};
+
+const createShipmentForProvider = async (order, provider) => {
+    if (provider === 'delhivery') {
+        const shipment = await createDelhiveryShipment(order);
+        order.delhivery = {
+            ...order.delhivery,
+            waybill: shipment.waybill || '',
+            providerOrderId: shipment.providerOrderId,
+            pickupLocation: shipment.pickupLocation,
+            syncedAt: new Date(),
+            requestPayload: shipment.requestPayload,
+            responsePayload: shipment.responsePayload,
+            lastError: ''
+        };
+        order.ekart = {
+            ...order.ekart,
+            lastError: ''
+        };
+        return;
+    }
+
+    if (provider === 'ekart') {
+        const shipment = await createEkartShipment(order);
+        order.ekart = {
+            ...order.ekart,
+            trackingNumber: shipment.trackingNumber || '',
+            providerOrderId: shipment.providerOrderId,
+            pickupLocation: shipment.pickupLocation,
+            syncedAt: new Date(),
+            requestPayload: shipment.requestPayload,
+            responsePayload: shipment.responsePayload,
+            lastError: ''
+        };
+        order.delhivery = {
+            ...order.delhivery,
+            lastError: ''
+        };
+    }
+};
+
+const setProviderCreationError = (order, provider, errorMessage) => {
+    if (provider === 'delhivery') {
+        order.delhivery = {
+            ...order.delhivery,
+            waybill: '',
+            lastError: errorMessage
+        };
+        return;
+    }
+
+    if (provider === 'ekart') {
+        order.ekart = {
+            ...order.ekart,
+            trackingNumber: '',
+            lastError: errorMessage
+        };
+    }
+};
+
+const cancelShipmentForProvider = async (order, provider) => {
+    if (provider === 'delhivery' && order?.delhivery?.waybill) {
+        const cancellation = await cancelDelhiveryShipment(order);
+        order.delhivery = {
+            ...order.delhivery,
+            cancelledAt: new Date(),
+            cancelResponsePayload: cancellation.responsePayload,
+            lastError: ''
+        };
+        return;
+    }
+
+    if (provider === 'ekart' && order?.ekart?.trackingNumber) {
+        const cancellation = await cancelEkartShipment(order);
+        order.ekart = {
+            ...order.ekart,
+            cancelledAt: new Date(),
+            cancelResponsePayload: cancellation.responsePayload,
+            lastError: ''
+        };
+    }
+};
+
+const setProviderCancellationError = (order, provider, errorMessage) => {
+    if (provider === 'delhivery') {
+        order.delhivery = {
+            ...order.delhivery,
+            lastError: errorMessage
+        };
+        return;
+    }
+
+    if (provider === 'ekart') {
+        order.ekart = {
+            ...order.ekart,
+            lastError: errorMessage
+        };
+    }
+};
+
+const fetchTrackingForProvider = async (order, provider) => {
+    if (provider === 'delhivery') {
+        return fetchDelhiveryTracking(order);
+    }
+
+    if (provider === 'ekart') {
+        return fetchEkartTracking(order);
+    }
+
+    throw new Error('Tracking is available only for courier-based fulfillment providers.');
 };
 
 // @desc    Create new order
@@ -106,18 +283,24 @@ export const addOrderItems = async (req, res) => {
                     if (itemKeys.length !== combKeys.length) return false;
                     return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
                 });
+                const purchaseLimit = getEffectivePurchaseLimit(product, sku?.stock);
                 
-                if (!sku || sku.stock < item.qty) {
+                if (!sku || purchaseLimit < item.qty) {
                     return res.status(400).json({ 
-                        message: `Insufficient stock for ${item.name} (${Object.values(item.variant).join(', ')})`,
-                        available: sku ? sku.stock : 0
+                        message: purchaseLimit <= 0
+                            ? `Insufficient stock for ${item.name} (${Object.values(item.variant).join(', ')})`
+                            : `Maximum allowed quantity for ${item.name} is ${purchaseLimit}`,
+                        available: purchaseLimit
                     });
                 }
-            } else if (product.stock < item.qty) {
+            } else if (getEffectivePurchaseLimit(product, product.stock) < item.qty) {
                 // Check Overall Stock
+                const purchaseLimit = getEffectivePurchaseLimit(product, product.stock);
                 return res.status(400).json({ 
-                    message: `Insufficient stock for ${item.name}`,
-                    available: product.stock
+                    message: purchaseLimit <= 0
+                        ? `Insufficient stock for ${item.name}`
+                        : `Maximum allowed quantity for ${item.name} is ${purchaseLimit}`,
+                    available: purchaseLimit
                 });
             }
         }
@@ -308,6 +491,106 @@ export const getOrderDelhiveryTracking = async (req, res) => {
     }
 };
 
+// @desc    Get live shipping tracking for an order
+// @route   GET /api/orders/:id/shipping-tracking
+// @access  Private
+export const getOrderShippingTracking = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const { isAllowed } = isOrderAccessibleByUser(order, req.user);
+        if (!isAllowed) {
+            return res.status(401).json({ message: 'Not authorized to view this order tracking' });
+        }
+
+        const provider = getFulfillmentMode(order);
+        if (!['delhivery', 'ekart'].includes(provider)) {
+            return res.status(400).json({ message: 'Tracking is available only after assigning Delhivery or Ekart.' });
+        }
+
+        const trackingIdentifier = getProviderTrackingIdentifier(order, provider);
+        if (!trackingIdentifier) {
+            return res.status(400).json({ message: `${provider === 'delhivery' ? 'Delhivery waybill' : 'Ekart tracking number'} has not been created for this order yet.` });
+        }
+
+        const tracking = await fetchTrackingForProvider(order, provider);
+
+        return res.json({
+            orderId: order._id,
+            displayId: order.displayId,
+            status: order.status,
+            provider,
+            trackingIdentifier,
+            tracking
+        });
+    } catch (error) {
+        console.error(`Get order shipping tracking error [ID: ${req.params.id}]:`, error);
+        return res.status(500).json({ message: error.message || 'Failed to fetch shipping tracking' });
+    }
+};
+
+// @desc    Assign order fulfillment mode
+// @route   PUT /api/orders/:id/fulfillment
+// @access  Private/Admin
+export const assignOrderFulfillment = async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+        const requestedMode = String(req.body?.mode || '').trim().toLowerCase();
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        if (!['manual', 'delhivery', 'ekart'].includes(requestedMode)) {
+            return res.status(400).json({ message: 'Invalid fulfillment mode' });
+        }
+
+        const currentMode = getFulfillmentMode(order);
+        if (currentMode === requestedMode) {
+            await order.populate('user', 'name email phone');
+            return res.json(order);
+        }
+
+        order.fulfillment = {
+            ...order.fulfillment,
+            mode: requestedMode,
+            assignedAt: new Date(),
+            assignedBy: req.user?._id || null
+        };
+
+        if (['delhivery', 'ekart'].includes(requestedMode)) {
+            if (!getProviderTrackingIdentifier(order, requestedMode)) {
+                try {
+                    await createShipmentForProvider(order, requestedMode);
+                } catch (error) {
+                    setProviderCreationError(order, requestedMode, error.message || `Failed to create ${requestedMode} shipment`);
+                    await order.save();
+                    return res.status(400).json({
+                        message: error.message || `Failed to create ${requestedMode} shipment`
+                    });
+                }
+            }
+
+            if (String(order.status || '').trim() === 'Pending') {
+                order.status = 'Confirmed';
+            }
+        } else {
+            clearInactiveProviderErrors(order, 'manual');
+        }
+
+        const updatedOrder = await order.save();
+        await updatedOrder.populate('user', 'name email phone');
+        return res.json(updatedOrder);
+    } catch (error) {
+        console.error('Assign order fulfillment error:', error);
+        return res.status(500).json({ message: error.message || 'Failed to assign fulfillment mode' });
+    }
+};
+
 // @desc    Get all orders
 // @route   GET /api/orders
 // @access  Private/Admin
@@ -418,9 +701,31 @@ export const updateOrderStatus = async (req, res) => {
         const { status, serialNumbers } = req.body;
 
         if (order) {
+            const fulfillmentMode = getFulfillmentMode(order);
+
+            if (fulfillmentMode === 'unassigned' && status !== 'Cancelled' && String(status || '').trim() !== String(order.status || '').trim()) {
+                return res.status(400).json({ message: 'Assign this order to Delhivery, Ekart, or Manual before updating fulfillment.' });
+            }
+
+            if (fulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(String(status || '').trim())) {
+                return res.status(400).json({ message: 'Invalid manual fulfillment status' });
+            }
+
             if (status === 'Cancelled') {
                 if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
                     return res.status(400).json({ message: 'Delivered order cannot be cancelled' });
+                }
+
+                if (['delhivery', 'ekart'].includes(fulfillmentMode) && getProviderTrackingIdentifier(order, fulfillmentMode)) {
+                    try {
+                        await cancelShipmentForProvider(order, fulfillmentMode);
+                    } catch (error) {
+                        setProviderCancellationError(order, fulfillmentMode, error.message || `Failed to cancel ${fulfillmentMode} shipment`);
+                        await order.save();
+                        return res.status(400).json({
+                            message: error.message || `Failed to cancel ${fulfillmentMode} shipment`
+                        });
+                    }
                 }
 
                 if (order.status !== 'Cancelled') {
@@ -428,7 +733,6 @@ export const updateOrderStatus = async (req, res) => {
                 }
             }
 
-            const wasConfirmedBefore = order.status === 'Confirmed';
             order.status = status;
             if (status === 'Delivered') {
                 order.isDelivered = true;
@@ -451,34 +755,26 @@ export const updateOrderStatus = async (req, res) => {
                 await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
             }
 
-            if (status === 'Confirmed' && !wasConfirmedBefore && !order.delhivery?.waybill) {
+            const shouldCreateProviderShipment =
+                ['delhivery', 'ekart'].includes(fulfillmentMode) &&
+                PROVIDER_SYNC_TRIGGER_STATUSES.has(String(status || '').trim()) &&
+                !getProviderTrackingIdentifier(order, fulfillmentMode);
+
+            if (shouldCreateProviderShipment) {
                 try {
-                    const shipment = await createDelhiveryShipment(order);
-                    order.delhivery = {
-                        ...order.delhivery,
-                        waybill: shipment.waybill || '',
-                        providerOrderId: shipment.providerOrderId,
-                        pickupLocation: shipment.pickupLocation,
-                        syncedAt: new Date(),
-                        requestPayload: shipment.requestPayload,
-                        responsePayload: shipment.responsePayload,
-                        lastError: ''
-                    };
+                    await createShipmentForProvider(order, fulfillmentMode);
                 } catch (error) {
-                    order.delhivery = {
-                        ...order.delhivery,
-                        waybill: '',
-                        lastError: error.message || 'Failed to create Delhivery shipment'
-                    };
+                    setProviderCreationError(order, fulfillmentMode, error.message || `Failed to create ${fulfillmentMode} shipment`);
                     order.status = 'Pending';
                     await order.save();
                     return res.status(400).json({
-                        message: error.message || 'Failed to create Delhivery shipment'
+                        message: error.message || `Failed to create ${fulfillmentMode} shipment`
                     });
                 }
             }
 
             const updatedOrder = await order.save();
+            await updatedOrder.populate('user', 'name email phone');
             res.json(updatedOrder);
         } else {
             res.status(404).json({ message: 'Order not found' });

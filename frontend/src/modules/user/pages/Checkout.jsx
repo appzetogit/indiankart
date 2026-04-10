@@ -56,6 +56,25 @@ const buildEstimatedDeliveryText = (deliveryTime, unit) => {
     return `Estimated delivery by ${dateLabel} (${timeValue} ${unitLabel})`;
 };
 
+const getItemPurchaseLimit = (item) => {
+    const maxAllowedQuantity = Number(item?.maxAllowedQuantity);
+    if (Number.isFinite(maxAllowedQuantity) && maxAllowedQuantity > 0) {
+        return Math.floor(maxAllowedQuantity);
+    }
+
+    const configuredLimit = Number(item?.maxOrderQuantity);
+    const stockLimit = Number(item?.stock);
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0 && Number.isFinite(stockLimit) && stockLimit > 0) {
+        return Math.min(Math.floor(configuredLimit), Math.floor(stockLimit));
+    }
+
+    if (Number.isFinite(configuredLimit) && configuredLimit > 0) {
+        return Math.floor(configuredLimit);
+    }
+    return Number.isFinite(stockLimit) && stockLimit > 0 ? 1 : 0;
+};
+
 const Checkout = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -366,6 +385,16 @@ const Checkout = () => {
         // Validate mobile number
         if (!selectedAddrObj.mobile) {
             toast.error('Please ensure a mobile number is added to your delivery address');
+            return;
+        }
+
+        const invalidLimitedItem = checkoutItems.find((item) => {
+            const purchaseLimit = getItemPurchaseLimit(item);
+            return Number.isFinite(purchaseLimit) && Number(item.quantity) > purchaseLimit;
+        });
+
+        if (invalidLimitedItem) {
+            toast.error(`Maximum allowed quantity for ${invalidLimitedItem.name} is ${getItemPurchaseLimit(invalidLimitedItem)}`);
             return;
         }
 
