@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
+import Counter from '../models/Counter.js';
 import PaymentClaim from '../models/PaymentClaim.js';
 import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
@@ -71,6 +72,91 @@ const PROVIDER_SYNC_TRIGGER_STATUSES = new Set([
     'Out for Delivery',
     'Delivered'
 ]);
+
+const INVOICE_PREFIX = 'AEPL26IKRT';
+const INVOICE_PAD_LENGTH = 6;
+const INVOICE_COUNTER_KEY = 'orderInvoice';
+const INVOICE_SEQUENCE_FLOOR = 9;
+const INVOICE_NUMBER_PATTERN = new RegExp(`^${INVOICE_PREFIX}(\\d+)$`);
+
+const formatInvoiceNumber = (sequence) => {
+    const safeSequence = Math.max(1, Number(sequence) || 1);
+    return `${INVOICE_PREFIX}${String(safeSequence).padStart(INVOICE_PAD_LENGTH, '0')}`;
+};
+
+const parseInvoiceSequence = (invoiceNumber = '') => {
+    const match = String(invoiceNumber || '').trim().match(INVOICE_NUMBER_PATTERN);
+    if (!match) return null;
+
+    const parsed = Number(match[1]);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const getHighestExistingInvoiceSequence = async () => {
+    const latestOrderWithInvoice = await Order.findOne({
+        invoiceNumber: { $regex: `^${INVOICE_PREFIX}\\d+$` }
+    })
+        .sort({ invoiceNumber: -1 })
+        .select('invoiceNumber')
+        .lean();
+
+    return parseInvoiceSequence(latestOrderWithInvoice?.invoiceNumber) || INVOICE_SEQUENCE_FLOOR;
+};
+
+const reserveNextInvoiceNumber = async () => {
+    let counter = await Counter.findById(INVOICE_COUNTER_KEY);
+
+    if (!counter) {
+        const highestExistingSequence = await getHighestExistingInvoiceSequence();
+
+        try {
+            counter = await Counter.create({
+                _id: INVOICE_COUNTER_KEY,
+                seq: highestExistingSequence
+            });
+        } catch (error) {
+            if (error?.code !== 11000) {
+                throw error;
+            }
+
+            counter = await Counter.findById(INVOICE_COUNTER_KEY);
+        }
+    }
+
+    const updatedCounter = await Counter.findByIdAndUpdate(
+        INVOICE_COUNTER_KEY,
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return formatInvoiceNumber(updatedCounter?.seq);
+};
+
+const ensureOrderInvoiceNumber = async (order) => {
+    if (!order) return '';
+
+    const existingInvoiceNumber = String(order.invoiceNumber || '').trim();
+    if (existingInvoiceNumber) {
+        return existingInvoiceNumber;
+    }
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            order.invoiceNumber = await reserveNextInvoiceNumber();
+            await order.save();
+            return order.invoiceNumber;
+        } catch (error) {
+            if (error?.code === 11000 && error?.keyPattern?.invoiceNumber) {
+                order.invoiceNumber = undefined;
+                continue;
+            }
+
+            throw error;
+        }
+    }
+
+    throw new Error('Failed to assign invoice number to order');
+};
 
 const getProviderTrackingIdentifier = (order, provider) => {
     if (provider === 'delhivery') return String(order?.delhivery?.waybill || '').trim();
@@ -634,8 +720,11 @@ export const addOrderItems = async (req, res) => {
             });
         }
 
+        const invoiceNumber = await reserveNextInvoiceNumber();
+
         const order = new Order({
             displayId,
+            invoiceNumber,
             transactionId: verifiedPayment.paymentResult?.razorpay_payment_id || verifiedPayment.paymentResult?.id || null,
             orderItems: orderItems.map(item => ({
                 ...item,
@@ -777,6 +866,7 @@ export const getOrderById = async (req, res) => {
 
             // Check if it's the owner or an admin
             if (isAllowed) {
+                await ensureOrderInvoiceNumber(order);
                 const syncedOrder = await syncOrderPaymentFromGateway(order);
                 const [auditedOrder] = await annotateDuplicatePayments([syncedOrder]);
                 await auditedOrder.populate('user', 'name email phone');

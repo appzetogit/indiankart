@@ -9,6 +9,7 @@ const transformOrder = (order, note = '') => {
         ...order,
         id: order._id,
         displayId: order.displayId,
+        invoiceNumber: order.invoiceNumber,
         transactionId: order.transactionId,
         date: order.createdAt,
         items: order.orderItems?.map(item => ({

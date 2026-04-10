@@ -1,6 +1,12 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+const getInvoiceNumber = (order) => {
+    const savedInvoiceNumber = String(order?.invoiceNumber || '').trim();
+    if (savedInvoiceNumber) return savedInvoiceNumber;
+    return `INV-${String(order?.displayId || order?.id || order?._id || '').toUpperCase()}`;
+};
+
 /**
  * Generate and download invoice PDF for an order
  * @param {Object} order - Order object containing all order details
@@ -54,7 +60,7 @@ export const generateInvoice = (order, settings = {}) => {
     doc.setFont(undefined, 'bold');
     doc.text('Invoice Number:', 15, yPos);
     doc.setFont(undefined, 'normal');
-    doc.text(`INV-${(order.displayId || order.id || order._id).toUpperCase()}`, 45, yPos);
+    doc.text(getInvoiceNumber(order), 45, yPos);
 
     doc.setFont(undefined, 'bold');
     doc.text('Invoice Date:', pageWidth - 85, yPos);

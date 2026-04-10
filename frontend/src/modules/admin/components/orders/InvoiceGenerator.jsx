@@ -4,6 +4,12 @@ import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier } from "../../../../utils/shippingProvider";
 
+const getInvoiceNumber = (order) => {
+  const savedInvoiceNumber = String(order?.invoiceNumber || "").trim();
+  if (savedInvoiceNumber) return savedInvoiceNumber;
+  return `INV-${String(order?.displayId || order?.id || order?._id || "").toUpperCase()}`;
+};
+
 const normalizeOrderStatus = (status = "") => {
   const value = String(status || "").trim();
   if (value === "Shipped") return "Dispatched";
@@ -545,7 +551,7 @@ export const InvoiceDisplay = React.forwardRef(
               <span style={{ fontSize: "7px" }}>{new Date(order.date || order.createdAt).toLocaleString()}</span>
             </div>
             <div className="tax-header-item">
-              Invoice: <b>INV-{String(order.displayId || order.id || order._id).toUpperCase()}</b><br />
+              Invoice: <b>{getInvoiceNumber(order)}</b><br />
               <span style={{ fontSize: "7px" }}>{new Date().toLocaleString()}</span>
             </div>
             <div className="tax-header-item text-right">

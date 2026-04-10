@@ -63,7 +63,7 @@ const OrderDetail = () => {
     };
 
     React.useEffect(() => {
-        if (!order) {
+        if (!order || !order.invoiceNumber) {
             getOrderDetails(id);
         }
         // Fetch settings for invoice
@@ -76,7 +76,7 @@ const OrderDetail = () => {
             }
         };
         fetchSettings();
-    }, [id, order, getOrderDetails]);
+    }, [id, order, order?.invoiceNumber, getOrderDetails]);
 
     React.useEffect(() => {
         let cancelled = false;

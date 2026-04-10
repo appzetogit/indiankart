@@ -85,6 +85,7 @@ const orderSchema = mongoose.Schema({
     
     // Order IDs
     displayId: { type: String, unique: true },
+    invoiceNumber: { type: String, unique: true, sparse: true },
     transactionId: { type: String },
     refund: {
         status: {
