@@ -1,10 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, Pagination, Navigation } from 'swiper/modules';
+import { Autoplay, Pagination } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/pagination';
-import 'swiper/css/navigation';
 import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 
 const HomeBanner = ({ banner, isMobileViewport = false }) => {
@@ -194,10 +193,9 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
         return (
             <section className="w-full">
                 <Swiper
-                    modules={[Autoplay, Pagination, Navigation]}
+                    modules={[Autoplay, Pagination]}
                     autoplay={{ delay: 4000, disableOnInteraction: false }}
                     pagination={{ clickable: true }}
-                    navigation={true}
                     loop={true}
                     autoHeight={true}
                     className={`${bannerFrameClass} rounded-xl overflow-hidden group home-banner-swiper`}

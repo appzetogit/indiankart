@@ -89,7 +89,6 @@ const getDistinctValues = (items = [], picker) => {
 };
 
 const CategoryPage = () => {
-    const PAGE_SIZE = 12;
     const navigate = useNavigate();
     const { categoryName, '*': subPath } = useParams();
     const routeSegments = String(subPath || '').split('/').filter(Boolean);
@@ -117,7 +116,6 @@ const CategoryPage = () => {
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
     const [fetchError, setFetchError] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const parseAmount = (value, fallback = 0) => {
@@ -205,7 +203,6 @@ const CategoryPage = () => {
         setCollapsedSections({});
         setFilterRange([0, 1000000]);
         setPriceRange({ min: 0, max: 1000000 });
-        setCurrentPage(1);
     }, [categoryName, subPath]);
 
     useEffect(() => {
@@ -223,7 +220,6 @@ const CategoryPage = () => {
         if (selectedDiscount) updated = updated.filter((product) => getEffectivePricing(product).discountPercent >= selectedDiscount);
         if (selectedRating) updated = updated.filter((product) => Number(product.rating || 0) >= selectedRating);
         setSortedProducts(updated);
-        setCurrentPage(1);
     }, [sortBy, filterRange, selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, categoryProducts]);
 
     const availableBrands = useMemo(() => getDistinctValues(categoryProducts, (product) => product?.brand), [categoryProducts]);
@@ -252,14 +248,6 @@ const CategoryPage = () => {
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
     const activeFilterCount = useMemo(() => selectedBrands.length + selectedRam.length + selectedCategories.length + (selectedDiscount ? 1 : 0) + (selectedRating ? 1 : 0) + ((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? 1 : 0), [selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, filterRange, priceRange]);
     const activeFilterChips = useMemo(() => ([...(selectedRating ? [`${selectedRating}★ & above`] : []), ...(selectedDiscount ? [`${selectedDiscount}% off`] : []), ...selectedBrands.map((brand) => `Brand: ${brand}`), ...selectedRam.map((ram) => `RAM: ${ram}`), ...selectedCategories.map((category) => `Type: ${category}`), ...((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? [`₹${filterRange[0].toLocaleString()} - ₹${filterRange[1].toLocaleString()}`] : [])]), [selectedRating, selectedDiscount, selectedBrands, selectedRam, selectedCategories, filterRange, priceRange]);
-    const totalPages = Math.max(1, Math.ceil(sortedProducts.length / PAGE_SIZE));
-    const safeCurrentPage = Math.min(currentPage, totalPages);
-    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
-    const endIndex = startIndex + PAGE_SIZE;
-    const currentPageProducts = sortedProducts.slice(startIndex, endIndex);
-    const pageStartLabel = sortedProducts.length > 0 ? startIndex + 1 : 0;
-    const pageEndLabel = Math.min(endIndex, sortedProducts.length);
-
     if (productsLoading || categoriesLoading) return <CategoryPageSkeleton />;
     if (fetchError) return <div className="p-10 text-center text-red-500">{fetchError}</div>;
     if (!categoryData) return <div className="p-10 text-center">Category not found</div>;
@@ -359,7 +347,7 @@ const CategoryPage = () => {
                                     </div>
                                     <span className="text-[11px] font-bold uppercase text-gray-400">Total {sortedProducts.length} Items</span>
                                 </div>
-                                {sortedProducts.length > 0 ? (<><div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4">{currentPageProducts.map((product) => <ProductCard key={product.id || product._id} product={product} />)}</div>{totalPages > 1 && <div className="mt-8 flex flex-col items-center gap-3"><p className="text-xs font-semibold text-gray-500">Showing {pageStartLabel}-{pageEndLabel} of {sortedProducts.length}</p><div className="flex items-center gap-2"><button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} className="rounded-lg border px-3 py-2 disabled:opacity-30">Prev</button><span className="rounded-lg bg-blue-50 px-3 py-2 font-bold text-blue-600">{safeCurrentPage} / {totalPages}</span><button onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages} className="rounded-lg border px-3 py-2 disabled:opacity-30">Next</button></div></div>}</>) : <div className="py-24 text-center">No products found.</div>}
+                                {sortedProducts.length > 0 ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4">{sortedProducts.map((product) => <ProductCard key={product.id || product._id} product={product} />)}</div> : <div className="py-24 text-center">No products found.</div>}
                             </div>
                         )}
                     </main>
