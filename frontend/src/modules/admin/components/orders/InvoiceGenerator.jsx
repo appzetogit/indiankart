@@ -127,12 +127,41 @@ export const InvoiceDisplay = React.forwardRef(
       );
     };
 
+    const getVariantDetails = (lineItem) => {
+      if (!lineItem?.variant || typeof lineItem.variant !== "object") return [];
+
+      return Object.entries(lineItem.variant)
+        .filter(([key, value]) => String(key || "").trim() && String(value || "").trim())
+        .map(([key, value]) => `${String(key).trim()}: ${String(value).trim()}`);
+    };
+
     const getSafeName = (lineItem, index) => {
       const candidates = [lineItem?.name, lineItem?.title, lineItem?.productName];
       const validName = candidates.find(
         (candidate) => typeof candidate === "string" && candidate.trim() && !isPathLike(candidate)
       );
       return validName?.trim() || `Product Item ${index + 1}`;
+    };
+
+    const getDisplayTitle = (lineItem, index) => {
+      const baseName = getSafeName(lineItem, index);
+      const detailParts = [];
+      const variantDetails = getVariantDetails(lineItem);
+
+      if (variantDetails.length > 0) {
+        detailParts.push(...variantDetails);
+      }
+
+      const skuCandidates = [lineItem?.sku, lineItem?.skuId, lineItem?.productId];
+      const skuValue = skuCandidates.find((candidate) => typeof candidate === "string" && candidate.trim());
+
+      if (skuValue) {
+        detailParts.push(`SKU: ${skuValue.trim()}`);
+      }
+
+      return detailParts.length > 0
+        ? `${baseName} (${detailParts.join(" | ")})`
+        : baseName;
     };
 
     const format = (n) => toNumber(n).toFixed(2);
@@ -182,7 +211,7 @@ export const InvoiceDisplay = React.forwardRef(
 
     const list = rawList.map((lineItem, index) => ({
       ...lineItem,
-      safeName: getSafeName(lineItem, index),
+      safeName: getDisplayTitle(lineItem, index),
       safeQty: getQty(lineItem),
       safePrice: getPrice(lineItem),
     }));
@@ -228,6 +257,21 @@ export const InvoiceDisplay = React.forwardRef(
           .label .brand {
             font-size: 15px;
             font-weight: bold;
+          }
+          .label .brand-block {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .label .logo-inline {
+            display: inline-block;
+            max-width: 110px;
+            max-height: 28px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            vertical-align: middle;
           }
           .label .b2 {
             width: 35px;
@@ -369,7 +413,18 @@ export const InvoiceDisplay = React.forwardRef(
               <tr>
                 <th style={{ width: "40px", textAlign: "center", fontSize: "14px" }}>STD</th>
                 <th>
-                  <div style={{ fontSize: "8px" }}>IndiaKart</div>
+                  <div className="brand-block">
+                    {settings.logoUrl && (
+                      <img
+                        src={settings.logoUrl}
+                        alt="Store Logo"
+                        className="logo-inline"
+                        loading="eager"
+                        crossOrigin="anonymous"
+                      />
+                    )}
+                    <div style={{ fontSize: "8px" }}>IndiaKart</div>
+                  </div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{order.displayId || order.id || order._id}</div>
                 </th>
                 <th style={{ width: "100px" }}>
@@ -383,7 +438,18 @@ export const InvoiceDisplay = React.forwardRef(
               <tr>
                 <td colSpan="4" style={{ padding: "6px 5px" }}>
                    <div style={{ fontSize: "8px", marginBottom: "2px" }}>Ordered through</div>
-                   <div className="brand" style={{ fontSize: "13px" }}>IndianKart</div>
+                   <div className="brand-block">
+                     {settings.logoUrl && (
+                       <img
+                         src={settings.logoUrl}
+                         alt="Store Logo"
+                         className="logo-inline"
+                         loading="eager"
+                         crossOrigin="anonymous"
+                       />
+                     )}
+                     <div className="brand" style={{ fontSize: "13px" }}>IndianKart</div>
+                   </div>
                 </td>
               </tr>
               <tr>
@@ -470,7 +536,7 @@ export const InvoiceDisplay = React.forwardRef(
           <div className="tax-header">
             <div className="tax-header-item">
               {settings.logoUrl && (
-                  <img src={settings.logoUrl} alt="Store Logo" style={{ height: "40px", marginBottom: "5px", objectFit: "contain", maxWidth: "120px" }} />
+                  <img src={settings.logoUrl} alt="Store Logo" loading="eager" crossOrigin="anonymous" style={{ height: "40px", marginBottom: "5px", objectFit: "contain", maxWidth: "120px" }} />
               )}
               <h2 style={{ fontSize: "12px", margin: "0 0 3px 0" }}>Tax Invoice</h2>
             </div>
