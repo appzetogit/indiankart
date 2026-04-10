@@ -46,12 +46,16 @@ const orderSchema = mongoose.Schema({
     paymentResult: {
         id: { type: String },
         status: { type: String },
+        refund_status: { type: String },
+        method: { type: String },
         update_time: { type: String },
         email_address: { type: String },
         razorpay_order_id: { type: String },
+        razorpay_payment_id: { type: String },
         card_network: { type: String },
         card_last4: { type: String },
         card_type: { type: String },
+        gateway_sync_error: { type: String }
     },
     itemsPrice: { type: Number, required: true, default: 0.0 },
     taxPrice: { type: Number, required: true, default: 0.0 },
@@ -140,6 +144,36 @@ const orderSchema = mongoose.Schema({
 }, {
     timestamps: true,
 });
+
+orderSchema.index(
+    { transactionId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            transactionId: { $type: 'string', $exists: true, $ne: '' }
+        }
+    }
+);
+
+orderSchema.index(
+    { 'paymentResult.razorpay_payment_id': 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            'paymentResult.razorpay_payment_id': { $type: 'string', $exists: true, $ne: '' }
+        }
+    }
+);
+
+orderSchema.index(
+    { 'paymentResult.razorpay_order_id': 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            'paymentResult.razorpay_order_id': { $type: 'string', $exists: true, $ne: '' }
+        }
+    }
+);
 
 const Order = mongoose.model('Order', orderSchema);
 

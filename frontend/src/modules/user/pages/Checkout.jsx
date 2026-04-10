@@ -507,13 +507,14 @@ const Checkout = () => {
                     handler: async (response) => {
                         try {
                             const { data: verification } = await API.post('/payments/verify', response);
-                            if (verification.message === "Payment verified successfully") {
+                            if (verification.message === "Payment verified successfully" && verification.isCaptured) {
                                 const paidOrderData = {
                                     ...orderData,
                                     paymentResult: {
                                         id: response.razorpay_payment_id,
+                                        razorpay_payment_id: response.razorpay_payment_id,
                                         razorpay_order_id: response.razorpay_order_id,
-                                        status: 'paid',
+                                        status: verification.gatewayStatus || 'captured',
                                         update_time: new Date().toISOString(),
                                         card_network: verification.cardInfo?.network,
                                         card_last4: verification.cardInfo?.last4,
@@ -529,10 +530,13 @@ const Checkout = () => {
                                 setTimeout(() => {
                                     navigate(`/my-orders/${data._id || data.id}`, { replace: true });
                                 }, 2000);
+                                return;
                             }
+                            toast.error("Payment was not captured. No order was created.");
+                            setIsPlacingOrder(false);
                         } catch (error) {
                             console.error(error);
-                            toast.error("Payment verification failed!");
+                            toast.error(error.response?.data?.message || "Payment verification failed!");
                             setIsPlacingOrder(false);
                         }
                     },
@@ -544,6 +548,9 @@ const Checkout = () => {
                         color: "#2874f0"
                     },
                     offers: bankOffers.map(o => o.razorpayOfferId),
+                    retry: {
+                        enabled: false
+                    },
                     modal: {
                         ondismiss: () => {
                             setIsPlacingOrder(false);
@@ -551,6 +558,11 @@ const Checkout = () => {
                     }
                 };
                 const rzp = new window.Razorpay(options);
+                rzp.on('payment.failed', (response) => {
+                    const reason = response?.error?.description || response?.error?.reason || response?.error?.code || 'Payment failed';
+                    toast.error(reason);
+                    setIsPlacingOrder(false);
+                });
                 rzp.open();
             } catch (error) {
                 console.error(error);

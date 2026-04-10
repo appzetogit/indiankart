@@ -1,29 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MdSearch, MdFilterList, MdVisibility, MdChevronLeft, MdChevronRight, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
-import useOrderStore from '../../store/orderStore';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 import { getFulfillmentMode } from '../../../../utils/shippingProvider';
+import { getAdminPaymentStatus, getAdminPaymentStatusClass } from '../../utils/paymentStatus';
 
 const OrderList = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const userEmailFilter = searchParams.get('user');
 
-    const { orders, fetchOrders } = useOrderStore();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
     // Server-side Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [totalOrders, setTotalOrders] = useState(0);
     const itemsPerPage = 20;
 
     const [localOrders, setLocalOrders] = useState([]);
-    const [loading, setLoading] = useState(false);
 
     const normalizeOrderStatus = (status = '') => {
         const value = String(status || '').trim();
@@ -33,7 +30,6 @@ const OrderList = () => {
 
     useEffect(() => {
         const fetchPaginatedOrders = async () => {
-            setLoading(true);
             try {
                 const params = {
                     pageNumber: currentPage,
@@ -50,11 +46,6 @@ const OrderList = () => {
                     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
                     const fulfillmentMode = getFulfillmentMode(order);
                     const effectiveStatus = String((fulfillmentMode !== 'manual' && fulfillmentMode !== 'unassigned' ? liveStatus : '') || normalizedOrderStatus || '').trim() || 'Pending';
-                    const rawPaymentResultStatus = String(order?.paymentResult?.status || '').trim().toLowerCase();
-                    const isPaymentSuccessByGateway = ['captured', 'paid', 'authorized', 'success'].includes(rawPaymentResultStatus);
-                    const paymentStatus = effectiveStatus === 'Delivered'
-                        ? 'Completed'
-                        : (order.isPaid || isPaymentSuccessByGateway ? 'Paid' : 'Pending');
 
                     return {
                         ...order,
@@ -70,7 +61,7 @@ const OrderList = () => {
                         total: order.totalPrice,
                         payment: {
                             method: order.paymentMethod || 'COD',
-                            status: paymentStatus
+                            status: getAdminPaymentStatus(order)
                         },
                         status: effectiveStatus,
                         baseStatus: normalizedOrderStatus
@@ -91,7 +82,7 @@ const OrderList = () => {
                             try {
                                 const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
-                            } catch (error) {
+                            } catch {
                                 return '';
                             }
                         })
@@ -99,7 +90,6 @@ const OrderList = () => {
 
                     setLocalOrders(data.orders.map((order, index) => transformOrder(order, liveStatuses[index])));
                     setTotalPages(data.pages);
-                    setTotalOrders(data.total);
                 } else {
                     const liveStatuses = await Promise.all(
                         (Array.isArray(data) ? data : []).map(async (order) => {
@@ -114,7 +104,7 @@ const OrderList = () => {
                             try {
                                 const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
                                 return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
-                            } catch (error) {
+                            } catch {
                                 return '';
                             }
                         })
@@ -124,8 +114,6 @@ const OrderList = () => {
                 }
             } catch (error) {
                 console.error(error);
-            } finally {
-                setLoading(false);
             }
         };
 
@@ -309,7 +297,7 @@ const OrderList = () => {
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
                                                     <div className="flex flex-col items-center gap-1">
                                                         <span className="text-[10px] font-black text-gray-500 uppercase">{order.payment?.method || 'N/A'}</span>
-                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${(order.payment?.status === 'Paid' || order.payment?.status === 'Completed') ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getAdminPaymentStatusClass(order.payment?.status || 'Pending')}`}>
                                                             {order.payment?.status || 'Pending'}
                                                         </span>
                                                     </div>

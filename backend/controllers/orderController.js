@@ -1,8 +1,11 @@
 import mongoose from 'mongoose';
+import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
+import PaymentClaim from '../models/PaymentClaim.js';
 import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
+import Setting from '../models/Setting.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
@@ -184,6 +187,309 @@ const setProviderCancellationError = (order, provider, errorMessage) => {
     }
 };
 
+const getRazorpayCredentials = async () => {
+    const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
+    return {
+        keyId: settings?.razorpayKeyId?.trim() || '',
+        keySecret: settings?.razorpayKeySecret?.trim() || ''
+    };
+};
+
+const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}) => {
+    const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
+    if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
+        return { isPaid: false, paidAt: null, paymentResult: null };
+    }
+
+    const paymentId = String(paymentResult?.razorpay_payment_id || paymentResult?.id || '').trim();
+    const orderId = String(paymentResult?.razorpay_order_id || '').trim();
+
+    if (!paymentId || !orderId) {
+        throw new Error('Online payment confirmation is incomplete. Please try again.');
+    }
+
+    const { keyId, keySecret } = await getRazorpayCredentials();
+    if (!keyId || !keySecret) {
+        throw new Error('Razorpay credentials are not configured');
+    }
+
+    const instance = new Razorpay({
+        key_id: keyId,
+        key_secret: keySecret
+    });
+
+    const payment = await instance.payments.fetch(paymentId);
+    const gatewayStatus = String(payment?.status || '').trim().toLowerCase();
+    const fetchedOrderId = String(payment?.order_id || '').trim();
+    const isCaptured = payment?.captured === true || gatewayStatus === 'captured';
+
+    if (fetchedOrderId && fetchedOrderId !== orderId) {
+        throw new Error('Payment verification mismatch. Please do not retry this order blindly.');
+    }
+
+    if (!isCaptured) {
+        throw new Error('Payment is not captured. Order was not created.');
+    }
+
+    return {
+        isPaid: true,
+        paidAt: payment?.captured_at
+            ? new Date(Number(payment.captured_at) * 1000)
+            : new Date(),
+        paymentResult: {
+            ...paymentResult,
+            id: paymentId,
+            razorpay_payment_id: paymentId,
+            razorpay_order_id: orderId,
+            status: gatewayStatus || 'captured',
+            update_time: new Date().toISOString(),
+            card_network: payment?.card?.network,
+            card_last4: payment?.card?.last4,
+            card_type: payment?.card?.type
+        }
+    };
+};
+
+const findExistingOnlineOrder = async (paymentMethod, paymentResult = {}) => {
+    const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
+    if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
+        return null;
+    }
+
+    const paymentId = String(paymentResult?.razorpay_payment_id || paymentResult?.id || '').trim();
+    const orderId = String(paymentResult?.razorpay_order_id || '').trim();
+
+    if (!paymentId && !orderId) {
+        return null;
+    }
+
+    const conditions = [];
+    if (paymentId) {
+        conditions.push(
+            { transactionId: paymentId },
+            { 'paymentResult.id': paymentId },
+            { 'paymentResult.razorpay_payment_id': paymentId }
+        );
+    }
+    if (orderId) {
+        conditions.push({ 'paymentResult.razorpay_order_id': orderId });
+    }
+
+    if (!conditions.length) {
+        return null;
+    }
+
+    return Order.findOne({ $or: conditions });
+};
+
+const claimOnlinePayment = async (paymentMethod, paymentResult = {}) => {
+    const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
+    if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
+        return { claimed: false, claim: null };
+    }
+
+    const paymentId = String(paymentResult?.razorpay_payment_id || paymentResult?.id || '').trim();
+    const razorpayOrderId = String(paymentResult?.razorpay_order_id || '').trim();
+
+    if (!paymentId) {
+        return { claimed: false, claim: null };
+    }
+
+    try {
+        const claim = await PaymentClaim.create({
+            paymentId,
+            razorpayOrderId
+        });
+        return { claimed: true, claim };
+    } catch (error) {
+        if (error?.code !== 11000) {
+            throw error;
+        }
+
+        const claim = await PaymentClaim.findOne({
+            $or: [
+                { paymentId },
+                ...(razorpayOrderId ? [{ razorpayOrderId }] : [])
+            ]
+        });
+
+        return { claimed: false, claim };
+    }
+};
+
+const syncOrderPaymentFromGateway = async (order) => {
+    const normalizedPaymentMethod = String(order?.paymentMethod || '').trim().toUpperCase();
+    if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
+        return order;
+    }
+
+    const paymentId = String(
+        order?.paymentResult?.razorpay_payment_id
+        || order?.paymentResult?.id
+        || order?.transactionId
+        || ''
+    ).trim();
+
+    if (!paymentId) {
+        return order;
+    }
+
+    const { keyId, keySecret } = await getRazorpayCredentials();
+    if (!keyId || !keySecret) {
+        return order;
+    }
+
+    try {
+        const instance = new Razorpay({
+            key_id: keyId,
+            key_secret: keySecret
+        });
+
+        const payment = await instance.payments.fetch(paymentId);
+        const gatewayStatus = String(payment?.status || '').trim().toLowerCase();
+        const refundStatus = String(payment?.refund_status || '').trim().toLowerCase();
+        const isCaptured = payment?.captured === true || gatewayStatus === 'captured';
+        const nextPaidAt = payment?.captured_at
+            ? new Date(Number(payment.captured_at) * 1000)
+            : (order?.paidAt || null);
+
+        const nextPaymentResult = {
+            ...(order?.paymentResult || {}),
+            id: payment.id || paymentId,
+            razorpay_payment_id: payment.id || paymentId,
+            razorpay_order_id: payment.order_id || order?.paymentResult?.razorpay_order_id || '',
+            status: gatewayStatus || order?.paymentResult?.status || '',
+            refund_status: refundStatus || order?.paymentResult?.refund_status || '',
+            method: payment.method || order?.paymentResult?.method || '',
+            update_time: new Date().toISOString(),
+            email_address: payment.email || order?.paymentResult?.email_address || '',
+            card_network: payment?.card?.network || order?.paymentResult?.card_network || '',
+            card_last4: payment?.card?.last4 || order?.paymentResult?.card_last4 || '',
+            card_type: payment?.card?.type || order?.paymentResult?.card_type || ''
+        };
+
+        const nextTransactionId = payment.id || order?.transactionId || paymentId;
+
+        if (typeof order?.set === 'function') {
+            order.set({
+                transactionId: nextTransactionId,
+                isPaid: isCaptured,
+                paidAt: isCaptured ? nextPaidAt : null,
+                paymentResult: nextPaymentResult
+            });
+            return order;
+        }
+
+        return {
+            ...order,
+            transactionId: nextTransactionId,
+            isPaid: isCaptured,
+            paidAt: isCaptured ? nextPaidAt : null,
+            paymentResult: nextPaymentResult
+        };
+    } catch (error) {
+        return {
+            ...(typeof order?.toObject === 'function' ? order.toObject() : order),
+            paymentResult: {
+                ...(order?.paymentResult || {}),
+                gateway_sync_error: error.message || 'Unable to sync payment status'
+            }
+        };
+    }
+};
+
+const annotateDuplicatePayments = async (orders = []) => {
+    const onlineOrders = orders.filter((order) => String(order?.paymentMethod || '').trim().toUpperCase() !== 'COD');
+
+    if (!onlineOrders.length) {
+        return orders;
+    }
+
+    const paymentIds = [
+        ...new Set(
+            onlineOrders
+                .map((order) => String(
+                    order?.paymentResult?.razorpay_payment_id
+                    || order?.paymentResult?.id
+                    || order?.transactionId
+                    || ''
+                ).trim())
+                .filter(Boolean)
+        )
+    ];
+
+    if (!paymentIds.length) {
+        return orders;
+    }
+
+    const duplicateGroups = await Order.aggregate([
+        {
+            $match: {
+                paymentMethod: { $ne: 'COD' },
+                transactionId: { $in: paymentIds }
+            }
+        },
+        {
+            $group: {
+                _id: '$transactionId',
+                count: { $sum: 1 },
+                orderIds: { $push: '$_id' },
+                displayIds: { $push: '$displayId' }
+            }
+        },
+        {
+            $match: {
+                count: { $gt: 1 }
+            }
+        }
+    ]);
+
+    const duplicateMap = new Map(
+        duplicateGroups.map((group) => [
+            String(group._id || '').trim(),
+            {
+                count: group.count,
+                orderIds: group.orderIds.map((id) => String(id)),
+                displayIds: group.displayIds
+            }
+        ])
+    );
+
+    return orders.map((order) => {
+        const paymentId = String(
+            order?.paymentResult?.razorpay_payment_id
+            || order?.paymentResult?.id
+            || order?.transactionId
+            || ''
+        ).trim();
+
+        const duplicateInfo = duplicateMap.get(paymentId);
+        if (!duplicateInfo) {
+            return order;
+        }
+
+        if (typeof order?.set === 'function') {
+            order.set('paymentAudit', {
+                hasDuplicatePayment: true,
+                duplicateCount: duplicateInfo.count,
+                duplicateOrderIds: duplicateInfo.orderIds,
+                duplicateDisplayIds: duplicateInfo.displayIds
+            });
+            return order;
+        }
+
+        return {
+            ...order,
+            paymentAudit: {
+                hasDuplicatePayment: true,
+                duplicateCount: duplicateInfo.count,
+                duplicateOrderIds: duplicateInfo.orderIds,
+                duplicateDisplayIds: duplicateInfo.displayIds
+            }
+        };
+    });
+};
+
 const fetchTrackingForProvider = async (order, provider) => {
     if (provider === 'delhivery') {
         return fetchDelhiveryTracking(order);
@@ -200,6 +506,8 @@ const fetchTrackingForProvider = async (order, provider) => {
 // @route   POST /api/orders
 // @access  Private
 export const addOrderItems = async (req, res) => {
+    let claimedPayment = null;
+    let createdOrderId = null;
     try {
         const {
             orderItems,
@@ -212,6 +520,13 @@ export const addOrderItems = async (req, res) => {
             totalPrice,
             coupon,
         } = req.body;
+
+        const verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult);
+        const existingOnlineOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
+
+        if (existingOnlineOrder) {
+            return res.status(200).json(existingOnlineOrder);
+        }
 
         if (!orderItems || orderItems.length === 0) {
             return res.status(400).json({ message: 'No order items' });
@@ -305,9 +620,23 @@ export const addOrderItems = async (req, res) => {
             }
         }
 
+        const paymentClaimResult = await claimOnlinePayment(paymentMethod, verifiedPayment.paymentResult);
+        claimedPayment = paymentClaimResult.claim;
+
+        if (!paymentClaimResult.claimed) {
+            const claimedExistingOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
+            if (claimedExistingOrder) {
+                return res.status(200).json(claimedExistingOrder);
+            }
+
+            return res.status(409).json({
+                message: 'This payment is already being processed. Please refresh and check your orders.'
+            });
+        }
+
         const order = new Order({
             displayId,
-            transactionId: req.body.paymentResult?.razorpay_payment_id || req.body.paymentResult?.id || null,
+            transactionId: verifiedPayment.paymentResult?.razorpay_payment_id || verifiedPayment.paymentResult?.id || null,
             orderItems: orderItems.map(item => ({
                 ...item,
                 product: item.product || item._id
@@ -325,12 +654,19 @@ export const addOrderItems = async (req, res) => {
             shippingPrice,
             totalPrice,
             coupon,
-            isPaid: req.body.isPaid || false,
-            paidAt: req.body.paidAt,
-            paymentResult: req.body.paymentResult
+            isPaid: verifiedPayment.isPaid,
+            paidAt: verifiedPayment.paidAt,
+            paymentResult: verifiedPayment.paymentResult
         });
 
         const createdOrder = await order.save();
+        createdOrderId = createdOrder._id;
+
+        if (claimedPayment?._id) {
+            await PaymentClaim.findByIdAndUpdate(claimedPayment._id, {
+                $set: { order: createdOrder._id }
+            });
+        }
 
         // 2. Reduce Stock (Post-creation)
         for (const item of createdOrder.orderItems) {
@@ -401,6 +737,9 @@ export const addOrderItems = async (req, res) => {
 
         res.status(201).json(createdOrder);
     } catch (error) {
+        if (claimedPayment?._id && !createdOrderId) {
+            await PaymentClaim.findByIdAndDelete(claimedPayment._id).catch(() => {});
+        }
         console.error('Order creation error:', error);
         res.status(500).json({ message: error.message || 'Order creation failed' });
     }
@@ -412,7 +751,9 @@ export const addOrderItems = async (req, res) => {
 export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
-        res.json(orders);
+        const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
+        const auditedOrders = await annotateDuplicatePayments(syncedOrders);
+        res.json(auditedOrders);
     } catch (error) {
         console.error('Get my orders error:', error);
         res.status(500).json({ message: error.message });
@@ -436,8 +777,10 @@ export const getOrderById = async (req, res) => {
 
             // Check if it's the owner or an admin
             if (isAllowed) {
-                await order.populate('user', 'name email phone');
-                res.json(order);
+                const syncedOrder = await syncOrderPaymentFromGateway(order);
+                const [auditedOrder] = await annotateDuplicatePayments([syncedOrder]);
+                await auditedOrder.populate('user', 'name email phone');
+                res.json(auditedOrder);
             } else {
                 res.status(401).json({ 
                     message: 'Not authorized to view this order',
@@ -650,9 +993,12 @@ export const getOrders = async (req, res) => {
                  .sort({ createdAt: -1 })
                  .limit(pageSize)
                  .skip(pageSize * (page - 1));
+
+             const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
+             const auditedOrders = await annotateDuplicatePayments(syncedOrders);
                  
              return res.json({ 
-                 orders, 
+                 orders: auditedOrders, 
                  page, 
                  pages: Math.ceil(count / pageSize), 
                  total: count 
@@ -662,7 +1008,9 @@ export const getOrders = async (req, res) => {
         const orders = await Order.find(filter) // Apply filter even without pagination
             .populate('user', 'name email phone')
             .sort({ createdAt: -1 });
-        res.json(orders);
+        const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
+        const auditedOrders = await annotateDuplicatePayments(syncedOrders);
+        res.json(auditedOrders);
     } catch (error) {
         console.error('Get all orders error:', error);
         res.status(500).json({ message: error.message });

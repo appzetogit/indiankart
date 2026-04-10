@@ -1,50 +1,56 @@
 import { create } from 'zustand';
 import API from '../../../services/api';
+import { getAdminPaymentStatus } from '../utils/paymentStatus';
 
-const transformOrder = (order, note = '') => ({
-    ...order,
-    id: order._id,
-    displayId: order.displayId,
-    transactionId: order.transactionId,
-    date: order.createdAt,
-    items: order.orderItems?.map(item => ({
-        id: item.product,
-        _id: item._id,
-        name: item.name,
-        image: item.image,
-        price: item.price,
-        quantity: item.qty,
-        serialNumber: item.serialNumber,
-        serialType: item.serialType
-    })) || [],
-    total: order.totalPrice,
-    itemsPrice: order.itemsPrice ?? 0,
-    shippingPrice: order.shippingPrice ?? 0,
-    taxPrice: order.taxPrice ?? 0,
-    payment: {
-        method: order.paymentMethod === 'COD' ? 'COD' : order.paymentMethod,
-        status: order.isPaid ? 'Paid' : 'Pending',
-        transactionId: order.transactionId || order.paymentResult?.razorpay_order_id || order.paymentResult?.id,
-        cardType: order.paymentResult?.card_type,
-        cardNetwork: order.paymentResult?.card_network,
-        cardLast4: order.paymentResult?.card_last4
-    },
-    address: {
-        name: order.user?.name || 'N/A',
-        line: order.shippingAddress?.street || '',
-        city: order.shippingAddress?.city || '',
-        state: order.shippingAddress?.state || '',
-        pincode: order.shippingAddress?.postalCode || '',
-        type: 'Home'
-    },
-    timeline: [
-        {
-            status: order.status,
-            time: order.updatedAt || order.createdAt,
-            note: note || ''
-        }
-    ]
-});
+const transformOrder = (order, note = '') => {
+    const gatewayStatus = String(order.paymentResult?.status || '').trim().toLowerCase();
+
+    return {
+        ...order,
+        id: order._id,
+        displayId: order.displayId,
+        transactionId: order.transactionId,
+        date: order.createdAt,
+        items: order.orderItems?.map(item => ({
+            id: item.product,
+            _id: item._id,
+            name: item.name,
+            image: item.image,
+            price: item.price,
+            quantity: item.qty,
+            serialNumber: item.serialNumber,
+            serialType: item.serialType
+        })) || [],
+        total: order.totalPrice,
+        itemsPrice: order.itemsPrice ?? 0,
+        shippingPrice: order.shippingPrice ?? 0,
+        taxPrice: order.taxPrice ?? 0,
+        paymentGatewayStatus: gatewayStatus,
+        payment: {
+            method: order.paymentMethod === 'COD' ? 'COD' : order.paymentMethod,
+            status: getAdminPaymentStatus(order),
+            transactionId: order.transactionId || order.paymentResult?.razorpay_order_id || order.paymentResult?.id,
+            cardType: order.paymentResult?.card_type,
+            cardNetwork: order.paymentResult?.card_network,
+            cardLast4: order.paymentResult?.card_last4
+        },
+        address: {
+            name: order.user?.name || 'N/A',
+            line: order.shippingAddress?.street || '',
+            city: order.shippingAddress?.city || '',
+            state: order.shippingAddress?.state || '',
+            pincode: order.shippingAddress?.postalCode || '',
+            type: 'Home'
+        },
+        timeline: [
+            {
+                status: order.status,
+                time: order.updatedAt || order.createdAt,
+                note: note || ''
+            }
+        ]
+    };
+};
 
 const useOrderStore = create((set) => ({
     orders: [],

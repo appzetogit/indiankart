@@ -6,6 +6,7 @@ import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator from '../../components/orders/InvoiceGenerator';
 import API from '../../../../services/api';
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getTrackingIdentifierLabel, getShippingError, getShippingPickupLocation, getShippingSyncedAt, isCourierMode } from '../../../../utils/shippingProvider';
+import { getAdminPaymentStatus, getAdminPaymentStatusClass } from '../../utils/paymentStatus';
 
 const formatTrackingDate = (value) => {
     if (!value) return 'N/A';
@@ -335,16 +336,8 @@ const OrderDetail = () => {
         || (hasCourierFulfillment && getShippingSyncedAt(order, fulfillmentMode) ? 'Confirmed' : '')
         || timelineOrderStatus;
     const currentTimelineIndex = adminTimelineEntries.findIndex((entry) => entry.status === currentTimelineStatus);
-    const isOrderDelivered = normalizedCurrentStatus === 'Delivered';
-    const paymentMethodValue = String(order.payment?.method || order.paymentMethod || '').trim().toUpperCase();
-    const isOnlinePaidOrder = Boolean(order.isPaid) && paymentMethodValue && paymentMethodValue !== 'COD';
-    const paymentStatusLabel = isOrderDelivered || isOnlinePaidOrder
-        ? 'Completed'
-        : (order.payment?.status || (order.isPaid ? 'Paid' : 'Pending'));
-    const paymentStatusClass =
-        paymentStatusLabel === 'Completed' || paymentStatusLabel === 'Paid'
-            ? 'bg-green-100 text-green-700'
-            : 'bg-amber-100 text-amber-700';
+    const paymentStatusLabel = getAdminPaymentStatus(order);
+    const paymentStatusClass = getAdminPaymentStatusClass(paymentStatusLabel);
     const summaryItemsPrice = Number(order.itemsPrice ?? Math.max(0, (order.total || 0) - Number(order.shippingPrice || 0) - Number(order.taxPrice || 0)));
     const summaryShippingPrice = Number(order.shippingPrice || 0);
     const summaryTotal = Number(order.total || 0);

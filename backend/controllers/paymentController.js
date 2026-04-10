@@ -94,6 +94,20 @@ export const verifyPayment = async (req, res) => {
         });
 
         const payment = await instance.payments.fetch(razorpay_payment_id);
+        const normalizedGatewayStatus = String(payment?.status || '').trim().toLowerCase();
+        const fetchedOrderId = String(payment?.order_id || '').trim();
+        const isCaptured = payment?.captured === true || normalizedGatewayStatus === 'captured';
+
+        if (fetchedOrderId && fetchedOrderId !== String(razorpay_order_id || '').trim()) {
+            return res.status(400).json({ message: 'Payment order mismatch' });
+        }
+
+        if (!isCaptured) {
+            return res.status(400).json({
+                message: 'Payment was not captured successfully',
+                gatewayStatus: normalizedGatewayStatus || 'unknown'
+            });
+        }
 
         let cardInfo = null;
         if (payment.method === 'card' && payment.card) {
@@ -107,6 +121,8 @@ export const verifyPayment = async (req, res) => {
         return res.json({
             message: 'Payment verified successfully',
             paymentId: razorpay_payment_id,
+            gatewayStatus: normalizedGatewayStatus,
+            isCaptured,
             cardInfo
         });
     } catch (error) {
