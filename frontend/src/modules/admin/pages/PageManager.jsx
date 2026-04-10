@@ -15,11 +15,19 @@ import { useContentStore } from '../store/contentStore';
 
 const RESERVED_PAGE_KEYS = new Set([
     'privacyPolicy',
+    'terms-of-use',
     'aboutUs',
     'seoContent',
     'copyright',
     'help-center-config'
 ]);
+
+const FIXED_EDITABLE_PAGES = [
+    { pageKey: 'privacyPolicy', title: 'Privacy Policy' },
+    { pageKey: 'terms-of-use', title: 'Terms of Use' }
+];
+
+const isFixedEditablePageKey = (pageKey) => FIXED_EDITABLE_PAGES.some((page) => page.pageKey === pageKey);
 
 const createEmptyDraft = () => ({
     title: '',
@@ -64,9 +72,28 @@ const PageManager = () => {
         [pages]
     );
 
+    const fixedEditablePages = useMemo(
+        () => FIXED_EDITABLE_PAGES.map((config) => {
+            const existingPage = pages.find((page) => page.pageKey === config.pageKey);
+            return existingPage || {
+                pageKey: config.pageKey,
+                title: config.title,
+                content: '<p></p>',
+                showInMobileProfile: false,
+                isFixed: true
+            };
+        }),
+        [pages]
+    );
+
     const selectedPage = useMemo(
-        () => customPages.find((page) => page.pageKey === selectedPageKey) || null,
-        [customPages, selectedPageKey]
+        () => [...fixedEditablePages, ...customPages].find((page) => page.pageKey === selectedPageKey) || null,
+        [fixedEditablePages, customPages, selectedPageKey]
+    );
+
+    const isFixedPageEditing = useMemo(
+        () => isFixedEditablePageKey(selectedPageKey),
+        [selectedPageKey]
     );
 
     useEffect(() => {
@@ -135,7 +162,7 @@ const PageManager = () => {
 
     const handleSave = async () => {
         const title = draft.title.trim();
-        const pageKey = sanitizePageKey(draft.pageKey);
+        const pageKey = isFixedPageEditing ? selectedPageKey : sanitizePageKey(draft.pageKey);
         const content = draft.content || '<p></p>';
         const showInMobileProfile = Boolean(draft.showInMobileProfile);
 
@@ -149,7 +176,7 @@ const PageManager = () => {
             return;
         }
 
-        if (RESERVED_PAGE_KEYS.has(pageKey)) {
+        if (RESERVED_PAGE_KEYS.has(pageKey) && !isFixedPageEditing) {
             toast.error('This page link is reserved');
             return;
         }
@@ -226,6 +253,43 @@ const PageManager = () => {
                     </div>
 
                     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-5 border-b border-gray-100">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900">Legal Pages</h2>
+                                <p className="text-xs text-gray-400 font-semibold mt-1">These links are fixed and only their content can be edited.</p>
+                            </div>
+                        </div>
+
+                        <div className="p-4 space-y-3 border-b border-gray-100 bg-gray-50/40">
+                            {fixedEditablePages.map((page) => (
+                                <div
+                                    key={page.pageKey}
+                                    className="rounded-2xl border border-gray-100 bg-white p-4"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-black text-gray-900 truncate">
+                                                {page.title || formatTitle(page)}
+                                            </p>
+                                            <p className="text-[11px] text-gray-500 mt-1 break-all">{buildPageHref(page.pageKey)}</p>
+                                            <p className="text-[10px] font-bold text-blue-600 mt-2 uppercase tracking-wider">
+                                                Fixed link
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={() => startEditingPage(page)}
+                                                className="w-9 h-9 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 flex items-center justify-center"
+                                                aria-label={`Edit ${formatTitle(page)}`}
+                                            >
+                                                <MdEdit size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
                         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                             <div>
                                 <h2 className="text-lg font-black text-gray-900">Saved Pages</h2>
@@ -337,6 +401,7 @@ const PageManager = () => {
                                     value={draft.title}
                                     onChange={(e) => handleDraftChange('title', e.target.value)}
                                     placeholder="e.g. Careers"
+                                    disabled={isFixedPageEditing}
                                     className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:border-blue-500"
                                 />
                             </div>
@@ -352,9 +417,15 @@ const PageManager = () => {
                                         value={draft.pageKey}
                                         onChange={(e) => handleDraftChange('pageKey', e.target.value)}
                                         placeholder="careers"
+                                        disabled={isFixedPageEditing}
                                         className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-gray-900 outline-none"
                                     />
                                 </div>
+                                {isFixedPageEditing ? (
+                                    <p className="mt-2 text-[11px] font-semibold text-gray-400">
+                                        This page link is fixed and cannot be changed.
+                                    </p>
+                                ) : null}
                             </div>
                         </div>
 
@@ -370,6 +441,7 @@ const PageManager = () => {
                                 type="checkbox"
                                 checked={draft.showInMobileProfile}
                                 onChange={(e) => handleDraftChange('showInMobileProfile', e.target.checked)}
+                                disabled={isFixedPageEditing}
                                 className="w-4 h-4 accent-blue-600"
                             />
                             <div>

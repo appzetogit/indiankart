@@ -186,14 +186,6 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
         setTimeout(() => setAnimating(false), 420);
     }, [animating]);
 
-    const next = useCallback(() => {
-        goTo((activeIndex + 1) % total);
-    }, [activeIndex, total, goTo]);
-
-    const prev = useCallback(() => {
-        goTo((activeIndex - 1 + total) % total);
-    }, [activeIndex, total, goTo]);
-
     // Auto-advance
     useEffect(() => {
         if (total <= 1) return;
@@ -270,27 +262,6 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
             </div>
 
             {/* Prev / Next arrows — only if >1 item */}
-            {total > 1 && (
-                <>
-                    <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); prev(); }}
-                        className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
-                        aria-label="Previous"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); next(); }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/30 text-white backdrop-blur-sm transition hover:bg-black/50"
-                        aria-label="Next"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                    </button>
-                </>
-            )}
-
             {/* Dot indicators */}
             {total > 1 && (
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
