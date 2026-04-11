@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MdSearch, MdFilterList, MdVisibility, MdChevronLeft, MdChevronRight, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
+import toast from 'react-hot-toast';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
-import { getFulfillmentMode } from '../../../../utils/shippingProvider';
 import { getAdminPaymentStatus, getAdminPaymentStatusClass } from '../../utils/paymentStatus';
+
+const BULK_STATUS_OPTIONS = [
+    'Pending',
+    'Confirmed',
+    'Packed',
+    'Dispatched',
+    'Out for Delivery',
+    'Delivered',
+    'Cancelled'
+];
 
 const OrderList = () => {
     const navigate = useNavigate();
@@ -21,6 +31,9 @@ const OrderList = () => {
     const itemsPerPage = 20;
 
     const [localOrders, setLocalOrders] = useState([]);
+    const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
+    const [bulkStatus, setBulkStatus] = useState('');
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
     const normalizeOrderStatus = (status = '') => {
         const value = String(status || '').trim();
@@ -33,7 +46,8 @@ const OrderList = () => {
             try {
                 const params = {
                     pageNumber: currentPage,
-                    limit: itemsPerPage
+                    limit: itemsPerPage,
+                    syncPayments: false
                 };
 
                 if (searchTerm) params.search = searchTerm;
@@ -42,10 +56,8 @@ const OrderList = () => {
 
                 const { data } = await API.get('/orders', { params });
 
-                const transformOrder = (order, liveStatus = '') => {
+                const transformOrder = (order) => {
                     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
-                    const fulfillmentMode = getFulfillmentMode(order);
-                    const effectiveStatus = String((fulfillmentMode !== 'manual' && fulfillmentMode !== 'unassigned' ? liveStatus : '') || normalizedOrderStatus || '').trim() || 'Pending';
 
                     return {
                         ...order,
@@ -63,54 +75,16 @@ const OrderList = () => {
                             method: order.paymentMethod || 'COD',
                             status: getAdminPaymentStatus(order)
                         },
-                        status: effectiveStatus,
+                        status: normalizedOrderStatus || 'Pending',
                         baseStatus: normalizedOrderStatus
                     };
                 };
 
                 if (data.orders) {
-                    const liveStatuses = await Promise.all(
-                        data.orders.map(async (order) => {
-                            const fulfillmentMode = getFulfillmentMode(order);
-                            const trackingIdentifier = fulfillmentMode === 'delhivery'
-                                ? order?.delhivery?.waybill
-                                : order?.ekart?.trackingNumber;
-                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
-                                return '';
-                            }
-
-                            try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
-                                return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
-                            } catch {
-                                return '';
-                            }
-                        })
-                    );
-
-                    setLocalOrders(data.orders.map((order, index) => transformOrder(order, liveStatuses[index])));
+                    setLocalOrders(data.orders.map((order) => transformOrder(order)));
                     setTotalPages(data.pages);
                 } else {
-                    const liveStatuses = await Promise.all(
-                        (Array.isArray(data) ? data : []).map(async (order) => {
-                            const fulfillmentMode = getFulfillmentMode(order);
-                            const trackingIdentifier = fulfillmentMode === 'delhivery'
-                                ? order?.delhivery?.waybill
-                                : order?.ekart?.trackingNumber;
-                            if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier || ['Cancelled', 'Delivered'].includes(normalizeOrderStatus(order?.status))) {
-                                return '';
-                            }
-
-                            try {
-                                const trackingResponse = await API.get(`/orders/${order._id}/shipping-tracking`);
-                                return String(trackingResponse?.data?.tracking?.currentStatus || '').trim();
-                            } catch {
-                                return '';
-                            }
-                        })
-                    );
-
-                    setLocalOrders(Array.isArray(data) ? data.map((order, index) => transformOrder(order, liveStatuses[index])) : []);
+                    setLocalOrders(Array.isArray(data) ? data.map((order) => transformOrder(order)) : []);
                 }
             } catch (error) {
                 console.error(error);
@@ -125,6 +99,9 @@ const OrderList = () => {
     }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
 
     const filteredOrders = localOrders; // Now directly from server
+    const selectedCount = selectedOrderIds.size;
+    const allVisibleSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderIds.has(order.id));
+    const someVisibleSelected = filteredOrders.some((order) => selectedOrderIds.has(order.id));
 
     const getStatusStyle = (status) => {
         switch (status) {
@@ -164,6 +141,84 @@ const OrderList = () => {
         if (newPage >= 1 && newPage <= totalPages) {
             setCurrentPage(newPage);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+
+    const handleToggleOrder = (orderId) => {
+        setSelectedOrderIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(orderId)) {
+                next.delete(orderId);
+            } else {
+                next.add(orderId);
+            }
+            return next;
+        });
+    };
+
+    const handleToggleVisibleOrders = () => {
+        setSelectedOrderIds((prev) => {
+            const next = new Set(prev);
+            if (allVisibleSelected) {
+                filteredOrders.forEach((order) => next.delete(order.id));
+            } else {
+                filteredOrders.forEach((order) => next.add(order.id));
+            }
+            return next;
+        });
+    };
+
+    const handleBulkStatusUpdate = async () => {
+        if (!selectedCount) {
+            toast.error('Select at least one order');
+            return;
+        }
+
+        if (!bulkStatus) {
+            toast.error('Choose a status first');
+            return;
+        }
+
+        setIsBulkUpdating(true);
+        try {
+            const { data } = await API.put('/orders/bulk-status', {
+                orderIds: Array.from(selectedOrderIds),
+                status: bulkStatus
+            });
+            const updatedOrderById = new Map(
+                (data.updatedOrders || []).map((order) => [order._id, order])
+            );
+
+            setLocalOrders((orders) => orders.map((order) => {
+                const updatedOrder = updatedOrderById.get(order.id);
+                if (!updatedOrder) return order;
+
+                const normalizedOrderStatus = normalizeOrderStatus(updatedOrder.status);
+                return {
+                    ...order,
+                    ...updatedOrder,
+                    id: updatedOrder._id,
+                    date: updatedOrder.createdAt,
+                    total: updatedOrder.totalPrice,
+                    status: normalizedOrderStatus,
+                    baseStatus: normalizedOrderStatus
+                };
+            }));
+            setSelectedOrderIds(new Set());
+            setBulkStatus('');
+
+            const updatedCount = data.updatedOrders?.length || 0;
+            const failedCount = data.failedOrders?.length || 0;
+            if (updatedCount) {
+                toast.success(`${updatedCount} order${updatedCount === 1 ? '' : 's'} updated to ${bulkStatus}`);
+            }
+            if (failedCount) {
+                toast.error(`${failedCount} order${failedCount === 1 ? '' : 's'} could not be updated`);
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to update selected orders');
+        } finally {
+            setIsBulkUpdating(false);
         }
     };
 
@@ -217,6 +272,36 @@ const OrderList = () => {
                 </div>
             </div>
 
+            {selectedCount > 0 && (
+                <div className="bg-gray-950 text-white p-3 md:p-4 rounded-xl md:rounded-2xl border border-gray-800 shadow-sm flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-tight">{selectedCount} selected</p>
+                        <p className="text-[10px] text-gray-300 font-bold">Bulk status updates save to the same order status source as single-order changes.</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                            className="px-4 py-2 bg-white text-gray-900 border border-gray-700 rounded-lg outline-none text-xs font-black cursor-pointer"
+                            value={bulkStatus}
+                            onChange={(e) => setBulkStatus(e.target.value)}
+                            disabled={isBulkUpdating}
+                        >
+                            <option value="">Choose status</option>
+                            {BULK_STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleBulkStatusUpdate}
+                            disabled={isBulkUpdating || !bulkStatus}
+                            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-black transition-colors"
+                        >
+                            {isBulkUpdating ? 'Updating...' : 'Update Selected'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Orders Table */}
             {filteredOrders.length === 0 ? (
                 <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-gray-200">
@@ -231,6 +316,18 @@ const OrderList = () => {
                         <AdminTable shellClassName="md:rounded-2xl border-y md:border" tableClassName="w-full min-w-max text-left border-collapse">
                                     <AdminTableHead>
                                         <AdminTableHeaderRow>
+                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allVisibleSelected}
+                                                    ref={(input) => {
+                                                        if (input) input.indeterminate = !allVisibleSelected && someVisibleSelected;
+                                                    }}
+                                                    onChange={handleToggleVisibleOrders}
+                                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                                                    aria-label="Select all visible orders"
+                                                />
+                                            </AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Order ID & Date</AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Customer</AdminTableHeaderCell>
                                             <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Items & Price</AdminTableHeaderCell>
@@ -242,6 +339,15 @@ const OrderList = () => {
                                     <tbody className="divide-y divide-gray-200">
                                         {filteredOrders.map((order, index) => (
                                             <tr key={order.id || `order-${index}`} className="hover:bg-blue-50/10 transition-colors group">
+                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-4 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedOrderIds.has(order.id)}
+                                                        onChange={() => handleToggleOrder(order.id)}
+                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                                                        aria-label={`Select order ${order.displayId || order.id}`}
+                                                    />
+                                                </td>
                                                 <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-black text-gray-900 group-hover:text-blue-600 transition-colors">{order.displayId || order.id}</span>

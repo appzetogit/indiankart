@@ -1030,6 +1030,7 @@ export const assignOrderFulfillment = async (req, res) => {
 export const getOrders = async (req, res) => {
     try {
         const { pageNumber, limit, search, status, user } = req.query;
+        const shouldSyncPayments = String(req.query.syncPayments || 'true') !== 'false';
         let filter = {};
         
         // Search Implementation
@@ -1084,7 +1085,9 @@ export const getOrders = async (req, res) => {
                  .limit(pageSize)
                  .skip(pageSize * (page - 1));
 
-             const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
+             const syncedOrders = shouldSyncPayments
+                 ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
+                 : orders;
              const auditedOrders = await annotateDuplicatePayments(syncedOrders);
                  
              return res.json({ 
@@ -1098,7 +1101,9 @@ export const getOrders = async (req, res) => {
         const orders = await Order.find(filter) // Apply filter even without pagination
             .populate('user', 'name email phone')
             .sort({ createdAt: -1 });
-        const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
+        const syncedOrders = shouldSyncPayments
+            ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
+            : orders;
         const auditedOrders = await annotateDuplicatePayments(syncedOrders);
         res.json(auditedOrders);
     } catch (error) {
@@ -1133,92 +1138,158 @@ export const updateOrderToDelivered = async (req, res) => {
 // @desc    Update order status (general)
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
+const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
+    const nextStatus = String(status || '').trim();
+    const fulfillmentMode = getFulfillmentMode(order);
+
+    if (!nextStatus) {
+        const error = new Error('Status is required');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (fulfillmentMode === 'unassigned' && nextStatus !== 'Cancelled' && nextStatus !== String(order.status || '').trim()) {
+        const error = new Error('Assign this order to Delhivery, Ekart, or Manual before updating fulfillment.');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (fulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(nextStatus)) {
+        const error = new Error('Invalid manual fulfillment status');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (nextStatus === 'Cancelled') {
+        if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
+            const error = new Error('Delivered order cannot be cancelled');
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (['delhivery', 'ekart'].includes(fulfillmentMode) && getProviderTrackingIdentifier(order, fulfillmentMode)) {
+            try {
+                await cancelShipmentForProvider(order, fulfillmentMode);
+            } catch (error) {
+                setProviderCancellationError(order, fulfillmentMode, error.message || `Failed to cancel ${fulfillmentMode} shipment`);
+                await order.save();
+                error.statusCode = 400;
+                throw error;
+            }
+        }
+
+        if (order.status !== 'Cancelled') {
+            await restoreOrderStock(order);
+        }
+    }
+
+    order.status = nextStatus;
+    if (nextStatus === 'Delivered') {
+        order.isDelivered = true;
+        order.deliveredAt = Date.now();
+    }
+
+    // serialNumbers expected to be array of objects: { itemId: "...", serial: "...", type: "..." }
+    if (serialNumbers && Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+        serialNumbers.forEach(sItem => {
+            const item = order.orderItems.find(i => i._id.toString() === sItem.itemId);
+            if (item) {
+                item.serialNumber = sItem.serial;
+                item.serialType = sItem.type || 'Serial Number';
+            }
+        });
+    }
+
+    if (nextStatus === 'Cancelled') {
+        await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
+    }
+
+    const shouldCreateProviderShipment =
+        ['delhivery', 'ekart'].includes(fulfillmentMode) &&
+        PROVIDER_SYNC_TRIGGER_STATUSES.has(nextStatus) &&
+        !getProviderTrackingIdentifier(order, fulfillmentMode);
+
+    if (shouldCreateProviderShipment) {
+        try {
+            await createShipmentForProvider(order, fulfillmentMode);
+        } catch (error) {
+            setProviderCreationError(order, fulfillmentMode, error.message || `Failed to create ${fulfillmentMode} shipment`);
+            order.status = 'Pending';
+            await order.save();
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const updatedOrder = await order.save();
+    await updatedOrder.populate('user', 'name email phone');
+    return updatedOrder;
+};
+
 export const updateOrderStatus = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         const { status, serialNumbers } = req.body;
 
         if (order) {
-            const fulfillmentMode = getFulfillmentMode(order);
-
-            if (fulfillmentMode === 'unassigned' && status !== 'Cancelled' && String(status || '').trim() !== String(order.status || '').trim()) {
-                return res.status(400).json({ message: 'Assign this order to Delhivery, Ekart, or Manual before updating fulfillment.' });
-            }
-
-            if (fulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(String(status || '').trim())) {
-                return res.status(400).json({ message: 'Invalid manual fulfillment status' });
-            }
-
-            if (status === 'Cancelled') {
-                if (order.isDelivered || order.deliveredAt || order.status === 'Delivered') {
-                    return res.status(400).json({ message: 'Delivered order cannot be cancelled' });
-                }
-
-                if (['delhivery', 'ekart'].includes(fulfillmentMode) && getProviderTrackingIdentifier(order, fulfillmentMode)) {
-                    try {
-                        await cancelShipmentForProvider(order, fulfillmentMode);
-                    } catch (error) {
-                        setProviderCancellationError(order, fulfillmentMode, error.message || `Failed to cancel ${fulfillmentMode} shipment`);
-                        await order.save();
-                        return res.status(400).json({
-                            message: error.message || `Failed to cancel ${fulfillmentMode} shipment`
-                        });
-                    }
-                }
-
-                if (order.status !== 'Cancelled') {
-                    await restoreOrderStock(order);
-                }
-            }
-
-            order.status = status;
-            if (status === 'Delivered') {
-                order.isDelivered = true;
-                order.deliveredAt = Date.now();
-            }
-
-            // If serialNumbers are provided (regardless of status change), update them
-            if (serialNumbers && Array.isArray(serialNumbers) && serialNumbers.length > 0) {
-                // serialNumbers expected to be array of objects: { itemId: "...", serial: "...", type: "..." }
-                serialNumbers.forEach(sItem => {
-                   const item = order.orderItems.find(i => i._id.toString() === sItem.itemId);
-                   if (item) {
-                       item.serialNumber = sItem.serial;
-                       item.serialType = sItem.type || 'Serial Number';
-                   }
-                });
-            }
-
-            if (status === 'Cancelled') {
-                await refundCancelledRazorpayOrder(order, 'Order cancelled before delivery');
-            }
-
-            const shouldCreateProviderShipment =
-                ['delhivery', 'ekart'].includes(fulfillmentMode) &&
-                PROVIDER_SYNC_TRIGGER_STATUSES.has(String(status || '').trim()) &&
-                !getProviderTrackingIdentifier(order, fulfillmentMode);
-
-            if (shouldCreateProviderShipment) {
-                try {
-                    await createShipmentForProvider(order, fulfillmentMode);
-                } catch (error) {
-                    setProviderCreationError(order, fulfillmentMode, error.message || `Failed to create ${fulfillmentMode} shipment`);
-                    order.status = 'Pending';
-                    await order.save();
-                    return res.status(400).json({
-                        message: error.message || `Failed to create ${fulfillmentMode} shipment`
-                    });
-                }
-            }
-
-            const updatedOrder = await order.save();
-            await updatedOrder.populate('user', 'name email phone');
+            const updatedOrder = await applyOrderStatusUpdate(order, status, serialNumbers);
             res.json(updatedOrder);
         } else {
             res.status(404).json({ message: 'Order not found' });
         }
     } catch (error) {
         console.error('Update order status error:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+};
+
+// @desc    Update multiple order statuses using the same source-of-truth status path
+// @route   PUT /api/orders/bulk-status
+// @access  Private/Admin
+export const updateBulkOrderStatus = async (req, res) => {
+    try {
+        const { orderIds, status } = req.body;
+        const normalizedIds = Array.isArray(orderIds)
+            ? [...new Set(orderIds.map((id) => String(id || '').trim()).filter(Boolean))]
+            : [];
+
+        if (!normalizedIds.length) {
+            return res.status(400).json({ message: 'Select at least one order' });
+        }
+
+        if (!String(status || '').trim()) {
+            return res.status(400).json({ message: 'Status is required' });
+        }
+
+        const updatedOrders = [];
+        const failedOrders = [];
+
+        for (const orderId of normalizedIds) {
+            try {
+                const order = await Order.findById(orderId);
+
+                if (!order) {
+                    failedOrders.push({ id: orderId, message: 'Order not found' });
+                    continue;
+                }
+
+                const updatedOrder = await applyOrderStatusUpdate(order, status);
+                updatedOrders.push(updatedOrder);
+            } catch (error) {
+                failedOrders.push({
+                    id: orderId,
+                    message: error.message || 'Failed to update order status'
+                });
+            }
+        }
+
+        res.json({
+            message: `${updatedOrders.length} order${updatedOrders.length === 1 ? '' : 's'} updated`,
+            updatedOrders,
+            failedOrders
+        });
+    } catch (error) {
+        console.error('Bulk update order status error:', error);
         res.status(500).json({ message: error.message });
     }
 };

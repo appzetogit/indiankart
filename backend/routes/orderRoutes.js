@@ -8,7 +8,8 @@ import {
     updateOrderStatus,
     getOrderDelhiveryTracking,
     getOrderShippingTracking,
-    assignOrderFulfillment
+    assignOrderFulfillment,
+    updateBulkOrderStatus
 } from '../controllers/orderController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
@@ -17,6 +18,8 @@ router.route('/')
     .get(protect, admin, getOrders); // Admin for listing all orders
 
 router.route('/myorders').get(protect, getMyOrders); // User's own orders
+
+router.route('/bulk-status').put(protect, admin, updateBulkOrderStatus);
 
 router.route('/:id')
     .get(protect, getOrderById); // Get specific order
