@@ -606,6 +606,8 @@ export const addOrderItems = async (req, res) => {
             totalPrice,
             coupon,
         } = req.body;
+        const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
+        const isOnlinePayment = normalizedPaymentMethod && normalizedPaymentMethod !== 'COD';
 
         const verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult);
         const existingOnlineOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
@@ -706,18 +708,20 @@ export const addOrderItems = async (req, res) => {
             }
         }
 
-        const paymentClaimResult = await claimOnlinePayment(paymentMethod, verifiedPayment.paymentResult);
-        claimedPayment = paymentClaimResult.claim;
+        if (isOnlinePayment) {
+            const paymentClaimResult = await claimOnlinePayment(paymentMethod, verifiedPayment.paymentResult);
+            claimedPayment = paymentClaimResult.claim;
 
-        if (!paymentClaimResult.claimed) {
-            const claimedExistingOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
-            if (claimedExistingOrder) {
-                return res.status(200).json(claimedExistingOrder);
+            if (!paymentClaimResult.claimed) {
+                const claimedExistingOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
+                if (claimedExistingOrder) {
+                    return res.status(200).json(claimedExistingOrder);
+                }
+
+                return res.status(409).json({
+                    message: 'This payment is already being processed. Please refresh and check your orders.'
+                });
             }
-
-            return res.status(409).json({
-                message: 'This payment is already being processed. Please refresh and check your orders.'
-            });
         }
 
         const invoiceNumber = await reserveNextInvoiceNumber();

@@ -6,7 +6,7 @@ const PinCodeManager = () => {
     const { pinCodes, fetchPinCodes, addPinCode, deletePinCode, bulkImportPinCodes, updatePinCode, isLoading } = usePinCodeStore();
     const [formData, setFormData] = useState({
         code: '',
-        isCOD: false,
+        isCOD: true,
         deliveryTime: '3',
         deliveryUnit: 'days'
     });
@@ -31,7 +31,7 @@ const PinCodeManager = () => {
         e.preventDefault();
         const success = await addPinCode(formData);
         if (success) {
-            setFormData({ code: '', isCOD: false, deliveryTime: '3', deliveryUnit: 'days' });
+            setFormData({ code: '', isCOD: true, deliveryTime: '3', deliveryUnit: 'days' });
         }
     };
 

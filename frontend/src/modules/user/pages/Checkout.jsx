@@ -187,7 +187,7 @@ const Checkout = () => {
                     setIsCODServiceable(data.isCOD !== false); // Default to true if undefined, but API sends it now
                     if (data.isServiceable) {
                         setEstimatedDeliveryText(
-                            buildEstimatedDeliveryText(data.deliveryTime, data.unit) || data.message || ''
+                            buildEstimatedDeliveryText(data.deliveryTime, data.deliveryUnit || data.unit) || data.message || ''
                         );
                     } else {
                         setEstimatedDeliveryText('');
