@@ -3,6 +3,7 @@ import { useReactToPrint } from "react-to-print";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier } from "../../../../utils/shippingProvider";
+import { getOrderedItemDisplayName } from "../../../../utils/orderItemDisplay";
 
 const getInvoiceNumber = (order) => {
   const savedInvoiceNumber = String(order?.invoiceNumber || "").trim();
@@ -133,14 +134,6 @@ export const InvoiceDisplay = React.forwardRef(
       );
     };
 
-    const getVariantDetails = (lineItem) => {
-      if (!lineItem?.variant || typeof lineItem.variant !== "object") return [];
-
-      return Object.entries(lineItem.variant)
-        .filter(([key, value]) => String(key || "").trim() && String(value || "").trim())
-        .map(([key, value]) => `${String(key).trim()}: ${String(value).trim()}`);
-    };
-
     const getSafeName = (lineItem, index) => {
       const candidates = [lineItem?.name, lineItem?.title, lineItem?.productName];
       const validName = candidates.find(
@@ -150,13 +143,8 @@ export const InvoiceDisplay = React.forwardRef(
     };
 
     const getDisplayTitle = (lineItem, index) => {
-      const baseName = getSafeName(lineItem, index);
+      const baseName = getOrderedItemDisplayName(lineItem, getSafeName(lineItem, index));
       const detailParts = [];
-      const variantDetails = getVariantDetails(lineItem);
-
-      if (variantDetails.length > 0) {
-        detailParts.push(...variantDetails);
-      }
 
       const skuCandidates = [lineItem?.sku, lineItem?.skuId, lineItem?.productId];
       const skuValue = skuCandidates.find((candidate) => typeof candidate === "string" && candidate.trim());

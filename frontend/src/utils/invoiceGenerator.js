@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getOrderedItemDisplayName } from './orderItemDisplay';
 
 const getInvoiceNumber = (order) => {
     const savedInvoiceNumber = String(order?.invoiceNumber || '').trim();
@@ -153,13 +154,9 @@ export const generateInvoice = (order, settings = {}) => {
 
     // Prepare table data
     const tableData = order.orderItems ? order.orderItems.map((item, index) => {
-        const variantText = item.variant
-            ? Object.entries(item.variant).map(([key, value]) => `${key}: ${value}`).join(', ')
-            : '';
-
         return [
             index + 1,
-            item.name + (variantText ? `\n(${variantText})` : ''),
+            getOrderedItemDisplayName(item, `Product Item ${index + 1}`),
             item.qty || item.quantity,
             `Rs.${item.price.toLocaleString('en-IN')}`,
             `Rs.${((item.price) * (item.qty || item.quantity)).toLocaleString('en-IN')}`

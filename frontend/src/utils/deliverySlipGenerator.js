@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import toast from 'react-hot-toast';
+import { getOrderedItemDisplayName } from './orderItemDisplay';
 
 /**
  * Generate and download delivery slip PDF for an order
@@ -117,13 +118,9 @@ export const generateDeliverySlip = (order) => {
     // Prepare items table
     const items = order.orderItems || order.items || [];
     const tableData = items.map((item, index) => {
-        const variantText = item.variant
-            ? Object.entries(item.variant).map(([key, value]) => `${key}: ${value}`).join(', ')
-            : '';
-
         return [
             index + 1,
-            item.name + (variantText ? `\n(${variantText})` : ''),
+            getOrderedItemDisplayName(item, `Product Item ${index + 1}`),
             item.qty || item.quantity || 1
         ];
     });

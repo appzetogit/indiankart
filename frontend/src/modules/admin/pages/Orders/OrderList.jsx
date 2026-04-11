@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MdSearch, MdFilterList, MdVisibility, MdChevronLeft, MdChevronRight, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
+import { MdSearch, MdFilterList, MdVisibility, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
@@ -17,6 +17,41 @@ const BULK_STATUS_OPTIONS = [
     'Cancelled'
 ];
 
+const normalizeOrderStatus = (status = '') => {
+    const value = String(status || '').trim();
+    if (value === 'Shipped') return 'Dispatched';
+    return value;
+};
+
+const transformOrder = (order) => {
+    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
+
+    return {
+        ...order,
+        id: order._id,
+        date: order.createdAt,
+        items: order.orderItems?.map((item) => ({
+            id: item.product,
+            _id: item._id,
+            name: item.name,
+            image: item.image,
+            price: item.price,
+            quantity: item.qty,
+            qty: item.qty,
+            serialNumber: item.serialNumber,
+            serialType: item.serialType || 'Serial Number',
+            variant: item.variant
+        })) || [],
+        total: order.totalPrice,
+        payment: {
+            method: order.paymentMethod || 'COD',
+            status: getAdminPaymentStatus(order)
+        },
+        status: normalizedOrderStatus || 'Pending',
+        baseStatus: normalizedOrderStatus
+    };
+};
+
 const OrderList = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -24,22 +59,17 @@ const OrderList = () => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
-
-    // Server-side Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const itemsPerPage = 20;
-
     const [localOrders, setLocalOrders] = useState([]);
     const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
     const [bulkStatus, setBulkStatus] = useState('');
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
-
-    const normalizeOrderStatus = (status = '') => {
-        const value = String(status || '').trim();
-        if (value === 'Shipped') return 'Dispatched';
-        return value;
-    };
+    const [serialEditorOrderId, setSerialEditorOrderId] = useState('');
+    const [serialInputs, setSerialInputs] = useState({});
+    const [serialTypes, setSerialTypes] = useState({});
+    const [serialSavingOrderId, setSerialSavingOrderId] = useState('');
+    const itemsPerPage = 20;
 
     useEffect(() => {
         const fetchPaginatedOrders = async () => {
@@ -56,30 +86,6 @@ const OrderList = () => {
 
                 const { data } = await API.get('/orders', { params });
 
-                const transformOrder = (order) => {
-                    const normalizedOrderStatus = normalizeOrderStatus(order?.status);
-
-                    return {
-                        ...order,
-                        id: order._id,
-                        date: order.createdAt,
-                        items: order.orderItems?.map(item => ({
-                            id: item.product,
-                            name: item.name,
-                            image: item.image,
-                            price: item.price,
-                            quantity: item.qty
-                        })) || [],
-                        total: order.totalPrice,
-                        payment: {
-                            method: order.paymentMethod || 'COD',
-                            status: getAdminPaymentStatus(order)
-                        },
-                        status: normalizedOrderStatus || 'Pending',
-                        baseStatus: normalizedOrderStatus
-                    };
-                };
-
                 if (data.orders) {
                     setLocalOrders(data.orders.map((order) => transformOrder(order)));
                     setTotalPages(data.pages);
@@ -91,14 +97,11 @@ const OrderList = () => {
             }
         };
 
-        const timer = setTimeout(() => {
-            fetchPaginatedOrders();
-        }, 300); // Debounce search
-
+        const timer = setTimeout(fetchPaginatedOrders, 300);
         return () => clearTimeout(timer);
     }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
 
-    const filteredOrders = localOrders; // Now directly from server
+    const filteredOrders = localOrders;
     const selectedCount = selectedOrderIds.size;
     const allVisibleSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderIds.has(order.id));
     const someVisibleSelected = filteredOrders.some((order) => selectedOrderIds.has(order.id));
@@ -137,6 +140,62 @@ const OrderList = () => {
         }
     };
 
+    const resetSerialEditor = () => {
+        setSerialEditorOrderId('');
+        setSerialInputs({});
+        setSerialTypes({});
+    };
+
+    const handleOpenSerialEditor = (order) => {
+        if (serialEditorOrderId === order.id) {
+            resetSerialEditor();
+            return;
+        }
+
+        const nextInputs = {};
+        const nextTypes = {};
+
+        (order.items || []).forEach((item) => {
+            if (item.serialNumber) nextInputs[item._id] = item.serialNumber;
+            if (item.serialType) nextTypes[item._id] = item.serialType;
+        });
+
+        setSerialInputs(nextInputs);
+        setSerialTypes(nextTypes);
+        setSerialEditorOrderId(order.id);
+    };
+
+    const handleSerialSave = async (order) => {
+        const serialNumbers = (order.items || []).map((item) => ({
+            itemId: item._id,
+            serial: (serialInputs[item._id] !== undefined ? serialInputs[item._id] : item.serialNumber || '').trim(),
+            type: serialTypes[item._id] !== undefined ? serialTypes[item._id] : (item.serialType || 'Serial Number')
+        })).filter((item) => item.serial);
+
+        if (!serialNumbers.length) {
+            toast.error('Enter at least one Serial Number or IMEI before saving.');
+            return;
+        }
+
+        setSerialSavingOrderId(order.id);
+        try {
+            const { data } = await API.put(`/orders/${order.id}/status`, {
+                status: order.baseStatus || order.status,
+                serialNumbers
+            });
+
+            setLocalOrders((orders) => orders.map((entry) => (
+                entry.id === order.id ? transformOrder(data) : entry
+            )));
+            toast.success('Serial / IMEI saved successfully');
+            resetSerialEditor();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to save Serial / IMEI');
+        } finally {
+            setSerialSavingOrderId('');
+        }
+    };
+
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) {
             setCurrentPage(newPage);
@@ -147,11 +206,8 @@ const OrderList = () => {
     const handleToggleOrder = (orderId) => {
         setSelectedOrderIds((prev) => {
             const next = new Set(prev);
-            if (next.has(orderId)) {
-                next.delete(orderId);
-            } else {
-                next.add(orderId);
-            }
+            if (next.has(orderId)) next.delete(orderId);
+            else next.add(orderId);
             return next;
         });
     };
@@ -185,24 +241,12 @@ const OrderList = () => {
                 orderIds: Array.from(selectedOrderIds),
                 status: bulkStatus
             });
-            const updatedOrderById = new Map(
-                (data.updatedOrders || []).map((order) => [order._id, order])
-            );
+
+            const updatedOrderById = new Map((data.updatedOrders || []).map((order) => [order._id, order]));
 
             setLocalOrders((orders) => orders.map((order) => {
                 const updatedOrder = updatedOrderById.get(order.id);
-                if (!updatedOrder) return order;
-
-                const normalizedOrderStatus = normalizeOrderStatus(updatedOrder.status);
-                return {
-                    ...order,
-                    ...updatedOrder,
-                    id: updatedOrder._id,
-                    date: updatedOrder.createdAt,
-                    total: updatedOrder.totalPrice,
-                    status: normalizedOrderStatus,
-                    baseStatus: normalizedOrderStatus
-                };
+                return updatedOrder ? transformOrder(updatedOrder) : order;
             }));
             setSelectedOrderIds(new Set());
             setBulkStatus('');
@@ -231,7 +275,6 @@ const OrderList = () => {
                 </div>
             </div>
 
-            {/* Filters */}
             <div className="bg-white p-3 md:p-4 rounded-xl md:rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-between">
                 <div className="relative flex-1 w-full">
                     <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
@@ -302,7 +345,6 @@ const OrderList = () => {
                 </div>
             )}
 
-            {/* Orders Table */}
             {filteredOrders.length === 0 ? (
                 <div className="bg-white p-12 text-center rounded-3xl border border-dashed border-gray-200">
                     <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
@@ -314,107 +356,116 @@ const OrderList = () => {
                 <div className="space-y-4">
                     <div className="relative md:mx-0">
                         <AdminTable shellClassName="md:rounded-2xl border-y md:border" tableClassName="w-full min-w-max text-left border-collapse">
-                                    <AdminTableHead>
-                                        <AdminTableHeaderRow>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">
+                            <AdminTableHead>
+                                <AdminTableHeaderRow>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={allVisibleSelected}
+                                            ref={(input) => {
+                                                if (input) input.indeterminate = !allVisibleSelected && someVisibleSelected;
+                                            }}
+                                            onChange={handleToggleVisibleOrders}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                                            aria-label="Select all visible orders"
+                                        />
+                                    </AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Order ID & Date</AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Customer</AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Items & Price</AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Payment</AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Status</AdminTableHeaderCell>
+                                    <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
+                                </AdminTableHeaderRow>
+                            </AdminTableHead>
+                            <tbody className="divide-y divide-gray-200">
+                                {filteredOrders.map((order, index) => (
+                                    <React.Fragment key={order.id || `order-${index}`}>
+                                        <tr className="hover:bg-blue-50/10 transition-colors group">
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-4 text-center">
                                                 <input
                                                     type="checkbox"
-                                                    checked={allVisibleSelected}
-                                                    ref={(input) => {
-                                                        if (input) input.indeterminate = !allVisibleSelected && someVisibleSelected;
-                                                    }}
-                                                    onChange={handleToggleVisibleOrders}
+                                                    checked={selectedOrderIds.has(order.id)}
+                                                    onChange={() => handleToggleOrder(order.id)}
                                                     className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                                                    aria-label="Select all visible orders"
+                                                    aria-label={`Select order ${order.displayId || order.id}`}
                                                 />
-                                            </AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Order ID & Date</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal">Customer</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Items & Price</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Payment</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-center">Status</AdminTableHeaderCell>
-                                            <AdminTableHeaderCell className="whitespace-nowrap md:whitespace-normal text-right">Actions</AdminTableHeaderCell>
-                                        </AdminTableHeaderRow>
-                                    </AdminTableHead>
-                                    <tbody className="divide-y divide-gray-200">
-                                        {filteredOrders.map((order, index) => (
-                                            <tr key={order.id || `order-${index}`} className="hover:bg-blue-50/10 transition-colors group">
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-4 text-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedOrderIds.has(order.id)}
-                                                        onChange={() => handleToggleOrder(order.id)}
-                                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-                                                        aria-label={`Select order ${order.displayId || order.id}`}
-                                                    />
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-black text-gray-900 group-hover:text-blue-600 transition-colors">{order.displayId || order.id}</span>
-                                                        <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">
-                                                            {new Date(order.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-gray-900 group-hover:text-blue-600 transition-colors">{order.displayId || order.id}</span>
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                                                        {new Date(order.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
+                                                <div className="flex flex-col">
+                                                    {order.user?._id || order.user?.id ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => navigate(`/admin/users/${order.user?._id || order.user?.id}`)}
+                                                            className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline transition-colors text-left"
+                                                            title="Open customer profile"
+                                                        >
+                                                            {order.user?.name || order.shippingAddress?.name || 'Unknown'}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs font-bold text-gray-800">
+                                                            {order.user?.name || order.shippingAddress?.name || 'Unknown'}
                                                         </span>
-                                                    </div>
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-6 md:py-4">
-                                                    <div className="flex flex-col">
-                                                        {order.user?._id || order.user?.id ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => navigate(`/admin/users/${order.user?._id || order.user?.id}`)}
-                                                                className="text-xs font-bold text-blue-700 hover:text-blue-800 hover:underline transition-colors text-left"
-                                                                title="Open customer profile"
-                                                            >
-                                                                {order.user?.name || order.shippingAddress?.name || 'Unknown'}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-xs font-bold text-gray-800">
-                                                                {order.user?.name || order.shippingAddress?.name || 'Unknown'}
-                                                            </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
+                                                <div className="flex items-center justify-center gap-3">
+                                                    <div className="flex -space-x-2 overflow-hidden items-center">
+                                                        {(order.items || []).slice(0, 3).map((item, idx) => (
+                                                            <div key={idx} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 flex-shrink-0">
+                                                                <img src={item.image} alt={item.name} className="h-full w-full object-cover rounded-full" />
+                                                            </div>
+                                                        ))}
+                                                        {(order.items || []).length > 3 && (
+                                                            <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-500 z-10">
+                                                                +{(order.items || []).length - 3}
+                                                            </div>
                                                         )}
                                                     </div>
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
-                                                    <div className="flex items-center justify-center gap-3">
-                                                        {/* Product Thumbnails */}
-                                                        <div className="flex -space-x-2 overflow-hidden items-center">
-                                                            {(order.items || []).slice(0, 3).map((item, idx) => (
-                                                                <div key={idx} className="inline-block h-8 w-8 rounded-full ring-2 ring-white bg-gray-100 flex-shrink-0">
-                                                                    <img
-                                                                        src={item.image}
-                                                                        alt={item.name}
-                                                                        className="h-full w-full object-cover rounded-full"
-                                                                    />
-                                                                </div>
-                                                            ))}
-                                                            {(order.items || []).length > 3 && (
-                                                                <div className="h-8 w-8 rounded-full ring-2 ring-white bg-gray-50 flex items-center justify-center text-[9px] font-bold text-gray-500 z-10">
-                                                                    +{(order.items || []).length - 3}
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="flex flex-col text-left">
-                                                            <span className="text-[13px] font-black text-gray-900">₹{(order.total || 0).toLocaleString()}</span>
-                                                            <span className="text-[9px] font-bold text-gray-400 uppercase">{(order.items || []).length} {(order.items || []).length === 1 ? 'Item' : 'Items'}</span>
-                                                        </div>
+                                                    <div className="flex flex-col text-left">
+                                                        <span className="text-[13px] font-black text-gray-900">Rs.{(order.total || 0).toLocaleString()}</span>
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase">{(order.items || []).length} {(order.items || []).length === 1 ? 'Item' : 'Items'}</span>
                                                     </div>
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
-                                                    <div className="flex flex-col items-center gap-1">
-                                                        <span className="text-[10px] font-black text-gray-500 uppercase">{order.payment?.method || 'N/A'}</span>
-                                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getAdminPaymentStatusClass(order.payment?.status || 'Pending')}`}>
-                                                            {order.payment?.status || 'Pending'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
-                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(order.status)}`}>
-                                                        {getStatusIcon(order.status)}
-                                                        {order.status}
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="text-[10px] font-black text-gray-500 uppercase">{order.payment?.method || 'N/A'}</span>
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${getAdminPaymentStatusClass(order.payment?.status || 'Pending')}`}>
+                                                        {order.payment?.status || 'Pending'}
                                                     </span>
-                                                </td>
-                                                <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-right">
+                                                </div>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-center">
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter shadow-sm ${getStatusStyle(order.status)}`}>
+                                                    {getStatusIcon(order.status)}
+                                                    {order.status}
+                                                </span>
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-5 md:py-3 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {order.status !== 'Cancelled' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenSerialEditor(order)}
+                                                            className={`px-3 py-2 text-[10px] font-black uppercase rounded-lg border transition-colors ${
+                                                                serialEditorOrderId === order.id
+                                                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                                                                    : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50'
+                                                            }`}
+                                                        >
+                                                            {serialEditorOrderId === order.id ? 'Close' : 'Serial / IMEI'}
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => navigate(`/admin/orders/${order.id}`)}
                                                         className="w-7 h-7 md:w-10 md:h-10 inline-flex items-center justify-center bg-gray-50 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg md:rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-700"
@@ -422,20 +473,83 @@ const OrderList = () => {
                                                     >
                                                         <MdVisibility size={14} className="md:w-[16px] md:h-[16px]" />
                                                     </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {serialEditorOrderId === order.id && (
+                                            <tr className="bg-indigo-50/40">
+                                                <td colSpan={7} className="px-3 py-4 md:px-6 md:py-5">
+                                                    <div className="rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm">
+                                                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                                                            <div>
+                                                                <h3 className="text-sm font-black text-gray-900 uppercase tracking-wide">Update Serial / IMEI</h3>
+                                                                <p className="text-xs text-gray-500 font-medium">Save serial details for this order directly from the list page.</p>
+                                                            </div>
+                                                            <div className="text-xs font-bold text-gray-500 uppercase">{order.displayId || order.id}</div>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            {(order.items || []).map((item, itemIndex) => (
+                                                                <div key={item._id || itemIndex} className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_180px_minmax(0,1fr)] gap-3 rounded-xl border border-gray-100 p-3">
+                                                                    <div className="min-w-0">
+                                                                        <div className="text-sm font-black text-gray-900 line-clamp-2">{item.name}</div>
+                                                                        <div className="mt-1 text-[11px] font-bold text-gray-400 uppercase">Qty: {item.quantity}</div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1">Type</label>
+                                                                        <select
+                                                                            value={serialTypes[item._id] || item.serialType || 'Serial Number'}
+                                                                            onChange={(e) => setSerialTypes((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                                                                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-indigo-400 focus:bg-white"
+                                                                        >
+                                                                            <option value="Serial Number">Serial Number</option>
+                                                                            <option value="IMEI">IMEI</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-black text-gray-500 uppercase mb-1">Number</label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={serialInputs[item._id] !== undefined ? serialInputs[item._id] : (item.serialNumber || '')}
+                                                                            onChange={(e) => setSerialInputs((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                                                                            placeholder="Enter serial or IMEI"
+                                                                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono text-gray-900 outline-none focus:border-indigo-400 focus:bg-white"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                                                            <button
+                                                                type="button"
+                                                                onClick={resetSerialEditor}
+                                                                disabled={serialSavingOrderId === order.id}
+                                                                className="px-4 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-black uppercase hover:bg-gray-50 disabled:opacity-60"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleSerialSave(order)}
+                                                                disabled={serialSavingOrderId === order.id}
+                                                                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase hover:bg-indigo-700 disabled:bg-indigo-300"
+                                                            >
+                                                                {serialSavingOrderId === order.id ? 'Saving...' : 'Save Serial / IMEI'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        ))}
-                                    </tbody>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
                         </AdminTable>
 
-                        {/* Pagination */}
-                        {totalPages >= 1 && (
-                            <Pagination
-                                page={currentPage}
-                                pages={totalPages}
-                                changePage={handlePageChange}
-                            />
-                        )}
+                        <Pagination
+                            page={currentPage}
+                            pages={totalPages}
+                            changePage={handlePageChange}
+                        />
                     </div>
                 </div>
             )}
@@ -444,5 +558,3 @@ const OrderList = () => {
 };
 
 export default OrderList;
-
-
