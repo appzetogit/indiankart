@@ -1145,6 +1145,7 @@ export const updateOrderToDelivered = async (req, res) => {
 const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
     const nextStatus = String(status || '').trim();
     const fulfillmentMode = getFulfillmentMode(order);
+    const resolvedFulfillmentMode = fulfillmentMode === 'unassigned' ? 'manual' : fulfillmentMode;
 
     if (!nextStatus) {
         const error = new Error('Status is required');
@@ -1152,16 +1153,19 @@ const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
         throw error;
     }
 
-    if (fulfillmentMode === 'unassigned' && nextStatus !== 'Cancelled' && nextStatus !== String(order.status || '').trim()) {
-        const error = new Error('Assign this order to Delhivery, Ekart, or Manual before updating fulfillment.');
+    if (resolvedFulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(nextStatus)) {
+        const error = new Error('Invalid manual fulfillment status');
         error.statusCode = 400;
         throw error;
     }
 
-    if (fulfillmentMode === 'manual' && !MANUAL_TRACKING_STATUSES.has(nextStatus)) {
-        const error = new Error('Invalid manual fulfillment status');
-        error.statusCode = 400;
-        throw error;
+    if (fulfillmentMode === 'unassigned' && resolvedFulfillmentMode === 'manual') {
+        order.fulfillment = {
+            ...order.fulfillment,
+            mode: 'manual',
+            assignedAt: order.fulfillment?.assignedAt || new Date(),
+            assignedBy: order.fulfillment?.assignedBy || null
+        };
     }
 
     if (nextStatus === 'Cancelled') {
@@ -1171,11 +1175,11 @@ const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
             throw error;
         }
 
-        if (['delhivery', 'ekart'].includes(fulfillmentMode) && getProviderTrackingIdentifier(order, fulfillmentMode)) {
+        if (['delhivery', 'ekart'].includes(resolvedFulfillmentMode) && getProviderTrackingIdentifier(order, resolvedFulfillmentMode)) {
             try {
-                await cancelShipmentForProvider(order, fulfillmentMode);
+                await cancelShipmentForProvider(order, resolvedFulfillmentMode);
             } catch (error) {
-                setProviderCancellationError(order, fulfillmentMode, error.message || `Failed to cancel ${fulfillmentMode} shipment`);
+                setProviderCancellationError(order, resolvedFulfillmentMode, error.message || `Failed to cancel ${resolvedFulfillmentMode} shipment`);
                 await order.save();
                 error.statusCode = 400;
                 throw error;
@@ -1209,15 +1213,15 @@ const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
     }
 
     const shouldCreateProviderShipment =
-        ['delhivery', 'ekart'].includes(fulfillmentMode) &&
+        ['delhivery', 'ekart'].includes(resolvedFulfillmentMode) &&
         PROVIDER_SYNC_TRIGGER_STATUSES.has(nextStatus) &&
-        !getProviderTrackingIdentifier(order, fulfillmentMode);
+        !getProviderTrackingIdentifier(order, resolvedFulfillmentMode);
 
     if (shouldCreateProviderShipment) {
         try {
-            await createShipmentForProvider(order, fulfillmentMode);
+            await createShipmentForProvider(order, resolvedFulfillmentMode);
         } catch (error) {
-            setProviderCreationError(order, fulfillmentMode, error.message || `Failed to create ${fulfillmentMode} shipment`);
+            setProviderCreationError(order, resolvedFulfillmentMode, error.message || `Failed to create ${resolvedFulfillmentMode} shipment`);
             order.status = 'Pending';
             await order.save();
             error.statusCode = 400;

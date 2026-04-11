@@ -6,6 +6,7 @@ import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator from '../../components/orders/InvoiceGenerator';
 import API from '../../../../services/api';
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getTrackingIdentifierLabel, getShippingError, getShippingPickupLocation, getShippingSyncedAt, isCourierMode } from '../../../../utils/shippingProvider';
+import { getOrderedItemDisplayName, getVariantDetails } from '../../../../utils/orderItemDisplay';
 import { getAdminPaymentStatus, getAdminPaymentStatusClass } from '../../utils/paymentStatus';
 
 const formatTrackingDate = (value) => {
@@ -433,13 +434,26 @@ const OrderDetail = () => {
                             <h2 className="text-xs md:text-sm font-black text-gray-800 uppercase tracking-widest">Order Items ({order.items.length})</h2>
                         </div>
                         <div className="divide-y divide-gray-200">
-                            {order.items.map((item, idx) => (
+                            {order.items.map((item, idx) => {
+                                const orderedItemName = getOrderedItemDisplayName(item);
+                                const variantDetails = getVariantDetails(item.variant);
+
+                                return (
                                 <div key={idx} className="p-4 md:p-6 flex items-center gap-3 md:gap-6 hover:bg-gray-50/50 transition-colors">
                                     <div className="w-14 h-14 md:w-20 md:h-20 bg-gray-50 rounded-xl md:rounded-2xl border border-gray-100 p-2 overflow-hidden flex-shrink-0">
-                                        <img src={item.image} className="w-full h-full object-contain" alt={item.name} />
+                                        <img src={item.image} className="w-full h-full object-contain" alt={orderedItemName} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="text-sm font-black text-gray-800 group-hover:text-blue-600 transition-colors line-clamp-2" title={item.name}>{item.name}</h3>
+                                        <h3 className="text-sm font-black text-gray-800 group-hover:text-blue-600 transition-colors break-words" title={orderedItemName}>{orderedItemName}</h3>
+                                        {variantDetails.length > 0 && (
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {variantDetails.map((detail) => (
+                                                    <span key={detail} className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700 border border-blue-100">
+                                                        {detail}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="flex items-center gap-4 mt-2">
                                             <span className="text-[10px] font-black text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded">ID: {item.id}</span>
                                             <span className="text-[10px] font-black text-gray-400 uppercase">Quantity: {item.quantity}</span>
@@ -460,7 +474,8 @@ const OrderDetail = () => {
                                         <div className="text-[10px] font-bold text-gray-400 uppercase mt-1">₹{(item.price * item.quantity).toLocaleString()} Subtotal</div>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                         <div className="p-4 md:p-8 bg-gray-50/30 border-t border-gray-50 flex flex-col items-end gap-2 md:gap-3 text-right">
                             <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-[10px] md:text-xs font-bold text-gray-400 uppercase">
