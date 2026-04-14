@@ -4,6 +4,7 @@ const productSchema = mongoose.Schema({
     id: { type: Number, required: true, unique: true }, // Keeping manual ID for sync with frontend data logic (Date.now())
     name: { type: String, required: true },
     brand: { type: String },
+    subcategoryBrand: { type: String },
     price: { type: Number, required: true },
     originalPrice: { type: Number },
     discount: { type: String },

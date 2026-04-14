@@ -541,6 +541,7 @@ const ProductForm = () => {
         const data = new FormData();
         data.append('name', formData.name?.trim() || 'Untitled Product');
         data.append('brand', formData.brand);
+        data.append('subcategoryBrand', formData.subcategoryBrand || '');
         data.append('price', String(finalPrice));
         data.append('originalPrice', String(finalOriginalPrice));
 

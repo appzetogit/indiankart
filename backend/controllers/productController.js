@@ -39,7 +39,7 @@ const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
-    return 'id name brand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock maxOrderQuantity createdAt';
+    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock maxOrderQuantity createdAt';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -67,13 +67,22 @@ const normalizeViewState = (value = '') => {
     const trimmed = String(value || '').trim();
     if (!trimmed) return 'Unknown';
 
-    return trimmed
+    const normalized = trimmed
         .toLowerCase()
         .split(/\s+/)
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(' ');
+
+    const compact = normalized.toLowerCase().replace(/[^a-z]/g, '');
+    if (['unknown', 'na', 'none', 'null', 'undefined', 'notavailable'].includes(compact)) {
+        return 'Unknown';
+    }
+
+    return normalized;
 };
+
+const isUnknownViewState = (value = '') => normalizeViewState(value) === 'Unknown';
 
 const getSortedStateBreakdown = (entries = []) => (
     (Array.isArray(entries) ? entries : [])
@@ -82,7 +91,16 @@ const getSortedStateBreakdown = (entries = []) => (
             count: Number(entry?.count || 0)
         }))
         .filter((entry) => entry.count > 0)
-        .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state))
+        .sort((a, b) => {
+            const aUnknown = isUnknownViewState(a.state) ? 1 : 0;
+            const bUnknown = isUnknownViewState(b.state) ? 1 : 0;
+            if (aUnknown !== bUnknown) return aUnknown - bUnknown;
+            return b.count - a.count || a.state.localeCompare(b.state);
+        })
+);
+
+const pickTopViewState = (stateBreakdown = []) => (
+    stateBreakdown.find((entry) => !isUnknownViewState(entry?.state)) || stateBreakdown[0] || null
 );
 
 // @desc    Fetch all products
@@ -162,6 +180,7 @@ export const getProducts = async (req, res) => {
                                 { 'subCategory._id': subCat._id },
                                 { tags: subRegex },
                                 { brand: subRegex },
+                                { subcategoryBrand: subRegex },
                                 { name: nameRegex }
                             ]
                         }
@@ -174,6 +193,7 @@ export const getProducts = async (req, res) => {
                             $or: [
                                 { tags: subRegex },
                                 { brand: subRegex },
+                                { subcategoryBrand: subRegex },
                                 { name: nameRegex }
                             ]
                         }
@@ -451,6 +471,7 @@ export const createProduct = async (req, res) => {
             id: body.id || Date.now(),
             name: body.name,
             brand: body.brand,
+            subcategoryBrand: String(body.subcategoryBrand || '').trim(),
             price: derivedSkuValues ? derivedSkuValues.price : Number(body.price),
             originalPrice: derivedSkuValues ? derivedSkuValues.originalPrice : Number(body.originalPrice),
             discount: body.discount,
@@ -669,6 +690,9 @@ export const updateProduct = async (req, res) => {
             if (updateData.b2bEnabled !== undefined) {
                 updateData.b2bEnabled = String(updateData.b2bEnabled).toLowerCase() === 'true';
             }
+            if (updateData.subcategoryBrand !== undefined) {
+                updateData.subcategoryBrand = String(updateData.subcategoryBrand || '').trim();
+            }
 
             // Fix: Cast categoryId to Number safely
             if (updateData.categoryId !== undefined) {
@@ -835,7 +859,7 @@ export const incrementProductView = async (req, res) => {
         await product.save();
 
         const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
-        const topState = stateBreakdown[0] || null;
+        const topState = pickTopViewState(stateBreakdown);
 
         res.json({
             id: product.id,
@@ -860,11 +884,12 @@ export const getProductViewInsights = async (req, res) => {
         }
 
         const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
-        const topState = stateBreakdown[0]
+        const preferredTopState = pickTopViewState(stateBreakdown);
+        const topState = preferredTopState
             ? {
-                ...stateBreakdown[0],
+                ...preferredTopState,
                 share: product.viewCount > 0
-                    ? Number(((stateBreakdown[0].count / Number(product.viewCount || 0)) * 100).toFixed(1))
+                    ? Number(((preferredTopState.count / Number(product.viewCount || 0)) * 100).toFixed(1))
                     : 0
             }
             : null;

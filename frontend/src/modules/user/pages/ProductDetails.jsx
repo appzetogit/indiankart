@@ -87,7 +87,7 @@ const TranslatedText = ({ text }) => {
 const ProductDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { user, isAuthenticated } = useAuthStore();
+    const { user, isAuthenticated, loading: authLoading } = useAuthStore();
     const { addToCart, wishlist, toggleWishlist, addresses } = useCartStore();
 
     // Fetch individual product
@@ -451,25 +451,92 @@ const ProductDetails = () => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [bankOffers, setBankOffers] = useState([]);
     const [razorpayEnabled, setRazorpayEnabled] = useState(false);
+    const [pincodeDerivedState, setPincodeDerivedState] = useState('');
+
+    useEffect(() => {
+        let active = true;
+
+        const resolveStateFromPincode = async () => {
+            const normalizedPincode = String(pincode || '').trim();
+            if (!/^\d{6}$/.test(normalizedPincode)) {
+                setPincodeDerivedState('');
+                return;
+            }
+
+            const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+            if (!apiKey) {
+                setPincodeDerivedState('');
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `https://maps.googleapis.com/maps/api/geocode/json?address=${normalizedPincode}&components=country:IN&key=${apiKey}`
+                );
+                const data = await response.json();
+                if (!active) return;
+
+                const components = Array.isArray(data?.results?.[0]?.address_components)
+                    ? data.results[0].address_components
+                    : [];
+                const stateComponent = components.find((component) =>
+                    Array.isArray(component?.types) && component.types.includes('administrative_area_level_1')
+                );
+                setPincodeDerivedState(String(stateComponent?.long_name || '').trim());
+            } catch {
+                if (!active) return;
+                setPincodeDerivedState('');
+            }
+        };
+
+        resolveStateFromPincode();
+        return () => {
+            active = false;
+        };
+    }, [pincode]);
+
+    const hasAddressContext = React.useMemo(() => {
+        const addressPool = [
+            ...(Array.isArray(addresses) ? addresses : []),
+            ...(Array.isArray(user?.addresses) ? user.addresses : [])
+        ];
+        return addressPool.length > 0;
+    }, [addresses, user]);
 
     const bestKnownState = React.useMemo(() => {
         const addressPool = [
             ...(Array.isArray(addresses) ? addresses : []),
             ...(Array.isArray(user?.addresses) ? user.addresses : [])
         ];
+        const cachedState = typeof window !== 'undefined'
+            ? String(localStorage.getItem('ik-last-known-state') || '').trim()
+            : '';
 
         const defaultAddress = addressPool.find((address) => address?.isDefault && String(address?.state || '').trim());
         const firstAddressWithState = addressPool.find((address) => String(address?.state || '').trim());
 
-        return String(defaultAddress?.state || firstAddressWithState?.state || '').trim() || 'Unknown';
-    }, [addresses, user]);
+        return String(
+            defaultAddress?.state ||
+            firstAddressWithState?.state ||
+            pincodeDerivedState ||
+            cachedState ||
+            ''
+        ).trim() || 'Unknown';
+    }, [addresses, user, pincodeDerivedState]);
+
+    useEffect(() => {
+        if (bestKnownState && bestKnownState !== 'Unknown') {
+            localStorage.setItem('ik-last-known-state', bestKnownState);
+        }
+    }, [bestKnownState]);
 
     useEffect(() => {
         setCurrentImageIndex(0);
     }, [id]);
 
     useEffect(() => {
-        if (!id || !product) return;
+        if (!id || !product || authLoading) return;
+        if (isAuthenticated && hasAddressContext && bestKnownState === 'Unknown') return;
 
         const sessionKey = `ik-product-viewed:${id}`;
         if (sessionStorage.getItem(sessionKey)) return;
@@ -479,9 +546,10 @@ const ProductDetails = () => {
         let active = true;
         const trackView = async () => {
             try {
-                await API.post(`/products/${id}/view`, {
-                    state: bestKnownState
-                });
+                const payload = bestKnownState && bestKnownState !== 'Unknown'
+                    ? { state: bestKnownState }
+                    : {};
+                await API.post(`/products/${id}/view`, payload);
                 if (active) sessionStorage.setItem(sessionKey, '1');
             } catch (error) {
                 sessionStorage.removeItem(sessionKey);
@@ -494,7 +562,7 @@ const ProductDetails = () => {
         return () => {
             active = false;
         };
-    }, [id, product, bestKnownState]);
+    }, [id, product, bestKnownState, authLoading, isAuthenticated, hasAddressContext]);
 
     useEffect(() => {
         if (currentImageIndex >= productImages.length) {

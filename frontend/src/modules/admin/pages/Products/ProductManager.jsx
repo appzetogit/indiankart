@@ -277,6 +277,7 @@ const ProductManager = () => {
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest">Product Details</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Category</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Subcategory</th>
+                                        <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Brand</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Stock Status</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-center">Max Qty</th>
                                         <th className="whitespace-nowrap md:whitespace-normal px-2 py-2 md:px-4 md:py-3 text-[10px] md:text-xs font-black text-white uppercase tracking-widest text-right">Actions</th>
@@ -323,6 +324,15 @@ const ProductManager = () => {
                                                 {getSubCategoryLabel(product) ? (
                                                     <span className="inline-block px-2.5 py-1 rounded-full bg-gray-100 text-[9px] font-bold text-gray-500 uppercase">
                                                         {getSubCategoryLabel(product)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">N/A</span>
+                                                )}
+                                            </td>
+                                            <td className="whitespace-nowrap md:whitespace-normal px-2 py-1.5 md:px-4 md:py-2.5 text-center">
+                                                {String(product.subcategoryBrand || '').trim() ? (
+                                                    <span className="inline-block px-2.5 py-1 rounded-full bg-blue-50 text-[9px] font-bold text-blue-600 uppercase">
+                                                        {product.subcategoryBrand}
                                                     </span>
                                                 ) : (
                                                     <span className="text-[10px] font-bold text-gray-400 uppercase">N/A</span>
