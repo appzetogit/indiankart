@@ -31,6 +31,7 @@ const settingSchema = mongoose.Schema({
     ekartTrackingPath: { type: String, default: '/api/v1/shipments/tracking' },
     ekartCancelPath: { type: String, default: '/api/v1/shipments/cancel' },
     categoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    subCategoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
 }, {
     timestamps: true,
 });
