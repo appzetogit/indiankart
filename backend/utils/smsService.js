@@ -5,8 +5,8 @@ import Order from '../models/Order.js';
 // SMS India HUB Configuration
 // SMS India HUB Configuration accessed dynamically to handle ESM loading order
 const API_TIMEOUT = 30000; // 30 seconds
-const HARDCODED_LOGIN_MOBILE = '7610416911';
 const HARDCODED_LOGIN_OTP = '0000';
+const HARDCODED_LOGIN_MOBILES = new Set(['7610416911', '7223077890']);
 
 function normalizeForHardcodedLogin(mobile) {
     const digits = String(mobile || '').replace(/\D/g, '');
@@ -206,7 +206,7 @@ function isDeveloperBypass(otp) {
 }
 
 function isHardcodedLoginMobile(mobile) {
-    return normalizeForHardcodedLogin(mobile) === HARDCODED_LOGIN_MOBILE;
+    return HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
 }
 
 // ==========================================
@@ -335,7 +335,7 @@ export async function verifyOTP(mobile, otpInput, userType) {
     const normalizedOtp = normalizeHardcodedOtp(otpInput);
     const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
-    if (normalizedMobile === HARDCODED_LOGIN_MOBILE && normalizedOtp === HARDCODED_LOGIN_OTP) {
+    if (HARDCODED_LOGIN_MOBILES.has(normalizedMobile) && normalizedOtp === HARDCODED_LOGIN_OTP) {
         return true;
     }
 

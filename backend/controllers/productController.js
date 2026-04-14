@@ -63,6 +63,28 @@ const normalizeMaxOrderQuantity = (value) => {
     return Math.floor(parsed);
 };
 
+const normalizeViewState = (value = '') => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return 'Unknown';
+
+    return trimmed
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+};
+
+const getSortedStateBreakdown = (entries = []) => (
+    (Array.isArray(entries) ? entries : [])
+        .map((entry) => ({
+            state: String(entry?.state || '').trim() || 'Unknown',
+            count: Number(entry?.count || 0)
+        }))
+        .filter((entry) => entry.count > 0)
+        .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state))
+);
+
 // @desc    Fetch all products
 // @route   GET /api/products
 // @access  Public
@@ -790,22 +812,71 @@ export const updateProductStock = async (req, res) => {
 // @access  Public
 export const incrementProductView = async (req, res) => {
     try {
-        const product = await Product.findOneAndUpdate(
-            { id: req.params.id },
-            { $inc: { viewCount: 1 } },
-            { new: true, select: 'id viewCount name' }
-        );
+        const product = await Product.findOne({ id: req.params.id });
 
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
         }
 
+        const normalizedState = normalizeViewState(req.body?.state);
+        const existingStateEntry = Array.isArray(product.viewStatsByState)
+            ? product.viewStatsByState.find((entry) => normalizeViewState(entry?.state) === normalizedState)
+            : null;
+
+        product.viewCount = Number(product.viewCount || 0) + 1;
+
+        if (existingStateEntry) {
+            existingStateEntry.count = Number(existingStateEntry.count || 0) + 1;
+            existingStateEntry.state = normalizedState;
+        } else {
+            product.viewStatsByState.push({ state: normalizedState, count: 1 });
+        }
+
+        await product.save();
+
+        const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
+        const topState = stateBreakdown[0] || null;
+
         res.json({
             id: product.id,
             name: product.name,
-            viewCount: product.viewCount
+            viewCount: product.viewCount,
+            topState
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get product view insights by state
+// @route   GET /api/products/:id/view-insights
+// @access  Private/Admin
+export const getProductViewInsights = async (req, res) => {
+    try {
+        const product = await Product.findOne({ id: req.params.id }).select('id name viewCount viewStatsByState');
+
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+
+        const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
+        const topState = stateBreakdown[0]
+            ? {
+                ...stateBreakdown[0],
+                share: product.viewCount > 0
+                    ? Number(((stateBreakdown[0].count / Number(product.viewCount || 0)) * 100).toFixed(1))
+                    : 0
+            }
+            : null;
+
+        return res.json({
+            id: product.id,
+            name: product.name,
+            viewCount: Number(product.viewCount || 0),
+            topState,
+            stateBreakdown
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };

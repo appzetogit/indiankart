@@ -11,6 +11,7 @@ import {
     deleteUser,
     updateUser,
     updateUserProfile,
+    deleteCurrentUserProfile,
     toggleUserStatus,
     getUserAddresses,
     addUserAddress,
@@ -173,7 +174,8 @@ router.post('/fcm-token/app', protect, async (req, res) => saveFcmToken(req, res
 
 router.route('/profile')
     .get(protect, getUserProfile)
-    .put(protect, updateUserProfile);
+    .put(protect, updateUserProfile)
+    .delete(protect, deleteCurrentUserProfile);
 
 router.route('/profile/addresses')
     .get(protect, getUserAddresses)

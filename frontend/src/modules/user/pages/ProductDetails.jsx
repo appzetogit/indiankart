@@ -452,6 +452,18 @@ const ProductDetails = () => {
     const [bankOffers, setBankOffers] = useState([]);
     const [razorpayEnabled, setRazorpayEnabled] = useState(false);
 
+    const bestKnownState = React.useMemo(() => {
+        const addressPool = [
+            ...(Array.isArray(addresses) ? addresses : []),
+            ...(Array.isArray(user?.addresses) ? user.addresses : [])
+        ];
+
+        const defaultAddress = addressPool.find((address) => address?.isDefault && String(address?.state || '').trim());
+        const firstAddressWithState = addressPool.find((address) => String(address?.state || '').trim());
+
+        return String(defaultAddress?.state || firstAddressWithState?.state || '').trim() || 'Unknown';
+    }, [addresses, user]);
+
     useEffect(() => {
         setCurrentImageIndex(0);
     }, [id]);
@@ -467,7 +479,9 @@ const ProductDetails = () => {
         let active = true;
         const trackView = async () => {
             try {
-                await API.post(`/products/${id}/view`);
+                await API.post(`/products/${id}/view`, {
+                    state: bestKnownState
+                });
                 if (active) sessionStorage.setItem(sessionKey, '1');
             } catch (error) {
                 sessionStorage.removeItem(sessionKey);
@@ -480,7 +494,7 @@ const ProductDetails = () => {
         return () => {
             active = false;
         };
-    }, [id, product]);
+    }, [id, product, bestKnownState]);
 
     useEffect(() => {
         if (currentImageIndex >= productImages.length) {

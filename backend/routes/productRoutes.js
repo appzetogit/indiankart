@@ -7,7 +7,8 @@ import {
     updateProduct, 
     deleteProduct,
     updateProductStock,
-    incrementProductView
+    incrementProductView,
+    getProductViewInsights
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
@@ -32,6 +33,9 @@ router.route('/:id')
 
 router.route('/:id/stock')
     .put(protect, admin, updateProductStock);
+
+router.route('/:id/view-insights')
+    .get(protect, admin, getProductViewInsights);
 
 router.route('/:id/view')
     .post(incrementProductView);

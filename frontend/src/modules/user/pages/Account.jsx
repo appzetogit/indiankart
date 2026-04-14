@@ -4,7 +4,7 @@ import {
     MdPerson, MdInventory2, MdLocationOn,
     MdFavoriteBorder,
     MdDescription, MdSupportAgent,
-    MdPowerSettingsNew, MdChevronRight, MdArrowBack
+    MdPowerSettingsNew, MdChevronRight, MdArrowBack, MdDeleteForever
 } from 'react-icons/md';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -13,7 +13,7 @@ import toast from 'react-hot-toast';
 
 const Account = () => {
     const navigate = useNavigate();
-    const { user, updateProfile, logout } = useAuthStore();
+    const { user, updateProfile, logout, deleteAccount } = useAuthStore();
     const { pages, fetchPages } = useContentStore();
     const [isEditing, setIsEditing] = useState(false);
 
@@ -91,6 +91,26 @@ const Account = () => {
         setPasswordData({ newPassword: '', confirmPassword: '' });
         if (currentUser) {
             setFormData(mapProfileToFormData(currentUser));
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        const confirmed = window.confirm('Are you sure you want to delete your account? This action cannot be undone.');
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            await toast.promise(deleteAccount(), {
+                loading: 'Deleting account...',
+                success: 'Account deleted successfully',
+                error: (error) => error?.response?.data?.message || error?.message || 'Failed to delete account'
+            });
+
+            navigate('/', { replace: true });
+        } catch (error) {
+            console.error('Error deleting account:', error);
         }
     };
 
@@ -292,6 +312,13 @@ const Account = () => {
                     {/* Logout (Mobile) - Red Background as requested */}
                     <div className="p-4 border-t border-gray-100">
                         <button
+                            onClick={handleDeleteAccount}
+                            className="mb-3 w-full flex items-center justify-center gap-2 py-3 bg-red-600 text-white font-medium text-sm hover:bg-red-700 rounded-md transition-colors"
+                        >
+                            <MdDeleteForever size={20} />
+                            <span>Delete Account</span>
+                        </button>
+                        <button
                             onClick={() => {
                                 logout();
                                 navigate('/');
@@ -415,6 +442,14 @@ const Account = () => {
                                 </div>
                             </div>
                         )}
+
+                        <button
+                            onClick={handleDeleteAccount}
+                            className="mt-2 w-full flex items-center justify-center gap-2 py-3 bg-red-600 text-white font-medium text-sm hover:bg-red-700 rounded-lg transition-colors"
+                        >
+                            <MdDeleteForever size={20} />
+                            <span>Delete Account</span>
+                        </button>
 
                         <button
                             onClick={() => {

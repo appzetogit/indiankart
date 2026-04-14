@@ -2,8 +2,14 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Admin from '../models/Admin.js';
 
-const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
-const HARDCODED_LOGIN_MOBILE = '7610416911';
+const HARDCODED_LOGIN_USERS = {
+    '000000000000000000000001': {
+        phone: '7610416911'
+    },
+    '000000000000000000000002': {
+        phone: '7223077890'
+    }
+};
 
 export const protect = async (req, res, next) => {
     let token;
@@ -32,12 +38,13 @@ export const protect = async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
             console.log('Decoded Token:', decoded);
 
-            if (decoded.id === HARDCODED_BYPASS_USER_ID) {
+            if (HARDCODED_LOGIN_USERS[decoded.id]) {
+                const hardcodedUser = HARDCODED_LOGIN_USERS[decoded.id];
                 req.user = {
-                    _id: HARDCODED_BYPASS_USER_ID,
+                    _id: decoded.id,
                     name: 'Test User',
-                    email: `${HARDCODED_LOGIN_MOBILE}@temp.local`,
-                    phone: HARDCODED_LOGIN_MOBILE,
+                    email: `${hardcodedUser.phone}@temp.local`,
+                    phone: hardcodedUser.phone,
                     gender: 'male',
                     isAdmin: false,
                     role: 'user'

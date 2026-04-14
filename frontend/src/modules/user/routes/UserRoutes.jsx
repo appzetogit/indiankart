@@ -28,6 +28,8 @@ import OfferPage from '../pages/OfferPage';
 import BecomeSeller from '../pages/BecomeSeller';
 import DelhiveryRedirect from '../pages/DelhiveryRedirect';
 import ShippingRedirect from '../pages/ShippingRedirect';
+import SupportPage from '../pages/SupportPage';
+import PrivacyPolicyPage from '../pages/PrivacyPolicyPage';
 
 const UserRoutes = () => {
     return (
@@ -43,6 +45,8 @@ const UserRoutes = () => {
                 <Route path="select-language" element={<SelectLanguage />} />
                 <Route path="notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
                 <Route path="help-center" element={<HelpCenter />} />
+                <Route path="support" element={<SupportPage />} />
+                <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="cart" element={<Cart />} />
                 <Route path="wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
                 <Route path="checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />

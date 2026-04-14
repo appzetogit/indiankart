@@ -6,8 +6,8 @@ import toast from 'react-hot-toast';
 
 const Login = () => {
     const RESEND_COOLDOWN_SECONDS = 60;
-    const HARDCODED_LOGIN_MOBILE = '7610416911';
     const HARDCODED_LOGIN_OTP = '0000';
+    const HARDCODED_LOGIN_MOBILES = new Set(['7610416911', '7223077890']);
     const normalizeForHardcodedLogin = (value) => {
         const digits = String(value || '').replace(/\D/g, '');
         return digits.length > 10 ? digits.slice(-10) : digits;
@@ -54,7 +54,7 @@ const Login = () => {
             setStep(2);
             setResendCooldown(RESEND_COOLDOWN_SECONDS);
 
-            if (normalizedMobile === HARDCODED_LOGIN_MOBILE) {
+            if (HARDCODED_LOGIN_MOBILES.has(normalizedMobile)) {
                 toast.success(`Use OTP ${HARDCODED_LOGIN_OTP}`);
             } else {
                 toast.success('OTP sent successfully');

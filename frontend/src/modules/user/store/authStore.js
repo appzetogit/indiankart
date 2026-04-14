@@ -153,6 +153,22 @@ export const useAuthStore = create(
             localStorage.removeItem('user-auth-storage');
         }
     },
+
+    deleteAccount: async () => {
+        set({ error: null });
+        try {
+            await API.delete('/auth/profile');
+            setUserTokenCache(null);
+            set({ user: null, isAuthenticated: false });
+            localStorage.removeItem('user-auth-storage');
+            useCartStore.getState().clearStore();
+        } catch (error) {
+            set({
+                error: error.response?.data?.message || 'Delete account failed'
+            });
+            throw error;
+        }
+    },
     
     // Update Profile
     updateProfile: async (profileData) => {

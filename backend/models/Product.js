@@ -10,6 +10,10 @@ const productSchema = mongoose.Schema({
     rating: { type: Number, default: 5, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
     viewCount: { type: Number, default: 0, min: 0 },
+    viewStatsByState: [{
+        state: { type: String, trim: true },
+        count: { type: Number, default: 0, min: 0 }
+    }],
     image: { type: String }, // Primary image
     images: [{ type: String }], // Gallery images
     category: { type: String, required: true }, // Main category name (Legacy/Display)

@@ -5,9 +5,17 @@ import jwt from 'jsonwebtoken';
 import { sendOTP, verifyOTP } from '../utils/smsService.js';
 import generateToken from '../utils/generateToken.js';
 
-const HARDCODED_LOGIN_MOBILE = '7610416911';
 const HARDCODED_LOGIN_OTP = '0000';
-const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
+const HARDCODED_LOGIN_USERS = {
+    '7610416911': {
+        id: '000000000000000000000001',
+        phone: '7610416911'
+    },
+    '7223077890': {
+        id: '000000000000000000000002',
+        phone: '7223077890'
+    }
+};
 
 const normalizeForHardcodedLogin = (mobile) => {
     const digits = String(mobile || '').replace(/\D/g, '');
@@ -69,18 +77,19 @@ export const verifyLoginOtp = async (req, res) => {
     try {
         const normalizedMobile = normalizeForHardcodedLogin(mobile);
         const normalizedOtp = normalizeHardcodedOtp(otp);
+        const hardcodedUser = HARDCODED_LOGIN_USERS[normalizedMobile];
 
-        if (normalizedMobile === HARDCODED_LOGIN_MOBILE) {
+        if (hardcodedUser) {
             if (normalizedOtp !== HARDCODED_LOGIN_OTP) {
                 return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
             }
 
-            const token = generateToken(res, HARDCODED_BYPASS_USER_ID, 'user_jwt');
+            const token = generateToken(res, hardcodedUser.id, 'user_jwt');
             return res.json({
-                _id: HARDCODED_BYPASS_USER_ID,
+                _id: hardcodedUser.id,
                 name: name || 'Test User',
-                email: email || `${HARDCODED_LOGIN_MOBILE}@temp.local`,
-                phone: HARDCODED_LOGIN_MOBILE,
+                email: email || `${hardcodedUser.phone}@temp.local`,
+                phone: hardcodedUser.phone,
                 gender: 'male',
                 addresses: [],
                 isNewUser: false,
@@ -208,6 +217,36 @@ export const getUserProfile = async (req, res) => {
         addresses: mapUserAddresses(req.user.addresses)
     };
     res.status(200).json(user);
+};
+
+// @desc    Delete current user profile
+// @route   DELETE /api/auth/profile
+// @access  Private
+export const deleteCurrentUserProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        await user.deleteOne();
+
+        const cookieOptions = {
+            httpOnly: true,
+            expires: new Date(0),
+            secure: process.env.NODE_ENV !== 'development',
+            sameSite: process.env.NODE_ENV === 'development' ? 'lax' : 'none'
+        };
+
+        res.cookie('user_jwt', '', cookieOptions);
+        res.cookie('jwt', '', cookieOptions);
+
+        return res.json({ message: 'Account deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting user profile:', error);
+        return res.status(500).json({ message: error.message });
+    }
 };
 
 // @desc    Update user profile
