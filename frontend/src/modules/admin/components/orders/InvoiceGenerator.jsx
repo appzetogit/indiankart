@@ -17,6 +17,14 @@ const normalizeOrderStatus = (status = "") => {
   return value;
 };
 
+const getInvoicePaymentMode = (order) => {
+  const normalizedPaymentMethod = String(order?.payment?.method || order?.paymentMethod || "")
+    .trim()
+    .toUpperCase();
+
+  return normalizedPaymentMethod === "COD" ? "COD" : "PREPAID";
+};
+
 const BarcodeSvg = ({ value, height = 118 }) => {
   const svgRef = useRef(null);
 
@@ -218,6 +226,7 @@ export const InvoiceDisplay = React.forwardRef(
     const orderGrandTotal = toNumber(order?.totalPrice ?? order?.total ?? order?.itemsPrice ?? subtotal);
     const totalAmount = (item ? subtotal : orderGrandTotal) + handlingFee;
     const printedAt = new Date();
+    const invoicePaymentMode = getInvoicePaymentMode(order);
 
     return (
       <div ref={ref} className="invoice-root">
@@ -423,7 +432,7 @@ export const InvoiceDisplay = React.forwardRef(
                 </th>
                 <th style={{ width: "100px" }}>
                   <div style={{ fontSize: "8px" }}>↑SURFACE</div>
-                  <div style={{ fontSize: "10px", fontWeight: "bold" }}>PREPAID</div>
+                  <div style={{ fontSize: "10px", fontWeight: "bold" }}>{invoicePaymentMode}</div>
                 </th>
                 <th style={{ width: "30px", fontSize: "18px", textAlign: "center" }}>E</th>
               </tr>
