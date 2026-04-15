@@ -391,52 +391,37 @@ const ProductDetails = () => {
 
     const handleShare = async () => {
         const shareTitle = product?.name || 'Product Details';
-        const shareText = `Explore this ${product?.name} on Indian Kart!`;
         const shareUrl = window.location.href;
-
-        const shareData = {
-            title: shareTitle,
-            text: shareText,
-            url: shareUrl,
-        };
+        
+        // Format text like professional apps (e.g. Flipkart)
+        // We include the URL in the text for maximum compatibility across apps
+        const shareText = `Check out this ${product?.name} at ₹${selectedPrice?.toLocaleString()} on Indian Kart!\n\n${shareUrl}`;
 
         if (navigator.share) {
             try {
-                // Enhanced sharing: Try to include the image if supported
-                if (product?.image && navigator.canShare && navigator.canShare({ files: [new File([], 'test.jpg', { type: 'image/jpeg' })] })) {
-                    try {
-                        const response = await fetch(product.image);
-                        const blob = await response.blob();
-                        const file = new File([blob], 'product-image.jpg', { type: blob.type });
-
-                        if (navigator.canShare({ files: [file] })) {
-                            await navigator.share({
-                                ...shareData,
-                                files: [file]
-                            });
-                            return;
-                        }
-                    } catch (imageErr) {
-                        console.error('Error fetching image for share:', imageErr);
-                        // Fallback to standard share below
-                    }
-                }
-
-                await navigator.share(shareData);
+                await navigator.share({
+                    title: shareTitle,
+                    text: shareText
+                    // Removed 'url: shareUrl' to prevent duplication in some browsers/OS
+                });
             } catch (err) {
                 if (err.name !== 'AbortError') {
                     console.error('Error sharing:', err);
+                    handleCopyToClipboard(shareText);
                 }
             }
         } else {
-            // Fallback: Copy to clipboard
-            try {
-                await navigator.clipboard.writeText(shareUrl);
-                toast.success('Link copied to clipboard!');
-            } catch (err) {
-                console.error('Error copying to clipboard:', err);
-                toast.error('Failed to copy link');
-            }
+            handleCopyToClipboard(shareText);
+        }
+    };
+
+    const handleCopyToClipboard = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Link copied to clipboard!');
+        } catch (err) {
+            console.error('Error copying to clipboard:', err);
+            toast.error('Failed to copy link');
         }
     };
     const [reviews, setReviews] = useState([]);
