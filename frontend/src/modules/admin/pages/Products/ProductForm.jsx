@@ -4,6 +4,7 @@ import { MdClose, MdAdd, MdDelete, MdImage, MdExpandMore, MdExpandLess, MdArrowB
 import useProductStore from '../../store/productStore';
 import useCategoryStore from '../../store/categoryStore';
 import useSubCategoryStore from '../../store/subCategoryStore';
+import useBrandStore from '../../store/brandStore';
 import RichTextEditor from '../../components/RichTextEditor';
 import toast from 'react-hot-toast';
 
@@ -13,14 +14,16 @@ const ProductForm = () => {
     const { addProduct, updateProduct, products, fetchProduct, isLoading } = useProductStore();
     const { categories, fetchCategories } = useCategoryStore();
     const { subCategories, fetchSubCategories } = useSubCategoryStore();
+    const { brands, fetchBrands } = useBrandStore();
 
     useEffect(() => {
         if (categories.length === 0) fetchCategories();
         if (subCategories.length === 0) fetchSubCategories();
+        if (brands.length === 0) fetchBrands();
         if (id) {
             fetchProduct(id);
         }
-    }, [id, fetchProduct, fetchCategories, categories.length, fetchSubCategories, subCategories.length]);
+    }, [id, fetchProduct, fetchCategories, categories.length, fetchSubCategories, subCategories.length, fetchBrands, brands.length]);
 
     // Fetch product if editing
     const product = id ? products.find(p => p.id === parseInt(id)) : null;
@@ -45,6 +48,7 @@ const ProductForm = () => {
         thumbnail: null, // { type: 'url'|'file', content: string|File, preview: string }
         galleryImages: [], // Array of image objects
         brand: '',
+        subcategoryBrand: '',
         name: '',
         categoryPath: [],
         price: '',
@@ -89,6 +93,33 @@ const ProductForm = () => {
             return String(subCategoryId) === String(primaryCat._id);
         });
     }, [categories, subCategories, formData.categoryPath]);
+
+    const availableBrands = React.useMemo(() => {
+        const selectedSubCategoryIds = new Set((formData.subCategories || []).map((id) => String(id)));
+        if (selectedSubCategoryIds.size === 0) return [];
+
+        return (brands || [])
+            .filter((brand) => {
+                const brandSubId = String(brand?.subcategory?._id || brand?.subcategory || '');
+                return selectedSubCategoryIds.has(brandSubId);
+            })
+            .sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
+    }, [brands, formData.subCategories]);
+
+    const brandOptions = React.useMemo(() => {
+        const seen = new Set();
+        const base = [];
+
+        for (const brand of availableBrands) {
+            const name = String(brand?.name || '').trim();
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            base.push(name);
+        }
+        return base;
+    }, [availableBrands]);
 
     // Populate form if editing
     useEffect(() => {
@@ -510,6 +541,7 @@ const ProductForm = () => {
         const data = new FormData();
         data.append('name', formData.name?.trim() || 'Untitled Product');
         data.append('brand', formData.brand);
+        data.append('subcategoryBrand', formData.subcategoryBrand || '');
         data.append('price', String(finalPrice));
         data.append('originalPrice', String(finalOriginalPrice));
 
@@ -917,6 +949,7 @@ const ProductForm = () => {
                                                 ...prev,
                                                 categoryPath: val ? [val] : [],
                                                 subCategories: [], // Reset subcategories
+                                                subcategoryBrand: '',
                                                 // Apply new template if match found, otherwise keep existing (or clear if we want strict mode, but keeping existing is safer for unknown cats)
                                                 variantHeadings: newHeadings.length > 0 ? newHeadings : prev.variantHeadings
                                             }));
@@ -938,7 +971,8 @@ const ProductForm = () => {
                                                     const val = e.target.value;
                                                     setFormData(prev => ({
                                                         ...prev,
-                                                        subCategories: val ? [val] : []
+                                                        subCategories: val ? [val] : [],
+                                                        subcategoryBrand: ''
                                                     }));
                                                 }}
                                                 className="w-full px-4 py-2.5 rounded-lg bg-white border border-gray-200 outline-none focus:ring-2 ring-blue-100 text-sm font-medium text-gray-900"
@@ -952,6 +986,25 @@ const ProductForm = () => {
                                                 <p className="mt-2 text-xs font-semibold text-red-600">
                                                     No subcategory found for selected category. Create one first.
                                                 </p>
+                                            )}
+
+                                            {formData.subCategories[0] && (
+                                                <div className="mt-4">
+                                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
+                                                        Subcategory Brand
+                                                    </label>
+                                                    <select
+                                                        name="subcategoryBrand"
+                                                        value={formData.subcategoryBrand}
+                                                        onChange={handleChange}
+                                                        className="w-full px-4 py-2.5 rounded-lg bg-white border border-gray-200 outline-none focus:ring-2 ring-blue-100 text-sm font-medium text-gray-900"
+                                                    >
+                                                        <option value="">Select Subcategory Brand</option>
+                                                        {brandOptions.map((name) => (
+                                                            <option key={name.toLowerCase()} value={name}>{name}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
                                             )}
                                         </div>
                                     )}

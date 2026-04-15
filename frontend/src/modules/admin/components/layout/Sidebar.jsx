@@ -53,6 +53,8 @@ const Sidebar = () => {
                 { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
                 { name: 'Category Page Builder', icon: MdViewAgenda, path: '/admin/categories/page-builder' },
                 { name: 'Subcategories', icon: MdCategory, path: '/admin/subcategories' },
+                { name: 'Subcategory Page Builder', icon: MdViewAgenda, path: '/admin/subcategories/page-builder' },
+                { name: 'Brands', icon: MdCategory, path: '/admin/brands' },
             ]
         },
         {
@@ -140,7 +142,11 @@ const Sidebar = () => {
                                         <NavLink
                                             key={item.path}
                                             to={item.path}
-                                            end={item.path === '/admin/categories' || item.path === '/admin/products'}
+                                            end={
+                                                item.path === '/admin/categories' ||
+                                                item.path === '/admin/products' ||
+                                                item.path === '/admin/subcategories'
+                                            }
                                             className={({ isActive }) =>
                                                 `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${isActive
                                                     ? 'bg-blue-600 text-white'

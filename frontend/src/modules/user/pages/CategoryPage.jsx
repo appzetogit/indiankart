@@ -6,6 +6,7 @@ import { useCategories } from '../../../hooks/useData';
 import { resolveCategoryPath } from '../../../utils/categoryUtils';
 import SubCategoryList from '../components/category/SubCategoryList';
 import CategoryLandingSections from '../components/category/CategoryLandingSections';
+import SubCategoryLandingSections from '../components/category/SubCategoryLandingSections';
 import ProductCard from '../components/product/ProductCard';
 import BottomNav from '../components/layout/BottomNav';
 
@@ -92,6 +93,7 @@ const CategoryPage = () => {
     const navigate = useNavigate();
     const { categoryName, '*': subPath } = useParams();
     const routeSegments = String(subPath || '').split('/').filter(Boolean);
+    const routeDepth = routeSegments.length;
     const routeHasExplicitSubPath = routeSegments.length > 0;
     const { categories, loading: categoriesLoading } = useCategories({ lite: true });
     const [products, setProducts] = useState([]);
@@ -116,6 +118,7 @@ const CategoryPage = () => {
     const [showAllCategories, setShowAllCategories] = useState(false);
     const [collapsedSections, setCollapsedSections] = useState({});
     const [fetchError, setFetchError] = useState('');
+    const [subCategoryHasBrands, setSubCategoryHasBrands] = useState(null);
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const parseAmount = (value, fallback = 0) => {
@@ -135,10 +138,68 @@ const CategoryPage = () => {
 
     useEffect(() => {
         let active = true;
+
+        const decideSubCategoryLandingMode = async () => {
+            if (routeDepth !== 1) {
+                setSubCategoryHasBrands(null);
+                return;
+            }
+
+            const currentCategoryName = decodeURIComponent(categoryName || '').trim().toLowerCase();
+            const currentSubCategoryName = decodeURIComponent(routeSegments[0] || '').trim().toLowerCase();
+
+            if (!currentCategoryName || !currentSubCategoryName) {
+                setSubCategoryHasBrands(false);
+                return;
+            }
+
+            try {
+                const [{ data: subData }, { data: brandData }, { data: productData }] = await Promise.all([
+                    API.get('/subcategories'),
+                    API.get('/brands'),
+                    API.get(`/products?category=${encodeURIComponent(decodeURIComponent(categoryName || ''))}&subcategory=${encodeURIComponent(decodeURIComponent(routeSegments[0] || ''))}&lite=true`)
+                ]);
+
+                if (!active) return;
+
+                const subcategories = Array.isArray(subData) ? subData : [];
+                const brands = Array.isArray(brandData) ? brandData : [];
+                const products = Array.isArray(productData) ? productData : (Array.isArray(productData?.products) ? productData.products : []);
+
+                const selectedSubCategory = subcategories.find((sub) => (
+                    String(sub?.name || '').trim().toLowerCase() === currentSubCategoryName &&
+                    String(sub?.category?.name || '').trim().toLowerCase() === currentCategoryName
+                ));
+
+                const hasProductLevelBrands = products.some((product) => String(product?.subcategoryBrand || '').trim());
+
+                let hasBrands = hasProductLevelBrands;
+                if (selectedSubCategory) {
+                    const selectedSubCategoryId = String(selectedSubCategory?._id || selectedSubCategory?.id || '').trim();
+                    hasBrands = hasBrands || brands.some((brand) => (
+                        String(brand?.subcategory?._id || brand?.subcategory || '').trim() === selectedSubCategoryId &&
+                        brand?.isActive !== false
+                    ));
+                }
+
+                setSubCategoryHasBrands(hasBrands);
+            } catch {
+                if (!active) return;
+                setSubCategoryHasBrands(false);
+            }
+        };
+
+        decideSubCategoryLandingMode();
+        return () => { active = false; };
+    }, [routeDepth, categoryName, subPath, routeSegments]);
+
+    useEffect(() => {
+        let active = true;
         const fetchCategoryProducts = async () => {
-            if (!routeHasExplicitSubPath) {
+            const shouldUseSubcategoryLanding = routeDepth === 1 && subCategoryHasBrands === true;
+            if (routeDepth === 0 || shouldUseSubcategoryLanding || (routeDepth === 1 && subCategoryHasBrands === null)) {
                 setProducts([]);
-                setProductsLoading(false);
+                setProductsLoading(routeDepth === 1 && subCategoryHasBrands === null);
                 setFetchError('');
                 return;
             }
@@ -163,7 +224,7 @@ const CategoryPage = () => {
         };
         fetchCategoryProducts();
         return () => { active = false; };
-    }, [categoryName, subPath, routeHasExplicitSubPath]);
+    }, [categoryName, subPath, routeDepth, subCategoryHasBrands]);
 
     useEffect(() => {
         window.scrollTo(0, 0);
@@ -252,7 +313,9 @@ const CategoryPage = () => {
     if (fetchError) return <div className="p-10 text-center text-red-500">{fetchError}</div>;
     if (!categoryData) return <div className="p-10 text-center">Category not found</div>;
 
-    const isSubCategoryLandingView = !routeHasExplicitSubPath && breadcrumbs.length === 1;
+    const isCategoryLandingView = routeDepth === 0 && breadcrumbs.length === 1;
+    const isSubCategoryLandingView = routeDepth === 1 && subCategoryHasBrands === true;
+    const isProductListingView = routeDepth > 1 || (routeDepth === 1 && subCategoryHasBrands === false);
     const rootCategory = breadcrumbs[0] || categoryData;
     const gridSubCategories = [];
     const handleBackNavigation = () => {
@@ -294,7 +357,7 @@ const CategoryPage = () => {
             </div>
             <div className="mx-auto flex min-h-[calc(100vh-160px)] max-w-[1440px] flex-col px-2 pb-4 pt-1 md:px-4 md:py-4 lg:px-5">
                 <div className="relative flex h-full flex-col gap-4 lg:flex-row">
-                    {!isSubCategoryLandingView && (
+                    {isProductListingView && (
                         <aside className="sticky top-[128px] hidden h-fit w-[300px] shrink-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:block xl:w-[320px]">
                             <div className="border-b border-gray-100 bg-white px-4 py-4">
                                 <div className="flex items-start justify-between gap-3">
@@ -335,10 +398,18 @@ const CategoryPage = () => {
                             </div>
                         </aside>
                     )}
-                    <main className={`min-w-0 flex-1 ${isSubCategoryLandingView ? '' : 'md:pr-2'}`}>
-                        {isSubCategoryLandingView && <div className="relative"><CategoryLandingSections categoryName={rootCategory.name} /></div>}
-                        {isSubCategoryLandingView && <div className="relative"><SubCategoryList subCategories={isSubCategoryLandingView ? gridSubCategories : []} categoryName={rootCategory.name} /></div>}
-                        {!isSubCategoryLandingView && (
+                    <main className={`min-w-0 flex-1 ${isProductListingView ? 'md:pr-2' : ''}`}>
+                        {isCategoryLandingView && <div className="relative"><CategoryLandingSections categoryName={rootCategory.name} /></div>}
+                        {isCategoryLandingView && <div className="relative"><SubCategoryList subCategories={isCategoryLandingView ? gridSubCategories : []} categoryName={rootCategory.name} /></div>}
+                        {isSubCategoryLandingView && (
+                            <div className="relative">
+                                <SubCategoryLandingSections
+                                    categoryName={decodeURIComponent(categoryName || '')}
+                                    subCategoryName={decodeURIComponent(routeSegments[0] || '')}
+                                />
+                            </div>
+                        )}
+                        {isProductListingView && (
                             <div className="min-h-[600px] border border-gray-100 bg-white p-3 md:rounded-lg md:p-6 md:shadow-sm">
                                 <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -353,10 +424,10 @@ const CategoryPage = () => {
                     </main>
                 </div>
             </div>
-            {!isSubCategoryLandingView && <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 z-40 flex h-14 border-t bg-white lg:hidden"><button onClick={() => setShowSortModal(true)} className="flex-1 border-r text-xs font-black uppercase tracking-widest">Sort By</button><button onClick={() => setShowFilterModal(true)} className="flex-1 text-xs font-black uppercase tracking-widest">Filters</button></div>}
+            {isProductListingView && <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 z-40 flex h-14 border-t bg-white lg:hidden"><button onClick={() => setShowSortModal(true)} className="flex-1 border-r text-xs font-black uppercase tracking-widest">Sort By</button><button onClick={() => setShowFilterModal(true)} className="flex-1 text-xs font-black uppercase tracking-widest">Filters</button></div>}
             <BottomNav />
-            {showSortModal && <div className="fixed inset-0 z-[100] flex items-end"><div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)} /><div className="relative w-full rounded-t-2xl bg-white p-6 animate-in slide-in-from-bottom duration-300"><div className="mb-4 flex items-center justify-between border-b pb-4"><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Sort By</h3><button onClick={() => setShowSortModal(false)} className="material-icons text-gray-400">close</button></div><div className="space-y-1">{SORT_OPTIONS.map((option) => <button key={option.id} onClick={() => { setSortBy(option.id); setShowSortModal(false); }} className={`w-full rounded-xl px-4 py-4 text-left text-sm font-bold ${sortBy === option.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}>{option.label}</button>)}</div></div></div>}
-            {showFilterModal && <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300"><div className="flex h-full flex-col"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Filters</h3></div><button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600">Clear all</button></div><div className="flex-1 overflow-y-auto p-5"><h4 className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Min</span><div className="text-sm font-black">₹{filterRange[0]}</div></div><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Max</span><div className="text-sm font-black">₹{filterRange[1]}</div></div></div><div className="mt-6 space-y-4"><div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Customer Ratings</h4><div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="mobile-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={`${rating}★ & above`} />)}</div></div>{effectiveAvailableBrands.length > 0 && <div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Brand</h4><div className="space-y-2">{effectiveAvailableBrands.slice(0, 8).map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div></div>}</div></div><div className="border-t p-4"><button onClick={() => setShowFilterModal(false)} className="w-full rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white">Apply Filters</button></div></div></div>}
+            {isProductListingView && showSortModal && <div className="fixed inset-0 z-[100] flex items-end"><div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={() => setShowSortModal(false)} /><div className="relative w-full rounded-t-2xl bg-white p-6 animate-in slide-in-from-bottom duration-300"><div className="mb-4 flex items-center justify-between border-b pb-4"><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Sort By</h3><button onClick={() => setShowSortModal(false)} className="material-icons text-gray-400">close</button></div><div className="space-y-1">{SORT_OPTIONS.map((option) => <button key={option.id} onClick={() => { setSortBy(option.id); setShowSortModal(false); }} className={`w-full rounded-xl px-4 py-4 text-left text-sm font-bold ${sortBy === option.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600'}`}>{option.label}</button>)}</div></div></div>}
+            {isProductListingView && showFilterModal && <div className="fixed inset-0 z-[100] bg-white animate-in slide-in-from-right duration-300"><div className="flex h-full flex-col"><div className="flex items-center justify-between border-b px-5 py-4"><div className="flex items-center gap-4"><button onClick={() => setShowFilterModal(false)} className="material-icons text-gray-900">arrow_back</button><h3 className="text-xs font-black uppercase tracking-widest text-gray-900">Filters</h3></div><button onClick={resetAllFilters} className="text-[11px] font-black uppercase text-blue-600">Clear all</button></div><div className="flex-1 overflow-y-auto p-5"><h4 className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Price Range</h4><div className="grid grid-cols-2 gap-4"><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Min</span><div className="text-sm font-black">₹{filterRange[0]}</div></div><div className="rounded-lg border border-gray-100 bg-gray-50 p-3"><span className="block text-[9px] font-bold uppercase text-gray-400">Max</span><div className="text-sm font-black">₹{filterRange[1]}</div></div></div><div className="mt-6 space-y-4"><div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Customer Ratings</h4><div className="space-y-2">{RATING_OPTIONS.map((rating) => <FilterRadioRow key={rating} name="mobile-rating" checked={selectedRating === rating} onChange={() => setSelectedRating(rating)} label={`${rating}★ & above`} />)}</div></div>{effectiveAvailableBrands.length > 0 && <div><h4 className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Brand</h4><div className="space-y-2">{effectiveAvailableBrands.slice(0, 8).map((brand) => <FilterCheckRow key={brand} checked={selectedBrands.includes(brand)} onChange={() => toggleBrand(brand)} label={brand} />)}</div></div>}</div></div><div className="border-t p-4"><button onClick={() => setShowFilterModal(false)} className="w-full rounded-xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white">Apply Filters</button></div></div></div>}
         </div>
     );
 };

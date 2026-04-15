@@ -6,6 +6,8 @@ import Dashboard from '../pages/Dashboard';
 import CategoryList from '../pages/Categories/CategoryList';
 import CategoryPageBuilder from '../pages/Categories/CategoryPageBuilder';
 import SubCategoryList from '../pages/SubCategories/SubCategoryList';
+import SubCategoryPageBuilder from '../pages/SubCategories/SubCategoryPageBuilder';
+import BrandList from '../pages/Brands/BrandList';
 import PlayManager from '../pages/Play/PlayManager';
 import CouponManager from '../pages/Coupons/CouponManager';
 import OrderList from '../pages/Orders/OrderList';
@@ -67,6 +69,9 @@ const AdminRoutes = () => {
                 <Route path="categories/page-builder" element={<CategoryPageBuilder />} />
                 <Route path="categories/page-builder/section/:sectionId" element={<CategoryPageBuilder />} />
                 <Route path="subcategories" element={<SubCategoryList />} />
+                <Route path="subcategories/page-builder" element={<SubCategoryPageBuilder />} />
+                <Route path="subcategories/page-builder/section/:sectionId" element={<SubCategoryPageBuilder />} />
+                <Route path="brands" element={<BrandList />} />
                 <Route path="orders" element={<OrderList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
                 <Route path="delivery-slip" element={<DeliverySlip />} />

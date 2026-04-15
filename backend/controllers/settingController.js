@@ -16,7 +16,8 @@ const getSettings = async (req, res) => {
                 freeShippingThreshold: 500,
                 minShippingOrderAmount: 0,
                 maxShippingOrderAmount: 499,
-                categoryPageCatalog: []
+                categoryPageCatalog: [],
+                subCategoryPageCatalog: []
             });
         }
         res.json(settings);
@@ -58,7 +59,8 @@ const updateSettings = async (req, res) => {
             freeShippingThreshold,
             minShippingOrderAmount,
             maxShippingOrderAmount,
-            categoryPageCatalog
+            categoryPageCatalog,
+            subCategoryPageCatalog
         } = req.body;
 
         let settings = await Setting.findOne();
@@ -164,6 +166,14 @@ const updateSettings = async (req, res) => {
                     settings.categoryPageCatalog = parsedCatalog;
                 }
             }
+            if (subCategoryPageCatalog !== undefined) {
+                const parsedCatalog = typeof subCategoryPageCatalog === 'string'
+                    ? JSON.parse(subCategoryPageCatalog)
+                    : subCategoryPageCatalog;
+                if (Array.isArray(parsedCatalog)) {
+                    settings.subCategoryPageCatalog = parsedCatalog;
+                }
+            }
 
             const updatedSettings = await settings.save();
             res.json(updatedSettings);
@@ -203,6 +213,11 @@ const updateSettings = async (req, res) => {
                     ? categoryPageCatalog
                     : (typeof categoryPageCatalog === 'string'
                         ? (JSON.parse(categoryPageCatalog) || [])
+                        : []),
+                subCategoryPageCatalog: Array.isArray(subCategoryPageCatalog)
+                    ? subCategoryPageCatalog
+                    : (typeof subCategoryPageCatalog === 'string'
+                        ? (JSON.parse(subCategoryPageCatalog) || [])
                         : [])
             });
             res.json(newSettings);
