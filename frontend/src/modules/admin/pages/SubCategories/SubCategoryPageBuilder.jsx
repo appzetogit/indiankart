@@ -312,6 +312,7 @@ const SubCategoryPageBuilder = () => {
     const [productPickerSearch, setProductPickerSearch] = useState('');
     const [productPickerCategory, setProductPickerCategory] = useState('All');
     const [productPickerSelectedIds, setProductPickerSelectedIds] = useState([]);
+    const [selectedParentId, setSelectedParentId] = useState('');
     const [sectionUsesCustomLink, setSectionUsesCustomLink] = useState(false);
     const [itemCustomLinkModes, setItemCustomLinkModes] = useState({});
     const navigate = useNavigate();
@@ -406,7 +407,9 @@ const SubCategoryPageBuilder = () => {
         return (Array.isArray(subCategories) ? subCategories : []).map((sub) => {
             const subId = String(sub?._id || sub?.id || '');
             const subName = normalizeText(sub?.name);
-            const parentName = normalizeText(sub?.category?.name);
+            const parent = sub?.category;
+            const parentId = String(parent?._id || parent?.id || parent || '');
+            const parentName = normalizeText(parent?.name);
             const displayName = parentName ? `${parentName} / ${subName}` : subName;
             const subBrands = (brandsBySubCategoryId.get(subId) || [])
                 .filter((item) => item?.name && item?.isActive !== false)
@@ -415,6 +418,8 @@ const SubCategoryPageBuilder = () => {
                 id: subId,
                 _id: subId,
                 dbId: subId,
+                parentId,
+                parentName,
                 name: displayName || subId,
                 subCategories: subBrands,
                 children: []
@@ -425,6 +430,27 @@ const SubCategoryPageBuilder = () => {
         () => new Set((normalizedSubCategories || []).map((item) => String(item?.id || '').trim()).filter(Boolean)),
         [normalizedSubCategories]
     );
+
+    const availableCategories = useMemo(() => {
+        const catMap = new Map();
+        (normalizedSubCategories || []).forEach(sub => {
+            if (sub.parentId && sub.parentName) {
+                catMap.set(sub.parentId, sub.parentName);
+            }
+        });
+        return Array.from(catMap.entries()).map(([id, name]) => ({ id, name }));
+    }, [normalizedSubCategories]);
+
+    useEffect(() => {
+        if (!selectedParentId && categoryId && normalizedSubCategories.length) {
+            const currentSub = normalizedSubCategories.find(s => String(s.id) === String(categoryId));
+            if (currentSub?.parentId) {
+                setSelectedParentId(currentSub.parentId);
+            } else if (availableCategories.length > 0) {
+                setSelectedParentId(availableCategories[0].id);
+            }
+        }
+    }, [categoryId, normalizedSubCategories, selectedParentId, availableCategories]);
 
     useEffect(() => {
         if (!normalizedSubCategories || normalizedSubCategories.length === 0) {
@@ -943,26 +969,56 @@ const SubCategoryPageBuilder = () => {
                     </p>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <select
-                        value={categoryId}
-                        onChange={(e) => {
-                            const nextCategoryId = e.target.value;
-                            setCategoryId(nextCategoryId);
-                            setSectionId('');
-                            navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(nextCategoryId)}`, { replace: true });
-                        }}
-                        className="max-w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 outline-none"
-                    >
-                        {catalog.map((item) => {
-                            const sub = (subCategories || []).find((entry) => (
-                                String(entry?._id || entry?.id || '') === String(item.id)
-                            ));
-                            const subName = normalizeText(sub?.name) || normalizeText(item?.name);
-                            const parentName = normalizeText(sub?.category?.name);
-                            const label = parentName && subName ? `${parentName} / ${subName}` : subName || item.name;
-                            return <option key={item.id} value={item.id}>{label}</option>;
-                        })}
-                    </select>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Category</span>
+                        <select
+                            value={selectedParentId}
+                            onChange={(e) => {
+                                const nextParentId = e.target.value;
+                                setSelectedParentId(nextParentId);
+                                // Automatically select the first subcategory in this category
+                                const firstSub = normalizedSubCategories.find(s => s.parentId === nextParentId);
+                                if (firstSub) {
+                                    setCategoryId(firstSub.id);
+                                    setSectionId('');
+                                    navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(firstSub.id)}`, { replace: true });
+                                }
+                            }}
+                            className="max-w-[200px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none"
+                        >
+                            {!selectedParentId && <option value="">Select Category</option>}
+                            {availableCategories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Subcategory</span>
+                        <select
+                            value={categoryId}
+                            onChange={(e) => {
+                                const nextCategoryId = e.target.value;
+                                setCategoryId(nextCategoryId);
+                                setSectionId('');
+                                navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(nextCategoryId)}`, { replace: true });
+                            }}
+                            className="max-w-[200px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none"
+                        >
+                            {catalog
+                                .filter(item => {
+                                    const sub = normalizedSubCategories.find(s => String(s.id) === String(item.id));
+                                    return !selectedParentId || sub?.parentId === selectedParentId;
+                                })
+                                .map((item) => {
+                                    const sub = (subCategories || []).find((entry) => (
+                                        String(entry?._id || entry?.id || '') === String(item.id)
+                                    ));
+                                    const subName = normalizeText(sub?.name) || normalizeText(item?.name);
+                                    return <option key={item.id} value={item.id}>{subName}</option>;
+                                })}
+                        </select>
+                    </div>
                     <div className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-bold uppercase tracking-wider text-emerald-700">Dynamic Builder</div>
                 </div>
             </div>
