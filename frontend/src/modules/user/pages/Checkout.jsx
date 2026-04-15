@@ -799,7 +799,7 @@ const Checkout = () => {
 
                             {/* Retailer Details */}
                             {hasEligibleB2BItems && (
-                                <div className="bg-white p-4 md:rounded-sm md:shadow-sm border border-gray-100">
+                                <div className="bg-white p-4 md:rounded-sm md:shadow-sm border border-gray-100 [color-scheme:light]">
                                     <h3 className="text-sm font-bold uppercase text-gray-400 tracking-wider mb-3">Business Details</h3>
                                     <p className="mb-3 text-xs font-medium text-blue-600">
                                         B2B is available for {eligibleB2BItems.length} selected product{eligibleB2BItems.length > 1 ? 's' : ''} in this order.
@@ -842,7 +842,7 @@ const Checkout = () => {
                                                     value={retailerInfo.shopName}
                                                     onChange={(e) => setRetailerInfo((prev) => ({ ...prev, shopName: e.target.value }))}
                                                     placeholder="Enter shop name"
-                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
+                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white"
                                                 />
                                             </div>
                                             <div>
@@ -857,7 +857,7 @@ const Checkout = () => {
                                                         }))
                                                     }
                                                     placeholder="15-character GSTIN"
-                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white uppercase"
+                                                    className="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-900 placeholder:text-gray-300 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white uppercase"
                                                 />
                                             </div>
                                         </div>
