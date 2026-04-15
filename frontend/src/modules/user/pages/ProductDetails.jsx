@@ -392,15 +392,7 @@ const ProductDetails = () => {
     const handleShare = async () => {
         const shareTitle = product?.name || 'Product Details';
         const shareText = `Explore this ${product?.name} on Indian Kart! \n\nCheck out the product here:`;
-        
-        // Derive backend URL for the smart preview link
-        const apiUrl = API.defaults.baseURL || '';
-        const backendBaseUrl = apiUrl.endsWith('/api') 
-            ? apiUrl.slice(0, -4) 
-            : apiUrl;
-            
-        // The smart link that provides the image preview
-        const shareUrl = `${backendBaseUrl}/p/${id}`;
+        const shareUrl = window.location.href;
 
         const shareData = {
             title: shareTitle,
@@ -422,11 +414,13 @@ const ProductDetails = () => {
             try {
                 await navigator.share(shareData);
             } catch (err) {
-                if (err.name === 'AbortError') return;
+                if (err.name === 'AbortError') return; // User cancelled
+                
                 console.error('Navigator share failed:', err);
                 await copyToClipboard();
             }
         } else {
+            // Fallback for browsers without navigator.share
             await copyToClipboard();
         }
     };
