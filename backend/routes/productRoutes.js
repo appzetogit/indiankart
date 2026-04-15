@@ -8,8 +8,7 @@ import {
     deleteProduct,
     updateProductStock,
     incrementProductView,
-    getProductViewInsights,
-    shareProduct
+    getProductViewInsights
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
@@ -27,9 +26,6 @@ const uploadMiddleware = (req, res, next) => {
 router.route('/')
     .get(getProducts)
     .post(protect, admin, uploadMiddleware, createProduct);
-router.route('/share/:id')
-    .get(shareProduct);
-
 router.route('/:id')
     .get(getProductById)
     .put(protect, admin, uploadMiddleware, updateProduct)
