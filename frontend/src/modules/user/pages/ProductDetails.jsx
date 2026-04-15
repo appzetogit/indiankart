@@ -391,7 +391,7 @@ const ProductDetails = () => {
 
     const handleShare = async () => {
         const shareTitle = product?.name || 'Product Details';
-        const shareText = `Explore this ${product?.name} on Indian Kart! \n\nCheck out the product here:`;
+        const shareText = `Explore this ${product?.name} on Indian Kart!`;
         const shareUrl = window.location.href;
 
         const shareData = {
@@ -400,28 +400,43 @@ const ProductDetails = () => {
             url: shareUrl,
         };
 
-        const copyToClipboard = async () => {
+        if (navigator.share) {
             try {
-                await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+                // Enhanced sharing: Try to include the image if supported
+                if (product?.image && navigator.canShare && navigator.canShare({ files: [new File([], 'test.jpg', { type: 'image/jpeg' })] })) {
+                    try {
+                        const response = await fetch(product.image);
+                        const blob = await response.blob();
+                        const file = new File([blob], 'product-image.jpg', { type: blob.type });
+
+                        if (navigator.canShare({ files: [file] })) {
+                            await navigator.share({
+                                ...shareData,
+                                files: [file]
+                            });
+                            return;
+                        }
+                    } catch (imageErr) {
+                        console.error('Error fetching image for share:', imageErr);
+                        // Fallback to standard share below
+                    }
+                }
+
+                await navigator.share(shareData);
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    console.error('Error sharing:', err);
+                }
+            }
+        } else {
+            // Fallback: Copy to clipboard
+            try {
+                await navigator.clipboard.writeText(shareUrl);
                 toast.success('Link copied to clipboard!');
             } catch (err) {
                 console.error('Error copying to clipboard:', err);
                 toast.error('Failed to copy link');
             }
-        };
-
-        if (navigator.share) {
-            try {
-                await navigator.share(shareData);
-            } catch (err) {
-                if (err.name === 'AbortError') return; // User cancelled
-                
-                console.error('Navigator share failed:', err);
-                await copyToClipboard();
-            }
-        } else {
-            // Fallback for browsers without navigator.share
-            await copyToClipboard();
         }
     };
     const [reviews, setReviews] = useState([]);
