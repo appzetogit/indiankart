@@ -392,7 +392,10 @@ const ProductDetails = () => {
     const handleShare = async () => {
         const shareTitle = product?.name || 'Product Details';
         const shareText = `Explore this ${product?.name} on Indian Kart!`;
-        const shareUrl = window.location.href;
+        
+        // Use the Backend Share Resolver URL for social media rich previews
+        const apiBaseUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api').replace(/\/$/, "");
+        const shareUrl = `${apiBaseUrl}/products/share/${product.id}`;
 
         const shareData = {
             title: shareTitle,
