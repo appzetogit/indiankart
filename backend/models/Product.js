@@ -15,6 +15,11 @@ const productSchema = mongoose.Schema({
         state: { type: String, trim: true },
         count: { type: Number, default: 0, min: 0 }
     }],
+    dailyViewStats: [{
+        date: { type: String }, // 'YYYY-MM-DD'
+        views: { type: Number, default: 0 },
+        visitors: { type: Number, default: 0 }
+    }],
     image: { type: String }, // Primary image
     images: [{ type: String }], // Gallery images
     category: { type: String, required: true }, // Main category name (Legacy/Display)

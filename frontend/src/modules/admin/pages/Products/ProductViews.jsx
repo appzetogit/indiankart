@@ -1,13 +1,27 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MdClose, MdRefresh, MdSearch, MdVisibility } from 'react-icons/md';
+import { useNavigate } from 'react-router-dom';
+import { MdRefresh, MdSearch, MdVisibility, MdBarChart } from 'react-icons/md';
+import { 
+    BarChart, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    Tooltip, 
+    ResponsiveContainer, 
+    Cell,
+    CartesianGrid 
+} from 'recharts';
+import { motion } from 'framer-motion';
 import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 import Pagination from '../../components/common/Pagination';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
+const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 
 const ProductViews = () => {
+    const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -58,19 +72,8 @@ const ProductViews = () => {
     const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
     const paginatedProducts = filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const handleViewInsights = async (product) => {
-        try {
-            setInsightsLoading(true);
-            setSelectedInsights(null);
-
-            const { data } = await API.get(`/products/${getProductId(product)}/view-insights`);
-            setSelectedInsights(data);
-        } catch (error) {
-            console.error('Error fetching product view insights:', error);
-            toast.error('Failed to load state-wise views');
-        } finally {
-            setInsightsLoading(false);
-        }
+    const handleViewInsights = (product) => {
+        navigate(`/admin/product-views/${getProductId(product)}`);
     };
 
     return (
@@ -108,6 +111,64 @@ const ProductViews = () => {
                     </p>
                 </div>
             </div>
+
+            {/* Top Products Chart */}
+            <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
+            >
+                <div className="mb-6 flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-black text-gray-900">Popular Products</h3>
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">Top 10 most viewed items</p>
+                    </div>
+                    <MdBarChart className="text-blue-500" size={24} />
+                </div>
+                
+                <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                            data={filteredProducts.slice(0, 10).map(p => ({ 
+                                name: p.name.length > 20 ? p.name.substring(0, 17) + '...' : p.name, 
+                                views: p.viewCount || 0,
+                                originalName: p.name 
+                            }))} 
+                            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                            layout="vertical"
+                        >
+                            <XAxis type="number" hide />
+                            <YAxis 
+                                dataKey="name" 
+                                type="category" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                width={120}
+                                tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }}
+                            />
+                            <Tooltip 
+                                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                cursor={{ fill: '#f8fafc' }}
+                                formatter={(value) => [`${value} Views`, 'Views']}
+                                labelStyle={{ display: 'none' }}
+                            />
+                            <Bar dataKey="views" radius={[0, 8, 8, 0]} barSize={20}>
+                                {filteredProducts.slice(0, 10).map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'][index % 5]} />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button 
+                        onClick={() => navigate(`/admin/product-views/${getProductId(filteredProducts[0])}`)}
+                        className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline"
+                    >
+                        View Full Stats
+                    </button>
+                </div>
+            </motion.div>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="relative">
@@ -195,94 +256,6 @@ const ProductViews = () => {
                 )}
             </div>
 
-            {(insightsLoading || selectedInsights) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-                    <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
-                        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-[0.24em] text-blue-600">View Insights</p>
-                                <h2 className="mt-1 text-xl font-black text-gray-900">
-                                    {selectedInsights?.name || 'Loading...'}
-                                </h2>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (insightsLoading) return;
-                                    setSelectedInsights(null);
-                                }}
-                                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                                aria-label="Close"
-                            >
-                                <MdClose size={20} />
-                            </button>
-                        </div>
-
-                        {insightsLoading ? (
-                            <div className="px-6 py-12 text-center text-sm font-medium text-gray-400">
-                                Loading state-wise view data...
-                            </div>
-                        ) : selectedInsights ? (
-                            <div className="space-y-6 px-6 py-6">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                                        <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Total Views</p>
-                                        <p className="mt-2 text-3xl font-black text-gray-900">
-                                            {Number(selectedInsights?.viewCount || 0).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                                        <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-500">Top State</p>
-                                        <p className="mt-2 text-2xl font-black text-gray-900">
-                                            {selectedInsights?.topState?.state || 'No state data yet'}
-                                        </p>
-                                        {selectedInsights?.topState ? (
-                                            <p className="mt-1 text-sm font-semibold text-blue-700">
-                                                {selectedInsights.topState.count.toLocaleString()} views
-                                                {' '}({selectedInsights.topState.share}%)
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-2xl border border-gray-100">
-                                    <div className="border-b border-gray-100 px-4 py-3">
-                                        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-gray-500">
-                                            State Breakdown
-                                        </h3>
-                                    </div>
-                                    {selectedInsights?.stateBreakdown?.length ? (
-                                        <div className="max-h-[360px] overflow-y-auto">
-                                            <table className="w-full">
-                                                <thead className="bg-gray-50">
-                                                    <tr>
-                                                        <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500">State</th>
-                                                        <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest text-gray-500">Views</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {selectedInsights.stateBreakdown.map((entry) => (
-                                                        <tr key={entry.state}>
-                                                            <td className="px-4 py-3 text-sm font-semibold text-gray-800">{entry.state}</td>
-                                                            <td className="px-4 py-3 text-right text-sm font-black text-gray-900">
-                                                                {Number(entry.count || 0).toLocaleString()}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    ) : (
-                                        <div className="px-4 py-10 text-center text-sm text-gray-400">
-                                            No state-wise views recorded yet.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
