@@ -10,6 +10,18 @@ import toast from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import './ProductDetails.css';
 
+const normalizeKnownState = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return '';
+
+    const compact = trimmed.toLowerCase().replace(/[^a-z]/g, '');
+    if (['unknown', 'na', 'none', 'null', 'undefined', 'notavailable'].includes(compact)) {
+        return '';
+    }
+
+    return trimmed;
+};
+
 const ProductSkeleton = () => {
     return (
         <div className="bg-white min-h-screen pb-24 font-sans animate-pulse px-4 md:px-0">
@@ -452,6 +464,7 @@ const ProductDetails = () => {
     const [bankOffers, setBankOffers] = useState([]);
     const [razorpayEnabled, setRazorpayEnabled] = useState(false);
     const [pincodeDerivedState, setPincodeDerivedState] = useState('');
+    const [isResolvingPincodeState, setIsResolvingPincodeState] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -460,16 +473,19 @@ const ProductDetails = () => {
             const normalizedPincode = String(pincode || '').trim();
             if (!/^\d{6}$/.test(normalizedPincode)) {
                 setPincodeDerivedState('');
+                setIsResolvingPincodeState(false);
                 return;
             }
 
             const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
             if (!apiKey) {
                 setPincodeDerivedState('');
+                setIsResolvingPincodeState(false);
                 return;
             }
 
             try {
+                setIsResolvingPincodeState(true);
                 const response = await fetch(
                     `https://maps.googleapis.com/maps/api/geocode/json?address=${normalizedPincode}&components=country:IN&key=${apiKey}`
                 );
@@ -482,10 +498,13 @@ const ProductDetails = () => {
                 const stateComponent = components.find((component) =>
                     Array.isArray(component?.types) && component.types.includes('administrative_area_level_1')
                 );
-                setPincodeDerivedState(String(stateComponent?.long_name || '').trim());
+                setPincodeDerivedState(normalizeKnownState(stateComponent?.long_name));
             } catch {
                 if (!active) return;
                 setPincodeDerivedState('');
+            } finally {
+                if (!active) return;
+                setIsResolvingPincodeState(false);
             }
         };
 
@@ -509,19 +528,21 @@ const ProductDetails = () => {
             ...(Array.isArray(user?.addresses) ? user.addresses : [])
         ];
         const cachedState = typeof window !== 'undefined'
-            ? String(localStorage.getItem('ik-last-known-state') || '').trim()
+            ? normalizeKnownState(localStorage.getItem('ik-last-known-state'))
             : '';
 
-        const defaultAddress = addressPool.find((address) => address?.isDefault && String(address?.state || '').trim());
-        const firstAddressWithState = addressPool.find((address) => String(address?.state || '').trim());
+        const defaultAddress = addressPool.find((address) => normalizeKnownState(address?.state) && address?.isDefault);
+        const firstAddressWithState = addressPool.find((address) => normalizeKnownState(address?.state));
+        const directUserState = normalizeKnownState(user?.state || user?.address?.state);
 
-        return String(
-            defaultAddress?.state ||
-            firstAddressWithState?.state ||
-            pincodeDerivedState ||
+        return (
+            normalizeKnownState(defaultAddress?.state) ||
+            normalizeKnownState(firstAddressWithState?.state) ||
+            directUserState ||
+            normalizeKnownState(pincodeDerivedState) ||
             cachedState ||
-            ''
-        ).trim() || 'Unknown';
+            'Unknown'
+        );
     }, [addresses, user, pincodeDerivedState]);
 
     useEffect(() => {
@@ -536,7 +557,9 @@ const ProductDetails = () => {
 
     useEffect(() => {
         if (!id || !product || authLoading) return;
+        if (isResolvingPincodeState) return;
         if (isAuthenticated && hasAddressContext && bestKnownState === 'Unknown') return;
+        if (bestKnownState === 'Unknown') return;
 
         const sessionKey = `ik-product-viewed:${id}`;
         if (sessionStorage.getItem(sessionKey)) return;
@@ -562,7 +585,7 @@ const ProductDetails = () => {
         return () => {
             active = false;
         };
-    }, [id, product, bestKnownState, authLoading, isAuthenticated, hasAddressContext]);
+    }, [id, product, bestKnownState, authLoading, isAuthenticated, hasAddressContext, isResolvingPincodeState]);
 
     useEffect(() => {
         if (currentImageIndex >= productImages.length) {

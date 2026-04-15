@@ -103,6 +103,10 @@ const pickTopViewState = (stateBreakdown = []) => (
     stateBreakdown.find((entry) => !isUnknownViewState(entry?.state)) || stateBreakdown[0] || null
 );
 
+const getKnownStateBreakdown = (entries = []) => (
+    getSortedStateBreakdown(entries).filter((entry) => !isUnknownViewState(entry?.state))
+);
+
 // @desc    Fetch all products
 // @route   GET /api/products
 // @access  Public
@@ -883,7 +887,7 @@ export const getProductViewInsights = async (req, res) => {
             return res.status(404).json({ message: 'Product not found' });
         }
 
-        const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
+        const stateBreakdown = getKnownStateBreakdown(product.viewStatsByState);
         const preferredTopState = pickTopViewState(stateBreakdown);
         const topState = preferredTopState
             ? {

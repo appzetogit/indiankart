@@ -6,6 +6,7 @@ import Pagination from '../../components/common/Pagination';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
+const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 
 const ProductViews = () => {
     const [products, setProducts] = useState([]);
@@ -64,7 +65,17 @@ const ProductViews = () => {
             setSelectedInsights(null);
 
             const { data } = await API.get(`/products/${getProductId(product)}/view-insights`);
-            setSelectedInsights(data);
+            const filteredStateBreakdown = Array.isArray(data?.stateBreakdown)
+                ? data.stateBreakdown.filter((entry) => isKnownState(entry?.state))
+                : [];
+
+            const sanitizedTopState = isKnownState(data?.topState?.state) ? data.topState : null;
+
+            setSelectedInsights({
+                ...data,
+                topState: sanitizedTopState,
+                stateBreakdown: filteredStateBreakdown
+            });
         } catch (error) {
             console.error('Error fetching product view insights:', error);
             toast.error('Failed to load state-wise views');
