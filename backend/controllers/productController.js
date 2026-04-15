@@ -939,6 +939,8 @@ export const getProductViewInsights = async (req, res) => {
             stateBreakdown,
             dailyStats: dailyStats.slice(-365)
         });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
 
