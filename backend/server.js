@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import Product from './models/Product.js';
+
 
 dotenv.config();
 
@@ -110,6 +112,53 @@ app.use('/api/fcm', fcmRoutes);
 app.use('/api/seller-requests', sellerRequestRoutes);
 app.use('/api/footer', footerRoutes);
 app.use('/api/header', headerRoutes);
+
+app.get('/p/:id', async (req, res) => {
+    try {
+        const product = await Product.findOne({ id: req.params.id });
+        if (!product) {
+            return res.status(404).send('Product not found');
+        }
+
+        const frontendUrl = process.env.NODE_ENV === 'production' 
+            ? 'https://www.indiankart.in' 
+            : 'http://localhost:5173';
+
+        const productUrl = `${frontendUrl}/product/${product.id}`;
+        const imageUrl = product.image;
+        const title = product.name;
+        const description = `Buy ${product.name} at the best price on Indian Kart!`;
+
+        res.send(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>${title}</title>
+                    <meta charset="UTF-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                    <meta property="og:type" content="product" />
+                    <meta property="og:url" content="${productUrl}" />
+                    <meta property="og:title" content="${title}" />
+                    <meta property="og:description" content="${description}" />
+                    <meta property="og:image" content="${imageUrl}" />
+                    <meta property="twitter:card" content="summary_large_image" />
+                    <meta property="twitter:title" content="${title}" />
+                    <meta property="twitter:image" content="${imageUrl}" />
+                    <script type="text/javascript">
+                        window.location.href = "${productUrl}";
+                    </script>
+                </head>
+                <body>
+                    <p>Redirecting to ${title}...</p>
+                </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('Share error:', error);
+        res.status(500).send('Server Error');
+    }
+});
+
 
 app.get('/', (req, res) => {
     res.send('API is running...');
