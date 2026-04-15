@@ -14,7 +14,7 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 const uploadMiddleware = (req, res, next) => {
-    upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'variant_images', maxCount: 20 }, { name: 'description_images', maxCount: 10 }])(req, res, (err) => {
+    upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 50 }, { name: 'variant_images', maxCount: 200 }, { name: 'description_images', maxCount: 50 }])(req, res, (err) => {
         if (err) {
             console.error('Upload Middleware Error:', err);
             return res.status(400).json({ message: 'Image upload failed', error: err.message });

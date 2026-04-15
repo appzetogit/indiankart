@@ -855,7 +855,7 @@ const ProductForm = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => removeGalleryImage(idx)}
-                                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100"
+                                                    className="absolute top-1 right-1 bg-red-500/70 hover:bg-red-600 text-white rounded-full p-1 shadow-md transition-all z-10"
                                                 >
                                                     <MdClose size={14} />
                                                 </button>
@@ -1284,7 +1284,7 @@ const ProductForm = () => {
                                                                                         const newImages = opt.images.filter((_, i) => i !== imgIdx);
                                                                                         updateVariantOption(vh.id, optIdx, 'images', newImages);
                                                                                     }}
-                                                                                    className="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-vimg/hover:opacity-100 transition-opacity"
+                                                                                    className="absolute top-0.5 right-0.5 bg-red-500/70 hover:bg-red-600 text-white rounded-full p-0.5 shadow-sm transition-all z-10"
                                                                                 >
                                                                                     <MdClose size={12} />
                                                                                 </button>

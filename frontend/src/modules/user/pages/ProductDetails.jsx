@@ -390,27 +390,38 @@ const ProductDetails = () => {
     };
 
     const handleShare = async () => {
+        const shareTitle = product?.name || 'Product Details';
+        const shareText = `Explore this ${product?.name} on Indian Kart! \n\nCheck out the product here:`;
+        const shareUrl = window.location.href;
+
         const shareData = {
-            title: product?.name || 'Product Details',
-            text: `Check out this ${product?.name} on Indian Kart!`,
-            url: window.location.href,
+            title: shareTitle,
+            text: shareText,
+            url: shareUrl,
+        };
+
+        const copyToClipboard = async () => {
+            try {
+                await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+                toast.success('Link copied to clipboard!');
+            } catch (err) {
+                console.error('Error copying to clipboard:', err);
+                toast.error('Failed to copy link');
+            }
         };
 
         if (navigator.share) {
             try {
                 await navigator.share(shareData);
             } catch (err) {
-                console.error('Error sharing:', err);
+                if (err.name === 'AbortError') return; // User cancelled
+                
+                console.error('Navigator share failed:', err);
+                await copyToClipboard();
             }
         } else {
-            // Fallback: Copy to clipboard
-            try {
-                await navigator.clipboard.writeText(window.location.href);
-                toast.success('Link copied to clipboard!');
-            } catch (err) {
-                console.error('Error copying to clipboard:', err);
-                toast.error('Failed to copy link');
-            }
+            // Fallback for browsers without navigator.share
+            await copyToClipboard();
         }
     };
     const [reviews, setReviews] = useState([]);
@@ -596,6 +607,34 @@ const ProductDetails = () => {
     useEffect(() => {
         if (!id || !product) return;
 
+        // Dynamic Meta Tag Updates for Sharing (Best Effort for CSR)
+        const updateMeta = (key, value, isProperty = true) => {
+            if (!value) return;
+            const attr = isProperty ? 'property' : 'name';
+            let el = document.querySelector(`meta[${attr}="${key}"]`);
+            if (!el) {
+                el = document.createElement('meta');
+                el.setAttribute(attr, key);
+                document.head.appendChild(el);
+            }
+            el.setAttribute('content', value);
+        };
+
+        // Update Title
+        document.title = `${product.name} | Indian Kart`;
+
+        // Update Open Graph Tags
+        updateMeta('og:title', product.name);
+        updateMeta('og:image', product.image);
+        updateMeta('og:description', `Buy ${product.name} for ₹${selectedPrice?.toLocaleString()} only on Indian Kart.`);
+        updateMeta('og:url', window.location.href);
+        updateMeta('og:type', 'product');
+
+        // Update Twitter Tags
+        updateMeta('twitter:card', 'summary_large_image', false);
+        updateMeta('twitter:title', product.name, false);
+        updateMeta('twitter:image', product.image, false);
+
         let active = true;
         const fetchBankOffers = async () => {
             try {
@@ -611,7 +650,7 @@ const ProductDetails = () => {
             active = false;
             clearTimeout(timer);
         };
-    }, [id, product]);
+    }, [id, product, selectedPrice]);
 
     useEffect(() => {
         let active = true;
