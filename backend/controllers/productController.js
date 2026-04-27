@@ -39,7 +39,7 @@ const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
-    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock maxOrderQuantity createdAt';
+    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity createdAt';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -938,6 +938,86 @@ export const getProductViewInsights = async (req, res) => {
             topState,
             stateBreakdown,
             dailyStats: dailyStats.slice(-365)
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get portal-wide product view insights
+// @route   GET /api/products/view-insights/portal
+// @access  Private/Admin
+export const getPortalViewInsights = async (_req, res) => {
+    try {
+        const products = await Product.find({})
+            .select('id viewCount dailyViewStats')
+            .lean();
+
+        const today = new Date();
+        const recentDailyMap = new Map();
+        const recentStart = new Date(today);
+        recentStart.setDate(recentStart.getDate() - 29);
+        recentStart.setHours(0, 0, 0, 0);
+
+        const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const weeklyMap = new Map(weekdayOrder.map((day) => [day, { day, views: 0, visitors: 0 }]));
+
+        let totalViews = 0;
+        let totalVisitors = 0;
+
+        for (const product of products) {
+            totalViews += Number(product?.viewCount || 0);
+
+            const dailyStats = Array.isArray(product?.dailyViewStats) ? product.dailyViewStats : [];
+            for (const entry of dailyStats) {
+                const entryDate = new Date(entry?.date);
+                if (Number.isNaN(entryDate.getTime())) continue;
+
+                const views = Number(entry?.views || 0);
+                const visitors = Number(entry?.visitors || 0);
+                totalVisitors += visitors;
+
+                if (entryDate >= recentStart) {
+                    const dateKey = String(entry.date);
+                    const existing = recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 };
+                    existing.views += views;
+                    existing.visitors += visitors;
+                    recentDailyMap.set(dateKey, existing);
+                }
+
+                const jsDay = entryDate.getDay();
+                const dayLabel = weekdayOrder[(jsDay + 6) % 7];
+                const weekdayEntry = weeklyMap.get(dayLabel);
+                weekdayEntry.views += views;
+                weekdayEntry.visitors += visitors;
+            }
+        }
+
+        const dailyStats = [];
+        for (let offset = 29; offset >= 0; offset -= 1) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - offset);
+            const dateKey = date.toISOString().split('T')[0];
+            dailyStats.push(recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 });
+        }
+
+        const weeklyDistribution = weekdayOrder.map((day) => weeklyMap.get(day));
+        const last7Days = dailyStats.slice(-7).reduce((acc, entry) => ({
+            views: acc.views + Number(entry?.views || 0),
+            visitors: acc.visitors + Number(entry?.visitors || 0)
+        }), { views: 0, visitors: 0 });
+        const busiestDay = dailyStats.reduce((best, entry) => (
+            Number(entry?.visitors || 0) > Number(best?.visitors || 0) ? entry : best
+        ), dailyStats[0] || { date: '', views: 0, visitors: 0 });
+
+        return res.json({
+            trackedProducts: products.length,
+            totalViews,
+            totalVisitors,
+            last7Days,
+            busiestDay,
+            dailyStats,
+            weeklyDistribution
         });
     } catch (error) {
         return res.status(500).json({ message: error.message });

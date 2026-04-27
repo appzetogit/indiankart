@@ -23,6 +23,8 @@ const ProductCard = ({ product, footerText }) => {
     // Translated Values
     const productName = useGoogleTranslation(cleanedProductName || product.name);
     const translatedFooter = useGoogleTranslation(footerText);
+
+    // Static translations used across all cards - ideally these would be globally provided
     const offText = useGoogleTranslation('OFF');
     const adText = useGoogleTranslation('AD');
 

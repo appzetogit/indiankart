@@ -232,58 +232,67 @@ const writeCatalogToIndexedDb = async (catalog) => {
     });
 };
 
+let catalogCachePromise = null;
+
 export const readCategoryPageCatalogAsync = async () => {
-    try {
-        const { data } = await API.get('/settings');
-        const serverCatalog = data?.[CATEGORY_PAGE_BUILDER_SERVER_FIELD];
-        if (Array.isArray(serverCatalog) && serverCatalog.length >= 0) {
-            if (typeof window !== 'undefined') {
-                try {
-                    const serialized = JSON.stringify(serverCatalog);
-                    window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
+    if (catalogCachePromise) return catalogCachePromise;
+
+    catalogCachePromise = (async () => {
+        try {
+            const { data } = await API.get('/settings');
+            const serverCatalog = data?.[CATEGORY_PAGE_BUILDER_SERVER_FIELD];
+            if (Array.isArray(serverCatalog) && serverCatalog.length >= 0) {
+                if (typeof window !== 'undefined') {
                     try {
-                        await writeCatalogToIndexedDb(serverCatalog);
+                        const serialized = JSON.stringify(serverCatalog);
+                        window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
+                        try {
+                            await writeCatalogToIndexedDb(serverCatalog);
+                        } catch {
+                            // Ignore IndexedDB mirror failure.
+                        }
                     } catch {
-                        // Ignore IndexedDB mirror failure.
+                        // Ignore local mirror issues.
                     }
-                } catch {
-                    // Ignore local mirror issues.
+                }
+                const sanitizedServerCatalog = sanitizeCategoryPageCatalog(serverCatalog);
+                return sanitizedServerCatalog.length > 0 ? sanitizedServerCatalog : legacyCatalog;
+            }
+        } catch {
+            // Fallback to local/offline catalog below.
+        }
+
+        const localCatalog = sanitizeCategoryPageCatalog(readCategoryPageCatalog());
+        if (localCatalog !== legacyCatalog) {
+            return localCatalog;
+        }
+
+        if (typeof window === 'undefined') return legacyCatalog;
+
+        try {
+            const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.storage === INDEXED_DB_POINTER) {
+                    return await readCatalogFromIndexedDb();
                 }
             }
-            const sanitizedServerCatalog = sanitizeCategoryPageCatalog(serverCatalog);
-            return sanitizedServerCatalog.length > 0 ? sanitizedServerCatalog : legacyCatalog;
+        } catch {
+            return legacyCatalog;
         }
-    } catch {
-        // Fallback to local/offline catalog below.
-    }
 
-    const localCatalog = sanitizeCategoryPageCatalog(readCategoryPageCatalog());
-    if (localCatalog !== legacyCatalog) {
-        return localCatalog;
-    }
-
-    if (typeof window === 'undefined') return legacyCatalog;
-
-    try {
-        const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed?.storage === INDEXED_DB_POINTER) {
-                return await readCatalogFromIndexedDb();
-            }
+        try {
+            return await readCatalogFromIndexedDb();
+        } catch {
+            return legacyCatalog;
         }
-    } catch {
-        return legacyCatalog;
-    }
+    })();
 
-    try {
-        return await readCatalogFromIndexedDb();
-    } catch {
-        return legacyCatalog;
-    }
+    return catalogCachePromise;
 };
 
 export const writeCategoryPageCatalog = async (catalog) => {
+    catalogCachePromise = null; // Invalidate cache
     if (typeof window === 'undefined') return;
 
     const sanitizedCatalog = sanitizeCategoryPageCatalog(catalog);

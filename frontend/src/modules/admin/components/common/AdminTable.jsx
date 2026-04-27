@@ -8,10 +8,10 @@ export const AdminTable = ({
     scrollClassName = '',
     tableClassName = '',
 }) => (
-    <div className={join('bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden', shellClassName)}>
+    <div className={join('bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden w-full max-w-full', shellClassName)}>
         <div
-            className={join('overflow-x-auto overflow-y-visible', scrollClassName)}
-            style={{ WebkitOverflowScrolling: 'touch', maxWidth: '100vw' }}
+            className={join('overflow-x-auto w-full pb-4 custom-scrollbar', scrollClassName)}
+            style={{ WebkitOverflowScrolling: 'touch' }}
         >
             <table className={join('w-full text-left border-collapse', tableClassName)}>
                 {children}
