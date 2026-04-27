@@ -392,27 +392,38 @@ const ProductDetails = () => {
     };
 
     const handleShare = async () => {
-        const shareData = {
-            title: product?.name || 'Product Details',
-            text: `Check out this ${product?.name} on Indian Kart!`,
-            url: window.location.href,
-        };
+        const shareTitle = product?.name || 'Product Details';
+        const shareUrl = window.location.href;
+        
+        // Format text like professional apps (e.g. Flipkart)
+        // We include the URL in the text for maximum compatibility across apps
+        const shareText = `Check out this ${product?.name} at ₹${selectedPrice?.toLocaleString()} on Indian Kart!\n\n${shareUrl}`;
 
         if (navigator.share) {
             try {
-                await navigator.share(shareData);
+                await navigator.share({
+                    title: shareTitle,
+                    text: shareText
+                    // Removed 'url: shareUrl' to prevent duplication in some browsers/OS
+                });
             } catch (err) {
-                console.error('Error sharing:', err);
+                if (err.name !== 'AbortError') {
+                    console.error('Error sharing:', err);
+                    handleCopyToClipboard(shareText);
+                }
             }
         } else {
-            // Fallback: Copy to clipboard
-            try {
-                await navigator.clipboard.writeText(window.location.href);
-                toast.success('Link copied to clipboard!');
-            } catch (err) {
-                console.error('Error copying to clipboard:', err);
-                toast.error('Failed to copy link');
-            }
+            handleCopyToClipboard(shareText);
+        }
+    };
+
+    const handleCopyToClipboard = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Link copied to clipboard!');
+        } catch (err) {
+            console.error('Error copying to clipboard:', err);
+            toast.error('Failed to copy link');
         }
     };
     const [reviews, setReviews] = useState([]);
@@ -598,6 +609,34 @@ const ProductDetails = () => {
     useEffect(() => {
         if (!id || !product) return;
 
+        // Dynamic Meta Tag Updates for Sharing (Best Effort for CSR)
+        const updateMeta = (key, value, isProperty = true) => {
+            if (!value) return;
+            const attr = isProperty ? 'property' : 'name';
+            let el = document.querySelector(`meta[${attr}="${key}"]`);
+            if (!el) {
+                el = document.createElement('meta');
+                el.setAttribute(attr, key);
+                document.head.appendChild(el);
+            }
+            el.setAttribute('content', value);
+        };
+
+        // Update Title
+        document.title = `${product.name} | Indian Kart`;
+
+        // Update Open Graph Tags
+        updateMeta('og:title', product.name);
+        updateMeta('og:image', product.image);
+        updateMeta('og:description', `Buy ${product.name} for ₹${selectedPrice?.toLocaleString()} only on Indian Kart.`);
+        updateMeta('og:url', window.location.href);
+        updateMeta('og:type', 'product');
+
+        // Update Twitter Tags
+        updateMeta('twitter:card', 'summary_large_image', false);
+        updateMeta('twitter:title', product.name, false);
+        updateMeta('twitter:image', product.image, false);
+
         let active = true;
         const fetchBankOffers = async () => {
             try {
@@ -613,7 +652,7 @@ const ProductDetails = () => {
             active = false;
             clearTimeout(timer);
         };
-    }, [id, product]);
+    }, [id, product, selectedPrice]);
 
     useEffect(() => {
         let active = true;
