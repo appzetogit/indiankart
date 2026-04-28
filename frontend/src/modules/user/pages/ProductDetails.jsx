@@ -347,6 +347,7 @@ const ProductDetails = () => {
         }
         const productForCart = {
             ...product,
+            image: productImages[0] || product.image,
             price: selectedPrice,
             originalPrice: selectedOriginalPrice,
             maxAllowedQuantity
@@ -373,6 +374,7 @@ const ProductDetails = () => {
         }
         const productForCheckout = {
             ...product,
+            image: productImages[0] || product.image,
             price: selectedPrice,
             originalPrice: selectedOriginalPrice,
             maxAllowedQuantity

@@ -8,7 +8,8 @@ import {
     deleteProduct,
     updateProductStock,
     incrementProductView,
-    getProductViewInsights
+    getProductViewInsights,
+    getPortalViewInsights
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
@@ -33,6 +34,9 @@ router.route('/:id')
 
 router.route('/:id/stock')
     .put(protect, admin, updateProductStock);
+
+router.route('/view-insights/portal')
+    .get(protect, admin, getPortalViewInsights);
 
 router.route('/:id/view-insights')
     .get(protect, admin, getProductViewInsights);
