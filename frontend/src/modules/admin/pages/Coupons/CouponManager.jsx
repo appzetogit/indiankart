@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { MdAdd, MdClose, MdDelete, MdToggleOn, MdToggleOff, MdContentCopy, MdEdit } from 'react-icons/md';
 import useCouponStore from '../../store/couponStore';
+import useCategoryStore from '../../store/categoryStore';
+import useSubCategoryStore from '../../store/subCategoryStore';
+import useBrandStore from '../../store/brandStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
 
 const getInitialCouponData = () => ({
@@ -14,15 +17,32 @@ const getInitialCouponData = () => ({
     maxDiscount: '',
     expiryDate: '',
     userSegment: 'all',
-    applicableCategory: 'all'
+    applicableCategory: 'all',
+    applicableSubCategory: 'all',
+    applicableBrand: 'all'
 });
+
+const normalizeValue = (value) => String(value || '').trim().toLowerCase();
 
 const CouponManager = () => {
     const { coupons, addCoupon, updateCoupon, deleteCoupon, toggleCouponStatus, fetchCoupons } = useCouponStore();
+    const categories = useCategoryStore((state) => state.categories);
+    const fetchCategories = useCategoryStore((state) => state.fetchCategories);
+    const getAllCategoriesFlat = useCategoryStore((state) => state.getAllCategoriesFlat);
+    const subCategories = useSubCategoryStore((state) => state.subCategories);
+    const fetchSubCategories = useSubCategoryStore((state) => state.fetchSubCategories);
+    const brands = useBrandStore((state) => state.brands);
+    const fetchBrands = useBrandStore((state) => state.fetchBrands);
 
     useEffect(() => {
         fetchCoupons();
     }, [fetchCoupons]);
+
+    useEffect(() => {
+        if (!categories.length) fetchCategories();
+        if (!subCategories.length) fetchSubCategories();
+        if (!brands.length) fetchBrands();
+    }, [brands.length, categories.length, fetchBrands, fetchCategories, fetchSubCategories, subCategories.length]);
 
     const [showForm, setShowForm] = useState(false);
     const [editingCouponId, setEditingCouponId] = useState(null);
@@ -31,6 +51,54 @@ const CouponManager = () => {
     const todayStr = new Date().toISOString().split('T')[0];
     const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const isEditing = Boolean(editingCouponId);
+
+    const categoryOptions = useMemo(() => {
+        const unique = new Map();
+        getAllCategoriesFlat().forEach((category) => {
+            const name = String(category?.name || '').trim();
+            if (!name) return;
+            unique.set(name.toLowerCase(), name);
+        });
+        return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
+    }, [categories, getAllCategoriesFlat]);
+
+    const subCategoryOptions = useMemo(() => {
+        const selectedCategory = normalizeValue(couponData.applicableCategory);
+        return (Array.isArray(subCategories) ? subCategories : [])
+            .filter((subCategory) => {
+                if (!selectedCategory || selectedCategory === 'all') return true;
+                return normalizeValue(subCategory?.category?.name) === selectedCategory;
+            })
+            .map((subCategory) => String(subCategory?.name || '').trim())
+            .filter(Boolean)
+            .filter((name, index, all) => all.findIndex((entry) => normalizeValue(entry) === normalizeValue(name)) === index)
+            .sort((a, b) => a.localeCompare(b));
+    }, [couponData.applicableCategory, subCategories]);
+
+    const brandOptions = useMemo(() => {
+        const selectedCategory = normalizeValue(couponData.applicableCategory);
+        const selectedSubCategory = normalizeValue(couponData.applicableSubCategory);
+
+        return (Array.isArray(brands) ? brands : [])
+            .filter((brand) => {
+                const brandSubCategory = normalizeValue(brand?.subcategory?.name || brand?.subcategory);
+                const brandCategory = normalizeValue(brand?.subcategory?.category?.name);
+
+                if (selectedSubCategory && selectedSubCategory !== 'all' && brandSubCategory !== selectedSubCategory) {
+                    return false;
+                }
+                if (selectedCategory && selectedCategory !== 'all' && brandCategory !== selectedCategory) {
+                    return false;
+                }
+                return true;
+            })
+            .map((brand) => String(brand?.name || '').trim())
+            .filter(Boolean)
+            .filter((name, index, all) => all.findIndex((entry) => normalizeValue(entry) === normalizeValue(name)) === index)
+            .sort((a, b) => a.localeCompare(b));
+    }, [brands, couponData.applicableCategory, couponData.applicableSubCategory]);
+    const isAllCategoriesSelected = normalizeValue(couponData.applicableCategory) === 'all';
+    const isAllSubCategoriesSelected = normalizeValue(couponData.applicableSubCategory) === 'all';
 
     const resetForm = () => {
         setCouponData(getInitialCouponData());
@@ -55,10 +123,38 @@ const CouponManager = () => {
             maxDiscount: coupon.maxDiscount ?? '',
             expiryDate: coupon.expiryDate || '',
             userSegment: coupon.userSegment || 'all',
-            applicableCategory: coupon.applicableCategory || 'all'
+            applicableCategory: coupon.applicableCategory || 'all',
+            applicableSubCategory: coupon.applicableSubCategory || 'all',
+            applicableBrand: coupon.applicableBrand || 'all'
         });
         setEditingCouponId(coupon._id);
         setShowForm(true);
+    };
+
+    const updateCouponField = (field, value) => {
+        setCouponData((prev) => {
+            if (field === 'applicableCategory') {
+                return {
+                    ...prev,
+                    applicableCategory: value,
+                    applicableSubCategory: 'all',
+                    applicableBrand: 'all'
+                };
+            }
+
+            if (field === 'applicableSubCategory') {
+                return {
+                    ...prev,
+                    applicableSubCategory: value,
+                    applicableBrand: 'all'
+                };
+            }
+
+            return {
+                ...prev,
+                [field]: value
+            };
+        });
     };
 
     const handleCouponSubmit = async (e) => {
@@ -95,7 +191,7 @@ const CouponManager = () => {
 
             resetForm();
         } catch {
-            // Store shows the backend error toast; keep the form open so admins can fix the values.
+            // Store shows backend error toast.
         }
     };
 
@@ -111,7 +207,7 @@ const CouponManager = () => {
 
     const copyCode = (code) => {
         navigator.clipboard.writeText(code);
-        toast.success('Copied: ' + code);
+        toast.success(`Copied: ${code}`);
     };
 
     const getSegmentLabel = (segment) => {
@@ -185,7 +281,17 @@ const CouponManager = () => {
                                         )}
                                         {coupon.applicableCategory && coupon.applicableCategory !== 'all' && (
                                             <span className="text-[10px] uppercase font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                                                {coupon.applicableCategory} Only
+                                                {coupon.applicableCategory}
+                                            </span>
+                                        )}
+                                        {coupon.applicableSubCategory && coupon.applicableSubCategory !== 'all' && (
+                                            <span className="text-[10px] uppercase font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded">
+                                                {coupon.applicableSubCategory}
+                                            </span>
+                                        )}
+                                        {coupon.applicableBrand && coupon.applicableBrand !== 'all' && (
+                                            <span className="text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                                                {coupon.applicableBrand}
                                             </span>
                                         )}
                                     </div>
@@ -240,7 +346,7 @@ const CouponManager = () => {
 
             {showForm && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                             <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                                 {isEditing ? <MdEdit className="text-blue-500" /> : <MdAdd className="text-pink-500" />}
@@ -251,105 +357,35 @@ const CouponManager = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleCouponSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-                            <div className="grid grid-cols-2 gap-4">
+                        <form onSubmit={handleCouponSubmit} className="p-6 space-y-6 max-h-[85vh] overflow-y-auto">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Coupon Code</label>
                                     <input
                                         type="text"
                                         value={couponData.code}
-                                        onChange={(e) => setCouponData({ ...couponData, code: e.target.value.toUpperCase() })}
+                                        onChange={(e) => updateCouponField('code', e.target.value.toUpperCase())}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none font-mono text-base text-gray-800 uppercase placeholder:text-gray-500"
                                         placeholder="e.g. SAVE20"
                                         required
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title (Short)</label>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Title</label>
                                     <input
                                         type="text"
                                         value={couponData.title}
-                                        onChange={(e) => setCouponData({ ...couponData, title: e.target.value })}
+                                        onChange={(e) => updateCouponField('title', e.target.value)}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none text-base text-gray-800 placeholder:text-gray-500"
                                         placeholder="e.g. Summer Sale"
                                         required
                                     />
                                 </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                                <textarea
-                                    value={couponData.description}
-                                    onChange={(e) => setCouponData({ ...couponData, description: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none h-20 resize-none text-base text-gray-800 placeholder:text-gray-500"
-                                    placeholder="Brief terms or benefits..."
-                                    required
-                                />
-                            </div>
-
-                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-3 border-b border-gray-200 pb-1">Conditions</label>
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Applicable For</label>
-                                        <select
-                                            value={couponData.userSegment}
-                                            onChange={(e) => setCouponData({ ...couponData, userSegment: e.target.value })}
-                                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white outline-none focus:border-blue-500 text-sm font-normal text-gray-800"
-                                        >
-                                            <option value="all">All Users</option>
-                                            <option value="new_user">New Users Only</option>
-                                            <option value="existing_user">Existing Users</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Category</label>
-                                        <select
-                                            value={couponData.applicableCategory}
-                                            onChange={(e) => setCouponData({ ...couponData, applicableCategory: e.target.value })}
-                                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-white outline-none focus:border-blue-500 bg-transparent text-sm font-normal text-gray-800"
-                                        >
-                                            <option value="all">All Categories</option>
-                                            <option value="electronics">Electronics</option>
-                                            <option value="fashion">Fashion</option>
-                                            <option value="home">Home & Kitchen</option>
-                                            <option value="beauty">Beauty</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Min Purchase</label>
-                                        <input
-                                            type="number"
-                                            value={couponData.minPurchase}
-                                            onChange={(e) => setCouponData({ ...couponData, minPurchase: e.target.value })}
-                                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm font-normal text-gray-800 placeholder:text-gray-500"
-                                            placeholder="Rs"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Expiry Date</label>
-                                        <input
-                                            type="date"
-                                            value={couponData.expiryDate}
-                                            onChange={(e) => setCouponData({ ...couponData, expiryDate: e.target.value })}
-                                            min={isEditing ? todayStr : tomorrowStr}
-                                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm font-normal text-gray-800"
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Discount Type</label>
                                     <select
                                         value={couponData.type}
-                                        onChange={(e) => setCouponData({ ...couponData, type: e.target.value })}
+                                        onChange={(e) => updateCouponField('type', e.target.value)}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none bg-white text-base text-gray-800"
                                     >
                                         <option value="percentage">Percentage (%)</option>
@@ -361,7 +397,7 @@ const CouponManager = () => {
                                     <input
                                         type="number"
                                         value={couponData.value}
-                                        onChange={(e) => setCouponData({ ...couponData, value: e.target.value })}
+                                        onChange={(e) => updateCouponField('value', e.target.value)}
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none text-base text-gray-800 placeholder:text-gray-500"
                                         placeholder={couponData.type === 'percentage' ? 'e.g. 20' : 'e.g. 200'}
                                         required
@@ -369,18 +405,133 @@ const CouponManager = () => {
                                 </div>
                             </div>
 
-                            {couponData.type === 'percentage' && (
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Max Discount Limit (Rs)</label>
-                                    <input
-                                        type="number"
-                                        value={couponData.maxDiscount}
-                                        onChange={(e) => setCouponData({ ...couponData, maxDiscount: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none text-base text-gray-800 placeholder:text-gray-500"
-                                        placeholder="e.g. 100"
-                                    />
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
+                                <textarea
+                                    value={couponData.description}
+                                    onChange={(e) => updateCouponField('description', e.target.value)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-pink-500 outline-none h-24 resize-none text-base text-gray-800 placeholder:text-gray-500"
+                                    placeholder="Brief terms or benefits..."
+                                    required
+                                />
+                            </div>
+
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                                <label className="block text-xs font-bold text-gray-500 uppercase border-b border-gray-200 pb-2">Conditions</label>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Applicable For</label>
+                                        <select
+                                            value={couponData.userSegment}
+                                            onChange={(e) => updateCouponField('userSegment', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white outline-none focus:border-blue-500 text-sm text-gray-800"
+                                        >
+                                            <option value="all">All Users</option>
+                                            <option value="new_user">New Users Only</option>
+                                            <option value="existing_user">Existing Users</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Category</label>
+                                        <select
+                                            value={couponData.applicableCategory}
+                                            onChange={(e) => updateCouponField('applicableCategory', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white outline-none focus:border-blue-500 text-sm text-gray-800"
+                                        >
+                                            <option value="all">All Categories</option>
+                                            {categoryOptions.map((category) => (
+                                                <option key={category} value={category}>{category}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Subcategory</label>
+                                        <select
+                                            value={couponData.applicableSubCategory}
+                                            onChange={(e) => updateCouponField('applicableSubCategory', e.target.value)}
+                                            disabled={isAllCategoriesSelected}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm ${
+                                                isAllCategoriesSelected
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-white text-gray-800 focus:border-blue-500'
+                                            }`}
+                                        >
+                                            <option value="all">All Subcategories</option>
+                                            {subCategoryOptions.map((subCategory) => (
+                                                <option key={subCategory} value={subCategory}>{subCategory}</option>
+                                            ))}
+                                        </select>
+                                        {isAllCategoriesSelected && (
+                                            <p className="mt-1 text-[10px] font-medium text-gray-400">
+                                                All Categories selected hai, isliye coupon har subcategory par lagega.
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Brand</label>
+                                        <select
+                                            value={couponData.applicableBrand}
+                                            onChange={(e) => updateCouponField('applicableBrand', e.target.value)}
+                                            disabled={isAllCategoriesSelected || isAllSubCategoriesSelected}
+                                            className={`w-full px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm ${
+                                                isAllCategoriesSelected || isAllSubCategoriesSelected
+                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-white text-gray-800 focus:border-blue-500'
+                                            }`}
+                                        >
+                                            <option value="all">All Brands</option>
+                                            {brandOptions.map((brand) => (
+                                                <option key={brand} value={brand}>{brand}</option>
+                                            ))}
+                                        </select>
+                                        {(isAllCategoriesSelected || isAllSubCategoriesSelected) && (
+                                            <p className="mt-1 text-[10px] font-medium text-gray-400">
+                                                {isAllCategoriesSelected
+                                                    ? 'All Categories selected hai, isliye coupon sabhi brands par lagega.'
+                                                    : 'All Subcategories selected hai, isliye coupon selected category ke sabhi brands par lagega.'}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Min Purchase</label>
+                                        <input
+                                            type="number"
+                                            value={couponData.minPurchase}
+                                            onChange={(e) => updateCouponField('minPurchase', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm text-gray-800 placeholder:text-gray-500"
+                                            placeholder="Rs"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Expiry Date</label>
+                                        <input
+                                            type="date"
+                                            value={couponData.expiryDate}
+                                            onChange={(e) => updateCouponField('expiryDate', e.target.value)}
+                                            min={isEditing ? todayStr : tomorrowStr}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm text-gray-800"
+                                            required
+                                        />
+                                    </div>
+                                    {couponData.type === 'percentage' && (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Max Discount Limit</label>
+                                            <input
+                                                type="number"
+                                                value={couponData.maxDiscount}
+                                                onChange={(e) => updateCouponField('maxDiscount', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm text-gray-800 placeholder:text-gray-500"
+                                                placeholder="e.g. 100"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
 
                             <button
                                 type="submit"

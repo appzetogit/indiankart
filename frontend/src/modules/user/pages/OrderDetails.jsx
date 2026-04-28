@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import InvoiceGenerator from '../../admin/components/orders/InvoiceGenerator';
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getShippingSyncedAt } from '../../../utils/shippingProvider';
+import { useAuthStore } from '../store/authStore';
 
 const RETURN_WINDOW_DAYS = 7;
 const RETURN_CONSUMING_STATUSES = new Set([
@@ -163,15 +164,20 @@ const normalizeOrderStatus = (status = '') => {
 };
 
 const EXCEPTION_STATUSES = new Set(['Cancelled', 'RTO', 'DTO', 'Collected']);
+const getDefaultReviewDraft = () => ({ rating: 5, comment: '' });
 
 const OrderDetails = () => {
     const { orderId } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuthStore();
     const [order, setOrder] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [settings, setSettings] = useState(null);
     const [myReturns, setMyReturns] = useState([]);
+    const [reviewDrafts, setReviewDrafts] = useState({});
+    const [existingReviewsByProduct, setExistingReviewsByProduct] = useState({});
+    const [submittingReviewFor, setSubmittingReviewFor] = useState('');
     const [trackingData, setTrackingData] = useState(null);
     const [deliveryEstimate, setDeliveryEstimate] = useState({
         loading: false,
@@ -461,6 +467,134 @@ const OrderDetails = () => {
         const diffDays = diffMs / (1000 * 60 * 60 * 24);
         return diffDays <= RETURN_WINDOW_DAYS;
     }, [effectiveDeliveredAt]);
+    const deliveredProductIds = useMemo(() => {
+        if (!isDeliveredOrder || !Array.isArray(order?.orderItems)) return [];
+
+        return [...new Set(
+            order.orderItems
+                .map((item) => String(item?.product || '').trim())
+                .filter(Boolean)
+        )];
+    }, [isDeliveredOrder, order?.orderItems]);
+
+    useEffect(() => {
+        if (!deliveredProductIds.length) {
+            setReviewDrafts({});
+            return;
+        }
+
+        setReviewDrafts((prev) => {
+            const next = { ...prev };
+            deliveredProductIds.forEach((productId) => {
+                if (!next[productId]) {
+                    next[productId] = getDefaultReviewDraft();
+                }
+            });
+            return next;
+        });
+    }, [deliveredProductIds]);
+
+    useEffect(() => {
+        if (!isDeliveredOrder || !user?._id || !deliveredProductIds.length) {
+            setExistingReviewsByProduct({});
+            return;
+        }
+
+        let cancelled = false;
+
+        const fetchExistingReviews = async () => {
+            try {
+                const results = await Promise.all(
+                    deliveredProductIds.map(async (productId) => {
+                        const { data } = await API.get(`/reviews/product/${productId}`);
+                        return {
+                            productId,
+                            reviews: Array.isArray(data) ? data : []
+                        };
+                    })
+                );
+
+                if (cancelled) return;
+
+                const next = {};
+                results.forEach(({ productId, reviews }) => {
+                    const myReview = reviews.find((review) => String(review?.user) === String(user._id));
+                    if (myReview) {
+                        next[productId] = myReview;
+                    }
+                });
+                setExistingReviewsByProduct(next);
+            } catch (err) {
+                if (!cancelled) {
+                    console.error('Fetch existing reviews error:', err);
+                    setExistingReviewsByProduct({});
+                }
+            }
+        };
+
+        fetchExistingReviews();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [deliveredProductIds, isDeliveredOrder, user?._id]);
+
+    const updateReviewDraft = (productId, updates) => {
+        const key = String(productId || '').trim();
+        if (!key) return;
+
+        setReviewDrafts((prev) => ({
+            ...prev,
+            [key]: {
+                ...(prev[key] || getDefaultReviewDraft()),
+                ...updates
+            }
+        }));
+    };
+
+    const handleSubmitReview = async (item) => {
+        const productId = String(item?.product || '').trim();
+        if (!productId) {
+            toast.error('Review cannot be submitted for this item.');
+            return;
+        }
+
+        const draft = reviewDrafts[productId] || getDefaultReviewDraft();
+        const comment = String(draft.comment || '').trim();
+
+        if (!comment) {
+            toast.error('Please write a short review before submitting.');
+            return;
+        }
+
+        try {
+            setSubmittingReviewFor(productId);
+            const { data } = await API.post('/reviews', {
+                productId: item.product,
+                rating: draft.rating,
+                comment
+            });
+
+            setExistingReviewsByProduct((prev) => ({
+                ...prev,
+                [productId]: {
+                    ...data,
+                    user: user?._id || data?.user,
+                    name: user?.name || data?.name || 'You'
+                }
+            }));
+            setReviewDrafts((prev) => ({
+                ...prev,
+                [productId]: getDefaultReviewDraft()
+            }));
+            toast.success('Your review has been published successfully!');
+        } catch (err) {
+            console.error('Submit review error:', err);
+            toast.error(err.response?.data?.message || 'Failed to submit review. Please try again.');
+        } finally {
+            setSubmittingReviewFor('');
+        }
+    };
 
     const getStepTimestamp = (stepStatus, stepIndex) => {
         if (stepStatus === 'Pending') return formatTrackingDate(order?.createdAt);
@@ -782,6 +916,10 @@ const OrderDetails = () => {
                                     const derivedStatus = hasPartialRequest
                                         ? `${itemMeta.consumedQty}/${itemMeta.orderedQty} units in return flow`
                                         : (item.status && item.status !== order.status ? item.status : '');
+                                    const reviewProductKey = String(item?.product || '').trim();
+                                    const reviewDraft = reviewDrafts[reviewProductKey] || getDefaultReviewDraft();
+                                    const existingReview = existingReviewsByProduct[reviewProductKey];
+                                    const isSubmittingReview = submittingReviewFor === reviewProductKey;
 
                                     return (
                                     <div key={index} className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200">
@@ -827,6 +965,71 @@ const OrderDetails = () => {
                                                         </p>
                                                     )}
                                                 </>
+                                            )}
+
+                                            {isDeliveredOrder && reviewProductKey && (
+                                                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-900">Rate this product</p>
+                                                            <p className="text-xs text-gray-500">Your review will be visible immediately on the product page.</p>
+                                                        </div>
+                                                        {existingReview && (
+                                                            <span className="rounded-full bg-green-100 px-3 py-1 text-[11px] font-bold text-green-700">
+                                                                Reviewed
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {existingReview ? (
+                                                        <div className="mt-3 rounded-xl border border-green-100 bg-white p-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-1 rounded-lg bg-green-600 px-2 py-1 text-xs font-bold text-white">
+                                                                    {existingReview.rating}
+                                                                    <span className="material-icons !text-[14px]">star</span>
+                                                                </div>
+                                                                <span className="text-xs font-semibold text-gray-500">
+                                                                    {existingReview.createdAt ? new Date(existingReview.createdAt).toLocaleDateString('en-IN') : 'Just now'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="mt-2 text-sm text-gray-700">{existingReview.comment}</p>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <div className="mt-3 flex gap-2">
+                                                                {[1, 2, 3, 4, 5].map((star) => (
+                                                                    <button
+                                                                        key={star}
+                                                                        type="button"
+                                                                        onClick={() => updateReviewDraft(reviewProductKey, { rating: star })}
+                                                                        className={`flex h-9 w-9 items-center justify-center rounded-lg border transition-all ${
+                                                                            reviewDraft.rating >= star
+                                                                                ? 'border-green-600 bg-green-600 text-white'
+                                                                                : 'border-gray-200 bg-white text-gray-300'
+                                                                        }`}
+                                                                    >
+                                                                        <span className="material-icons !text-[18px]">star</span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                            <textarea
+                                                                value={reviewDraft.comment}
+                                                                onChange={(e) => updateReviewDraft(reviewProductKey, { comment: e.target.value })}
+                                                                rows={3}
+                                                                placeholder="Share your experience with this product"
+                                                                className="mt-3 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-all focus:border-green-500"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleSubmitReview(item)}
+                                                                disabled={isSubmittingReview}
+                                                                className="mt-3 inline-flex items-center justify-center rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                                                            >
+                                                                {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     </div>

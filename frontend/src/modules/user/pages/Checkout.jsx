@@ -27,6 +27,48 @@ const isCouponExpired = (coupon) => {
     return expiry < todayDateOnly;
 };
 
+const normalizeCouponScopeValue = (value) => String(value || '').trim().toLowerCase();
+
+const getCouponApplicabilityError = (coupon, items = []) => {
+    const categoryScope = normalizeCouponScopeValue(coupon?.applicableCategory);
+    const subCategoryScope = normalizeCouponScopeValue(coupon?.applicableSubCategory);
+    const brandScope = normalizeCouponScopeValue(coupon?.applicableBrand);
+
+    if (categoryScope === 'all' && subCategoryScope === 'all' && brandScope === 'all') {
+        return '';
+    }
+
+    const hasEligibleItem = (Array.isArray(items) ? items : []).some((item) => {
+        const itemCategory = normalizeCouponScopeValue(item?.category?.name || item?.category);
+        const itemBrand = normalizeCouponScopeValue(item?.subcategoryBrand || item?.brand);
+        const itemSubCategories = Array.isArray(item?.subCategories)
+            ? item.subCategories.map((sub) => normalizeCouponScopeValue(sub?.name || sub))
+            : [];
+
+        const matchesCategory = categoryScope === 'all' || itemCategory === categoryScope;
+        const matchesSubCategory = subCategoryScope === 'all' || itemSubCategories.includes(subCategoryScope);
+        const matchesBrand = brandScope === 'all' || itemBrand === brandScope;
+
+        return matchesCategory && matchesSubCategory && matchesBrand;
+    });
+
+    if (hasEligibleItem) {
+        return '';
+    }
+
+    if (brandScope !== 'all') {
+        return `This coupon is valid only for ${coupon.applicableBrand} brand items`;
+    }
+    if (subCategoryScope !== 'all') {
+        return `This coupon is valid only for ${coupon.applicableSubCategory} items`;
+    }
+    if (categoryScope !== 'all') {
+        return `This coupon is valid only for ${coupon.applicableCategory} category items`;
+    }
+
+    return 'This coupon is not applicable to your current cart';
+};
+
 const buildEstimatedDeliveryText = (deliveryTime, unit) => {
     const timeValue = Number(deliveryTime);
     const normalizedUnit = String(unit || '').toLowerCase();
@@ -222,7 +264,11 @@ const Checkout = () => {
 
     const [couponInput, setCouponInput] = useState('');
     const [couponError, setCouponError] = useState('');
-    const visibleCoupons = coupons.filter((coupon) => Boolean(coupon?.code) && !isCouponExpired(coupon));
+    const visibleCoupons = coupons.filter((coupon) => (
+        Boolean(coupon?.code)
+        && !isCouponExpired(coupon)
+        && !getCouponApplicabilityError(coupon, checkoutItems)
+    ));
     const couponInputPlaceholder = appliedCoupon ? `Applied: ${appliedCoupon.code}` : 'Enter Coupon Code';
 
     const handleApplyCoupon = (codeOverride = null) => {
@@ -246,6 +292,11 @@ const Checkout = () => {
             }
             if (isCouponExpired(coupon)) {
                 setCouponError('This coupon has expired');
+                return;
+            }
+            const applicabilityError = getCouponApplicabilityError(coupon, checkoutItems);
+            if (applicabilityError) {
+                setCouponError(applicabilityError);
                 return;
             }
 

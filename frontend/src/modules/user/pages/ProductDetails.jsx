@@ -1205,7 +1205,7 @@ const ProductDetails = () => {
                                                 comment: newReview.comment
                                             });
                                             setNewReview({ rating: 5, comment: '' });
-                                            toast.success("Your review has been submitted for approval!");
+                                            toast.success("Your review has been published successfully!");
                                         } catch (err) {
                                             console.error("Error posting review:", err);
                                             toast.error(err.response?.data?.message || "Failed to post review. Please login.");
@@ -1666,7 +1666,7 @@ const ProductDetails = () => {
                                                     comment: newReview.comment
                                                 });
                                                 setNewReview({ rating: 5, comment: '' });
-                                                toast.success("Your review has been submitted for approval!");
+                                                toast.success("Your review has been published successfully!");
                                             } catch (err) {
                                                 console.error("Error posting review:", err);
                                                 toast.error(err.response?.data?.message || "Failed to post review. Please login.");
