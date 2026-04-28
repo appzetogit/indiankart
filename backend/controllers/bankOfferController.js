@@ -2,6 +2,9 @@ import BankOffer from '../models/BankOffer.js';
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
+import Brand from '../models/Brand.js';
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // @desc    Create a new bank offer
 // @route   POST /api/bank-offers
@@ -21,6 +24,7 @@ const createBankOffer = async (req, res) => {
         isUniversal,
         applicableCategories,
         applicableSubCategories,
+        applicableBrands,
         applicableProducts,
         razorpayOfferId
     } = req.body;
@@ -43,6 +47,7 @@ const createBankOffer = async (req, res) => {
         isUniversal: isUniversal || false,
         applicableCategories: applicableCategories || [],
         applicableSubCategories: applicableSubCategories || [],
+        applicableBrands: applicableBrands || [],
         applicableProducts: applicableProducts || [],
         razorpayOfferId: razorpayOfferId || ''
     });
@@ -72,6 +77,7 @@ const updateBankOffer = async (req, res) => {
         isUniversal,
         applicableCategories,
         applicableSubCategories,
+        applicableBrands,
         applicableProducts,
         razorpayOfferId
     } = req.body;
@@ -99,6 +105,7 @@ const updateBankOffer = async (req, res) => {
     offer.isUniversal = Boolean(isUniversal);
     offer.applicableCategories = applicableCategories || [];
     offer.applicableSubCategories = applicableSubCategories || [];
+    offer.applicableBrands = applicableBrands || [];
     offer.applicableProducts = applicableProducts || [];
     offer.razorpayOfferId = razorpayOfferId || '';
 
@@ -149,7 +156,7 @@ const updateBankOfferStatus = async (req, res) => {
 const getActiveBankOffers = async (req, res) => {
     try {
         const offers = await BankOffer.find({ isActive: true })
-            .select('offerName description bankName discountType discountValue razorpayOfferId isUniversal applicableCategories applicableSubCategories applicableProducts')
+            .select('offerName description bankName discountType discountValue razorpayOfferId isUniversal applicableCategories applicableSubCategories applicableBrands applicableProducts')
             .sort({ createdAt: -1 });
         res.json(offers);
     } catch (error) {
@@ -179,6 +186,25 @@ const getBankOffersForProduct = async (req, res) => {
             if (category) {
                 categoryObjectId = category._id;
             }
+        }
+
+        const normalizedBrandName = String(product.subcategoryBrand || product.brand || '').trim();
+        let productBrandIds = [];
+        if (normalizedBrandName) {
+            const matchingBrands = await Brand.find({
+                name: new RegExp(`^${escapeRegex(normalizedBrandName)}$`, 'i')
+            }).select('_id subcategory');
+
+            const productSubCategoryIds = Array.isArray(product.subCategories)
+                ? product.subCategories.map((id) => id.toString())
+                : [];
+
+            productBrandIds = matchingBrands
+                .filter((brand) => {
+                    if (productSubCategoryIds.length === 0) return true;
+                    return productSubCategoryIds.includes(String(brand?.subcategory || ''));
+                })
+                .map((brand) => brand._id.toString());
         }
 
         // 3. Fetch All Active Offers
@@ -212,6 +238,14 @@ const getBankOffersForProduct = async (req, res) => {
                  if (productSubCatIds.some(id => offerSubCatIds.includes(id))) {
                      return true;
                  }
+            }
+
+            // E. Brand Specific
+            if (productBrandIds.length > 0 && offer.applicableBrands && offer.applicableBrands.length > 0) {
+                const offerBrandIds = offer.applicableBrands.map((id) => id.toString());
+                if (productBrandIds.some((id) => offerBrandIds.includes(id))) {
+                    return true;
+                }
             }
 
             return false;

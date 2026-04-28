@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MdSearch, MdFilterList, MdVisibility, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
+import { MdSearch, MdFilterList, MdVisibility, MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel, MdDownload } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api';
@@ -21,6 +21,14 @@ const normalizeOrderStatus = (status = '') => {
     const value = String(status || '').trim();
     if (value === 'Shipped') return 'Dispatched';
     return value;
+};
+
+const escapeCsvCell = (value) => {
+    const text = String(value ?? '');
+    if (/[",\n]/.test(text)) {
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
 };
 
 const transformOrder = (order) => {
@@ -69,6 +77,7 @@ const OrderList = () => {
     const [serialInputs, setSerialInputs] = useState({});
     const [serialTypes, setSerialTypes] = useState({});
     const [serialSavingOrderId, setSerialSavingOrderId] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
     const itemsPerPage = 20;
 
     useEffect(() => {
@@ -266,6 +275,110 @@ const OrderList = () => {
         }
     };
 
+    const handleExportOrders = async () => {
+        setIsExporting(true);
+        try {
+            const params = { syncPayments: false };
+            if (searchTerm) params.search = searchTerm;
+            if (statusFilter !== 'All') params.status = statusFilter;
+            if (userEmailFilter) params.user = userEmailFilter;
+
+            const { data } = await API.get('/orders', { params });
+            const exportOrders = Array.isArray(data)
+                ? data.map((order) => transformOrder(order))
+                : Array.isArray(data?.orders)
+                    ? data.orders.map((order) => transformOrder(order))
+                    : [];
+
+            if (!exportOrders.length) {
+                toast.error('No orders available to export');
+                return;
+            }
+
+            const headers = [
+                'Order ID',
+                'Display ID',
+                'Order Date',
+                'Customer Name',
+                'Customer Email',
+                'Customer Phone',
+                'Status',
+                'Payment Method',
+                'Payment Status',
+                'Items',
+                'Total Quantity',
+                'Items Price',
+                'Shipping Price',
+                'Tax Price',
+                'Total Amount',
+                'Shipping Name',
+                'Shipping Street',
+                'Shipping City',
+                'Shipping State',
+                'Shipping Pincode',
+                'Shipping Country',
+                'Transaction ID'
+            ];
+
+            const rows = exportOrders.map((order) => {
+                const items = Array.isArray(order.items) ? order.items : [];
+                const itemSummary = items.map((item) => {
+                    const variantText = item?.variant && Object.keys(item.variant).length > 0
+                        ? ` (${Object.entries(item.variant).map(([key, value]) => `${key}: ${value}`).join(', ')})`
+                        : '';
+                    return `${item.name} x${item.quantity}${variantText}`;
+                }).join(' | ');
+
+                const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+                return [
+                    order.id,
+                    order.displayId || '',
+                    order.date ? new Date(order.date).toLocaleString('en-IN') : '',
+                    order.user?.name || order.shippingAddress?.name || '',
+                    order.user?.email || order.shippingAddress?.email || '',
+                    order.user?.phone || order.shippingAddress?.phone || '',
+                    order.status || '',
+                    order.payment?.method || '',
+                    order.payment?.status || '',
+                    itemSummary,
+                    totalQuantity,
+                    Number(order.itemsPrice || 0),
+                    Number(order.shippingPrice || 0),
+                    Number(order.taxPrice || 0),
+                    Number(order.total || 0),
+                    order.shippingAddress?.name || '',
+                    order.shippingAddress?.street || '',
+                    order.shippingAddress?.city || '',
+                    order.shippingAddress?.state || '',
+                    order.shippingAddress?.postalCode || '',
+                    order.shippingAddress?.country || '',
+                    order.transactionId || order.payment?.transactionId || ''
+                ];
+            });
+
+            const csvContent = [headers, ...rows]
+                .map((row) => row.map((cell) => escapeCsvCell(cell)).join(','))
+                .join('\n');
+
+            const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `orders_export_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success(`Exported ${exportOrders.length} orders`);
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to export orders');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="space-y-3 md:space-y-4 px-2 md:px-0">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
@@ -273,6 +386,15 @@ const OrderList = () => {
                     <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight">Order Management</h1>
                     <p className="text-xs md:text-sm text-gray-500 font-medium italic">Monitor sales and live fulfillment progress ({filteredOrders.length} total)</p>
                 </div>
+                <button
+                    type="button"
+                    onClick={handleExportOrders}
+                    disabled={isExporting}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                >
+                    <MdDownload size={18} />
+                    {isExporting ? 'Exporting...' : 'Download Excel'}
+                </button>
             </div>
 
             <div className="bg-white p-3 md:p-4 rounded-xl md:rounded-3xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 md:gap-4 items-center justify-between">

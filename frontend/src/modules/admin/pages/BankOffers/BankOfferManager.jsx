@@ -3,6 +3,7 @@ import { MdLocalOffer, MdDelete, MdAdd, MdCheckCircle, MdCancel, MdEdit } from '
 import useBankOfferStore from '../../store/bankOfferStore';
 import useCategoryStore from '../../store/categoryStore';
 import useSubCategoryStore from '../../store/subCategoryStore';
+import useBrandStore from '../../store/brandStore';
 import useProductStore from '../../store/productStore';
 import { toast } from 'react-hot-toast';
 
@@ -20,6 +21,7 @@ const getInitialFormData = () => ({
     isUniversal: false,
     applicableCategories: [],
     applicableSubCategories: [],
+    applicableBrands: [],
     applicableProducts: [],
     razorpayOfferId: ''
 });
@@ -28,6 +30,7 @@ const BankOfferManager = () => {
     const { offers, fetchOffers, createOffer, updateOffer, deleteOffer, toggleOfferStatus, isLoading } = useBankOfferStore();
     const { categories, fetchCategories } = useCategoryStore();
     const { subCategories, fetchSubCategories } = useSubCategoryStore();
+    const { brands, fetchBrands } = useBrandStore();
     const { products, fetchProducts } = useProductStore();
     
     const [formData, setFormData] = useState(getInitialFormData);
@@ -35,6 +38,7 @@ const BankOfferManager = () => {
 
     const [catSearch, setCatSearch] = useState('');
     const [subCatSearch, setSubCatSearch] = useState('');
+    const [brandSearch, setBrandSearch] = useState('');
     const [prodSearch, setProdSearch] = useState('');
     const isEditing = Boolean(editingOfferId);
 
@@ -63,14 +67,16 @@ const BankOfferManager = () => {
         fetchOffers();
         fetchCategories();
         fetchSubCategories();
+        fetchBrands();
         fetchProducts();
-    }, [fetchOffers, fetchCategories, fetchSubCategories, fetchProducts]);
+    }, [fetchOffers, fetchCategories, fetchSubCategories, fetchBrands, fetchProducts]);
 
     const resetForm = () => {
         setFormData(getInitialFormData());
         setEditingOfferId(null);
         setCatSearch('');
         setSubCatSearch('');
+        setBrandSearch('');
         setProdSearch('');
     };
 
@@ -132,12 +138,14 @@ const BankOfferManager = () => {
             isUniversal: Boolean(offer.isUniversal),
             applicableCategories: Array.isArray(offer.applicableCategories) ? offer.applicableCategories.map((item) => item?._id || item?.id || item) : [],
             applicableSubCategories: Array.isArray(offer.applicableSubCategories) ? offer.applicableSubCategories.map((item) => item?._id || item?.id || item) : [],
+            applicableBrands: Array.isArray(offer.applicableBrands) ? offer.applicableBrands.map((item) => item?._id || item?.id || item) : [],
             applicableProducts: Array.isArray(offer.applicableProducts) ? offer.applicableProducts.map((item) => item?._id || item?.id || item) : [],
             razorpayOfferId: offer.razorpayOfferId || ''
         });
         setEditingOfferId(offer._id);
         setCatSearch('');
         setSubCatSearch('');
+        setBrandSearch('');
         setProdSearch('');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -176,6 +184,26 @@ const BankOfferManager = () => {
             })
             .filter(Boolean)
     ), [subCategories]);
+
+    const normalizedBrandOptions = useMemo(() => (
+        (Array.isArray(brands) ? brands : [])
+            .map((brand) => {
+                const optionId = brand?._id || brand?.id;
+                const brandName = brand?.name || '';
+                const subCategoryName = brand?.subcategory?.name || '';
+                const categoryName = brand?.subcategory?.category?.name || '';
+
+                if (!optionId || !brandName) return null;
+
+                const scopeLabel = [subCategoryName, categoryName].filter(Boolean).join(' / ');
+
+                return {
+                    id: optionId,
+                    label: scopeLabel ? `${brandName} (${scopeLabel})` : brandName
+                };
+            })
+            .filter(Boolean)
+    ), [brands]);
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-10">
@@ -353,7 +381,7 @@ const BankOfferManager = () => {
                         </div>
 
                         {!formData.isUniversal && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
                                 
                                 {/* Categories */}
                                 <div className="space-y-4 p-6 bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
@@ -442,6 +470,51 @@ const BankOfferManager = () => {
                                             </div>
                                         ))}
                                         {formData.applicableSubCategories.length === 0 && <span className="text-xs text-gray-400 italic px-2">No subcategories selected</span>}
+                                    </div>
+                                </div>
+
+                                {/* Brands */}
+                                <div className="space-y-4 p-6 bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block">Applicable Brands</label>
+                                        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{formData.applicableBrands.length} Selected</span>
+                                    </div>
+
+                                    <div className="relative group">
+                                        <input
+                                            type="text"
+                                            placeholder="Search brands..."
+                                            value={brandSearch}
+                                            onChange={(e) => setBrandSearch(e.target.value)}
+                                            className="w-full px-4 py-2.5 bg-gray-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl outline-none text-xs font-bold text-gray-900 transition-all mb-2"
+                                        />
+                                        <select
+                                            value=""
+                                            onChange={(e) => {
+                                                handleAddId('applicableBrands', e.target.value);
+                                                setBrandSearch('');
+                                            }}
+                                            className="w-full px-4 py-2.5 bg-gray-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl outline-none text-xs font-bold text-gray-900 appearance-none cursor-pointer"
+                                        >
+                                            <option value="">+ Add Brand</option>
+                                            {normalizedBrandOptions
+                                                .filter((brand) => brand.label.toLowerCase().includes(brandSearch.toLowerCase()))
+                                                .filter((brand) => !formData.applicableBrands.includes(brand.id))
+                                                .map((brand) => (
+                                                    <option key={brand.id} value={brand.id}>{brand.label}</option>
+                                                ))
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2 min-h-[40px] pt-2">
+                                        {formData.applicableBrands.map((id) => (
+                                            <div key={id} className="flex items-center gap-2 px-3 py-1.5 bg-cyan-50 border border-cyan-100 rounded-full animate-in zoom-in duration-200">
+                                                <span className="text-[11px] font-black text-cyan-700">{normalizedBrandOptions.find((brand) => brand.id === id)?.label || getName(brands, id)}</span>
+                                                <button type="button" onClick={() => handleRemoveId('applicableBrands', id)} className="text-cyan-400 hover:text-red-500 transition-colors"><MdCancel size={16} /></button>
+                                            </div>
+                                        ))}
+                                        {formData.applicableBrands.length === 0 && <span className="text-xs text-gray-400 italic px-2">No brands selected</span>}
                                     </div>
                                 </div>
 
@@ -582,6 +655,7 @@ const BankOfferManager = () => {
                                     {offer.isUniversal ? 'Entire Store' : [
                                         offer.applicableCategories?.length > 0 && `${offer.applicableCategories.length} Categories`,
                                         offer.applicableSubCategories?.length > 0 && `${offer.applicableSubCategories.length} Sub-cats`,
+                                        offer.applicableBrands?.length > 0 && `${offer.applicableBrands.length} Brands`,
                                         offer.applicableProducts?.length > 0 && `${offer.applicableProducts.length} Specific Prods`
                                     ].filter(Boolean).join(' • ') || 'None'}
                                 </p>

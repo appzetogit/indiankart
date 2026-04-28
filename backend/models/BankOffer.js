@@ -60,6 +60,10 @@ const bankOfferSchema = mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'SubCategory'
     }],
+    applicableBrands: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Brand'
+    }],
     applicableProducts: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Product'
