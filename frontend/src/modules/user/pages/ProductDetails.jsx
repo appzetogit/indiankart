@@ -289,6 +289,14 @@ const ProductDetails = () => {
         ) || null;
     }, [product, selectedVariants, displayVariantHeadings]);
 
+    const isVariantSelectionComplete = React.useMemo(() => {
+        if (displayVariantHeadings.length === 0) return true;
+        return displayVariantHeadings.every((vh) => {
+            const headingName = String(vh?.name || '').trim();
+            return headingName && String(selectedVariants[headingName] || '').trim();
+        });
+    }, [displayVariantHeadings, selectedVariants]);
+
     const selectedPrice = selectedSku?.price ?? product?.price ?? 0;
     const selectedOriginalPrice = selectedSku?.originalPrice ?? product?.originalPrice ?? selectedPrice;
     const discountPercentage = selectedOriginalPrice > selectedPrice
@@ -345,6 +353,10 @@ const ProductDetails = () => {
             navigate('/login', { state: { from: window.location.pathname } });
             return;
         }
+        if (!isVariantSelectionComplete || (displayVariantHeadings.length > 0 && !selectedSku)) {
+            toast.error('Please select a valid product variant before adding to cart');
+            return;
+        }
         const productForCart = {
             ...product,
             image: productImages[0] || product.image,
@@ -361,6 +373,10 @@ const ProductDetails = () => {
         if (!isAuthenticated) {
             toast.error('Please login first to buy items');
             navigate('/login', { state: { from: window.location.pathname } });
+            return;
+        }
+        if (!isVariantSelectionComplete || (displayVariantHeadings.length > 0 && !selectedSku)) {
+            toast.error('Please select a valid product variant before continuing');
             return;
         }
         if (addresses.length === 0) {

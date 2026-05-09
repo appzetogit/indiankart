@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MdLocalShipping, MdCheckCircle, MdPendingActions, MdCancel } from 'react-icons/md';
 import toast from 'react-hot-toast';
@@ -54,6 +54,50 @@ const transformOrder = (order) => {
     };
 };
 
+const OrderListLoadingState = ({ message = 'Loading orders...' }) => (
+    <div className="space-y-4 animate-pulse">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {[0, 1, 2].map((card) => (
+                <div key={card} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="h-3 w-24 rounded-full bg-gray-200" />
+                    <div className="mt-3 h-7 w-20 rounded-full bg-gray-300" />
+                    <div className="mt-3 h-3 w-32 rounded-full bg-gray-200" />
+                </div>
+            ))}
+        </div>
+        <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-4 py-4 md:px-6">
+                <div className="flex gap-3">
+                    <div className="h-4 w-10 rounded-full bg-gray-200" />
+                    <div className="h-4 w-28 rounded-full bg-gray-200" />
+                    <div className="h-4 w-24 rounded-full bg-gray-200" />
+                </div>
+            </div>
+            <div className="space-y-3 px-4 py-4 md:px-6 md:py-5">
+                {[0, 1, 2, 3, 4].map((row) => (
+                    <div key={row} className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-100 bg-gray-50/80 p-4 md:grid-cols-[1.2fr_1fr_1.4fr_0.9fr_0.8fr]">
+                        <div className="space-y-2">
+                            <div className="h-3 w-28 rounded-full bg-gray-200" />
+                            <div className="h-4 w-40 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="h-3 w-20 rounded-full bg-gray-200" />
+                            <div className="h-4 w-32 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="h-3 w-24 rounded-full bg-gray-200" />
+                            <div className="h-4 w-full rounded-full bg-gray-300" />
+                        </div>
+                        <div className="h-8 w-24 rounded-full bg-gray-300" />
+                        <div className="h-8 w-20 rounded-full bg-gray-200 justify-self-end" />
+                    </div>
+                ))}
+            </div>
+        </div>
+        <p className="text-center text-sm font-semibold text-gray-500">{message}</p>
+    </div>
+);
+
 const OrderList = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -71,10 +115,19 @@ const OrderList = () => {
     const [serialInputs, setSerialInputs] = useState({});
     const [serialTypes, setSerialTypes] = useState({});
     const [serialSavingOrderId, setSerialSavingOrderId] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+    const [fetchError, setFetchError] = useState('');
+    const latestRequestRef = useRef(0);
     const itemsPerPage = 20;
 
     useEffect(() => {
         const fetchPaginatedOrders = async () => {
+            const requestId = latestRequestRef.current + 1;
+            latestRequestRef.current = requestId;
+            setIsLoading(true);
+            setFetchError('');
+
             try {
                 const params = {
                     pageNumber: currentPage,
@@ -87,15 +140,26 @@ const OrderList = () => {
                 if (userEmailFilter) params.user = userEmailFilter;
 
                 const { data } = await API.get('/orders', { params });
+                if (requestId !== latestRequestRef.current) return;
 
                 if (data.orders) {
                     setLocalOrders(data.orders.map((order) => transformOrder(order)));
-                    setTotalPages(data.pages);
+                    setTotalPages(data.pages || 1);
                 } else {
                     setLocalOrders(Array.isArray(data) ? data.map((order) => transformOrder(order)) : []);
+                    setTotalPages(1);
                 }
+                setHasLoadedOnce(true);
             } catch (error) {
                 console.error(error);
+                if (requestId !== latestRequestRef.current) return;
+                const message = error.response?.data?.message || 'Failed to load orders';
+                setFetchError(message);
+                toast.error(message);
+            } finally {
+                if (requestId === latestRequestRef.current) {
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -290,6 +354,18 @@ const OrderList = () => {
                 }}
             />
 
+            {isLoading && !hasLoadedOnce ? (
+                <OrderListLoadingState />
+            ) : fetchError && filteredOrders.length === 0 ? (
+                <div className="rounded-3xl border border-red-100 bg-red-50 px-6 py-10 text-center">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-red-500 shadow-sm">
+                        <MdCancel size={28} />
+                    </div>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-red-500">Could not load orders</p>
+                    <p className="mt-2 text-sm font-medium text-red-700">{fetchError}</p>
+                </div>
+            ) : (
+                <>
             {selectedCount > 0 && (
                 <div className="bg-gray-950 text-white p-3 md:p-4 rounded-xl md:rounded-2xl border border-gray-800 shadow-sm flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
                     <div>
@@ -350,7 +426,10 @@ const OrderList = () => {
                     setSerialTypes={setSerialTypes}
                     serialSavingOrderId={serialSavingOrderId}
                     navigate={navigate}
+                    isRefreshing={isLoading}
                 />
+            )}
+                </>
             )}
         </div>
     );

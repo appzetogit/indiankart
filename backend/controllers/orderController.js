@@ -41,6 +41,94 @@ const getEffectivePurchaseLimit = (product, availableStock) => {
     return Math.min(stockLimit, configuredLimit);
 };
 
+const getProductVariantHeadings = (product) => (
+    Array.isArray(product?.variantHeadings)
+        ? product.variantHeadings.filter((heading) => String(heading?.name || '').trim())
+        : []
+);
+
+const normalizeVariantObject = (variant) => {
+    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
+        return {};
+    }
+
+    return Object.entries(variant).reduce((acc, [key, value]) => {
+        const normalizedKey = String(key || '').trim();
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedKey || !normalizedValue) return acc;
+        acc[normalizedKey] = normalizedValue;
+        return acc;
+    }, {});
+};
+
+const findMatchingSkuForVariant = (product, variant) => {
+    const normalizedVariant = normalizeVariantObject(variant);
+    const itemKeys = Object.keys(normalizedVariant);
+    if (!itemKeys.length) return null;
+
+    return (Array.isArray(product?.skus) ? product.skus : []).find((sku) => {
+        const combinationSource = sku?.combination instanceof Map
+            ? Object.fromEntries(sku.combination)
+            : sku?.combination;
+        const combination = normalizeVariantObject(combinationSource);
+        const combinationKeys = Object.keys(combination);
+
+        if (itemKeys.length !== combinationKeys.length) return false;
+        return itemKeys.every((key) => String(normalizedVariant[key]) === String(combination[key]));
+    }) || null;
+};
+
+const validateAndResolveOrderItemVariant = (product, item) => {
+    const productVariantHeadings = getProductVariantHeadings(product);
+    const normalizedVariant = normalizeVariantObject(item?.variant);
+    const hasVariantProduct = productVariantHeadings.length > 0;
+
+    if (!hasVariantProduct) {
+        return {
+            normalizedVariant,
+            matchingSku: null
+        };
+    }
+
+    if (!Object.keys(normalizedVariant).length) {
+        const error = new Error(`Please reselect the variant for ${item?.name || product?.name || 'this product'} before placing the order.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    for (const heading of productVariantHeadings) {
+        const headingName = String(heading?.name || '').trim();
+        const selectedValue = normalizedVariant[headingName];
+        const validOptions = Array.isArray(heading?.options)
+            ? heading.options.map((option) => String(option?.name || '').trim()).filter(Boolean)
+            : [];
+
+        if (!selectedValue) {
+            const error = new Error(`Please select ${headingName} for ${item?.name || product?.name || 'this product'}.`);
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (validOptions.length > 0 && !validOptions.includes(selectedValue)) {
+            const error = new Error(`The selected ${headingName} for ${item?.name || product?.name || 'this product'} is no longer available.`);
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const matchingSku = findMatchingSkuForVariant(product, normalizedVariant);
+    if (!matchingSku) {
+        const error = new Error(`The selected variant for ${item?.name || product?.name || 'this product'} is invalid or unavailable.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return {
+        normalizedVariant,
+        matchingSku
+    };
+};
+
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
@@ -670,6 +758,8 @@ export const addOrderItems = async (req, res) => {
             }
         }
 
+        const resolvedOrderItems = [];
+
         // 1. Initial Stock Validation (Pre-creation)
         for (const item of orderItems) {
             const product = await Product.findOne({ id: item.product || item._id });
@@ -677,21 +767,16 @@ export const addOrderItems = async (req, res) => {
                 return res.status(404).json({ message: `Product not found: ${item.name}` });
             }
 
+            const { normalizedVariant, matchingSku } = validateAndResolveOrderItemVariant(product, item);
+
             // Check Variant Stock if applicable
-            if (item.variant && Object.keys(item.variant).length > 0) {
-                const sku = product.skus.find(s => {
-                    const comb = s.combination instanceof Map ? Object.fromEntries(s.combination) : s.combination;
-                    const itemKeys = Object.keys(item.variant);
-                    const combKeys = Object.keys(comb);
-                    if (itemKeys.length !== combKeys.length) return false;
-                    return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
-                });
-                const purchaseLimit = getEffectivePurchaseLimit(product, sku?.stock);
-                
-                if (!sku || purchaseLimit < item.qty) {
+            if (matchingSku) {
+                const purchaseLimit = getEffectivePurchaseLimit(product, matchingSku.stock);
+
+                if (purchaseLimit < item.qty) {
                     return res.status(400).json({ 
                         message: purchaseLimit <= 0
-                            ? `Insufficient stock for ${item.name} (${Object.values(item.variant).join(', ')})`
+                            ? `Insufficient stock for ${item.name} (${Object.values(normalizedVariant).join(', ')})`
                             : `Maximum allowed quantity for ${item.name} is ${purchaseLimit}`,
                         available: purchaseLimit
                     });
@@ -706,6 +791,12 @@ export const addOrderItems = async (req, res) => {
                     available: purchaseLimit
                 });
             }
+
+            resolvedOrderItems.push({
+                ...item,
+                variant: Object.keys(normalizedVariant).length > 0 ? normalizedVariant : undefined,
+                product: item.product || item._id
+            });
         }
 
         if (isOnlinePayment) {
@@ -730,10 +821,7 @@ export const addOrderItems = async (req, res) => {
             displayId,
             invoiceNumber,
             transactionId: verifiedPayment.paymentResult?.razorpay_payment_id || verifiedPayment.paymentResult?.id || null,
-            orderItems: orderItems.map(item => ({
-                ...item,
-                product: item.product || item._id
-            })),
+            orderItems: resolvedOrderItems,
             user: req.user._id,
             shippingAddress,
             retailerDetails: {
@@ -834,7 +922,7 @@ export const addOrderItems = async (req, res) => {
             await PaymentClaim.findByIdAndDelete(claimedPayment._id).catch(() => {});
         }
         console.error('Order creation error:', error);
-        res.status(500).json({ message: error.message || 'Order creation failed' });
+        res.status(error.statusCode || 500).json({ message: error.message || 'Order creation failed' });
     }
 };
 

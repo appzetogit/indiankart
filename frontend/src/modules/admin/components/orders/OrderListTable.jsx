@@ -17,6 +17,7 @@ const OrderListTable = ({
     totalPages,
     currentPage,
     onPageChange,
+    isRefreshing,
     allVisibleSelected,
     someVisibleSelected,
     selectedOrderIds,
@@ -37,6 +38,14 @@ const OrderListTable = ({
 }) => (
     <div className="space-y-4">
         <div className="relative md:mx-0">
+            {isRefreshing && (
+                <div className="absolute inset-0 z-30 flex items-start justify-center rounded-2xl bg-white/65 pt-10 backdrop-blur-[1px]">
+                    <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2 shadow-sm">
+                        <div className="h-4 w-4 rounded-full border-2 border-gray-200 border-t-gray-900 animate-spin" />
+                        <span className="text-xs font-black uppercase tracking-[0.16em] text-gray-600">Refreshing orders</span>
+                    </div>
+                </div>
+            )}
             <AdminTable
                 shellClassName="md:rounded-2xl border-y md:border"
                 scrollClassName="pb-2 custom-scrollbar"

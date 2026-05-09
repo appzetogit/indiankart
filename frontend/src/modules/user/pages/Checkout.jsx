@@ -75,6 +75,68 @@ const getItemPurchaseLimit = (item) => {
     return Number.isFinite(stockLimit) && stockLimit > 0 ? 1 : 0;
 };
 
+const normalizeVariantSelection = (variant) => {
+    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
+        return {};
+    }
+
+    return Object.entries(variant).reduce((acc, [key, value]) => {
+        const normalizedKey = String(key || '').trim();
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedKey || !normalizedValue) return acc;
+        acc[normalizedKey] = normalizedValue;
+        return acc;
+    }, {});
+};
+
+const getVariantHeadings = (item) => (
+    Array.isArray(item?.variantHeadings)
+        ? item.variantHeadings.filter((heading) => String(heading?.name || '').trim())
+        : []
+);
+
+const getCheckoutItemVariantIssue = (item) => {
+    const variantHeadings = getVariantHeadings(item);
+    if (variantHeadings.length === 0) return '';
+
+    const normalizedVariant = normalizeVariantSelection(item?.variant);
+    if (!Object.keys(normalizedVariant).length) {
+        return `${item?.name || 'This product'} is missing its selected variant. Please remove it and add it again.`;
+    }
+
+    for (const heading of variantHeadings) {
+        const headingName = String(heading?.name || '').trim();
+        const selectedValue = normalizedVariant[headingName];
+        const validOptions = Array.isArray(heading?.options)
+            ? heading.options.map((option) => String(option?.name || '').trim()).filter(Boolean)
+            : [];
+
+        if (!selectedValue) {
+            return `${item?.name || 'This product'} is missing ${headingName}. Please reselect the variant.`;
+        }
+
+        if (validOptions.length > 0 && !validOptions.includes(selectedValue)) {
+            return `${item?.name || 'This product'} has an outdated ${headingName} selection. Please add it again.`;
+        }
+    }
+
+    if (Array.isArray(item?.skus) && item.skus.length > 0) {
+        const hasMatchingSku = item.skus.some((sku) => {
+            const combination = normalizeVariantSelection(sku?.combination);
+            const variantKeys = Object.keys(normalizedVariant);
+            const combinationKeys = Object.keys(combination);
+            if (variantKeys.length !== combinationKeys.length) return false;
+            return variantKeys.every((key) => normalizedVariant[key] === combination[key]);
+        });
+
+        if (!hasMatchingSku) {
+            return `${item?.name || 'This product'} has an invalid variant selection. Please add it again.`;
+        }
+    }
+
+    return '';
+};
+
 const Checkout = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -395,6 +457,12 @@ const Checkout = () => {
 
         if (invalidLimitedItem) {
             toast.error(`Maximum allowed quantity for ${invalidLimitedItem.name} is ${getItemPurchaseLimit(invalidLimitedItem)}`);
+            return;
+        }
+
+        const variantIssue = checkoutItems.map(getCheckoutItemVariantIssue).find(Boolean);
+        if (variantIssue) {
+            toast.error(variantIssue);
             return;
         }
 
