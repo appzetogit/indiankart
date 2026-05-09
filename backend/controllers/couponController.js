@@ -47,6 +47,8 @@ export const createCoupon = async (req, res) => {
             expiryDate,
             userSegment,
             applicableCategory,
+            applicableSubCategory,
+            applicableBrand,
             usageCount,
             terms
         } = req.body;
@@ -71,6 +73,8 @@ export const createCoupon = async (req, res) => {
             expiryDate,
             userSegment,
             applicableCategory,
+            applicableSubCategory,
+            applicableBrand,
             usageCount: usageCount || 0,
             terms
         });
@@ -110,7 +114,7 @@ export const updateCoupon = async (req, res) => {
             const {
                 type, title, description, active, isOffer, code, 
                 value, minPurchase, maxDiscount, expiryDate, 
-                userSegment, applicableCategory, terms
+                userSegment, applicableCategory, applicableSubCategory, applicableBrand, terms
             } = req.body;
 
             coupon.type = type || coupon.type;
@@ -131,6 +135,8 @@ export const updateCoupon = async (req, res) => {
             }
             coupon.userSegment = userSegment || coupon.userSegment;
             coupon.applicableCategory = applicableCategory || coupon.applicableCategory;
+            coupon.applicableSubCategory = applicableSubCategory || coupon.applicableSubCategory;
+            coupon.applicableBrand = applicableBrand || coupon.applicableBrand;
             coupon.terms = terms || coupon.terms;
 
             const updatedCoupon = await coupon.save();

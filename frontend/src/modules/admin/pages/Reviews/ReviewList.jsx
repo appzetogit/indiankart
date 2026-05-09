@@ -66,8 +66,8 @@ const ReviewList = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Review Moderation</h1>
-                    <p className="text-sm text-gray-500 font-medium italic">Approve or reject customer reviews ({filteredReviews.length} shown)</p>
+                    <h1 className="text-2xl font-black text-gray-900 tracking-tight">Customer Reviews</h1>
+                    <p className="text-sm text-gray-500 font-medium italic">Latest customer reviews across the store ({filteredReviews.length} shown)</p>
                 </div>
             </div>
 

@@ -39,10 +39,11 @@ export const createReview = async (req, res) => {
             name: req.user.name,
             rating: Number(rating),
             comment,
-            status: 'pending' // Default status
+            status: 'approved'
         });
 
         const createdReview = await review.save();
+        await syncProductRating(product._id);
         res.status(201).json(createdReview);
     } catch (error) {
         res.status(500).json({ message: error.message });

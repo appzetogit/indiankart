@@ -16,6 +16,8 @@ const couponSchema = mongoose.Schema({
     expiryDate: { type: String }, // Storing as string YYYY-MM-DD from frontend form
     userSegment: { type: String, default: 'all' },
     applicableCategory: { type: String, default: 'all' },
+    applicableSubCategory: { type: String, default: 'all' },
+    applicableBrand: { type: String, default: 'all' },
     usageCount: { type: Number, default: 0 },
 
     // Offer specific
