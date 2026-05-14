@@ -125,7 +125,7 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
 
 router.post('/register', registerUser);
 router.post('/login', authUser);
-router.post('/logout', logoutUser);
+router.post('/logout', protect, logoutUser);
 router.post('/send-otp', sendLoginOtp);
 router.post('/verify-otp', verifyLoginOtp);
 

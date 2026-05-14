@@ -20,6 +20,7 @@ import Pagination from '../../components/common/Pagination';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
+const LIVE_REFRESH_MS = 15000;
 const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 const getKnownStateEntries = (product) => (
     (Array.isArray(product?.viewStatsByState) ? product.viewStatsByState : [])
@@ -65,6 +66,14 @@ const ProductViews = () => {
         fetchProducts();
     }, []);
 
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            fetchProducts();
+        }, LIVE_REFRESH_MS);
+
+        return () => window.clearInterval(intervalId);
+    }, []);
+
     const filteredProducts = useMemo(() => {
         const query = searchTerm.trim().toLowerCase();
         if (!query) return products;
@@ -87,8 +96,19 @@ const ProductViews = () => {
     const paginatedProducts = filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
     const totalPortalVisitors = Number(portalInsights?.totalVisitors || 0);
     const last7DaysVisitors = Number(portalInsights?.last7Days?.visitors || 0);
+    const liveLoggedInUsers = Number(portalInsights?.authStats?.activeLoggedInUsers || 0);
+    const todayLogins = Number(portalInsights?.authStats?.todayLogins || 0);
+    const todayLogouts = Number(portalInsights?.authStats?.todayLogouts || 0);
+    const liveWindowMinutes = Number(portalInsights?.authStats?.liveWindowMinutes || 5);
+    const todayDateKey = new Date().toISOString().split('T')[0];
+    const todayVisitors = Number(
+        (portalInsights?.dailyStats || []).find((entry) => entry?.date === todayDateKey)?.visitors || 0
+    );
     const avgDailyVisitors = portalInsights?.dailyStats?.length
-        ? Math.round(totalPortalVisitors / portalInsights.dailyStats.length)
+        ? Math.round(
+            (portalInsights.dailyStats.reduce((sum, entry) => sum + Number(entry?.visitors || 0), 0)) /
+            portalInsights.dailyStats.length
+        )
         : 0;
     const trendChartData = (portalInsights?.dailyStats || []).map((entry) => ({
         ...entry,
@@ -128,7 +148,7 @@ const ProductViews = () => {
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Product Views</h1>
                     <p className="text-sm text-gray-500 font-medium italic">
-                        Track how many times users opened each product page
+                        Track product traffic and live logged-in user activity
                     </p>
                 </div>
                 <button
@@ -163,7 +183,15 @@ const ProductViews = () => {
                 </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <div className="rounded-2xl border border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-white p-5 shadow-sm">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-fuchsia-600 text-white">
+                        <MdPeople size={22} />
+                    </div>
+                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-fuchsia-500">Live Logged In</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{liveLoggedInUsers.toLocaleString()}</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Active in the last {liveWindowMinutes} minutes</p>
+                </div>
                 <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white">
                         <MdPeople size={22} />
@@ -176,28 +204,30 @@ const ProductViews = () => {
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white">
                         <MdToday size={22} />
                     </div>
-                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-emerald-500">Last 7 Days</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">{last7DaysVisitors.toLocaleString()}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">Recent visitor movement across the portal</p>
+                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-emerald-500">Today's Logins</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{todayLogins.toLocaleString()}</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">New authenticated user sessions today</p>
                 </div>
                 <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-5 shadow-sm">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-600 text-white">
                         <MdTimeline size={22} />
                     </div>
-                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-violet-500">Avg Daily Visitors</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">{avgDailyVisitors.toLocaleString()}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">Average across the current 30-day trend window</p>
+                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-violet-500">Today's Visitors</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{todayVisitors.toLocaleString()}</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Actual portal visitors recorded for today</p>
                 </div>
                 <div className="rounded-2xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-white">
                         <MdBarChart size={22} />
                     </div>
-                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-amber-600">Busiest Day</p>
-                    <p className="mt-2 text-xl font-black text-gray-900">{busiestDayLabel}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">
-                        {Number(portalInsights?.busiestDay?.visitors || 0).toLocaleString()} visitors
-                    </p>
+                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-amber-600">Last 7 Days</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{last7DaysVisitors.toLocaleString()}</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Recent visitor movement across the portal</p>
                 </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs font-semibold text-gray-500 shadow-sm">
+                Auto-refreshing every {Math.round(LIVE_REFRESH_MS / 1000)} seconds. Busiest day: {busiestDayLabel}. Average daily visitors over the current 30-day window: {avgDailyVisitors.toLocaleString()}. Today's logouts: {todayLogouts.toLocaleString()}.
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">

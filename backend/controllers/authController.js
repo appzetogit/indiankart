@@ -4,17 +4,26 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { sendOTP, verifyOTP } from '../utils/smsService.js';
 import generateToken from '../utils/generateToken.js';
+import {
+    createPortalSessionId,
+    recordPortalLogin,
+    recordPortalLogout,
+    touchPortalSession
+} from '../utils/portalSessionTracking.js';
 
 const HARDCODED_LOGIN_OTP = '0000';
 const HARDCODED_LOGIN_USERS = {
     '7610416911': {
-        id: '000000000000000000000001',
         phone: '7610416911'
     },
     '7223077890': {
-        id: '000000000000000000000002',
         phone: '7223077890'
     }
+};
+
+const LEGACY_HARDCODED_USER_IDS = {
+    '000000000000000000000001': '7610416911',
+    '000000000000000000000002': '7223077890'
 };
 
 const normalizeForHardcodedLogin = (mobile) => {
@@ -26,6 +35,39 @@ const normalizeHardcodedOtp = (otp) => {
     const digits = String(otp ?? '').replace(/\D/g, '');
     if (!digits) return '';
     return digits.length < 4 ? digits.padStart(4, '0') : digits;
+};
+
+const normalizeGender = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return '';
+    if (normalized === 'male') return 'Male';
+    if (normalized === 'female') return 'Female';
+    if (normalized === 'other') return 'Other';
+    return null;
+};
+
+const findOrCreateHardcodedLoginUser = async (phone, overrides = {}) => {
+    const normalizedPhone = normalizeForHardcodedLogin(phone);
+    const fallbackEmail = `${normalizedPhone}@temp.local`;
+
+    let user = await User.findOne({
+        $or: [
+            { phone: normalizedPhone },
+            { email: fallbackEmail }
+        ]
+    });
+
+    if (!user) {
+        user = await User.create({
+            name: overrides.name || 'Test User',
+            email: fallbackEmail,
+            phone: normalizedPhone,
+            gender: 'Male',
+            password: Math.random().toString(36)
+        });
+    }
+
+    return user;
 };
 
 const mapUserAddresses = (addresses = []) =>
@@ -84,17 +126,35 @@ export const verifyLoginOtp = async (req, res) => {
                 return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
             }
 
-            const token = generateToken(res, hardcodedUser.id, 'user_jwt');
+            const user = await findOrCreateHardcodedLoginUser(hardcodedUser.phone, {
+                name,
+                email
+            });
+            const hasRealName = Boolean(user.name && user.name.trim() && user.name.trim() !== 'Test User');
+            const hasRealEmail = Boolean(
+                user.email &&
+                user.email.includes('@') &&
+                !user.email.endsWith('@temp.local')
+            );
+            const token = generateToken(res, user._id, 'user_jwt');
+            const sessionId = createPortalSessionId();
+            await recordPortalLogin({
+                sessionId,
+                userId: user._id,
+                userRole: 'user',
+                authMethod: 'otp'
+            });
             return res.json({
-                _id: hardcodedUser.id,
-                name: name || 'Test User',
-                email: email || `${hardcodedUser.phone}@temp.local`,
-                phone: hardcodedUser.phone,
-                gender: 'male',
-                addresses: [],
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                gender: user.gender,
+                addresses: mapUserAddresses(user.addresses),
                 isNewUser: false,
-                requiresProfile: false,
-                token
+                requiresProfile: !hasRealName || !hasRealEmail,
+                token,
+                sessionId
             });
         }
 
@@ -134,6 +194,13 @@ export const verifyLoginOtp = async (req, res) => {
         const requiresProfile = !hasRealName || !hasRealEmail;
 
         const token = generateToken(res, user._id, 'user_jwt');
+        const sessionId = createPortalSessionId();
+        await recordPortalLogin({
+            sessionId,
+            userId: user._id,
+            userRole: 'user',
+            authMethod: 'otp'
+        });
         res.json({
             _id: user._id,
             name: user.name,
@@ -143,7 +210,8 @@ export const verifyLoginOtp = async (req, res) => {
             addresses: mapUserAddresses(user.addresses),
             isNewUser,
             requiresProfile,
-            token
+            token,
+            sessionId
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -156,6 +224,13 @@ export const authUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (user && (await user.matchPassword(password))) {
         const token = generateToken(res, user._id, 'user_jwt');
+        const sessionId = createPortalSessionId();
+        await recordPortalLogin({
+            sessionId,
+            userId: user._id,
+            userRole: 'user',
+            authMethod: 'password'
+        });
         res.json({
             _id: user._id,
             name: user.name,
@@ -163,7 +238,8 @@ export const authUser = async (req, res) => {
             phone: user.phone,
             gender: user.gender,
             addresses: mapUserAddresses(user.addresses),
-            token
+            token,
+            sessionId
         });
     } else {
         res.status(401).json({ message: 'Invalid email or password' });
@@ -180,6 +256,13 @@ export const registerUser = async (req, res) => {
     const user = await User.create({ name, email, password });
     if (user) {
         const token = generateToken(res, user._id, 'user_jwt');
+        const sessionId = createPortalSessionId();
+        await recordPortalLogin({
+            sessionId,
+            userId: user._id,
+            userRole: 'user',
+            authMethod: 'signup'
+        });
         res.status(201).json({
             _id: user._id,
             name: user.name,
@@ -187,14 +270,27 @@ export const registerUser = async (req, res) => {
             phone: user.phone,
             gender: user.gender,
             addresses: mapUserAddresses(user.addresses),
-            token
+            token,
+            sessionId
         });
     } else {
         res.status(400).json({ message: 'Invalid user data' });
     }
 };
 
-export const logoutUser = (req, res) => {
+export const logoutUser = async (req, res) => {
+    try {
+        const sessionId = String(req.headers['x-user-session-id'] || '').trim();
+        if (req.user?._id && sessionId) {
+            await recordPortalLogout({
+                sessionId,
+                userId: req.user._id
+            });
+        }
+    } catch (error) {
+        console.error('Failed to record logout session:', error);
+    }
+
     const cookieOptions = {
         httpOnly: true,
         expires: new Date(0),
@@ -208,6 +304,18 @@ export const logoutUser = (req, res) => {
 };
 
 export const getUserProfile = async (req, res) => {
+    const sessionId = String(req.headers['x-user-session-id'] || '').trim();
+    if (sessionId && req.user?._id) {
+        try {
+            await touchPortalSession({
+                sessionId,
+                userId: req.user._id
+            });
+        } catch (error) {
+            console.error('Failed to touch portal session:', error);
+        }
+    }
+
     const user = {
         _id: req.user._id,
         name: req.user.name,
@@ -218,6 +326,8 @@ export const getUserProfile = async (req, res) => {
     };
     res.status(200).json(user);
 };
+
+export { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS };
 
 // @desc    Delete current user profile
 // @route   DELETE /api/auth/profile
@@ -268,9 +378,12 @@ export const updateUserProfile = async (req, res) => {
             user.name = req.body.name || user.name;
             user.email = nextEmail || user.email;
             user.phone = req.body.mobile || req.body.phone || user.phone; // Use mobile or phone
-            // Ensure gender is valid enum value
-            if (req.body.gender) {
-                user.gender = req.body.gender;
+            const normalizedGender = normalizeGender(req.body.gender);
+            if (req.body.gender !== undefined) {
+                if (normalizedGender === null) {
+                    return res.status(400).json({ message: 'Please select a valid gender' });
+                }
+                user.gender = normalizedGender;
             }
 
             if (req.body.password) {
@@ -295,6 +408,12 @@ export const updateUserProfile = async (req, res) => {
         }
     } catch (error) {
         console.error('Error updating user profile:', error); // Log for debugging
+        if (error?.code === 11000) {
+            return res.status(400).json({ message: 'This email is already in use' });
+        }
+        if (error?.name === 'ValidationError') {
+            return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: error.message });
     }
 };

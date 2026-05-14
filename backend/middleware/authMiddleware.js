@@ -1,15 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Admin from '../models/Admin.js';
-
-const HARDCODED_LOGIN_USERS = {
-    '000000000000000000000001': {
-        phone: '7610416911'
-    },
-    '000000000000000000000002': {
-        phone: '7223077890'
-    }
-};
+import { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS } from '../controllers/authController.js';
 
 export const protect = async (req, res, next) => {
     let token;
@@ -38,17 +30,10 @@ export const protect = async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
             console.log('Decoded Token:', decoded);
 
-            if (HARDCODED_LOGIN_USERS[decoded.id]) {
-                const hardcodedUser = HARDCODED_LOGIN_USERS[decoded.id];
-                req.user = {
-                    _id: decoded.id,
-                    name: 'Test User',
-                    email: `${hardcodedUser.phone}@temp.local`,
-                    phone: hardcodedUser.phone,
-                    gender: 'male',
-                    isAdmin: false,
-                    role: 'user'
-                };
+            if (LEGACY_HARDCODED_USER_IDS[decoded.id]) {
+                req.user = await findOrCreateHardcodedLoginUser(LEGACY_HARDCODED_USER_IDS[decoded.id]);
+                req.user.isAdmin = false;
+                req.user.role = 'user';
                 return next();
             }
 

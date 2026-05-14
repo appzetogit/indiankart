@@ -2,6 +2,7 @@ import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import PortalSession from '../models/PortalSession.js';
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
 let activeVisibilityCache = {
@@ -952,10 +953,13 @@ export const getPortalViewInsights = async (_req, res) => {
         const products = await Product.find({})
             .select('id viewCount dailyViewStats')
             .lean();
+        const now = new Date();
+        const liveThreshold = new Date(now.getTime() - (5 * 60 * 1000));
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
 
-        const today = new Date();
         const recentDailyMap = new Map();
-        const recentStart = new Date(today);
+        const recentStart = new Date(now);
         recentStart.setDate(recentStart.getDate() - 29);
         recentStart.setHours(0, 0, 0, 0);
 
@@ -995,7 +999,7 @@ export const getPortalViewInsights = async (_req, res) => {
 
         const dailyStats = [];
         for (let offset = 29; offset >= 0; offset -= 1) {
-            const date = new Date(today);
+            const date = new Date(now);
             date.setDate(date.getDate() - offset);
             const dateKey = date.toISOString().split('T')[0];
             dailyStats.push(recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 });
@@ -1009,6 +1013,17 @@ export const getPortalViewInsights = async (_req, res) => {
         const busiestDay = dailyStats.reduce((best, entry) => (
             Number(entry?.visitors || 0) > Number(best?.visitors || 0) ? entry : best
         ), dailyStats[0] || { date: '', views: 0, visitors: 0 });
+        const [
+            activeLoggedInUsers,
+            todayLogins,
+            todayLogouts,
+            totalLoginEvents
+        ] = await Promise.all([
+            PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold } }),
+            PortalSession.countDocuments({ loginAt: { $gte: startOfToday } }),
+            PortalSession.countDocuments({ logoutAt: { $gte: startOfToday } }),
+            PortalSession.countDocuments()
+        ]);
 
         return res.json({
             trackedProducts: products.length,
@@ -1017,7 +1032,14 @@ export const getPortalViewInsights = async (_req, res) => {
             last7Days,
             busiestDay,
             dailyStats,
-            weeklyDistribution
+            weeklyDistribution,
+            authStats: {
+                activeLoggedInUsers,
+                todayLogins,
+                todayLogouts,
+                totalLoginEvents,
+                liveWindowMinutes: 5
+            }
         });
     } catch (error) {
         return res.status(500).json({ message: error.message });

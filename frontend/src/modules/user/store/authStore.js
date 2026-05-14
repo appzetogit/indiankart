@@ -55,8 +55,9 @@ export const useAuthStore = create(
                         return;
                     }
                     // Ensure token is preserved if it exists in data or state
+                    const currentSessionId = get().user?.sessionId || null;
                     setUserTokenCache(storedToken);
-                    set({ user: { ...data, token: storedToken }, isAuthenticated: true, loading: false });
+                    set({ user: { ...data, token: storedToken, sessionId: currentSessionId }, isAuthenticated: true, loading: false });
                     useCartStore.getState().setAddresses(data?.addresses || []);
                     get().registerFcmToken();
                 } catch (error) {
@@ -182,8 +183,8 @@ export const useAuthStore = create(
             const { data } = await API.put(endpoint, profileData);
             
             const mergedUser = currentUser?.token
-                ? { ...data, token: currentUser.token }
-                : data;
+                ? { ...data, token: currentUser.token, sessionId: currentUser?.sessionId || data?.sessionId || null }
+                : { ...data, sessionId: currentUser?.sessionId || data?.sessionId || null };
 
             setUserTokenCache(mergedUser?.token);
             set({ user: mergedUser, isAuthenticated: true });

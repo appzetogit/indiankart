@@ -37,6 +37,9 @@ API.interceptors.request.use((config) => {
             userStorageState?.state?.user?.token ||
             userStorageState?.state?.token ||
             null;
+        const userSessionId =
+            userStorageState?.state?.user?.sessionId ||
+            null;
 
         // Keep admin/user sessions isolated:
         // admin pages -> admin token, user pages -> user token.
@@ -46,6 +49,10 @@ API.interceptors.request.use((config) => {
             config.headers.Authorization = `Bearer ${userToken}`;
         } else {
             delete config.headers.Authorization;
+        }
+
+        if (userSessionId && !(isAdminContext || isAdminApiCall)) {
+            config.headers['X-User-Session-Id'] = userSessionId;
         }
     } catch (error) {
         console.error('Error retrieving auth token:', error);

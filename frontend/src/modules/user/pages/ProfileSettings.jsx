@@ -10,6 +10,14 @@ const ProfileSettings = () => {
     const updateProfile = useAuthStore((state) => state.updateProfile);
     const currentUser = user;
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    const normalizeGender = (value) => {
+        const normalized = String(value || '').trim().toLowerCase();
+        if (!normalized) return '';
+        if (normalized === 'male') return 'Male';
+        if (normalized === 'female') return 'Female';
+        if (normalized === 'other') return 'Other';
+        return '';
+    };
 
     const [formData, setFormData] = useState({
         name: '',
@@ -31,7 +39,7 @@ const ProfileSettings = () => {
             name: currentUser?.name || '',
             mobile: normalizedPhone || (looksLikePhoneInEmail ? digitsFromEmail : ''),
             email: looksLikePhoneInEmail ? '' : normalizedEmail,
-            gender: currentUser?.gender || ''
+            gender: normalizeGender(currentUser?.gender)
         });
     }, [currentUser]);
 
