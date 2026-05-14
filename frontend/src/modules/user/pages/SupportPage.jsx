@@ -1,12 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MdArrowBack, MdCall, MdEmail, MdPerson, MdSchedule, MdSupportAgent } from 'react-icons/md';
-
-const clientInfo = {
-    name: 'Pintu Natha',
-    contact: '8093080110',
-    email: 'indiakart24@gmail.com'
-};
+import { legalContact } from './legalPageData';
 
 const SupportPage = () => {
     const navigate = useNavigate();
@@ -99,16 +94,16 @@ const SupportPage = () => {
                                 <div className="flex items-start gap-3">
                                     <MdPerson className="mt-1 text-[#2874f0]" size={20} />
                                     <div>
-                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Client Name</p>
-                                        <p className="text-sm font-medium text-gray-800">{clientInfo.name}</p>
+                                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Owner Name</p>
+                                        <p className="text-sm font-medium text-gray-800">{legalContact.ownerName}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <MdCall className="mt-1 text-[#2874f0]" size={20} />
                                     <div>
                                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Contact Number</p>
-                                        <a href={`tel:+91${clientInfo.contact}`} className="text-sm font-medium text-gray-800 hover:text-[#2874f0]">
-                                            +91 {clientInfo.contact}
+                                        <a href={`tel:+91${legalContact.phoneHref}`} className="text-sm font-medium text-gray-800 hover:text-[#2874f0]">
+                                            +91 {legalContact.phoneDisplay}
                                         </a>
                                     </div>
                                 </div>
@@ -116,8 +111,8 @@ const SupportPage = () => {
                                     <MdEmail className="mt-1 text-[#2874f0]" size={20} />
                                     <div>
                                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Email Address</p>
-                                        <a href={`mailto:${clientInfo.email}`} className="text-sm font-medium text-gray-800 hover:text-[#2874f0]">
-                                            {clientInfo.email}
+                                        <a href={`mailto:${legalContact.email}`} className="text-sm font-medium text-gray-800 hover:text-[#2874f0]">
+                                            {legalContact.email}
                                         </a>
                                     </div>
                                 </div>

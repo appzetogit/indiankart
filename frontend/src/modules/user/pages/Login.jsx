@@ -158,7 +158,7 @@ const Login = () => {
                                     By continuing, you agree to Indiankart&apos;s{' '}
                                     <button
                                         type="button"
-                                        onClick={() => navigate('/info?type=dynamic&key=terms-of-use')}
+                                        onClick={() => navigate('/terms-and-conditions')}
                                         className="text-blue-600 hover:underline font-medium"
                                     >
                                         Terms of Use
@@ -166,7 +166,7 @@ const Login = () => {
                                     and{' '}
                                     <button
                                         type="button"
-                                        onClick={() => navigate('/info?type=dynamic&key=privacyPolicy')}
+                                        onClick={() => navigate('/privacy')}
                                         className="text-blue-600 hover:underline font-medium"
                                     >
                                         Privacy Policy

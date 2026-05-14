@@ -30,6 +30,7 @@ import DelhiveryRedirect from '../pages/DelhiveryRedirect';
 import ShippingRedirect from '../pages/ShippingRedirect';
 import SupportPage from '../pages/SupportPage';
 import PrivacyPolicyPage from '../pages/PrivacyPolicyPage';
+import TermsAndConditionsPage from '../pages/TermsAndConditionsPage';
 
 const UserRoutes = () => {
     return (
@@ -46,7 +47,9 @@ const UserRoutes = () => {
                 <Route path="notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
                 <Route path="help-center" element={<HelpCenter />} />
                 <Route path="support" element={<SupportPage />} />
+                <Route path="privacy" element={<PrivacyPolicyPage />} />
                 <Route path="privacy-policy" element={<PrivacyPolicyPage />} />
+                <Route path="terms-and-conditions" element={<TermsAndConditionsPage />} />
                 <Route path="cart" element={<Cart />} />
                 <Route path="wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
                 <Route path="checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
