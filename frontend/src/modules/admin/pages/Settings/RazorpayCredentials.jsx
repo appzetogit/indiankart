@@ -11,14 +11,15 @@ const DEFAULT_FORM = {
     delhiveryToken: '',
     ekartBaseUrl: '',
     ekartTrackingBaseUrl: '',
+    ekartClientId: '',
     ekartClientName: '',
     ekartPickupLocation: '',
     ekartUsername: '',
     ekartPassword: '',
     ekartApiKey: '',
-    ekartCreateShipmentPath: '/api/v1/shipments',
-    ekartTrackingPath: '/api/v1/shipments/tracking',
-    ekartCancelPath: '/api/v1/shipments/cancel'
+    ekartCreateShipmentPath: '/api/v1/package/create',
+    ekartTrackingPath: '/api/v1/track/{id}',
+    ekartCancelPath: '/api/v1/package/cancel'
 };
 
 const SECTION_STYLES = {
@@ -115,14 +116,15 @@ const RazorpayCredentials = () => {
                     delhiveryToken: '',
                     ekartBaseUrl: data?.ekartBaseUrl || '',
                     ekartTrackingBaseUrl: data?.ekartTrackingBaseUrl || '',
+                    ekartClientId: data?.ekartClientId || '',
                     ekartClientName: data?.ekartClientName || '',
                     ekartPickupLocation: data?.ekartPickupLocation || '',
                     ekartUsername: data?.ekartUsername || '',
                     ekartPassword: '',
                     ekartApiKey: '',
-                    ekartCreateShipmentPath: data?.ekartCreateShipmentPath || '/api/v1/shipments',
-                    ekartTrackingPath: data?.ekartTrackingPath || '/api/v1/shipments/tracking',
-                    ekartCancelPath: data?.ekartCancelPath || '/api/v1/shipments/cancel'
+                    ekartCreateShipmentPath: data?.ekartCreateShipmentPath || '/api/v1/package/create',
+                    ekartTrackingPath: data?.ekartTrackingPath || '/api/v1/track/{id}',
+                    ekartCancelPath: data?.ekartCancelPath || '/api/v1/package/cancel'
                 });
             } catch (error) {
                 console.error('Failed to fetch API credentials:', error);
@@ -154,6 +156,7 @@ const RazorpayCredentials = () => {
             data.append('delhiveryToken', form.delhiveryToken);
             data.append('ekartBaseUrl', form.ekartBaseUrl.trim());
             data.append('ekartTrackingBaseUrl', form.ekartTrackingBaseUrl.trim());
+            data.append('ekartClientId', form.ekartClientId.trim());
             data.append('ekartClientName', form.ekartClientName.trim());
             data.append('ekartPickupLocation', form.ekartPickupLocation.trim());
             data.append('ekartUsername', form.ekartUsername.trim());
@@ -176,14 +179,15 @@ const RazorpayCredentials = () => {
                 delhiveryToken: '',
                 ekartBaseUrl: res.data?.ekartBaseUrl || '',
                 ekartTrackingBaseUrl: res.data?.ekartTrackingBaseUrl || '',
+                ekartClientId: res.data?.ekartClientId || '',
                 ekartClientName: res.data?.ekartClientName || '',
                 ekartPickupLocation: res.data?.ekartPickupLocation || '',
                 ekartUsername: res.data?.ekartUsername || '',
                 ekartPassword: '',
                 ekartApiKey: '',
-                ekartCreateShipmentPath: res.data?.ekartCreateShipmentPath || '/api/v1/shipments',
-                ekartTrackingPath: res.data?.ekartTrackingPath || '/api/v1/shipments/tracking',
-                ekartCancelPath: res.data?.ekartCancelPath || '/api/v1/shipments/cancel'
+                ekartCreateShipmentPath: res.data?.ekartCreateShipmentPath || '/api/v1/package/create',
+                ekartTrackingPath: res.data?.ekartTrackingPath || '/api/v1/track/{id}',
+                ekartCancelPath: res.data?.ekartCancelPath || '/api/v1/package/cancel'
             });
             toast.success('API credentials updated');
         } catch (error) {
@@ -364,7 +368,7 @@ const RazorpayCredentials = () => {
                                 name="ekartBaseUrl"
                                 value={form.ekartBaseUrl}
                                 onChange={handleChange}
-                                placeholder="https://api.ekart.example.com"
+                                placeholder="https://app.elite.ekartlogistics.in"
                             />
                             <InputField
                                 section="ekart"
@@ -373,6 +377,16 @@ const RazorpayCredentials = () => {
                                 value={form.ekartTrackingBaseUrl}
                                 onChange={handleChange}
                                 placeholder="Leave blank to reuse Base URL"
+                                hint="Use the eKart API host here, not the dashboard shippingHealth page."
+                            />
+                            <InputField
+                                section="ekart"
+                                label="Client ID"
+                                name="ekartClientId"
+                                value={form.ekartClientId}
+                                onChange={handleChange}
+                                placeholder="EKART_xxxxxxxxx"
+                                hint="This is the client_id used to fetch the temporary access token."
                             />
                             <InputField
                                 section="ekart"
@@ -388,7 +402,8 @@ const RazorpayCredentials = () => {
                                 name="ekartPickupLocation"
                                 value={form.ekartPickupLocation}
                                 onChange={handleChange}
-                                placeholder="Warehouse or pickup location"
+                                placeholder="Registered location alias or leave blank"
+                                hint="If your eKart account has only one registered pickup location, leave this blank and eKart will autofill it."
                             />
                             <InputField
                                 section="ekart"
@@ -412,13 +427,13 @@ const RazorpayCredentials = () => {
                         <div className="mt-6">
                             <InputField
                                 section="ekart"
-                                label="API Key"
+                                label="Static Access Token"
                                 type="password"
                                 name="ekartApiKey"
                                 value={form.ekartApiKey}
                                 onChange={handleChange}
-                                placeholder="Leave blank to keep existing API key"
-                                hint="Use either API key auth or username/password, depending on what your Ekart account provides."
+                                placeholder="Optional fallback bearer token"
+                                hint="Optional. Leave empty if you want the app to fetch `access_token` automatically using Client ID + Username + Password."
                             />
                         </div>
 
@@ -429,7 +444,7 @@ const RazorpayCredentials = () => {
                                 name="ekartCreateShipmentPath"
                                 value={form.ekartCreateShipmentPath}
                                 onChange={handleChange}
-                                placeholder="/api/v1/shipments"
+                                placeholder="/api/v1/package/create"
                             />
                             <InputField
                                 section="ekart"
@@ -437,7 +452,7 @@ const RazorpayCredentials = () => {
                                 name="ekartTrackingPath"
                                 value={form.ekartTrackingPath}
                                 onChange={handleChange}
-                                placeholder="/api/v1/shipments/tracking"
+                                placeholder="/api/v1/track/{id}"
                             />
                             <InputField
                                 section="ekart"
@@ -445,7 +460,7 @@ const RazorpayCredentials = () => {
                                 name="ekartCancelPath"
                                 value={form.ekartCancelPath}
                                 onChange={handleChange}
-                                placeholder="/api/v1/shipments/cancel"
+                                placeholder="/api/v1/package/cancel"
                             />
                         </div>
                     </SectionCard>

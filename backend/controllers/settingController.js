@@ -47,6 +47,7 @@ const updateSettings = async (req, res) => {
             delhiveryToken,
             ekartBaseUrl,
             ekartTrackingBaseUrl,
+            ekartClientId,
             ekartClientName,
             ekartPickupLocation,
             ekartUsername,
@@ -117,6 +118,9 @@ const updateSettings = async (req, res) => {
             }
             if (ekartTrackingBaseUrl !== undefined) {
                 settings.ekartTrackingBaseUrl = String(ekartTrackingBaseUrl || '').trim();
+            }
+            if (ekartClientId !== undefined) {
+                settings.ekartClientId = String(ekartClientId || '').trim();
             }
             if (ekartClientName !== undefined) {
                 settings.ekartClientName = String(ekartClientName || '').trim();
@@ -197,14 +201,15 @@ const updateSettings = async (req, res) => {
                 delhiveryToken: (typeof delhiveryToken === 'string' ? delhiveryToken.trim() : '') || '',
                 ekartBaseUrl: typeof ekartBaseUrl === 'string' ? ekartBaseUrl.trim() : '',
                 ekartTrackingBaseUrl: typeof ekartTrackingBaseUrl === 'string' ? ekartTrackingBaseUrl.trim() : '',
+                ekartClientId: typeof ekartClientId === 'string' ? ekartClientId.trim() : '',
                 ekartClientName: typeof ekartClientName === 'string' ? ekartClientName.trim() : '',
                 ekartPickupLocation: typeof ekartPickupLocation === 'string' ? ekartPickupLocation.trim() : '',
                 ekartUsername: typeof ekartUsername === 'string' ? ekartUsername.trim() : '',
                 ekartPassword: (typeof ekartPassword === 'string' ? ekartPassword.trim() : '') || '',
                 ekartApiKey: (typeof ekartApiKey === 'string' ? ekartApiKey.trim() : '') || '',
-                ekartCreateShipmentPath: typeof ekartCreateShipmentPath === 'string' ? ekartCreateShipmentPath.trim() : '/api/v1/shipments',
-                ekartTrackingPath: typeof ekartTrackingPath === 'string' ? ekartTrackingPath.trim() : '/api/v1/shipments/tracking',
-                ekartCancelPath: typeof ekartCancelPath === 'string' ? ekartCancelPath.trim() : '/api/v1/shipments/cancel',
+                ekartCreateShipmentPath: typeof ekartCreateShipmentPath === 'string' ? ekartCreateShipmentPath.trim() : '/api/v1/package/create',
+                ekartTrackingPath: typeof ekartTrackingPath === 'string' ? ekartTrackingPath.trim() : '/api/v1/track/{id}',
+                ekartCancelPath: typeof ekartCancelPath === 'string' ? ekartCancelPath.trim() : '/api/v1/package/cancel',
                 shippingCharge: Number.isFinite(Number(shippingCharge)) ? Number(shippingCharge) : 40,
                 freeShippingThreshold: Number.isFinite(Number(freeShippingThreshold)) ? Number(freeShippingThreshold) : 500,
                 minShippingOrderAmount: Number.isFinite(Number(minShippingOrderAmount)) ? Number(minShippingOrderAmount) : 0,

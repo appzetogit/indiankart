@@ -1,6 +1,13 @@
 import axios from 'axios';
 import Setting from '../models/Setting.js';
 
+const DEFAULT_EKART_BASE_URL = 'https://app.elite.ekartlogistics.in';
+const DEFAULT_EKART_TRACKING_PATH = '/api/v1/track/{id}';
+const DEFAULT_EKART_CREATE_PATH = '/api/v1/package/create';
+const DEFAULT_EKART_CANCEL_PATH = '/api/v1/package/cancel';
+const DEFAULT_EKART_TOKEN_PATH = '/integrations/v2/auth/token/{client_id}';
+const ekartTokenCache = new Map();
+
 const sanitizeText = (value = '') => (
     String(value || '')
         .replace(/[&#%;\\]/g, ' ')
@@ -12,6 +19,20 @@ const normalizePhone = (value = '') => {
     const digits = String(value || '').replace(/\D/g, '');
     if (digits.length >= 10) return digits.slice(-10);
     return digits;
+};
+
+const formatDate = (value = Date.now()) => {
+    const date = new Date(value);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const toPositiveInteger = (value, fallback) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.round(parsed);
 };
 
 const joinUrl = (baseUrl = '', path = '') => {
@@ -74,6 +95,10 @@ const getCurrentStatus = (payload = {}) => {
     return '';
 };
 
+const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUpperCase() === 'COD'
+    ? 'COD'
+    : 'Prepaid';
+
 const RAW_TO_USER_TRACKING_STEP = {
     Created: 'Processing',
     Booked: 'Processing',
@@ -108,47 +133,129 @@ const buildShipmentPayload = (order, settings) => {
     const shippingAddress = order?.shippingAddress || {};
     const orderItems = Array.isArray(order?.orderItems) ? order.orderItems : [];
     const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || 1;
-    const totalAmount = Number(order?.totalPrice || 0);
+    const totalAmount = Math.max(1, Number(order?.totalPrice || 0));
+    const taxValue = Math.max(0, Number(order?.taxPrice || 0));
+    const taxableAmount = Math.max(1, Number((totalAmount - taxValue).toFixed(2)));
+    const paymentMode = getPaymentMode(order);
+    const sellerName = sanitizeText(settings?.sellerName || settings?.ekartClientName || 'IndianKart');
+    const sellerAddress = sanitizeText(settings?.sellerAddress || '');
+    const gstNumber = sanitizeText(settings?.gstNumber || '');
+    const productsDescription = sanitizeText(orderItems.map((item) => item?.name || 'Item').join(', ')).slice(0, 250) || 'General merchandise';
+    const dropLocationAddress = sanitizeText(shippingAddress?.street || '');
+    const consigneePhone = normalizePhone(shippingAddress?.phone || '');
+    const consigneeAlternatePhoneCandidates = [
+        shippingAddress?.alternatePhone,
+        order?.alternatePhone,
+        order?.user?.alternatePhone,
+        settings?.contactPhone
+    ].map((value) => normalizePhone(value || ''));
+    const consigneeAlternatePhone = consigneeAlternatePhoneCandidates.find((value) => value && value !== consigneePhone) || '';
+    const pickupAlias = sanitizeText(settings?.ekartPickupLocation || '');
+
+    if (!consigneePhone) {
+        throw new Error('Customer phone number is required before creating an Ekart shipment.');
+    }
+
+    if (!consigneeAlternatePhone) {
+        throw new Error('Ekart requires an alternate customer phone number. Save a support/contact phone in Settings or add an alternate phone for the customer.');
+    }
 
     return {
-        orderReference: sanitizeText(order?.displayId || order?._id || ''),
-        clientName: sanitizeText(settings?.ekartClientName || settings?.sellerName || 'IndianKart'),
-        pickupLocation: sanitizeText(settings?.ekartPickupLocation || ''),
-        paymentMode: String(order?.paymentMethod || '').trim().toUpperCase() === 'COD' ? 'COD' : 'PREPAID',
-        amount: totalAmount,
-        currency: 'INR',
+        seller_name: sellerName,
+        seller_address: sellerAddress,
+        seller_gst_tin: gstNumber,
+        seller_gst_amount: 0,
+        consignee_gst_amount: 0,
+        integrated_gst_amount: 0,
+        order_number: sanitizeText(order?.displayId || order?._id || ''),
+        invoice_number: sanitizeText(order?.invoiceNumber || order?.displayId || order?._id || ''),
+        invoice_date: formatDate(order?.createdAt),
+        consignee_name: sanitizeText(shippingAddress?.name || 'Customer'),
+        consignee_alternate_phone: consigneeAlternatePhone,
+        products_desc: productsDescription,
+        payment_mode: paymentMode,
+        category_of_goods: 'General Merchandise',
+        total_amount: totalAmount,
+        tax_value: taxValue,
+        taxable_amount: taxableAmount,
+        commodity_value: taxableAmount.toFixed(2),
+        cod_amount: paymentMode === 'COD' ? totalAmount : 0,
         quantity: totalQuantity,
-        customer: {
-            name: sanitizeText(shippingAddress?.name || 'Customer'),
-            phone: normalizePhone(shippingAddress?.phone || ''),
-            email: sanitizeText(shippingAddress?.email || ''),
-            addressLine1: sanitizeText(shippingAddress?.street || ''),
+        weight: toPositiveInteger(order?.shippingWeight || totalQuantity * 500, 500),
+        length: toPositiveInteger(order?.shippingLength, 10),
+        height: toPositiveInteger(order?.shippingHeight, 10),
+        width: toPositiveInteger(order?.shippingWidth, 10),
+        drop_location: {
+            location_type: 'Home',
+            address: dropLocationAddress,
             city: sanitizeText(shippingAddress?.city || ''),
             state: sanitizeText(shippingAddress?.state || ''),
-            postalCode: String(shippingAddress?.postalCode || '').trim(),
-            country: sanitizeText(shippingAddress?.country || 'India') || 'India'
+            country: sanitizeText(shippingAddress?.country || 'India') || 'India',
+            name: sanitizeText(shippingAddress?.name || 'Customer'),
+            phone: Number(consigneePhone || 0),
+            pin: Number(String(shippingAddress?.postalCode || '').trim() || 0)
         },
-        items: orderItems.map((item) => ({
-            name: sanitizeText(item?.name || 'Item'),
-            quantity: Number(item?.qty) || 1,
-            unitPrice: Number(item?.price) || 0
-        }))
+        pickup_location: pickupAlias ? { name: pickupAlias } : undefined,
+        return_location: pickupAlias ? { name: pickupAlias } : undefined
     };
 };
 
-const buildAuthHeaders = (config) => {
-    const headers = {};
-    if (config.apiKey) {
-        headers.Authorization = `Bearer ${config.apiKey}`;
-        headers['x-api-key'] = config.apiKey;
+const getCachedTokenKey = (config) => `${config.baseUrl}|${config.clientId}|${config.username}`;
+
+const resolveTokenUrl = (baseUrl, clientId, tokenPath = DEFAULT_EKART_TOKEN_PATH) => {
+    const normalizedPath = String(tokenPath || DEFAULT_EKART_TOKEN_PATH).trim();
+    const resolvedPath = normalizedPath.replace('{client_id}', encodeURIComponent(clientId));
+    return joinUrl(baseUrl, resolvedPath);
+};
+
+const fetchEkartAccessToken = async (config) => {
+    if (config.apiKey && !config.clientId) {
+        return config.apiKey;
     }
 
-    if (config.username && config.password) {
-        const encoded = Buffer.from(`${config.username}:${config.password}`).toString('base64');
-        headers.Authorization = headers.Authorization || `Basic ${encoded}`;
+    if (!config.clientId || !config.username || !config.password) {
+        throw new Error('Ekart credentials are incomplete. Please save Client ID, Username, and Password in Admin > API Credentials.');
     }
 
-    return headers;
+    const cacheKey = getCachedTokenKey(config);
+    const cachedEntry = ekartTokenCache.get(cacheKey);
+    if (cachedEntry && cachedEntry.expiresAt > Date.now() + 60_000) {
+        return cachedEntry.accessToken;
+    }
+
+    const { data } = await axios.post(
+        resolveTokenUrl(config.baseUrl, config.clientId, config.tokenPath),
+        {
+            username: config.username,
+            password: config.password
+        },
+        {
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            timeout: 45000
+        }
+    );
+
+    const accessToken = sanitizeText(data?.access_token || '');
+    const expiresInSeconds = Number(data?.expires_in || 0);
+    if (!accessToken) {
+        throw new Error(sanitizeText(data?.message || data?.description || 'Ekart access token could not be fetched.'));
+    }
+
+    ekartTokenCache.set(cacheKey, {
+        accessToken,
+        expiresAt: Date.now() + Math.max(300, expiresInSeconds) * 1000
+    });
+
+    return accessToken;
+};
+
+const buildAuthHeaders = async (config) => {
+    const accessToken = await fetchEkartAccessToken(config);
+    return {
+        Authorization: `Bearer ${accessToken}`
+    };
 };
 
 const getEkartSettings = async () => {
@@ -158,29 +265,63 @@ const getEkartSettings = async () => {
 
     return {
         settings,
-        baseUrl: baseUrl.replace(/\/$/, ''),
-        trackingBaseUrl: trackingBaseUrl.replace(/\/$/, ''),
+        baseUrl: (baseUrl || DEFAULT_EKART_BASE_URL).replace(/\/$/, ''),
+        trackingBaseUrl: (trackingBaseUrl || baseUrl || DEFAULT_EKART_BASE_URL).replace(/\/$/, ''),
+        clientId: String(settings?.ekartClientId || '').trim(),
         username: String(settings?.ekartUsername || '').trim(),
         password: String(settings?.ekartPassword || '').trim(),
         apiKey: String(settings?.ekartApiKey || '').trim(),
-        createShipmentPath: String(settings?.ekartCreateShipmentPath || '/api/v1/shipments').trim(),
-        trackingPath: String(settings?.ekartTrackingPath || '/api/v1/shipments/tracking').trim(),
-        cancelPath: String(settings?.ekartCancelPath || '/api/v1/shipments/cancel').trim(),
+        createShipmentPath: String(settings?.ekartCreateShipmentPath || DEFAULT_EKART_CREATE_PATH).trim(),
+        trackingPath: String(settings?.ekartTrackingPath || DEFAULT_EKART_TRACKING_PATH).trim(),
+        cancelPath: String(settings?.ekartCancelPath || DEFAULT_EKART_CANCEL_PATH).trim(),
+        tokenPath: DEFAULT_EKART_TOKEN_PATH,
         clientName: String(settings?.ekartClientName || '').trim(),
         pickupLocation: String(settings?.ekartPickupLocation || '').trim()
     };
 };
 
-const normalizeTrackingResponse = (responseData, fallbackTrackingNumber = '') => {
-    const rawEvents = Array.isArray(responseData?.events)
-        ? responseData.events
-        : (Array.isArray(responseData?.scans) ? responseData.scans : []);
+const normalizePublicTrackingResponse = (responseData, fallbackTrackingNumber = '') => {
+    const details = Array.isArray(responseData?.track?.details) ? responseData.track.details : [];
+    const scans = details.map((entry) => ({
+        status: sanitizeText(entry?.status || entry?.event || entry?.description || responseData?.track?.status || ''),
+        location: sanitizeText(entry?.location || responseData?.track?.location || ''),
+        time: entry?.ctime || entry?.time || null,
+        remarks: sanitizeText(entry?.desc || '')
+    })).filter((entry) => entry.status || entry.time);
 
-    const scans = rawEvents.map((entry) => ({
+    if (!scans.length && responseData?.track) {
+        scans.push({
+            status: sanitizeText(responseData.track.status || ''),
+            location: sanitizeText(responseData.track.location || ''),
+            time: responseData.track.ctime || responseData.track.pickupTime || null,
+            remarks: sanitizeText(responseData.track.desc || '')
+        });
+    }
+
+    const currentStatus = getCurrentStatus(responseData?.track || {}) || sanitizeText(responseData?.track?.status || '');
+    const currentLocation = sanitizeText(responseData?.track?.location || '');
+
+    return {
+        trackingNumber: fallbackTrackingNumber || sanitizeText(responseData?.order_number || ''),
+        currentStatus,
+        mappedCurrentStep: getMappedTrackingStep(currentStatus),
+        currentLocation,
+        lastUpdatedAt: responseData?.track?.ctime || responseData?.track?.pickupTime || null,
+        expectedDeliveryDate: responseData?.edd || null,
+        stepTimes: {},
+        scans,
+        rawResponse: responseData
+    };
+};
+
+const normalizeRawTrackingResponse = (responseData, fallbackTrackingNumber = '') => {
+    const rawEntry = responseData?.[fallbackTrackingNumber] || Object.values(responseData || {})[0] || {};
+    const history = Array.isArray(rawEntry?.history) ? rawEntry.history : [];
+    const scans = history.map((entry) => ({
         status: sanitizeText(entry?.status || entry?.event || entry?.description || ''),
         location: sanitizeText(entry?.location || entry?.hub || entry?.city || ''),
-        time: entry?.time || entry?.timestamp || entry?.updatedAt || null,
-        remarks: sanitizeText(entry?.remarks || entry?.note || '')
+        time: entry?.time || entry?.ctime || entry?.timestamp || null,
+        remarks: sanitizeText(entry?.desc || entry?.remarks || '')
     })).filter((entry) => entry.status || entry.time);
 
     const stepTimes = {};
@@ -193,49 +334,67 @@ const normalizeTrackingResponse = (responseData, fallbackTrackingNumber = '') =>
             }
         });
 
-    const currentStatus = getCurrentStatus(responseData) || sanitizeText(scans[scans.length - 1]?.status || '');
+    const currentStatus = getCurrentStatus(rawEntry) || sanitizeText(scans[scans.length - 1]?.status || '');
     const currentLocation = sanitizeText(
-        responseData?.currentLocation ||
-        responseData?.current_location ||
+        rawEntry?.currentLocation ||
+        rawEntry?.current_location ||
+        rawEntry?.current_hub?.name ||
         scans[scans.length - 1]?.location ||
         ''
     );
 
     return {
-        trackingNumber: getTrackingNumber(responseData) || fallbackTrackingNumber,
+        trackingNumber: getTrackingNumber(rawEntry) || fallbackTrackingNumber,
         currentStatus,
         mappedCurrentStep: getMappedTrackingStep(currentStatus),
         currentLocation,
-        lastUpdatedAt: responseData?.lastUpdatedAt || responseData?.updatedAt || scans[scans.length - 1]?.time || null,
-        expectedDeliveryDate: responseData?.expectedDeliveryDate || responseData?.expected_delivery_date || null,
+        lastUpdatedAt: rawEntry?.lastUpdatedAt || rawEntry?.updatedAt || scans[scans.length - 1]?.time || null,
+        expectedDeliveryDate: rawEntry?.expectedDeliveryDate || rawEntry?.expected_delivery_date || null,
         stepTimes,
         scans,
         rawResponse: responseData
     };
 };
 
+const normalizeTrackingResponse = (responseData, fallbackTrackingNumber = '') => {
+    if (responseData?.track) {
+        return normalizePublicTrackingResponse(responseData, fallbackTrackingNumber);
+    }
+
+    return normalizeRawTrackingResponse(responseData, fallbackTrackingNumber);
+};
+
+const resolveTrackingUrl = (baseUrl, path, trackingNumber) => {
+    const normalizedPath = String(path || DEFAULT_EKART_TRACKING_PATH).trim();
+    const resolvedPath = normalizedPath
+        .replace('{id}', encodeURIComponent(trackingNumber))
+        .replace('{wbn}', encodeURIComponent(trackingNumber));
+    return joinUrl(baseUrl, resolvedPath);
+};
+
 export const createEkartShipment = async (order) => {
     const config = await getEkartSettings();
-    if (!config.baseUrl || (!config.apiKey && !(config.username && config.password))) {
-        throw new Error('Ekart credentials are incomplete. Please save base URL plus API key or username/password in Admin > API Credentials.');
+    if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
+        throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
     }
 
     const payload = buildShipmentPayload(order, config.settings);
-    const { data } = await axios.post(
+    const authHeaders = await buildAuthHeaders(config);
+    const { data } = await axios.put(
         joinUrl(config.baseUrl, config.createShipmentPath),
         payload,
         {
             headers: {
-                ...buildAuthHeaders(config),
+                ...authHeaders,
                 'Content-Type': 'application/json'
             },
             timeout: 20000
         }
     );
 
-    const trackingNumber = getTrackingNumber(data);
+    const trackingNumber = getTrackingNumber(data) || sanitizeText(data?.tracking_id || '');
     if (!trackingNumber) {
-        throw new Error(sanitizeText(data?.message || data?.error || 'Ekart shipment was not created successfully.'));
+        throw new Error(sanitizeText(data?.remark || data?.message || data?.error || 'Ekart shipment was not created successfully.'));
     }
 
     return {
@@ -255,21 +414,19 @@ export const fetchEkartTracking = async (orderOrTrackingNumber) => {
             : orderOrTrackingNumber?.ekart?.trackingNumber || ''
     ).trim();
 
-    if (!config.trackingBaseUrl || (!config.apiKey && !(config.username && config.password))) {
-        throw new Error('Ekart credentials are incomplete. Please save tracking base URL plus API key or username/password in Admin > API Credentials.');
+    if (!config.trackingBaseUrl) {
+        throw new Error('Ekart tracking base URL is missing. Please save it in Admin > API Credentials.');
     }
 
     if (!trackingNumber) {
         throw new Error('Ekart tracking number is not available for this order yet.');
     }
 
+    const authHeaders = await buildAuthHeaders(config);
     const { data } = await axios.get(
-        joinUrl(config.trackingBaseUrl, config.trackingPath),
+        resolveTrackingUrl(config.trackingBaseUrl, config.trackingPath, trackingNumber),
         {
-            headers: buildAuthHeaders(config),
-            params: {
-                trackingNumber
-            },
+            headers: authHeaders,
             timeout: 20000
         }
     );
@@ -281,33 +438,33 @@ export const cancelEkartShipment = async (order) => {
     const config = await getEkartSettings();
     const trackingNumber = String(order?.ekart?.trackingNumber || '').trim();
 
-    if (!config.baseUrl || (!config.apiKey && !(config.username && config.password))) {
-        throw new Error('Ekart credentials are incomplete. Please save base URL plus API key or username/password in Admin > API Credentials.');
+    if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
+        throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
     }
 
     if (!trackingNumber) {
         throw new Error('Ekart tracking number is not available for this order yet.');
     }
 
-    const payload = {
-        trackingNumber,
-        orderReference: sanitizeText(order?.displayId || order?._id || '')
-    };
-
-    const { data } = await axios.post(
+    const authHeaders = await buildAuthHeaders(config);
+    const { data } = await axios.delete(
         joinUrl(config.baseUrl, config.cancelPath),
-        payload,
         {
             headers: {
-                ...buildAuthHeaders(config),
+                ...authHeaders,
                 'Content-Type': 'application/json'
+            },
+            params: {
+                tracking_id: trackingNumber
             },
             timeout: 20000
         }
     );
 
     return {
-        requestPayload: payload,
+        requestPayload: {
+            tracking_id: trackingNumber
+        },
         responsePayload: data
     };
 };
