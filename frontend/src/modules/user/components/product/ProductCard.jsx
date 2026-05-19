@@ -5,6 +5,11 @@ import { useGoogleTranslation } from '../../../../hooks/useGoogleTranslation';
 import { prefetchProductById } from '../../../../hooks/useData';
 import { optimizeImage } from '../../../../utils/imageUtils';
 
+const parseDisplayNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
 const ProductCard = ({ product, footerText }) => {
     const navigate = useNavigate();
     const displayRating = Number(product?.rating) > 0 ? Number(product.rating).toFixed(1) : '5.0';
@@ -38,13 +43,17 @@ const ProductCard = ({ product, footerText }) => {
 
     // Variant Price Logic: Use first variant's price if available
     const firstSku = product?.skus?.[0];
-    const displayPrice = (firstSku?.price !== undefined && firstSku?.price !== null) ? firstSku.price : product.price;
-    const displayOriginalPrice = (firstSku?.originalPrice !== undefined && firstSku?.originalPrice !== null) ? firstSku.originalPrice : product.originalPrice;
+    const displayPrice = parseDisplayNumber(
+        (firstSku?.price !== undefined && firstSku?.price !== null) ? firstSku.price : product?.price
+    );
+    const displayOriginalPrice = parseDisplayNumber(
+        (firstSku?.originalPrice !== undefined && firstSku?.originalPrice !== null) ? firstSku.originalPrice : product?.originalPrice
+    );
 
     // Calculate dynamic discount if not provided
     const discountPercent = product.discount
         || (
-            displayOriginalPrice && displayOriginalPrice > displayPrice
+            displayOriginalPrice !== null && displayPrice !== null && displayOriginalPrice > displayPrice
                 ? `${Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)}% ${offText}`
                 : null
         );
@@ -64,6 +73,8 @@ const ProductCard = ({ product, footerText }) => {
                 <img
                     alt={product.name}
                     loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                     className="w-full h-full object-contain p-2 group-hover/card:scale-105 transition-transform duration-500"
                     src={optimizeImage(product.image, { width: 400, quality: 'auto' })}
                     onError={(e) => {
@@ -93,10 +104,12 @@ const ProductCard = ({ product, footerText }) => {
 
                 {/* Prices */}
                 <div className="flex items-center gap-1.5 mb-0.5">
-                    {displayOriginalPrice && displayOriginalPrice > displayPrice && (
+                    {displayOriginalPrice !== null && displayPrice !== null && displayOriginalPrice > displayPrice && (
                         <span className="text-[11px] md:text-sm text-gray-500 line-through">&#8377;{displayOriginalPrice.toLocaleString()}</span>
                     )}
-                    <span className="text-[13px] md:text-lg font-bold text-gray-900">&#8377;{displayPrice.toLocaleString()}</span>
+                    <span className="text-[13px] md:text-lg font-bold text-gray-900">
+                        {displayPrice !== null ? `\u20B9${displayPrice.toLocaleString()}` : 'Price on request'}
+                    </span>
                     {discountPercent && (
                         <span className="text-[10px] md:text-xs font-bold text-green-700 uppercase">
                             {discountPercent}
@@ -115,4 +128,4 @@ const ProductCard = ({ product, footerText }) => {
     );
 };
 
-export default ProductCard;
+export default React.memo(ProductCard);

@@ -1,5 +1,172 @@
 import Setting from '../models/Setting.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import Product from '../models/Product.js';
+
+const normalizeSettingKey = (value) => String(value || '').trim().toLowerCase();
+const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
+
+const buildCatalogEntryPipeline = (field, normalizedName) => ([
+    { $limit: 1 },
+    {
+        $project: {
+            entry: {
+                $first: {
+                    $filter: {
+                        input: `$${field}`,
+                        as: 'entry',
+                        cond: {
+                            $eq: [
+                                {
+                                    $toLower: {
+                                        $trim: {
+                                            input: { $ifNull: ['$$entry.name', ''] }
+                                        }
+                                    }
+                                },
+                                normalizedName
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+]);
+
+const buildCatalogLayoutPipeline = (field, normalizedName) => ([
+    ...buildCatalogEntryPipeline(field, normalizedName),
+    {
+        $project: {
+            entry: {
+                $cond: [
+                    { $ifNull: ['$entry', false] },
+                    {
+                        id: '$entry.id',
+                        dbId: '$entry.dbId',
+                        name: '$entry.name',
+                        subCategories: { $ifNull: ['$entry.subCategories', []] },
+                        categoryStrip: {
+                            $ifNull: [
+                                '$entry.categoryStrip',
+                                { isActive: true, items: [] }
+                            ]
+                        },
+                        products: [],
+                        pageSections: {
+                            $map: {
+                                input: { $ifNull: ['$entry.pageSections', []] },
+                                as: 'section',
+                                in: {
+                                    id: '$$section.id',
+                                    sectionKind: '$$section.sectionKind',
+                                    isActive: '$$section.isActive',
+                                    order: '$$section.order',
+                                    title: { $ifNull: ['$$section.title', ''] },
+                                    description: { $ifNull: ['$$section.description', ''] },
+                                    sectionLink: { $ifNull: ['$$section.sectionLink', ''] },
+                                    showArrow: { $ifNull: ['$$section.showArrow', false] },
+                                    backgroundType: { $ifNull: ['$$section.backgroundType', 'color'] },
+                                    backgroundColor: { $ifNull: ['$$section.backgroundColor', '#ffffff'] },
+                                    backgroundImage: { $ifNull: ['$$section.backgroundImage', ''] },
+                                    imageRatio: { $ifNull: ['$$section.imageRatio', 'square'] },
+                                    imageWidth: { $ifNull: ['$$section.imageWidth', ''] },
+                                    desktopImageItemsPerRow: { $ifNull: ['$$section.desktopImageItemsPerRow', ''] },
+                                    mediaDisplay: { $ifNull: ['$$section.mediaDisplay', 'grid'] },
+                                    locked: { $ifNull: ['$$section.locked', false] },
+                                    itemCount: {
+                                        $size: {
+                                            $ifNull: ['$$section.items', []]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    null
+                ]
+            }
+        }
+    }
+]);
+
+const buildCatalogSectionPipeline = (field, normalizedName, sectionId) => ([
+    ...buildCatalogEntryPipeline(field, normalizedName),
+    {
+        $project: {
+            section: {
+                $first: {
+                    $filter: {
+                        input: { $ifNull: ['$entry.pageSections', []] },
+                        as: 'section',
+                        cond: {
+                            $eq: [
+                                {
+                                    $trim: {
+                                        input: { $ifNull: ['$$section.id', ''] }
+                                    }
+                                },
+                                sectionId
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
+]);
+
+const loadMatchingCatalogEntry = async (field, normalizedName) => {
+    const [result] = await Setting.aggregate(buildCatalogEntryPipeline(field, normalizedName));
+    return result?.entry || null;
+};
+
+const loadMatchingCatalogLayout = async (field, normalizedName) => {
+    const [result] = await Setting.aggregate(buildCatalogLayoutPipeline(field, normalizedName));
+    return result?.entry || null;
+};
+
+const loadMatchingCatalogSection = async (field, normalizedName, sectionId) => {
+    const [result] = await Setting.aggregate(buildCatalogSectionPipeline(field, normalizedName, sectionId));
+    return result?.section || null;
+};
+
+const loadSectionProducts = async (items = []) => {
+    const snapshotsById = new Map();
+    const numericIds = new Set();
+
+    items.forEach((item) => {
+        if (item?.itemType !== 'product' || !item?.productId) return;
+        const normalizedId = String(item.productId).trim();
+        if (!normalizedId) return;
+
+        if (item?.productSnapshot) {
+            snapshotsById.set(normalizedId, item.productSnapshot);
+            return;
+        }
+
+        const numericId = Number(normalizedId);
+        if (Number.isFinite(numericId)) {
+            numericIds.add(numericId);
+        }
+    });
+
+    if (numericIds.size === 0) {
+        return Array.from(snapshotsById.values());
+    }
+
+    const products = await Product.find({ id: { $in: Array.from(numericIds) } })
+        .select(CATEGORY_PAGE_PROJECTION)
+        .lean();
+
+    products.forEach((product) => {
+        const normalizedId = String(product?.id || product?._id || '').trim();
+        if (normalizedId && !snapshotsById.has(normalizedId)) {
+            snapshotsById.set(normalizedId, product);
+        }
+    });
+
+    return Array.from(snapshotsById.values());
+};
 
 // @desc    Get settings
 // @route   GET /api/settings
@@ -23,6 +190,105 @@ const getSettings = async (req, res) => {
         res.json(settings);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get one category page config by category name
+// @route   GET /api/settings/category-page-config/:categoryName
+// @access  Public
+const getCategoryPageConfig = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const config = await loadMatchingCatalogEntry('categoryPageCatalog', categoryName);
+        res.json({ config });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get one subcategory page config by category/subcategory name
+// @route   GET /api/settings/subcategory-page-config/:categoryName/:subCategoryName
+// @access  Public
+const getSubCategoryPageConfig = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const subCategoryName = normalizeSettingKey(decodeURIComponent(req.params.subCategoryName || ''));
+        const targetName = `${categoryName} / ${subCategoryName}`;
+
+        const config = await loadMatchingCatalogEntry('subCategoryPageCatalog', targetName);
+        res.json({ config });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get category page layout metadata only
+// @route   GET /api/settings/category-page-layout/:categoryName
+// @access  Public
+const getCategoryPageLayout = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const config = await loadMatchingCatalogLayout('categoryPageCatalog', categoryName);
+        res.json({ config: config || null });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get one category page section payload
+// @route   GET /api/settings/category-page-section/:categoryName/:sectionId
+// @access  Public
+const getCategoryPageSection = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const sectionId = String(req.params.sectionId || '').trim();
+        const section = await loadMatchingCatalogSection('categoryPageCatalog', categoryName, sectionId);
+
+        if (!section) {
+            return res.status(404).json({ message: 'Section not found' });
+        }
+
+        const products = await loadSectionProducts(section.items);
+        return res.json({ section, products });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get subcategory page layout metadata only
+// @route   GET /api/settings/subcategory-page-layout/:categoryName/:subCategoryName
+// @access  Public
+const getSubCategoryPageLayout = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const subCategoryName = normalizeSettingKey(decodeURIComponent(req.params.subCategoryName || ''));
+        const targetName = `${categoryName} / ${subCategoryName}`;
+        const config = await loadMatchingCatalogLayout('subCategoryPageCatalog', targetName);
+        res.json({ config: config || null });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get one subcategory page section payload
+// @route   GET /api/settings/subcategory-page-section/:categoryName/:subCategoryName/:sectionId
+// @access  Public
+const getSubCategoryPageSection = async (req, res) => {
+    try {
+        const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
+        const subCategoryName = normalizeSettingKey(decodeURIComponent(req.params.subCategoryName || ''));
+        const targetName = `${categoryName} / ${subCategoryName}`;
+        const sectionId = String(req.params.sectionId || '').trim();
+        const section = await loadMatchingCatalogSection('subCategoryPageCatalog', targetName, sectionId);
+
+        if (!section) {
+            return res.status(404).json({ message: 'Section not found' });
+        }
+
+        const products = await loadSectionProducts(section.items);
+        return res.json({ section, products });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
 
@@ -253,4 +519,14 @@ const uploadCategoryPageImage = async (req, res) => {
     }
 };
 
-export { getSettings, updateSettings, uploadCategoryPageImage };
+export {
+    getSettings,
+    getCategoryPageConfig,
+    getCategoryPageLayout,
+    getCategoryPageSection,
+    getSubCategoryPageConfig,
+    getSubCategoryPageLayout,
+    getSubCategoryPageSection,
+    updateSettings,
+    uploadCategoryPageImage
+};

@@ -4,9 +4,11 @@ import { MdArrowForward } from 'react-icons/md';
 import ProductCard from '../product/ProductCard';
 import API from '../../../../services/api';
 import { getPlaceholderImage, optimizeImage } from '../../../../utils/imageUtils';
+import LazySection from '../common/LazySection';
 import {
     mergeCategoryPageCatalogWithCategories,
-    readCategoryPageCatalogAsync
+    readSubCategoryPageLayoutEntryAsync,
+    readSubCategoryPageSectionAsync
 } from '../../../../utils/subCategoryPageConfig';
 
 const DESKTOP_BREAKPOINT = 768;
@@ -205,6 +207,7 @@ const getImageFrameClass = (itemType) => {
 };
 
 const getProductId = (product) => String(product?.id || product?._id || '').trim();
+const getSectionItemKey = (item, index) => String(item?.id || item?.productId || item?.link || `${item?.itemType || 'item'}-${index}`);
 
 const getResolvedSectionProduct = (item, products = []) => {
     if (item?.itemType !== 'product') return null;
@@ -352,7 +355,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
                 ? { WebkitOverflowScrolling: 'touch' }
                 : desktopImageGridStyle}
         >
-            {sectionItems.map((item) => {
+            {sectionItems.map((item, index) => {
                 const product = getResolvedSectionProduct(item, sectionProducts);
                 const image = item.itemType === 'product' ? product?.image : item.image;
                 const title = item.title || product?.name;
@@ -375,7 +378,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
 
                 if (item.itemType === 'product') {
                     return (
-                        <div key={item.id} className={getProductCardWrapClass(section.mediaDisplay)}>
+                        <div key={getSectionItemKey(item, index)} className={getProductCardWrapClass(section.mediaDisplay)}>
                             {product ? <ProductCard product={product} footerText={description || product?.subtitle || ''} /> : null}
                         </div>
                     );
@@ -383,7 +386,7 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
 
                 return (
                     <button
-                        key={item.id}
+                        key={getSectionItemKey(item, index)}
                         type="button"
                         data-carousel-card="true"
                         onClick={() => openLink(link)}
@@ -437,8 +440,13 @@ const CategorySectionItems = ({ section, sectionItems, categoryName, openLink, s
 };
 
 const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
+    const eagerContentSectionCount = 1;
     const navigate = useNavigate();
-    const [catalog, setCatalog] = useState([]);
+    const [layoutEntry, setLayoutEntry] = useState(null);
+    const [catalogResolved, setCatalogResolved] = useState(false);
+    const [loadedSections, setLoadedSections] = useState({});
+    const [loadedSectionProducts, setLoadedSectionProducts] = useState({});
+    const [loadingSectionIds, setLoadingSectionIds] = useState({});
     const [allSubCategories, setAllSubCategories] = useState([]);
     const [allBrands, setAllBrands] = useState([]);
     const [version, setVersion] = useState(0);
@@ -461,20 +469,26 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
     useEffect(() => {
         let active = true;
 
-        readCategoryPageCatalogAsync()
-            .then((storedCatalog) => {
+        setCatalogResolved(false);
+        setLoadedSections({});
+        setLoadedSectionProducts({});
+        setLoadingSectionIds({});
+        readSubCategoryPageLayoutEntryAsync(categoryName, subCategoryName)
+            .then((storedEntry) => {
                 if (!active) return;
-                setCatalog(Array.isArray(storedCatalog) ? storedCatalog : []);
+                setLayoutEntry(storedEntry || null);
+                setCatalogResolved(true);
             })
             .catch(() => {
                 if (!active) return;
-                setCatalog([]);
+                setLayoutEntry(null);
+                setCatalogResolved(true);
             });
 
         return () => {
             active = false;
         };
-    }, [version]);
+    }, [categoryName, subCategoryName, version]);
 
     useEffect(() => {
         let active = true;
@@ -504,11 +518,12 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
         if (typeof window === 'undefined') return undefined;
 
         const handleResize = () => {
-            setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT);
+            const nextIsDesktop = window.innerWidth >= DESKTOP_BREAKPOINT;
+            setIsDesktop((current) => (current === nextIsDesktop ? current : nextIsDesktop));
         };
 
         handleResize();
-        window.addEventListener('resize', handleResize);
+        window.addEventListener('resize', handleResize, { passive: true });
 
         return () => {
             window.removeEventListener('resize', handleResize);
@@ -553,7 +568,7 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
     }, [allSubCategories, subCategoryName, categoryName]);
 
     const categoryConfig = useMemo(() => {
-        const mergedCatalog = mergeCategoryPageCatalogWithCategories(catalog, normalizedSubCategoryEntries);
+        const mergedCatalog = mergeCategoryPageCatalogWithCategories(layoutEntry ? [layoutEntry] : [], normalizedSubCategoryEntries);
         const selectedId = String(selectedSubCategory?._id || selectedSubCategory?.id || '').trim();
         if (selectedId) {
             const byId = mergedCatalog.find((entry) => String(entry?.id || '').trim() === selectedId);
@@ -562,7 +577,7 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
 
         const fallbackName = `${normalizeText(categoryName)} / ${normalizeText(subCategoryName)}`;
         return mergedCatalog.find((entry) => normalizeKey(entry?.name) === normalizeKey(fallbackName)) || null;
-    }, [catalog, normalizedSubCategoryEntries, selectedSubCategory, categoryName, subCategoryName]);
+    }, [layoutEntry, normalizedSubCategoryEntries, selectedSubCategory, categoryName, subCategoryName]);
 
     const brandsForSubCategory = useMemo(() => (
         Array.isArray(categoryConfig?.subCategories)
@@ -576,7 +591,62 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
             .sort((a, b) => (a.order || 0) - (b.order || 0)),
         [categoryConfig]
     );
+    const contentSectionOrder = useMemo(
+        () => new Map(
+            sections
+                .filter((section) => section?.sectionKind !== 'brands')
+                .map((section, index) => [section?.id, index])
+        ),
+        [sections]
+    );
     const hasBrandsSection = sections.some((section) => section.sectionKind === 'brands');
+
+    const loadSectionPayload = useCallback(async (sectionId) => {
+        const normalizedSectionId = String(sectionId || '').trim();
+        if (!normalizedSectionId) return;
+        if (loadedSections[normalizedSectionId] || loadingSectionIds[normalizedSectionId]) return;
+
+        setLoadingSectionIds((prev) => ({ ...prev, [normalizedSectionId]: true }));
+        try {
+            const payload = await readSubCategoryPageSectionAsync(categoryName, subCategoryName, normalizedSectionId);
+            if (payload?.section) {
+                setLoadedSections((prev) => ({ ...prev, [normalizedSectionId]: payload.section }));
+                setLoadedSectionProducts((prev) => ({
+                    ...prev,
+                    [normalizedSectionId]: Array.isArray(payload.products) ? payload.products : []
+                }));
+            }
+        } finally {
+            setLoadingSectionIds((prev) => ({ ...prev, [normalizedSectionId]: false }));
+        }
+    }, [categoryName, loadedSections, loadingSectionIds, subCategoryName]);
+
+    useEffect(() => {
+        const eagerSections = sections
+            .filter((section) => section?.sectionKind !== 'brands')
+            .slice(0, eagerContentSectionCount);
+
+        eagerSections.forEach((section) => {
+            loadSectionPayload(section.id);
+        });
+    }, [eagerContentSectionCount, loadSectionPayload, sections]);
+
+    if (!catalogResolved) {
+        return (
+            <div className="w-full">
+                <div className="max-w-[1360px] mx-auto px-3 py-3">
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                            <div key={index} className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+                                <div className="aspect-square rounded-2xl shimmer" />
+                                <div className="mt-3 h-3 w-3/4 rounded shimmer" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (!categoryConfig) return null;
 
@@ -588,11 +658,11 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
     return (
         <div className="w-full">
             <div className="max-w-[1360px] mx-auto px-3 py-2">
-                {sections.map((section) => {
+                {sections.map((section, index) => {
                     if (section.sectionKind === 'brands') {
                         if (brandsForSubCategory.length === 0) return null;
 
-                        return (
+                        const sectionContent = (
                             <section key={section.id} className="mb-3 rounded-2xl bg-white p-1.5">
                                 <BrandQuickLinkGrid
                                     categoryName={categoryName}
@@ -605,38 +675,53 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
                                 />
                             </section>
                         );
+
+                        if (index < eagerContentSectionCount) {
+                            return <React.Fragment key={section.id}>{sectionContent}</React.Fragment>;
+                        }
+
+                        return (
+                            <LazySection
+                                key={section.id}
+                                threshold={0.01}
+                                placeholder={<div className="mb-3 min-h-[140px] rounded-2xl bg-gray-50/80" />}
+                            >
+                                {sectionContent}
+                            </LazySection>
+                        );
                     }
 
-                    const backgroundType = section.backgroundType || (section.backgroundImage ? 'image' : 'color');
-                    const sectionItems = section.mediaDisplay === 'single'
-                        ? (section.items || []).slice(0, 1)
-                        : (section.items || []);
+                    const loadedSection = loadedSections[section.id] || null;
+                    const activeSection = loadedSection || section;
+                    const backgroundType = activeSection.backgroundType || (activeSection.backgroundImage ? 'image' : 'color');
+                    const sectionItems = activeSection.mediaDisplay === 'single'
+                        ? (activeSection.items || []).slice(0, 1)
+                        : (activeSection.items || []);
+                    const sectionPlaceholder = <div className="mb-3 min-h-[220px] rounded-2xl bg-gray-50/80" />;
 
-                    if (sectionItems.length === 0) return null;
-
-                    return (
+                    const sectionContent = sectionItems.length > 0 ? (
                         <section
-                            key={section.id}
+                            key={activeSection.id || section.id}
                             className="mb-3 overflow-hidden rounded-2xl p-2"
                             style={{
-                                backgroundColor: backgroundType === 'color' ? (section.backgroundColor || '#ffffff') : '#ffffff',
-                                backgroundImage: backgroundType === 'image' && section.backgroundImage ? `url(${section.backgroundImage})` : undefined,
+                                backgroundColor: backgroundType === 'color' ? (activeSection.backgroundColor || '#ffffff') : '#ffffff',
+                                backgroundImage: backgroundType === 'image' && activeSection.backgroundImage ? `url(${activeSection.backgroundImage})` : undefined,
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center'
                             }}
                         >
-                            {(section.title || section.description || section.showArrow) && (
+                            {(activeSection.title || activeSection.description || activeSection.showArrow) && (
                                 <div className="mb-2 flex items-start justify-between gap-3">
                                     <div>
-                                        {section.title ? <h3 className="text-lg font-bold tracking-tight text-gray-900 md:text-3xl">{section.title}</h3> : null}
-                                        {section.description ? <p className="mt-1 text-sm text-gray-600">{section.description}</p> : null}
+                                        {activeSection.title ? <h3 className="text-lg font-bold tracking-tight text-gray-900 md:text-3xl">{activeSection.title}</h3> : null}
+                                        {activeSection.description ? <p className="mt-1 text-sm text-gray-600">{activeSection.description}</p> : null}
                                     </div>
-                                    {section.showArrow && section.sectionLink ? (
+                                    {activeSection.showArrow && activeSection.sectionLink ? (
                                         <button
                                             type="button"
-                                            onClick={() => openLink(section.sectionLink)}
+                                            onClick={() => openLink(activeSection.sectionLink)}
                                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white shadow-sm transition hover:bg-blue-600"
-                                            aria-label={`Open ${section.title || subCategoryName}`}
+                                            aria-label={`Open ${activeSection.title || subCategoryName}`}
                                         >
                                             <MdArrowForward className="text-[18px]" />
                                         </button>
@@ -645,14 +730,36 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
                             )}
 
                             <CategorySectionItems
-                                section={section}
+                                section={activeSection}
                                 sectionItems={sectionItems}
                                 categoryName={subCategoryName}
                                 openLink={openLink}
-                                sectionProducts={categoryConfig?.products || []}
+                                sectionProducts={loadedSectionProducts[section.id] || []}
                                 isDesktop={isDesktop}
                             />
                         </section>
+                    ) : sectionPlaceholder;
+
+                    const contentSectionIndex = contentSectionOrder.get(section.id);
+
+                    if (contentSectionIndex > -1 && contentSectionIndex < eagerContentSectionCount) {
+                        return (
+                            <React.Fragment key={section.id}>
+                                {loadedSection ? sectionContent : sectionPlaceholder}
+                            </React.Fragment>
+                        );
+                    }
+
+                    return (
+                        <LazySection
+                            key={section.id}
+                            threshold={0.01}
+                            rootMargin="220px"
+                            onVisible={() => loadSectionPayload(section.id)}
+                            placeholder={sectionPlaceholder}
+                        >
+                            {loadedSection ? sectionContent : sectionPlaceholder}
+                        </LazySection>
                     );
                 })}
 

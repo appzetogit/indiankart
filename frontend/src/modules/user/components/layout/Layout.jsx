@@ -2,7 +2,6 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Header from './Header';
 import BottomNav from './BottomNav';
-import Footer from './Footer';
 
 const Layout = () => {
     const location = useLocation();
@@ -43,8 +42,6 @@ const Layout = () => {
         !location.pathname.includes('/login') &&
         !location.pathname.includes('/track-order') &&
         !location.pathname.includes('/category/');
-    const showFooter = !isCategory && !isAllCategories;
-
     return (
         <div className="w-full min-h-screen flex flex-col relative bg-background-light">
             {!isStandalonePage && (
@@ -52,7 +49,7 @@ const Layout = () => {
                     <Header />
                 </div>
             )}
-            <main className={`flex flex-col ${showFooter ? 'pb-0' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'} md:pb-0 w-full transition-all duration-300 ${isInfoPage ? 'bg-white' : 'bg-white'}
+            <main className={`flex flex-col ${isCategory || isAllCategories ? 'pb-[calc(92px+env(safe-area-inset-bottom))]' : 'pb-0'} md:pb-0 w-full transition-all duration-300 ${isInfoPage ? 'bg-white' : 'bg-white'}
                 ${isStandalonePage ? 'pt-0' :
                     isPDP ? 'pt-[0px] md:pt-[130px]' :
                         isCategory ? 'pt-[72px] md:pt-[116px]' :
@@ -76,11 +73,6 @@ const Layout = () => {
                 </AnimatePresence>
             </main>
             {showBottomNav && <BottomNav />}
-            {showFooter && (
-                <div className="hidden md:block">
-                    <Footer />
-                </div>
-            )}
         </div >
     );
 };

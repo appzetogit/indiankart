@@ -1,5 +1,15 @@
 import express from 'express';
-import { getSettings, updateSettings, uploadCategoryPageImage } from '../controllers/settingController.js';
+import {
+    getSettings,
+    getCategoryPageConfig,
+    getCategoryPageLayout,
+    getCategoryPageSection,
+    getSubCategoryPageConfig,
+    getSubCategoryPageLayout,
+    getSubCategoryPageSection,
+    updateSettings,
+    uploadCategoryPageImage
+} from '../controllers/settingController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
@@ -18,6 +28,13 @@ const uploadMiddleware = (req, res, next) => {
 router.route('/')
     .get(getSettings)
     .put(protect, admin, uploadMiddleware, updateSettings);
+
+router.get('/category-page-config/:categoryName', getCategoryPageConfig);
+router.get('/category-page-layout/:categoryName', getCategoryPageLayout);
+router.get('/category-page-section/:categoryName/:sectionId', getCategoryPageSection);
+router.get('/subcategory-page-config/:categoryName/:subCategoryName', getSubCategoryPageConfig);
+router.get('/subcategory-page-layout/:categoryName/:subCategoryName', getSubCategoryPageLayout);
+router.get('/subcategory-page-section/:categoryName/:subCategoryName/:sectionId', getSubCategoryPageSection);
 
 router.post('/category-page-image', protect, admin, upload.single('image'), uploadCategoryPageImage);
 

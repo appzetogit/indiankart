@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './modules/user/store/authStore';
 import { onMessageListener } from './services/firebase';
@@ -9,9 +9,27 @@ import toast from 'react-hot-toast';
 import ScrollToTop from './components/common/ScrollToTop';
 import LenisProvider from './components/common/LenisProvider';
 import Loader from './components/common/Loader';
+import Footer from './modules/user/components/layout/Footer';
 
 const UserRoutes = lazy(() => import('./modules/user/routes/UserRoutes'));
 const AdminRoutes = lazy(() => import('./modules/admin/routes/AdminRoutes'));
+
+const AppShell = () => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  return (
+    <>
+      <Suspense fallback={<Loader fullPage message="Loading page..." variant="shimmer" />}>
+        <Routes>
+          <Route path="/admin/*" element={<AdminRoutes />} />
+          <Route path="/*" element={<UserRoutes />} />
+        </Routes>
+      </Suspense>
+      {!isAdminRoute && <Footer />}
+    </>
+  );
+};
 
 function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
@@ -45,12 +63,7 @@ function App() {
             error: { duration: 1200, removeDelay: 0 }
           }}
         />
-        <Suspense fallback={<Loader fullPage message="Loading page..." variant="shimmer" />}>
-          <Routes>
-            <Route path="/admin/*" element={<AdminRoutes />} />
-            <Route path="/*" element={<UserRoutes />} />
-          </Routes>
-        </Suspense>
+        <AppShell />
       </LenisProvider>
     </Router>
   );

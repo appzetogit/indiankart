@@ -366,20 +366,26 @@ export const useHomeLayout = () => {
     return { layout, loading, error };
 };
 export const useSubCategoriesByCategory = (categoryId) => {
-    const cacheKey = `sub-categories:${categoryId}`;
-    const initialData = readCache(cacheKey) || [];
+    const normalizedCategoryId = String(categoryId || '').trim();
+    const cacheKey = normalizedCategoryId ? `sub-categories:${normalizedCategoryId}` : null;
+    const initialData = cacheKey ? (readCache(cacheKey) || []) : [];
     const [subCategories, setSubCategories] = useState(initialData);
-    const [loading, setLoading] = useState(initialData.length === 0);
+    const [loading, setLoading] = useState(Boolean(normalizedCategoryId) && initialData.length === 0);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (!categoryId) return;
+        if (!normalizedCategoryId || !cacheKey) {
+            setSubCategories([]);
+            setLoading(false);
+            setError(null);
+            return;
+        }
         let active = true;
 
         const fetchSubs = async () => {
             try {
                 const data = await getOrFetch(cacheKey, async () => {
-                    const { data } = await API.get(`/subcategories/category/${categoryId}`);
+                    const { data } = await API.get(`/subcategories/category/${normalizedCategoryId}`);
                     return data;
                 });
 
@@ -396,7 +402,7 @@ export const useSubCategoriesByCategory = (categoryId) => {
 
         fetchSubs();
         return () => { active = false; };
-    }, [categoryId]);
+    }, [cacheKey, normalizedCategoryId]);
 
     return { subCategories, loading, error };
 };

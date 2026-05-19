@@ -97,6 +97,9 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
                                 src={getHeroImage()}
                                 className={`${bannerImageClass} group-hover:scale-[1.02] transition-transform duration-1000`}
                                 alt=""
+                                loading="eager"
+                                decoding="async"
+                                fetchPriority="high"
                             />
                         </div>
                     )}
@@ -116,6 +119,9 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
                     <img
                         src={banner.content.imageUrl}
                         alt={banner.content.title}
+                        loading="lazy"
+                        decoding="async"
+                        fetchPriority="low"
                         className="w-full h-auto block group-hover:scale-[1.02] transition-transform duration-700"
                         onError={(e) => {
                             e.target.onerror = null;
@@ -168,6 +174,9 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
                                 <img
                                     src={banner.content.imageUrl}
                                     alt={banner.content.title}
+                                    loading="lazy"
+                                    decoding="async"
+                                    fetchPriority="low"
                                     className="h-[80%] md:h-[120%] object-contain drop-shadow-2xl translate-x-4 group-hover:scale-105 transition-transform duration-500"
                                 />
                             )}
@@ -211,6 +220,9 @@ const HomeBanner = ({ banner, isMobileViewport = false }) => {
                                         src={getSlideImage(slide)}
                                         className={bannerImageClass}
                                         alt={`Slide ${index + 1}`}
+                                        loading={index === 0 ? 'eager' : 'lazy'}
+                                        decoding="async"
+                                        fetchPriority={index === 0 ? 'high' : 'low'}
                                     />
                                 ) : (
                                     <div className="w-full min-h-[120px] rounded-xl bg-transparent" />

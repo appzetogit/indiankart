@@ -36,6 +36,25 @@ import logo from '../../../../assets/indiankart-logo.png';
 const normalizeSearchText = (value) => String(value || '').trim().toLowerCase();
 
 const getProductId = (product) => String(product?.id || product?._id || '').trim();
+const getCategoryId = (category) => String(category?.id || category?._id || category?.name || '').trim();
+
+const scoreSearchMatch = (target, query) => {
+    if (!target || !query) return 0;
+    if (target === query) return 300;
+    if (target.startsWith(query)) return 220;
+    if (target.includes(query)) return 140;
+    return 0;
+};
+
+const dedupeByKey = (items = [], getKey) => {
+    const seen = new Set();
+    return items.filter((item) => {
+        const key = String(getKey(item) || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+};
 
 const getProductSubcategoryText = (product) => {
     const names = [];
@@ -117,6 +136,27 @@ const Header = () => {
     ];
     const shouldSpreadCategories = displayCategories.length >= 6;
     const { products: searchableProducts = [] } = useProducts({ lite: true });
+    const searchableSubCategories = React.useMemo(
+        () => dedupeByKey(
+            displayCategories.flatMap((category) => {
+                const categoryName = String(category?.name || '').trim();
+                const subCategories = Array.isArray(category?.children) && category.children.length > 0
+                    ? category.children
+                    : (Array.isArray(category?.subCategories) ? category.subCategories : []);
+
+                return subCategories.map((subCategory) => ({
+                    _id: subCategory?._id || subCategory?.id || `${categoryName}-${subCategory?.name || ''}`,
+                    id: subCategory?.id || subCategory?._id || `${categoryName}-${subCategory?.name || ''}`,
+                    name: String(subCategory?.name || '').trim(),
+                    category: {
+                        name: categoryName
+                    }
+                }));
+            }),
+            (item) => `${item?.category?.name || ''}::${item?.name || ''}`
+        ),
+        [displayCategories]
+    );
 
 
     // Mega menu state
@@ -170,19 +210,56 @@ const Header = () => {
                     .map((entry) => entry.product);
 
                 const backendProducts = Array.isArray(data?.products) ? data.products : [];
+                const backendCategories = Array.isArray(data?.categories) ? data.categories : [];
+                const backendSubCategories = Array.isArray(data?.subCategories) ? data.subCategories : [];
+                const fallbackCategories = displayCategories
+                    .map((category) => {
+                        const score = scoreSearchMatch(normalizeSearchText(category?.name), normalizedQuery);
+                        if (!score) return null;
+                        return { category, score };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => b.score - a.score)
+                    .map((entry) => entry.category);
+                const fallbackSubCategories = searchableSubCategories
+                    .map((subCategory) => {
+                        const subName = normalizeSearchText(subCategory?.name);
+                        const combinedName = `${normalizeSearchText(subCategory?.category?.name)} ${subName}`.trim();
+                        const score = Math.max(
+                            scoreSearchMatch(subName, normalizedQuery),
+                            scoreSearchMatch(combinedName, normalizedQuery)
+                        );
+                        if (!score) return null;
+                        return { subCategory, score };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => b.score - a.score)
+                    .map((entry) => entry.subCategory);
                 const mergedProductsMap = new Map();
                 [...backendProducts, ...fallbackProducts].forEach((product) => {
                     const key = getProductId(product);
                     if (!key || mergedProductsMap.has(key)) return;
                     mergedProductsMap.set(key, product);
                 });
+                const mergedCategories = dedupeByKey(
+                    [...backendCategories, ...fallbackCategories],
+                    (category) => getCategoryId(category)
+                ).slice(0, 5);
+                const mergedSubCategories = dedupeByKey(
+                    [...backendSubCategories, ...fallbackSubCategories],
+                    (subCategory) => `${subCategory?.category?.name || ''}::${subCategory?._id || subCategory?.id || subCategory?.name || ''}`
+                ).slice(0, 6);
 
                 setSearchResults({
-                    categories: Array.isArray(data?.categories) ? data.categories : [],
-                    subCategories: Array.isArray(data?.subCategories) ? data.subCategories : [],
+                    categories: mergedCategories,
+                    subCategories: mergedSubCategories,
                     products: Array.from(mergedProductsMap.values()).slice(0, 8)
                 });
-                setShowSearchDropdown(true);
+                setShowSearchDropdown(
+                    mergedCategories.length > 0
+                    || mergedSubCategories.length > 0
+                    || mergedProductsMap.size > 0
+                );
             } catch (error) {
                 console.error("Search failed:", error);
                 const normalizedQuery = normalizeSearchText(searchQuery);
@@ -199,9 +276,30 @@ const Header = () => {
                         return haystack.includes(normalizedQuery);
                     })
                     .slice(0, 8);
+                const fallbackCategories = displayCategories
+                    .filter((category) => scoreSearchMatch(normalizeSearchText(category?.name), normalizedQuery) > 0)
+                    .slice(0, 5);
+                const fallbackSubCategories = searchableSubCategories
+                    .filter((subCategory) => {
+                        const subName = normalizeSearchText(subCategory?.name);
+                        const combinedName = `${normalizeSearchText(subCategory?.category?.name)} ${subName}`.trim();
+                        return Math.max(
+                            scoreSearchMatch(subName, normalizedQuery),
+                            scoreSearchMatch(combinedName, normalizedQuery)
+                        ) > 0;
+                    })
+                    .slice(0, 6);
 
-                setSearchResults({ products: fallbackProducts, categories: [], subCategories: [] });
-                setShowSearchDropdown(fallbackProducts.length > 0);
+                setSearchResults({
+                    products: fallbackProducts,
+                    categories: fallbackCategories,
+                    subCategories: fallbackSubCategories
+                });
+                setShowSearchDropdown(
+                    fallbackProducts.length > 0
+                    || fallbackCategories.length > 0
+                    || fallbackSubCategories.length > 0
+                );
             } finally {
                 setIsSearching(false);
             }
@@ -209,7 +307,7 @@ const Header = () => {
 
         const debounceTimer = setTimeout(fetchSearchResults, 300);
         return () => clearTimeout(debounceTimer);
-    }, [searchQuery, searchableProducts]);
+    }, [displayCategories, searchQuery, searchableProducts, searchableSubCategories]);
 
     // Close search dropdown on click outside
     useEffect(() => {
@@ -288,7 +386,7 @@ const Header = () => {
 
     // Translation State
     const { language, setLanguage } = useLanguageStore();
-    const searchPlaceholder = useGoogleTranslation('Search for products, brands and more');
+    const searchPlaceholder = useGoogleTranslation('Search for products, categories, subcategories and more');
     const myAccountText = useGoogleTranslation('My Account');
     const cartText = useGoogleTranslation('Cart');
     const categoriesText = useGoogleTranslation('Categories');
@@ -298,6 +396,31 @@ const Header = () => {
         if (!subCategoryName) return `/category/${categorySegment}`;
         const subCategorySegment = encodeURIComponent(String(subCategoryName).trim());
         return `/category/${categorySegment}/${subCategorySegment}`;
+    };
+    const handleSearchSelection = (targetPath) => {
+        if (!targetPath) return;
+        navigate(targetPath);
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+    };
+    const handleSearchSubmit = () => {
+        const firstCategory = searchResults.categories?.[0];
+        const firstSubCategory = searchResults.subCategories?.[0];
+        const firstProduct = searchResults.products?.[0];
+
+        if (firstCategory?.name) {
+            handleSearchSelection(buildCategoryRoute(firstCategory.name));
+            return;
+        }
+
+        if (firstSubCategory?.name && firstSubCategory?.category?.name) {
+            handleSearchSelection(buildCategoryRoute(firstSubCategory.category.name, firstSubCategory.name));
+            return;
+        }
+
+        if (firstProduct) {
+            handleSearchSelection(`/product/${firstProduct.id || firstProduct._id}`);
+        }
     };
 
     return (
@@ -388,6 +511,12 @@ const Header = () => {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onFocus={() => searchQuery.length >= 2 && setShowSearchDropdown(true)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSearchSubmit();
+                                }
+                            }}
                         />
                         {searchQuery && (
                             <button
@@ -412,12 +541,8 @@ const Header = () => {
                                     <div className="flex flex-wrap gap-2">
                                         {searchResults.categories?.map(cat => (
                                             <button
-                                                key={cat.id}
-                                                onClick={() => {
-                                                    navigate(buildCategoryRoute(cat.name));
-                                                    setShowSearchDropdown(false);
-                                                    setSearchQuery('');
-                                                }}
+                                                key={getCategoryId(cat)}
+                                                onClick={() => handleSearchSelection(buildCategoryRoute(cat.name))}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-xs font-bold hover:bg-blue-600 hover:text-white transition-all"
                                             >
                                                 <MdGridView size={14} />
@@ -426,12 +551,8 @@ const Header = () => {
                                         ))}
                                         {searchResults.subCategories?.map(sub => (
                                             <button
-                                                key={sub._id}
-                                                onClick={() => {
-                                                    navigate(buildCategoryRoute(sub.category?.name, sub.name));
-                                                    setShowSearchDropdown(false);
-                                                    setSearchQuery('');
-                                                }}
+                                                key={`${sub.category?.name || 'category'}-${sub._id || sub.id || sub.name}`}
+                                                onClick={() => handleSearchSelection(buildCategoryRoute(sub.category?.name, sub.name))}
                                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 text-gray-600 rounded-full text-xs font-bold hover:bg-gray-600 hover:text-white transition-all"
                                             >
                                                 <MdKeyboardArrowRight size={14} />
@@ -450,11 +571,7 @@ const Header = () => {
                                         {searchResults.products.map(product => (
                                             <div
                                                 key={product.id || product._id}
-                                                onClick={() => {
-                                                    navigate(`/product/${product.id || product._id}`);
-                                                    setShowSearchDropdown(false);
-                                                    setSearchQuery('');
-                                                }}
+                                                onClick={() => handleSearchSelection(`/product/${product.id || product._id}`)}
                                                 className="flex items-center gap-4 p-2 hover:bg-blue-50 rounded-lg cursor-pointer transition-colors group"
                                             >
                                                 <div className="w-12 h-12 bg-gray-100 rounded-md overflow-hidden flex-shrink-0 border border-gray-100">

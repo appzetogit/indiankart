@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { translateText } from '../services/translationService';
+import { getCachedTranslationSync, translateText } from '../services/translationService';
 import { useLanguageStore } from '../store/languageStore';
 
 /**
@@ -9,7 +9,7 @@ import { useLanguageStore } from '../store/languageStore';
  */
 export const useGoogleTranslation = (text) => {
     const { language } = useLanguageStore();
-    const [translatedText, setTranslatedText] = useState(text);
+    const [translatedText, setTranslatedText] = useState(() => getCachedTranslationSync(text, language) ?? text);
     // eslint-disable-next-line no-unused-vars
     const [isLoading, setIsLoading] = useState(false);
 
@@ -20,6 +20,12 @@ export const useGoogleTranslation = (text) => {
         const fetchTranslation = async () => {
             if (!text || language === 'en') {
                 setTranslatedText(text);
+                return;
+            }
+
+            const cached = getCachedTranslationSync(text, language);
+            if (cached !== null) {
+                setTranslatedText(cached);
                 return;
             }
 

@@ -8,6 +8,7 @@ const CATEGORY_PAGE_BUILDER_IDB_STORE = 'catalog';
 const CATEGORY_PAGE_BUILDER_IDB_KEY = 'catalog-v2';
 const INDEXED_DB_POINTER = '__indexed_db__';
 const SUBCATEGORY_PAGE_BUILDER_SERVER_FIELD = 'subCategoryPageCatalog';
+const MAX_SYNC_LOCAL_STORAGE_BYTES = 120000;
 
 const normalizeText = (value) => String(value || '').trim();
 const normalizeKey = (value) => normalizeText(value).toLowerCase();
@@ -165,18 +166,54 @@ const buildLegacyCatalog = () => {
 };
 
 const legacyCatalog = buildLegacyCatalog();
+const subCategoryConfigRequestStore = new Map();
+const subCategoryLayoutRequestStore = new Map();
+const subCategorySectionRequestStore = new Map();
+
+const isNonEmptyCatalog = (catalog) => Array.isArray(catalog) && catalog.length > 0;
+
+const setIndexedDbPointer = () => {
+    if (typeof window === 'undefined') return;
+
+    try {
+        window.localStorage.setItem(
+            CATEGORY_PAGE_BUILDER_STORAGE_KEY,
+            JSON.stringify({
+                storage: INDEXED_DB_POINTER,
+                updatedAt: Date.now()
+            })
+        );
+    } catch {
+        // Ignore storage pointer failures.
+    }
+};
+
+const readStoredLocalCatalog = ({ allowLargePayload = false } = {}) => {
+    if (typeof window === 'undefined') return null;
+
+    const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
+    const legacyStored = window.localStorage.getItem(LEGACY_CATEGORY_PAGE_BUILDER_STORAGE_KEY);
+    const source = stored || legacyStored;
+    if (!source) return null;
+
+    if (!allowLargePayload && source.length > MAX_SYNC_LOCAL_STORAGE_BYTES) {
+        return null;
+    }
+
+    const parsed = JSON.parse(source);
+    if (parsed?.storage === INDEXED_DB_POINTER) {
+        return { storage: INDEXED_DB_POINTER };
+    }
+
+    return isNonEmptyCatalog(parsed) ? sanitizeCategoryPageCatalog(parsed) : null;
+};
 
 export const readCategoryPageCatalog = () => {
     if (typeof window === 'undefined') return legacyCatalog;
 
     try {
-        const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
-        const legacyStored = window.localStorage.getItem(LEGACY_CATEGORY_PAGE_BUILDER_STORAGE_KEY);
-        const source = stored || legacyStored;
-        if (!source) return legacyCatalog;
-
-        const parsed = JSON.parse(source);
-        return Array.isArray(parsed) && parsed.length > 0 ? sanitizeCategoryPageCatalog(parsed) : legacyCatalog;
+        const localCatalog = readStoredLocalCatalog();
+        return isNonEmptyCatalog(localCatalog) ? localCatalog : legacyCatalog;
     } catch {
         return legacyCatalog;
     }
@@ -234,53 +271,183 @@ const writeCatalogToIndexedDb = async (catalog) => {
 
 export const readCategoryPageCatalogAsync = async () => {
     try {
+        const localCatalog = readStoredLocalCatalog();
+        if (isNonEmptyCatalog(localCatalog)) {
+            return localCatalog;
+        }
+    } catch {
+        // Continue to IndexedDB/network fallback.
+    }
+
+    try {
+        const indexedDbCatalog = sanitizeCategoryPageCatalog(await readCatalogFromIndexedDb());
+        if (isNonEmptyCatalog(indexedDbCatalog)) {
+            setIndexedDbPointer();
+            return indexedDbCatalog;
+        }
+    } catch {
+        // Continue to network fallback.
+    }
+
+    try {
         const { data } = await API.get('/settings');
         const serverCatalog = data?.[SUBCATEGORY_PAGE_BUILDER_SERVER_FIELD];
         if (Array.isArray(serverCatalog) && serverCatalog.length >= 0) {
             if (typeof window !== 'undefined') {
                 try {
-                    const serialized = JSON.stringify(serverCatalog);
-                    window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
-                    try {
-                        await writeCatalogToIndexedDb(serverCatalog);
-                    } catch {
-                        // Ignore IndexedDB mirror failure.
-                    }
+                    await writeCatalogToIndexedDb(serverCatalog);
+                    setIndexedDbPointer();
                 } catch {
-                    // Ignore local mirror issues.
+                    try {
+                        window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, JSON.stringify(serverCatalog));
+                    } catch {
+                        // Ignore local mirror issues.
+                    }
                 }
             }
             const sanitizedServerCatalog = sanitizeCategoryPageCatalog(serverCatalog);
-            return sanitizedServerCatalog.length > 0 ? sanitizedServerCatalog : legacyCatalog;
+            return isNonEmptyCatalog(sanitizedServerCatalog) ? sanitizedServerCatalog : legacyCatalog;
         }
     } catch {
-        // Fallback to local/offline catalog below.
+        // Fallback to final local parse below.
     }
-
-    const localCatalog = sanitizeCategoryPageCatalog(readCategoryPageCatalog());
-    if (localCatalog !== legacyCatalog) {
-        return localCatalog;
-    }
-
-    if (typeof window === 'undefined') return legacyCatalog;
 
     try {
-        const stored = window.localStorage.getItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed?.storage === INDEXED_DB_POINTER) {
-                return await readCatalogFromIndexedDb();
+        const largeLocalCatalog = readStoredLocalCatalog({ allowLargePayload: true });
+        if (isNonEmptyCatalog(largeLocalCatalog)) {
+            return largeLocalCatalog;
+        }
+    } catch {
+        // Ignore final local fallback failures.
+    }
+
+    return legacyCatalog;
+};
+
+export const readSubCategoryPageConfigEntryAsync = async (categoryName, subCategoryName) => {
+    const normalizedCategoryName = normalizeText(categoryName);
+    const normalizedSubCategoryName = normalizeText(subCategoryName);
+    if (!normalizedCategoryName || !normalizedSubCategoryName) return null;
+
+    const cacheKey = `${normalizeKey(normalizedCategoryName)}::${normalizeKey(normalizedSubCategoryName)}`;
+    if (subCategoryConfigRequestStore.has(cacheKey)) {
+        return subCategoryConfigRequestStore.get(cacheKey);
+    }
+
+    const request = (async () => {
+        try {
+            const { data } = await API.get(
+                `/settings/subcategory-page-config/${encodeURIComponent(normalizedCategoryName)}/${encodeURIComponent(normalizedSubCategoryName)}`
+            );
+            return data?.config || null;
+        } catch {
+            try {
+                const localCatalog = await readCategoryPageCatalogAsync();
+                const targetName = `${normalizeKey(normalizedCategoryName)} / ${normalizeKey(normalizedSubCategoryName)}`;
+                return (Array.isArray(localCatalog) ? localCatalog : []).find(
+                    (entry) => normalizeKey(entry?.name) === targetName
+                ) || null;
+            } catch {
+                return null;
             }
+        } finally {
+            subCategoryConfigRequestStore.delete(cacheKey);
         }
-    } catch {
-        return legacyCatalog;
+    })();
+
+    subCategoryConfigRequestStore.set(cacheKey, request);
+    return request;
+};
+
+export const readSubCategoryPageLayoutEntryAsync = async (categoryName, subCategoryName) => {
+    const normalizedCategoryName = normalizeText(categoryName);
+    const normalizedSubCategoryName = normalizeText(subCategoryName);
+    if (!normalizedCategoryName || !normalizedSubCategoryName) return null;
+
+    const cacheKey = `${normalizeKey(normalizedCategoryName)}::${normalizeKey(normalizedSubCategoryName)}`;
+    if (subCategoryLayoutRequestStore.has(cacheKey)) {
+        return subCategoryLayoutRequestStore.get(cacheKey);
     }
 
-    try {
-        return await readCatalogFromIndexedDb();
-    } catch {
-        return legacyCatalog;
+    const request = (async () => {
+        try {
+            const { data } = await API.get(
+                `/settings/subcategory-page-layout/${encodeURIComponent(normalizedCategoryName)}/${encodeURIComponent(normalizedSubCategoryName)}`
+            );
+            return data?.config || null;
+        } catch {
+            try {
+                const localCatalog = await readCategoryPageCatalogAsync();
+                const targetName = `${normalizeKey(normalizedCategoryName)} / ${normalizeKey(normalizedSubCategoryName)}`;
+                const localEntry = (Array.isArray(localCatalog) ? localCatalog : []).find(
+                    (entry) => normalizeKey(entry?.name) === targetName
+                ) || null;
+                if (!localEntry) return null;
+                return {
+                    ...localEntry,
+                    products: [],
+                    pageSections: toArray(localEntry.pageSections).map((section) => ({
+                        ...section,
+                        items: [],
+                        itemCount: Array.isArray(section?.items) ? section.items.length : 0
+                    }))
+                };
+            } catch {
+                return null;
+            }
+        } finally {
+            subCategoryLayoutRequestStore.delete(cacheKey);
+        }
+    })();
+
+    subCategoryLayoutRequestStore.set(cacheKey, request);
+    return request;
+};
+
+export const readSubCategoryPageSectionAsync = async (categoryName, subCategoryName, sectionId) => {
+    const normalizedCategoryName = normalizeText(categoryName);
+    const normalizedSubCategoryName = normalizeText(subCategoryName);
+    const normalizedSectionId = String(sectionId || '').trim();
+    if (!normalizedCategoryName || !normalizedSubCategoryName || !normalizedSectionId) return null;
+
+    const cacheKey = `${normalizeKey(normalizedCategoryName)}::${normalizeKey(normalizedSubCategoryName)}::${normalizedSectionId}`;
+    if (subCategorySectionRequestStore.has(cacheKey)) {
+        return subCategorySectionRequestStore.get(cacheKey);
     }
+
+    const request = (async () => {
+        try {
+            const { data } = await API.get(
+                `/settings/subcategory-page-section/${encodeURIComponent(normalizedCategoryName)}/${encodeURIComponent(normalizedSubCategoryName)}/${encodeURIComponent(normalizedSectionId)}`
+            );
+            return {
+                section: data?.section || null,
+                products: Array.isArray(data?.products) ? data.products : []
+            };
+        } catch {
+            try {
+                const localCatalog = await readCategoryPageCatalogAsync();
+                const targetName = `${normalizeKey(normalizedCategoryName)} / ${normalizeKey(normalizedSubCategoryName)}`;
+                const localEntry = (Array.isArray(localCatalog) ? localCatalog : []).find(
+                    (entry) => normalizeKey(entry?.name) === targetName
+                ) || null;
+                const localSection = toArray(localEntry?.pageSections).find(
+                    (section) => String(section?.id || '').trim() === normalizedSectionId
+                ) || null;
+                return {
+                    section: localSection,
+                    products: Array.isArray(localEntry?.products) ? localEntry.products : []
+                };
+            } catch {
+                return { section: null, products: [] };
+            }
+        } finally {
+            subCategorySectionRequestStore.delete(cacheKey);
+        }
+    })();
+
+    subCategorySectionRequestStore.set(cacheKey, request);
+    return request;
 };
 
 export const writeCategoryPageCatalog = async (catalog) => {
@@ -296,30 +463,16 @@ export const writeCategoryPageCatalog = async (catalog) => {
         // Continue with local persistence fallback.
     }
 
-    const serialized = JSON.stringify(sanitizedCatalog);
-
     try {
-        window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, serialized);
-        try {
-            await writeCatalogToIndexedDb(sanitizedCatalog);
-        } catch {
-            // LocalStorage save succeeded, so IndexedDB mirror failure can be ignored.
-        }
+        await writeCatalogToIndexedDb(sanitizedCatalog);
+        setIndexedDbPointer();
         window.dispatchEvent(new CustomEvent('subcategory-page-builder-updated'));
         return;
     } catch (error) {
-        await writeCatalogToIndexedDb(sanitizedCatalog);
         try {
-            window.localStorage.removeItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY);
-            window.localStorage.setItem(
-                CATEGORY_PAGE_BUILDER_STORAGE_KEY,
-                JSON.stringify({
-                    storage: INDEXED_DB_POINTER,
-                    updatedAt: Date.now()
-                })
-            );
+            window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, JSON.stringify(sanitizedCatalog));
         } catch {
-            // IndexedDB already has the actual payload.
+            // Ignore local-only fallback failures.
         }
         window.dispatchEvent(new CustomEvent('subcategory-page-builder-updated'));
         return;

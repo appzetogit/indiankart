@@ -25,6 +25,8 @@ const CategoryQuickLinkGrid = ({ categoryName, items = [] }) => {
                                 src={optimizeImage(item.image || getPlaceholderImage(220, 220), { width: 220, quality: '80' })}
                                 alt={item.name}
                                 loading="lazy"
+                                decoding="async"
+                                fetchPriority="low"
                                 className="h-full w-full object-cover"
                                 onError={(event) => {
                                     event.currentTarget.onerror = null;

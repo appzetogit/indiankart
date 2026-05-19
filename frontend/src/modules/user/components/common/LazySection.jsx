@@ -1,20 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const LazySection = ({ children, threshold = 0.1, placeholder }) => {
+const LazySection = ({ children, threshold = 0.1, placeholder, rootMargin = '100px', onVisible }) => {
     const [isVisible, setIsVisible] = useState(false);
     const sectionRef = useRef(null);
+    const hasTriggeredRef = useRef(false);
 
     useEffect(() => {
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting) {
+                    if (!hasTriggeredRef.current) {
+                        hasTriggeredRef.current = true;
+                        onVisible?.();
+                    }
                     setIsVisible(true);
                     observer.unobserve(entry.target);
                 }
             },
             {
                 threshold,
-                rootMargin: '100px', // Start loading slightly before it comes into view
+                rootMargin,
             }
         );
 
@@ -27,7 +32,7 @@ const LazySection = ({ children, threshold = 0.1, placeholder }) => {
                 observer.unobserve(sectionRef.current);
             }
         };
-    }, [threshold]);
+    }, [onVisible, rootMargin, threshold]);
 
     return (
         <div ref={sectionRef}>
