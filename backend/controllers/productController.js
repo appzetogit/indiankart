@@ -1013,17 +1013,38 @@ export const getPortalViewInsights = async (_req, res) => {
         const busiestDay = dailyStats.reduce((best, entry) => (
             Number(entry?.visitors || 0) > Number(best?.visitors || 0) ? entry : best
         ), dailyStats[0] || { date: '', views: 0, visitors: 0 });
+        const sessionsThreshold = new Date(now.getTime() - (24 * 60 * 60 * 1000));
         const [
             activeLoggedInUsers,
             todayLogins,
             todayLogouts,
-            totalLoginEvents
+            totalLoginEvents,
+            recentSessions
         ] = await Promise.all([
             PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold } }),
             PortalSession.countDocuments({ loginAt: { $gte: startOfToday } }),
             PortalSession.countDocuments({ logoutAt: { $gte: startOfToday } }),
-            PortalSession.countDocuments()
+            PortalSession.countDocuments(),
+            PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } }).sort({ lastSeenAt: -1 }).lean()
         ]);
+
+        // Resolve user details using an optimized in-memory mapping
+        const userIds = [...new Set(recentSessions.map(s => s.userId).filter(Boolean))];
+        const User = (await import('../models/User.js')).default;
+        const users = await User.find({ _id: { $in: userIds } }).select('name email phone').lean();
+        const userMap = new Map(users.map(u => [String(u._id), u]));
+
+        const populatedSessions = recentSessions.map(s => {
+            const user = userMap.get(String(s.userId)) || null;
+            return {
+                ...s,
+                user: user ? {
+                    name: user.name,
+                    email: user.email,
+                    phone: user.phone || ''
+                } : null
+            };
+        });
 
         return res.json({
             trackedProducts: products.length,
@@ -1033,6 +1054,7 @@ export const getPortalViewInsights = async (_req, res) => {
             busiestDay,
             dailyStats,
             weeklyDistribution,
+            recentSessions: populatedSessions,
             authStats: {
                 activeLoggedInUsers,
                 todayLogins,

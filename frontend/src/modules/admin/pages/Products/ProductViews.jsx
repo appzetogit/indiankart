@@ -32,6 +32,27 @@ const getKnownStateEntries = (product) => (
         .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state))
 );
 
+const getFriendlyPathLabel = (path = '') => {
+    if (path === '/') return 'Home';
+    if (path === '/cart') return 'Cart';
+    if (path === '/checkout') return 'Checkout';
+    if (path === '/my-orders') return 'My Orders';
+    if (path === '/wishlist') return 'Wishlist';
+    if (path === '/addresses') return 'Addresses';
+    if (path === '/categories') return 'Categories';
+    if (path.includes('/product/')) return 'Product Details';
+    if (path.includes('/category/')) return 'Category Page';
+    if (path === '/login') return 'Login';
+    if (path === '/become-seller') return 'Become Seller';
+    if (path === '/play') return 'Quiz Play';
+    if (path === '/help-center') return 'Help Center';
+    const lastSegment = path.split('/').filter(Boolean).pop();
+    if (lastSegment) {
+        return lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1).replace(/-/g, ' ');
+    }
+    return path;
+};
+
 const ProductViews = () => {
     const navigate = useNavigate();
     const [products, setProducts] = useState([]);
@@ -411,6 +432,133 @@ const ProductViews = () => {
                     >
                         View Full Stats
                     </button>
+                </div>
+            </motion.div>
+
+            {/* Live & Recent Portal Activity */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
+            >
+                <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                            <span className="relative flex h-3.5 w-3.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                            </span>
+                            Live & Recent Portal Activity
+                        </h3>
+                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">
+                            Real-time user session status, locations, and transition flows
+                        </p>
+                    </div>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[800px]">
+                            <thead className="bg-slate-900 text-white">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">User</th>
+                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Auth Method</th>
+                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">State</th>
+                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Status / Last Seen</th>
+                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Page Navigation Flow</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {portalInsights?.recentSessions && portalInsights.recentSessions.length > 0 ? (
+                                    portalInsights.recentSessions.map((session) => {
+                                        const now = new Date();
+                                        const lastSeen = new Date(session.lastSeenAt);
+                                        const isOnline = session.isActive && (now.getTime() - lastSeen.getTime() < 5 * 60 * 1000);
+                                        const initials = session.user?.name
+                                            ? session.user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                                            : 'U';
+                                        
+                                        return (
+                                            <tr key={session.sessionId} className="hover:bg-gray-50/50">
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
+                                                            {initials}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-900">
+                                                                {session.user?.name || 'Anonymous User'}
+                                                            </p>
+                                                            <p className="text-[11px] font-semibold text-gray-400">
+                                                                {session.user?.email || session.user?.phone || 'No Contact Info'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black uppercase tracking-wider text-slate-700">
+                                                        {session.authMethod || 'unknown'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex items-center gap-1.5 text-gray-900">
+                                                        <span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>
+                                                        <span className="text-sm font-black">{session.state || 'Unknown'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5">
+                                                    <div className="flex items-center gap-2">
+                                                        {isOnline ? (
+                                                            <span className="flex items-center gap-1.5 text-xs font-black text-emerald-600">
+                                                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                                Online
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-gray-400">
+                                                                {new Date(session.lastSeenAt).toLocaleTimeString('en-IN', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3.5 max-w-[400px]">
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        {Array.isArray(session.pagesVisited) && session.pagesVisited.length > 0 ? (
+                                                            session.pagesVisited.map((page, idx) => (
+                                                                <React.Fragment key={idx}>
+                                                                    {idx > 0 && <span className="text-gray-300 font-bold">→</span>}
+                                                                    <span 
+                                                                        title={new Date(page.visitedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                                                        className={`inline-flex items-center rounded-lg px-2 py-1 text-[11px] font-black tracking-wide border cursor-default transition-all duration-200 hover:scale-105 ${
+                                                                            idx === session.pagesVisited.length - 1
+                                                                                ? 'bg-blue-600 border-blue-600 text-white font-extrabold shadow-sm'
+                                                                                : 'bg-white border-gray-200 text-gray-700 font-bold'
+                                                                        }`}
+                                                                    >
+                                                                        {getFriendlyPathLabel(page.path)}
+                                                                    </span>
+                                                                </React.Fragment>
+                                                            ))
+                                                        ) : (
+                                                            <span className="text-xs font-semibold text-gray-400 italic">No pages logged yet</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan="5" className="px-4 py-10 text-center text-sm text-gray-400">
+                                            No active or recent user sessions recorded in the last 24 hours.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </motion.div>
 

@@ -33,6 +33,8 @@ const settingSchema = mongoose.Schema({
     ekartCancelPath: { type: String, default: '/api/v1/package/cancel' },
     categoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
     subCategoryPageCatalog: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    codAdvancedPaymentEnabled: { type: Boolean, default: false },
+    codAdvancedPaymentAmount: { type: Number, default: 0 },
 }, {
     timestamps: true,
 });

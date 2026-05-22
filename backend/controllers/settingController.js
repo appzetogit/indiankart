@@ -327,7 +327,9 @@ const updateSettings = async (req, res) => {
             minShippingOrderAmount,
             maxShippingOrderAmount,
             categoryPageCatalog,
-            subCategoryPageCatalog
+            subCategoryPageCatalog,
+            codAdvancedPaymentEnabled,
+            codAdvancedPaymentAmount
         } = req.body;
 
         let settings = await Setting.findOne();
@@ -444,6 +446,13 @@ const updateSettings = async (req, res) => {
                     settings.subCategoryPageCatalog = parsedCatalog;
                 }
             }
+            if (codAdvancedPaymentEnabled !== undefined) {
+                settings.codAdvancedPaymentEnabled = codAdvancedPaymentEnabled === 'true' || codAdvancedPaymentEnabled === true;
+            }
+            if (codAdvancedPaymentAmount !== undefined) {
+                const parsed = Number(codAdvancedPaymentAmount);
+                if (Number.isFinite(parsed) && parsed >= 0) settings.codAdvancedPaymentAmount = parsed;
+            }
 
             const updatedSettings = await settings.save();
             res.json(updatedSettings);
@@ -489,7 +498,9 @@ const updateSettings = async (req, res) => {
                     ? subCategoryPageCatalog
                     : (typeof subCategoryPageCatalog === 'string'
                         ? (JSON.parse(subCategoryPageCatalog) || [])
-                        : [])
+                        : []),
+                codAdvancedPaymentEnabled: codAdvancedPaymentEnabled === 'true' || codAdvancedPaymentEnabled === true,
+                codAdvancedPaymentAmount: Number.isFinite(Number(codAdvancedPaymentAmount)) ? Number(codAdvancedPaymentAmount) : 0
             });
             res.json(newSettings);
         }

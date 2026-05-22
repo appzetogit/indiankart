@@ -74,6 +74,9 @@ const orderSchema = mongoose.Schema({
     },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
+    isCodAdvancedPaid: { type: Boolean, default: false },
+    codAdvancedAmount: { type: Number, default: 0 },
+    remainingCodBalance: { type: Number, default: 0 },
     isDelivered: { type: Boolean, required: true, default: false },
     deliveredAt: { type: Date },
     

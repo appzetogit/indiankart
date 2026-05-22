@@ -8,7 +8,12 @@ const portalSessionSchema = mongoose.Schema({
     loginAt: { type: Date, default: Date.now, index: true },
     lastSeenAt: { type: Date, default: Date.now, index: true },
     logoutAt: { type: Date, default: null, index: true },
-    isActive: { type: Boolean, default: true, index: true }
+    isActive: { type: Boolean, default: true, index: true },
+    state: { type: String, default: 'Unknown', trim: true },
+    pagesVisited: [{
+        path: { type: String, required: true },
+        visitedAt: { type: Date, default: Date.now }
+    }]
 }, {
     timestamps: true
 });

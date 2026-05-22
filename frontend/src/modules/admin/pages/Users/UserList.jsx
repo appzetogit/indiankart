@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdSearch, MdVisibility, MdBlock, MdCheckCircle, MdPhone } from 'react-icons/md';
+import { MdSearch, MdVisibility, MdBlock, MdCheckCircle, MdPhone, MdFileDownload } from 'react-icons/md';
 import { useNavigate } from 'react-router-dom';
 import useUserStore from '../../store/userStore';
 import Pagination from '../../../../components/Pagination';
@@ -21,6 +21,7 @@ const UserList = () => {
 
     const [localUsers, setLocalUsers] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [exporting, setExporting] = useState(false);
     const [updatingUserId, setUpdatingUserId] = useState(null);
 
     const fetchPaginatedUsers = async () => {
@@ -99,6 +100,62 @@ const UserList = () => {
         }
     };
 
+    const handleExportCSV = async () => {
+        setExporting(true);
+        try {
+            const params = {};
+            if (searchTerm) params.search = searchTerm;
+            if (statusFilter !== 'All') params.status = statusFilter;
+
+            const { data } = await API.get('/auth/users', { params });
+            const usersToExport = Array.isArray(data) ? data : (data.users || []);
+
+            if (usersToExport.length === 0) {
+                toast.error('No users to export');
+                return;
+            }
+
+            // Convert to CSV
+            const headers = ['User ID', 'Name', 'Phone', 'Join Date', 'Total Orders', 'Status'];
+            const rows = usersToExport.map((user) => [
+                user._id || user.id || '',
+                user.name || 'Unnamed User',
+                user.phone ? `+91 ${user.phone}` : 'N/A',
+                new Date(user.joinedDate || user.createdAt).toLocaleDateString('en-IN', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric'
+                }),
+                user.orderStats?.total || 0,
+                user.status || 'active'
+            ]);
+
+            const csvContent = [
+                headers.join(','),
+                ...rows.map((row) => row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))
+            ].join('\n');
+
+            // Download trigger
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            const dateStr = new Date().toISOString().split('T')[0];
+            link.setAttribute('download', `IndiaKart_Users_${dateStr}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success(`Exported ${usersToExport.length} users successfully`);
+        } catch (error) {
+            console.error('Failed to export users:', error);
+            toast.error('Failed to export users');
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <div className="space-y-5 md:space-y-7">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
@@ -146,6 +203,15 @@ const UserList = () => {
                         <option value="Active">Active</option>
                         <option value="Disabled">Disabled</option>
                     </select>
+                    <button
+                        type="button"
+                        onClick={handleExportCSV}
+                        disabled={exporting}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-2xl text-sm font-bold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        <MdFileDownload size={18} className={exporting ? 'animate-bounce' : ''} />
+                        {exporting ? 'Exporting...' : 'Export CSV'}
+                    </button>
                 </div>
             </div>
 

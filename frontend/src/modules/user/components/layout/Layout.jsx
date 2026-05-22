@@ -1,10 +1,25 @@
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Header from './Header';
 import BottomNav from './BottomNav';
+import { useAuthStore } from '../../store/authStore';
+import API from '../../../../services/api';
 
 const Layout = () => {
     const location = useLocation();
+    const { isAuthenticated } = useAuthStore();
+
+    useEffect(() => {
+        if (isAuthenticated) {
+            const lastState = localStorage.getItem('ik-last-known-state') || 'Unknown';
+            API.post('/auth/session/touch', {
+                path: location.pathname,
+                state: lastState
+            }).catch(err => console.error('Failed to touch user session:', err));
+        }
+    }, [location.pathname, isAuthenticated]);
+
     const isPDP = location.pathname.includes('/product/');
     const isCategory = location.pathname.includes('/category/');
     const isAllCategories = location.pathname === '/categories';

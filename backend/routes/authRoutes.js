@@ -19,6 +19,7 @@ import {
     deleteUserAddress
 } from '../controllers/authController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
+import { touchPortalSession } from '../utils/portalSessionTracking.js';
 
 const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
 
@@ -184,6 +185,25 @@ router.route('/profile/addresses')
 router.route('/profile/addresses/:addressId')
     .put(protect, updateUserAddress)
     .delete(protect, deleteUserAddress);
+
+router.post('/session/touch', protect, async (req, res) => {
+    try {
+        const sessionId = String(req.headers['x-user-session-id'] || '').trim();
+        const { path, state } = req.body;
+        if (!sessionId || !req.user?._id) {
+            return res.status(400).json({ message: 'Session ID and User authentication required' });
+        }
+        const session = await touchPortalSession({
+            sessionId,
+            userId: req.user._id,
+            path,
+            state
+        });
+        res.json(session);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
 
 console.log('Auth routes registered: /test, /fcm-token, /fcm-token/web, /fcm-token/mobile, /profile');
 

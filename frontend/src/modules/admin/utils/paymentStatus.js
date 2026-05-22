@@ -9,7 +9,9 @@ export const getAdminPaymentStatus = (order) => {
     const isOnlinePayment = paymentMethod && paymentMethod !== 'COD';
 
     if (!isOnlinePayment) {
-        return order?.isPaid ? 'Paid' : 'Pending';
+        if (order?.isPaid) return 'Paid';
+        if (order?.isCodAdvancedPaid) return 'COD Pre-Paid';
+        return 'Pending';
     }
 
     if (hasDuplicatePayment) {
@@ -50,6 +52,10 @@ export const getAdminPaymentStatus = (order) => {
 export const getAdminPaymentStatusClass = (status) => {
     if (['Paid', 'Completed'].includes(status)) {
         return 'bg-green-100 text-green-700';
+    }
+
+    if (status === 'COD Pre-Paid') {
+        return 'bg-amber-100 text-amber-700 border border-amber-200';
     }
 
     if (['Refunded', 'Partially Refunded'].includes(status)) {

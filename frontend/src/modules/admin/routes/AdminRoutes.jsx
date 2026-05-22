@@ -39,6 +39,7 @@ import AdminNotifications from '../pages/Notifications/AdminNotifications';
 import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
 import B2BManager from '../pages/B2B/B2BManager';
+import CODAdvancedPayment from '../pages/Settings/CODAdvancedPayment';
 
 const HOME_PAGE_BUILDER_REDIRECT = '/admin/categories/page-builder?categoryName=For%20You';
 
@@ -119,6 +120,7 @@ const AdminRoutes = () => {
                 <Route path="razorpay-credentials" element={<Navigate to="/admin/api-credentials" replace />} />
                 <Route path="api-credentials" element={<RazorpayCredentials />} />
                 <Route path="shipping-charges" element={<ShippingCharges />} />
+                <Route path="cod-advanced-payment" element={<CODAdvancedPayment />} />
                 <Route path="footer-settings" element={<FooterManager />} />
                 <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="user-notifications" element={<NotificationManager />} />

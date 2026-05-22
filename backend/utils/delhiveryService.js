@@ -63,7 +63,7 @@ const buildShipmentPayload = (order, settings) => {
                 products_desc: productsDescription,
                 order_date: formatOrderDate(order?.createdAt),
                 total_amount: totalAmount,
-                cod_amount: paymentMode === 'COD' ? totalAmount : 0,
+                cod_amount: paymentMode === 'COD' ? (order?.remainingCodBalance !== undefined ? Number(order.remainingCodBalance) : totalAmount) : 0,
                 seller_add: sellerAddress,
                 seller_name: sellerName,
                 seller_inv: orderReference,

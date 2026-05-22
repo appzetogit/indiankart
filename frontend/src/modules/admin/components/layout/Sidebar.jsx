@@ -22,7 +22,8 @@ import {
     MdNotifications,
     MdBusinessCenter,
     MdPlayCircle,
-    MdVisibility
+    MdVisibility,
+    MdPayment
 } from 'react-icons/md';
 
 import logo from '../../../../assets/indiankart-logo.png';
@@ -89,6 +90,7 @@ const Sidebar = () => {
             items: [
                 { name: 'API Credentials', icon: MdSettings, path: '/admin/api-credentials' },
                 { name: 'Store Settings', icon: MdSettings, path: '/admin/settings' },
+                { name: 'COD Advanced Payment', icon: MdPayment, path: '/admin/cod-advanced-payment' },
             ]
         }
     ];

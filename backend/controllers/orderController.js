@@ -678,6 +678,9 @@ const fetchTrackingForProvider = async (order, provider) => {
 
 // @desc    Create new order
 // @route   POST /api/orders
+
+// @desc    Create new order
+// @route   POST /api/orders
 // @access  Private
 export const addOrderItems = async (req, res) => {
     let claimedPayment = null;
@@ -697,8 +700,30 @@ export const addOrderItems = async (req, res) => {
         const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
         const isOnlinePayment = normalizedPaymentMethod && normalizedPaymentMethod !== 'COD';
 
-        const verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult);
-        const existingOnlineOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
+        const settings = await Setting.findOne().lean();
+        const codAdvancedActive = normalizedPaymentMethod === 'COD' && 
+            settings?.codAdvancedPaymentEnabled && 
+            settings?.codAdvancedPaymentAmount > 0;
+
+        let verifiedPayment;
+        if (codAdvancedActive) {
+            const expectedCodAdvancedAmount = Math.min(totalPrice, settings.codAdvancedPaymentAmount);
+            if (expectedCodAdvancedAmount > 0) {
+                if (!req.body.paymentResult) {
+                    return res.status(400).json({ message: 'COD advanced pre-payment details are required.' });
+                }
+                verifiedPayment = await verifyCapturedOnlinePayment('ONLINE', req.body.paymentResult);
+            } else {
+                verifiedPayment = { isPaid: false, paidAt: null, paymentResult: null };
+            }
+        } else {
+            verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult);
+        }
+
+        const existingOnlineOrder = await findExistingOnlineOrder(
+            codAdvancedActive ? 'ONLINE' : paymentMethod, 
+            verifiedPayment.paymentResult
+        );
 
         if (existingOnlineOrder) {
             return res.status(200).json(existingOnlineOrder);
@@ -799,12 +824,14 @@ export const addOrderItems = async (req, res) => {
             });
         }
 
-        if (isOnlinePayment) {
-            const paymentClaimResult = await claimOnlinePayment(paymentMethod, verifiedPayment.paymentResult);
+        const shouldClaimPayment = isOnlinePayment || (codAdvancedActive && Math.min(totalPrice, settings.codAdvancedPaymentAmount) > 0);
+        if (shouldClaimPayment) {
+            const claimMethod = codAdvancedActive ? 'ONLINE' : paymentMethod;
+            const paymentClaimResult = await claimOnlinePayment(claimMethod, verifiedPayment.paymentResult);
             claimedPayment = paymentClaimResult.claim;
 
             if (!paymentClaimResult.claimed) {
-                const claimedExistingOrder = await findExistingOnlineOrder(paymentMethod, verifiedPayment.paymentResult);
+                const claimedExistingOrder = await findExistingOnlineOrder(claimMethod, verifiedPayment.paymentResult);
                 if (claimedExistingOrder) {
                     return res.status(200).json(claimedExistingOrder);
                 }
@@ -816,6 +843,7 @@ export const addOrderItems = async (req, res) => {
         }
 
         const invoiceNumber = await reserveNextInvoiceNumber();
+        const expectedCodAdvancedAmount = codAdvancedActive ? Math.min(totalPrice, settings.codAdvancedPaymentAmount) : 0;
 
         const order = new Order({
             displayId,
@@ -835,8 +863,11 @@ export const addOrderItems = async (req, res) => {
             shippingPrice,
             totalPrice,
             coupon,
-            isPaid: verifiedPayment.isPaid,
-            paidAt: verifiedPayment.paidAt,
+            isPaid: codAdvancedActive ? false : verifiedPayment.isPaid,
+            paidAt: codAdvancedActive ? null : verifiedPayment.paidAt,
+            isCodAdvancedPaid: codAdvancedActive && expectedCodAdvancedAmount > 0,
+            codAdvancedAmount: expectedCodAdvancedAmount,
+            remainingCodBalance: codAdvancedActive ? Math.max(0, totalPrice - expectedCodAdvancedAmount) : totalPrice,
             paymentResult: verifiedPayment.paymentResult
         });
 

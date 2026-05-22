@@ -229,6 +229,10 @@ const Checkout = () => {
         logoUrl: ''
     });
     const [bankOffers, setBankOffers] = useState([]);
+    const [codAdvancedConfig, setCodAdvancedConfig] = useState({
+        enabled: false,
+        amount: 0
+    });
 
     const eligibleB2BItems = checkoutItems.filter((item) => {
         const productCategoryName = String(item?.category?.name || item?.category || '').trim().toLowerCase();
@@ -258,6 +262,10 @@ const Checkout = () => {
                 setStoreBranding({
                     sellerName: data?.sellerName?.trim() || 'IndiaKart',
                     logoUrl: data?.logoUrl || ''
+                });
+                setCodAdvancedConfig({
+                    enabled: !!data?.codAdvancedPaymentEnabled,
+                    amount: Number(data?.codAdvancedPaymentAmount ?? 0)
                 });
             } catch (error) {
                 console.error('Failed to fetch shipping settings:', error);
@@ -473,6 +481,12 @@ const Checkout = () => {
     const delivery = isInShippingRange ? shippingCharge : 0;
     const finalAmount = Math.max(0, totalPrice + delivery - discount);
 
+    const isCodAdvancedActive = codAdvancedConfig.enabled && codAdvancedConfig.amount > 0;
+    const codAdvancedAmountToPay = isCodAdvancedActive ? Math.min(finalAmount, codAdvancedConfig.amount) : 0;
+    const remainingCodAmount = isCodAdvancedActive ? Math.max(0, finalAmount - codAdvancedAmountToPay) : finalAmount;
+    const isCodSelected = step === 2 || paymentMethod === 'COD';
+    const showCodAdvancedBreakdown = isCodAdvancedActive && isCodSelected;
+
     const handlePlaceOrder = async (paymentMethodOverride = 'COD') => {
         // Validate cart is not empty
         if (checkoutItems.length === 0) {
@@ -586,6 +600,86 @@ const Checkout = () => {
         };
 
         if (paymentMethodOverride === 'COD') {
+            const isCodAdvancedActive = codAdvancedConfig.enabled && codAdvancedConfig.amount > 0;
+            if (isCodAdvancedActive && finalAmount > 0) {
+                try {
+                    const codAdvancedAmountToPay = Math.min(finalAmount, codAdvancedConfig.amount);
+                    const { data: config } = await API.get('/payments/config');
+                    const { data: order } = await API.post('/payments/order', { amount: codAdvancedAmountToPay });
+                    
+                    const options = {
+                        key: config.keyId,
+                        amount: order.amount,
+                        currency: order.currency,
+                        name: storeBranding.sellerName || 'IndiaKart',
+                        description: "COD Advanced Pre-payment",
+                        image: storeBranding.logoUrl || undefined,
+                        order_id: order.id,
+                        handler: async (response) => {
+                            try {
+                                const { data: verification } = await API.post('/payments/verify', response);
+                                if (verification.message === "Payment verified successfully" && verification.isCaptured) {
+                                    const paidOrderData = {
+                                        ...orderData,
+                                        paymentResult: {
+                                            id: response.razorpay_payment_id,
+                                            razorpay_payment_id: response.razorpay_payment_id,
+                                            razorpay_order_id: response.razorpay_order_id,
+                                            status: verification.gatewayStatus || 'captured',
+                                            update_time: new Date().toISOString(),
+                                            card_network: verification.cardInfo?.network,
+                                            card_last4: verification.cardInfo?.last4,
+                                            card_type: verification.cardInfo?.type
+                                        }
+                                    };
+                                    const { data } = await API.post('/orders', paidOrderData);
+                                    placeOrder(data, !buyNowItem);
+                                    if (appliedCoupon) removeCoupon();
+                                    setIsOrderSuccess(true);
+                                    setTimeout(() => {
+                                        navigate(`/my-orders/${data._id || data.id}`, { replace: true });
+                                    }, 2000);
+                                    return;
+                                }
+                                toast.error("Pre-payment was not captured. COD order not created.");
+                                setIsPlacingOrder(false);
+                            } catch (error) {
+                                console.error(error);
+                                toast.error(error.response?.data?.message || "Pre-payment verification failed!");
+                                setIsPlacingOrder(false);
+                            }
+                        },
+                        prefill: {
+                            name: selectedAddrObj?.name,
+                            contact: selectedAddrObj?.mobile
+                        },
+                        theme: {
+                            color: "#f59e0b"
+                        },
+                        retry: {
+                            enabled: false
+                        },
+                        modal: {
+                            ondismiss: () => {
+                                setIsPlacingOrder(false);
+                            }
+                        }
+                    };
+                    const rzp = new window.Razorpay(options);
+                    rzp.on('payment.failed', (response) => {
+                        const reason = response?.error?.description || response?.error?.reason || response?.error?.code || 'Payment failed';
+                        toast.error(reason);
+                        setIsPlacingOrder(false);
+                    });
+                    rzp.open();
+                } catch (error) {
+                    console.error(error);
+                    setIsPlacingOrder(false);
+                    toast.error("Failed to initialize COD advanced payment!");
+                }
+                return;
+            }
+
             try {
                 const { data } = await API.post('/orders', orderData);
                 // If buying now, do NOT clear the main cart. Pass false.
@@ -1010,6 +1104,17 @@ const Checkout = () => {
                                 ))}
                                 {/* Desktop Continue Button */}
                                 <div className="hidden md:flex flex-col gap-3 p-4 border-t sticky bottom-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+                                    {isCodAdvancedActive && (
+                                        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-left">
+                                            <div className="flex items-start gap-2.5">
+                                                <span className="material-icons text-amber-600 text-[18px] shrink-0 mt-0.5">info</span>
+                                                <div className="text-[11px] leading-relaxed text-amber-800">
+                                                    <span className="font-black uppercase tracking-wide block mb-0.5 text-amber-900">COD Pre-payment Active</span>
+                                                    Choosing Cash on Delivery requires a micro pre-payment of <span className="font-bold text-amber-900">₹{codAdvancedAmountToPay.toLocaleString()}</span> online. The remaining <span className="font-bold text-amber-900">₹{remainingCodAmount.toLocaleString()}</span> will be paid in cash at delivery.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     {!isPincodeServiceable && !isPincodeChecking && (
                                         <div className="bg-red-50 p-3 rounded-lg border border-red-100 mb-2">
                                             <p className="text-red-600 font-bold text-xs flex items-center gap-2 justify-center">
@@ -1171,6 +1276,18 @@ const Checkout = () => {
                                         <span className="text-gray-900 tracking-tight">Total Amount</span>
                                         <span className="text-gray-900 font-black">₹{finalAmount.toLocaleString()}</span>
                                     </div>
+                                    {showCodAdvancedBreakdown && (
+                                        <div className="space-y-2 mt-2 pt-2 border-t border-gray-100">
+                                            <div className="flex justify-between text-amber-600 font-bold text-xs pl-2 border-l-2 border-amber-300">
+                                                <span>COD Pre-payment (Online)</span>
+                                                <span>₹{codAdvancedAmountToPay.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between text-gray-600 font-medium text-xs pl-2 border-l-2 border-slate-300">
+                                                <span>Remaining COD Collect (Cash)</span>
+                                                <span>₹{remainingCodAmount.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 {appliedCoupon && (
                                     <div className="border-t border-gray-100 mt-4 pt-3 text-green-600 font-bold text-xs">
@@ -1183,7 +1300,11 @@ const Checkout = () => {
                             <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-3 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.06)] z-[50] md:hidden">
                                 <div className="flex flex-col">
                                     <span className="text-lg font-black text-gray-900">₹{finalAmount.toLocaleString()}</span>
-                                    <button className="text-[10px] text-blue-600 font-black uppercase tracking-tighter text-left w-fit">View Details</button>
+                                    {isCodAdvancedActive ? (
+                                        <span className="text-[9px] text-amber-600 font-black uppercase tracking-tighter">₹{codAdvancedAmountToPay} Online + ₹{remainingCodAmount} COD</span>
+                                    ) : (
+                                        <button className="text-[10px] text-blue-600 font-black uppercase tracking-tighter text-left w-fit">View Details</button>
+                                    )}
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     {( (!isPincodeServiceable && !isPincodeChecking) || (!isCODServiceable && !isPincodeChecking) ) && (
@@ -1262,6 +1383,20 @@ const Checkout = () => {
                                                 {!isCODServiceable && <span className="text-[10px] text-red-500 font-bold">Not available due to high returns/risk</span>}
                                             </div>
                                         </label>
+
+                                        {paymentMethod === 'COD' && isCodAdvancedActive && (
+                                            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/50 p-4 transition-all duration-300 animate-in fade-in">
+                                                <div className="flex items-start gap-3 text-left">
+                                                    <span className="material-icons text-amber-600 text-[20px] shrink-0 mt-0.5">info</span>
+                                                    <div className="flex-1 text-xs">
+                                                        <p className="font-black uppercase tracking-wider text-amber-800">COD Pre-payment Active</p>
+                                                        <p className="text-amber-700 mt-1 font-semibold leading-relaxed">
+                                                            A partial pre-payment of <span className="font-black text-amber-900">₹{codAdvancedAmountToPay.toLocaleString()}</span> must be paid online via Razorpay. The remaining <span className="font-black text-amber-900">₹{remainingCodAmount.toLocaleString()}</span> is payable at delivery.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <button
@@ -1313,6 +1448,18 @@ const Checkout = () => {
                                     <span className="text-gray-900 tracking-tight">Total Amount</span>
                                     <span className="text-gray-900 font-black">₹{finalAmount.toLocaleString()}</span>
                                 </div>
+                                {showCodAdvancedBreakdown && (
+                                    <div className="space-y-2 mt-2 pt-2 border-t border-gray-100">
+                                        <div className="flex justify-between text-amber-600 font-bold text-xs pl-2 border-l-2 border-amber-300 animate-in slide-in-from-left-1">
+                                            <span>COD Pre-payment (Online)</span>
+                                            <span>₹{codAdvancedAmountToPay.toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-600 font-medium text-xs pl-2 border-l-2 border-slate-300 animate-in slide-in-from-left-1">
+                                            <span>Remaining COD Collect (Cash)</span>
+                                            <span>₹{remainingCodAmount.toLocaleString()}</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             {appliedCoupon && (
                                 <div className="border-t border-gray-100 mt-4 pt-3 text-green-600 font-bold text-xs">

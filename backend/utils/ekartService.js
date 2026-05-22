@@ -179,7 +179,7 @@ const buildShipmentPayload = (order, settings) => {
         tax_value: taxValue,
         taxable_amount: taxableAmount,
         commodity_value: taxableAmount.toFixed(2),
-        cod_amount: paymentMode === 'COD' ? totalAmount : 0,
+        cod_amount: paymentMode === 'COD' ? (order?.remainingCodBalance !== undefined ? Number(order.remainingCodBalance) : totalAmount) : 0,
         quantity: totalQuantity,
         weight: toPositiveInteger(order?.shippingWeight || totalQuantity * 500, 500),
         length: toPositiveInteger(order?.shippingLength, 10),
