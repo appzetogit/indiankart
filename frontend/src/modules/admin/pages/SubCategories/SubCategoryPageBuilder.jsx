@@ -442,15 +442,18 @@ const SubCategoryPageBuilder = () => {
     }, [normalizedSubCategories]);
 
     useEffect(() => {
-        if (!selectedParentId && categoryId && normalizedSubCategories.length) {
-            const currentSub = normalizedSubCategories.find(s => String(s.id) === String(categoryId));
-            if (currentSub?.parentId) {
-                setSelectedParentId(currentSub.parentId);
-            } else if (availableCategories.length > 0) {
-                setSelectedParentId(availableCategories[0].id);
-            }
+        if (!normalizedSubCategories.length) {
+            if (selectedParentId) setSelectedParentId('');
+            return;
         }
-    }, [categoryId, normalizedSubCategories, selectedParentId, availableCategories]);
+
+        const currentSub = normalizedSubCategories.find((sub) => String(sub.id) === String(categoryId));
+        const nextParentId = currentSub?.parentId || availableCategories[0]?.id || '';
+
+        if (nextParentId !== selectedParentId) {
+            setSelectedParentId(nextParentId);
+        }
+    }, [availableCategories, categoryId, normalizedSubCategories, selectedParentId]);
 
     useEffect(() => {
         if (!normalizedSubCategories || normalizedSubCategories.length === 0) {
@@ -999,6 +1002,10 @@ const SubCategoryPageBuilder = () => {
                             value={categoryId}
                             onChange={(e) => {
                                 const nextCategoryId = e.target.value;
+                                const nextSub = normalizedSubCategories.find((sub) => String(sub.id) === String(nextCategoryId));
+                                if (nextSub?.parentId && nextSub.parentId !== selectedParentId) {
+                                    setSelectedParentId(nextSub.parentId);
+                                }
                                 setCategoryId(nextCategoryId);
                                 setSectionId('');
                                 navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(nextCategoryId)}`, { replace: true });

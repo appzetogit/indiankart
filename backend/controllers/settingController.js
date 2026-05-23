@@ -1,6 +1,7 @@
 import Setting from '../models/Setting.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import Product from '../models/Product.js';
+import mongoose from 'mongoose';
 
 const normalizeSettingKey = (value) => String(value || '').trim().toLowerCase();
 const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
@@ -133,6 +134,7 @@ const loadMatchingCatalogSection = async (field, normalizedName, sectionId) => {
 const loadSectionProducts = async (items = []) => {
     const snapshotsById = new Map();
     const numericIds = new Set();
+    const objectIds = new Set();
 
     items.forEach((item) => {
         if (item?.itemType !== 'product' || !item?.productId) return;
@@ -141,31 +143,50 @@ const loadSectionProducts = async (items = []) => {
 
         if (item?.productSnapshot) {
             snapshotsById.set(normalizedId, item.productSnapshot);
-            return;
         }
 
         const numericId = Number(normalizedId);
         if (Number.isFinite(numericId)) {
             numericIds.add(numericId);
         }
+
+        if (mongoose.Types.ObjectId.isValid(normalizedId)) {
+            objectIds.add(normalizedId);
+        }
     });
 
-    if (numericIds.size === 0) {
+    if (numericIds.size === 0 && objectIds.size === 0) {
         return Array.from(snapshotsById.values());
     }
 
-    const products = await Product.find({ id: { $in: Array.from(numericIds) } })
+    const productQuery = [];
+    if (numericIds.size > 0) {
+        productQuery.push({ id: { $in: Array.from(numericIds) } });
+    }
+    if (objectIds.size > 0) {
+        productQuery.push({ _id: { $in: Array.from(objectIds) } });
+    }
+
+    const products = await Product.find(productQuery.length === 1 ? productQuery[0] : { $or: productQuery })
         .select(CATEGORY_PAGE_PROJECTION)
         .lean();
 
     products.forEach((product) => {
-        const normalizedId = String(product?.id || product?._id || '').trim();
-        if (normalizedId && !snapshotsById.has(normalizedId)) {
-            snapshotsById.set(normalizedId, product);
+        const normalizedNumericId = String(product?.id || '').trim();
+        const normalizedObjectId = String(product?._id || '').trim();
+
+        if (normalizedNumericId) {
+            snapshotsById.set(normalizedNumericId, product);
+        }
+        if (normalizedObjectId) {
+            snapshotsById.set(normalizedObjectId, product);
         }
     });
 
-    return Array.from(snapshotsById.values());
+    return items
+        .filter((item) => item?.itemType === 'product' && item?.productId)
+        .map((item) => snapshotsById.get(String(item.productId).trim()) || item?.productSnapshot || null)
+        .filter(Boolean);
 };
 
 // @desc    Get settings
