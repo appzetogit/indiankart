@@ -972,6 +972,77 @@ export const getMyOrders = async (req, res) => {
     }
 };
 
+const syncOrderFulfillmentStatus = async (order) => {
+    if (!order) return order;
+
+    // If order is already in a final state, do not query tracking API
+    if (order.isDelivered || ['Delivered', 'Cancelled'].includes(order.status)) {
+        return order;
+    }
+
+    const provider = getFulfillmentMode(order);
+    if (!['delhivery', 'ekart'].includes(provider)) {
+        return order;
+    }
+
+    const trackingIdentifier = getProviderTrackingIdentifier(order, provider);
+    if (!trackingIdentifier) {
+        return order;
+    }
+
+    // Rate-limit sync to avoid overloading courier APIs (e.g. max once per 5 minutes)
+    const lastSyncedAt = provider === 'ekart' ? order.ekart?.syncedAt : order.delhivery?.syncedAt;
+    if (lastSyncedAt && (Date.now() - new Date(lastSyncedAt).getTime() < 5 * 60 * 1000)) {
+        return order;
+    }
+
+    try {
+        const tracking = await fetchTrackingForProvider(order, provider);
+        if (tracking && tracking.mappedCurrentStep) {
+            const step = tracking.mappedCurrentStep;
+            let statusChanged = false;
+
+            if (step === 'Delivered') {
+                order.isDelivered = true;
+                order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
+                order.status = 'Delivered';
+                statusChanged = true;
+            } else if (step === 'Cancelled') {
+                order.status = 'Cancelled';
+                statusChanged = true;
+                try {
+                    await restoreOrderStock(order);
+                } catch (stockError) {
+                    console.error(`Failed to restore stock for order ${order._id}:`, stockError);
+                }
+            } else if (['Dispatched', 'Out for Delivery'].includes(step)) {
+                if (order.status !== step) {
+                    order.status = step;
+                    statusChanged = true;
+                }
+            }
+
+            // Always update syncedAt on successful tracking check to enforce rate limit
+            if (provider === 'ekart' && order.ekart) {
+                order.ekart.syncedAt = new Date();
+                statusChanged = true;
+            } else if (provider === 'delhivery' && order.delhivery) {
+                order.delhivery.syncedAt = new Date();
+                statusChanged = true;
+            }
+
+            if (statusChanged) {
+                await order.save();
+            }
+        }
+    } catch (error) {
+        console.error(`Fulfillment status sync failed for order ${order._id} (provider: ${provider}):`, error);
+        // Silently catch and log so order retrieval is not broken
+    }
+
+    return order;
+};
+
 // @desc    Get order by ID
 // @route   GET /api/orders/:id
 // @access  Private
@@ -991,7 +1062,8 @@ export const getOrderById = async (req, res) => {
             if (isAllowed) {
                 await ensureOrderInvoiceNumber(order);
                 const syncedOrder = await syncOrderPaymentFromGateway(order);
-                const [auditedOrder] = await annotateDuplicatePayments([syncedOrder]);
+                const fullySyncedOrder = await syncOrderFulfillmentStatus(syncedOrder);
+                const [auditedOrder] = await annotateDuplicatePayments([fullySyncedOrder]);
                 await auditedOrder.populate('user', 'name email phone');
                 res.json(auditedOrder);
             } else {
@@ -1074,6 +1146,45 @@ export const getOrderShippingTracking = async (req, res) => {
         }
 
         const tracking = await fetchTrackingForProvider(order, provider);
+
+        // Sync fulfillment status on the fly with retrieved tracking
+        if (tracking && tracking.mappedCurrentStep) {
+            const step = tracking.mappedCurrentStep;
+            let statusChanged = false;
+
+            if (step === 'Delivered' && !order.isDelivered) {
+                order.isDelivered = true;
+                order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
+                order.status = 'Delivered';
+                statusChanged = true;
+            } else if (step === 'Cancelled' && order.status !== 'Cancelled') {
+                order.status = 'Cancelled';
+                statusChanged = true;
+                try {
+                    await restoreOrderStock(order);
+                } catch (stockError) {
+                    console.error(`Failed to restore stock for order ${order._id}:`, stockError);
+                }
+            } else if (['Dispatched', 'Out for Delivery'].includes(step)) {
+                if (order.status !== step) {
+                    order.status = step;
+                    statusChanged = true;
+                }
+            }
+
+            // Always update syncedAt when we query tracking explicitly
+            if (provider === 'ekart' && order.ekart) {
+                order.ekart.syncedAt = new Date();
+                statusChanged = true;
+            } else if (provider === 'delhivery' && order.delhivery) {
+                order.delhivery.syncedAt = new Date();
+                statusChanged = true;
+            }
+
+            if (statusChanged) {
+                await order.save();
+            }
+        }
 
         return res.json({
             orderId: order._id,
@@ -1211,7 +1322,8 @@ export const getOrders = async (req, res) => {
              const syncedOrders = shouldSyncPayments
                  ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
                  : orders;
-             const auditedOrders = await annotateDuplicatePayments(syncedOrders);
+             const fullySyncedOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
+             const auditedOrders = await annotateDuplicatePayments(fullySyncedOrders);
                  
              return res.json({ 
                  orders: auditedOrders, 
@@ -1227,7 +1339,8 @@ export const getOrders = async (req, res) => {
         const syncedOrders = shouldSyncPayments
             ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
             : orders;
-        const auditedOrders = await annotateDuplicatePayments(syncedOrders);
+        const fullySyncedOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
+        const auditedOrders = await annotateDuplicatePayments(fullySyncedOrders);
         res.json(auditedOrders);
     } catch (error) {
         console.error('Get all orders error:', error);
