@@ -115,6 +115,7 @@ const OrderList = () => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [totalOrders, setTotalOrders] = useState(0);
     const [localOrders, setLocalOrders] = useState([]);
     const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
     const [bulkStatus, setBulkStatus] = useState('');
@@ -141,7 +142,9 @@ const OrderList = () => {
                 const params = {
                     pageNumber: currentPage,
                     limit: itemsPerPage,
-                    syncPayments: false
+                    syncPayments: false,
+                    syncFulfillment: false,
+                    includePaymentAudit: false
                 };
 
                 if (searchTerm) params.search = searchTerm;
@@ -154,9 +157,11 @@ const OrderList = () => {
                 if (data.orders) {
                     setLocalOrders(data.orders.map((order) => transformOrder(order)));
                     setTotalPages(data.pages || 1);
+                    setTotalOrders(Number(data.total) || 0);
                 } else {
                     setLocalOrders(Array.isArray(data) ? data.map((order) => transformOrder(order)) : []);
                     setTotalPages(1);
+                    setTotalOrders(Array.isArray(data) ? data.length : 0);
                 }
                 setHasLoadedOnce(true);
             } catch (error) {
@@ -174,6 +179,13 @@ const OrderList = () => {
 
         const timer = setTimeout(fetchPaginatedOrders, 300);
         return () => clearTimeout(timer);
+    }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
+
+    useEffect(() => {
+        setSelectedOrderIds(new Set());
+        setSerialEditorOrderId('');
+        setSerialInputs({});
+        setSerialTypes({});
     }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
 
     const filteredOrders = localOrders;
@@ -344,7 +356,11 @@ const OrderList = () => {
     const handleExportOrders = async () => {
         setIsExporting(true);
         try {
-            const params = { syncPayments: false };
+            const params = {
+                syncPayments: false,
+                syncFulfillment: false,
+                includePaymentAudit: false
+            };
             if (searchTerm) params.search = searchTerm;
             if (statusFilter !== 'All') params.status = statusFilter;
             if (userEmailFilter) params.user = userEmailFilter;
@@ -450,7 +466,7 @@ const OrderList = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4">
                 <div>
                     <h1 className="text-lg md:text-2xl font-black text-gray-900 tracking-tight">Order Management</h1>
-                    <p className="text-xs md:text-sm text-gray-500 font-medium italic">Monitor sales and live fulfillment progress ({filteredOrders.length} total)</p>
+                    <p className="text-xs md:text-sm text-gray-500 font-medium italic">Monitor sales and live fulfillment progress ({totalOrders} total)</p>
                 </div>
                 <button
                     type="button"

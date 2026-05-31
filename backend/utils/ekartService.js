@@ -21,6 +21,29 @@ const normalizePhone = (value = '') => {
     return digits;
 };
 
+const getEkartErrorMessage = (error, fallbackMessage) => {
+    const responseData = error?.response?.data;
+    const description = sanitizeText(responseData?.description || '');
+    const message = sanitizeText(responseData?.message || '');
+    const code = sanitizeText(responseData?.code || '');
+
+    if (description && message && description !== message) {
+        return code
+            ? `${message}: ${description} (${code})`
+            : `${message}: ${description}`;
+    }
+
+    if (description) {
+        return code ? `${description} (${code})` : description;
+    }
+
+    if (message) {
+        return code ? `${message} (${code})` : message;
+    }
+
+    return fallbackMessage || error?.message || 'Ekart request failed.';
+};
+
 const formatDate = (value = Date.now()) => {
     const date = new Date(value);
     const year = date.getFullYear();
@@ -209,46 +232,50 @@ const resolveTokenUrl = (baseUrl, clientId, tokenPath = DEFAULT_EKART_TOKEN_PATH
 };
 
 const fetchEkartAccessToken = async (config) => {
-    if (config.apiKey && !config.clientId) {
-        return config.apiKey;
-    }
-
-    if (!config.clientId || !config.username || !config.password) {
-        throw new Error('Ekart credentials are incomplete. Please save Client ID, Username, and Password in Admin > API Credentials.');
-    }
-
-    const cacheKey = getCachedTokenKey(config);
-    const cachedEntry = ekartTokenCache.get(cacheKey);
-    if (cachedEntry && cachedEntry.expiresAt > Date.now() + 60_000) {
-        return cachedEntry.accessToken;
-    }
-
-    const { data } = await axios.post(
-        resolveTokenUrl(config.baseUrl, config.clientId, config.tokenPath),
-        {
-            username: config.username,
-            password: config.password
-        },
-        {
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 45000
+    try {
+        if (config.apiKey && !config.clientId) {
+            return config.apiKey;
         }
-    );
 
-    const accessToken = sanitizeText(data?.access_token || '');
-    const expiresInSeconds = Number(data?.expires_in || 0);
-    if (!accessToken) {
-        throw new Error(sanitizeText(data?.message || data?.description || 'Ekart access token could not be fetched.'));
+        if (!config.clientId || !config.username || !config.password) {
+            throw new Error('Ekart credentials are incomplete. Please save Client ID, Username, and Password in Admin > API Credentials.');
+        }
+
+        const cacheKey = getCachedTokenKey(config);
+        const cachedEntry = ekartTokenCache.get(cacheKey);
+        if (cachedEntry && cachedEntry.expiresAt > Date.now() + 60_000) {
+            return cachedEntry.accessToken;
+        }
+
+        const { data } = await axios.post(
+            resolveTokenUrl(config.baseUrl, config.clientId, config.tokenPath),
+            {
+                username: config.username,
+                password: config.password
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                timeout: 45000
+            }
+        );
+
+        const accessToken = sanitizeText(data?.access_token || '');
+        const expiresInSeconds = Number(data?.expires_in || 0);
+        if (!accessToken) {
+            throw new Error(sanitizeText(data?.message || data?.description || 'Ekart access token could not be fetched.'));
+        }
+
+        ekartTokenCache.set(cacheKey, {
+            accessToken,
+            expiresAt: Date.now() + Math.max(300, expiresInSeconds) * 1000
+        });
+
+        return accessToken;
+    } catch (error) {
+        throw new Error(getEkartErrorMessage(error, 'Ekart access token could not be fetched.'));
     }
-
-    ekartTokenCache.set(cacheKey, {
-        accessToken,
-        expiresAt: Date.now() + Math.max(300, expiresInSeconds) * 1000
-    });
-
-    return accessToken;
 };
 
 const buildAuthHeaders = async (config) => {
@@ -373,98 +400,110 @@ const resolveTrackingUrl = (baseUrl, path, trackingNumber) => {
 };
 
 export const createEkartShipment = async (order) => {
-    const config = await getEkartSettings();
-    if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
-        throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
-    }
-
-    const payload = buildShipmentPayload(order, config.settings);
-    const authHeaders = await buildAuthHeaders(config);
-    const { data } = await axios.put(
-        joinUrl(config.baseUrl, config.createShipmentPath),
-        payload,
-        {
-            headers: {
-                ...authHeaders,
-                'Content-Type': 'application/json'
-            },
-            timeout: 20000
+    try {
+        const config = await getEkartSettings();
+        if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
+            throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
         }
-    );
 
-    const trackingNumber = getTrackingNumber(data) || sanitizeText(data?.tracking_id || '');
-    if (!trackingNumber) {
-        throw new Error(sanitizeText(data?.remark || data?.message || data?.error || 'Ekart shipment was not created successfully.'));
+        const payload = buildShipmentPayload(order, config.settings);
+        const authHeaders = await buildAuthHeaders(config);
+        const { data } = await axios.put(
+            joinUrl(config.baseUrl, config.createShipmentPath),
+            payload,
+            {
+                headers: {
+                    ...authHeaders,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 20000
+            }
+        );
+
+        const trackingNumber = getTrackingNumber(data) || sanitizeText(data?.tracking_id || '');
+        if (!trackingNumber) {
+            throw new Error(sanitizeText(data?.remark || data?.message || data?.error || 'Ekart shipment was not created successfully.'));
+        }
+
+        return {
+            trackingNumber,
+            providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
+            pickupLocation: config.pickupLocation,
+            requestPayload: payload,
+            responsePayload: data
+        };
+    } catch (error) {
+        throw new Error(getEkartErrorMessage(error, 'Ekart shipment was not created successfully.'));
     }
-
-    return {
-        trackingNumber,
-        providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
-        pickupLocation: config.pickupLocation,
-        requestPayload: payload,
-        responsePayload: data
-    };
 };
 
 export const fetchEkartTracking = async (orderOrTrackingNumber) => {
-    const config = await getEkartSettings();
-    const trackingNumber = String(
-        typeof orderOrTrackingNumber === 'string'
-            ? orderOrTrackingNumber
-            : orderOrTrackingNumber?.ekart?.trackingNumber || ''
-    ).trim();
+    try {
+        const config = await getEkartSettings();
+        const trackingNumber = String(
+            typeof orderOrTrackingNumber === 'string'
+                ? orderOrTrackingNumber
+                : orderOrTrackingNumber?.ekart?.trackingNumber || ''
+        ).trim();
 
-    if (!config.trackingBaseUrl) {
-        throw new Error('Ekart tracking base URL is missing. Please save it in Admin > API Credentials.');
-    }
-
-    if (!trackingNumber) {
-        throw new Error('Ekart tracking number is not available for this order yet.');
-    }
-
-    const authHeaders = await buildAuthHeaders(config);
-    const { data } = await axios.get(
-        resolveTrackingUrl(config.trackingBaseUrl, config.trackingPath, trackingNumber),
-        {
-            headers: authHeaders,
-            timeout: 20000
+        if (!config.trackingBaseUrl) {
+            throw new Error('Ekart tracking base URL is missing. Please save it in Admin > API Credentials.');
         }
-    );
 
-    return normalizeTrackingResponse(data, trackingNumber);
+        if (!trackingNumber) {
+            throw new Error('Ekart tracking number is not available for this order yet.');
+        }
+
+        const authHeaders = await buildAuthHeaders(config);
+        const { data } = await axios.get(
+            resolveTrackingUrl(config.trackingBaseUrl, config.trackingPath, trackingNumber),
+            {
+                headers: authHeaders,
+                timeout: 20000
+            }
+        );
+
+        return normalizeTrackingResponse(data, trackingNumber);
+    } catch (error) {
+        throw new Error(getEkartErrorMessage(error, 'Failed to fetch Ekart tracking.'));
+    }
 };
 
 export const cancelEkartShipment = async (order) => {
-    const config = await getEkartSettings();
-    const trackingNumber = String(order?.ekart?.trackingNumber || '').trim();
+    try {
+        const config = await getEkartSettings();
+        const trackingNumber = String(order?.ekart?.trackingNumber || '').trim();
 
-    if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
-        throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
-    }
+        if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
+            throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
+        }
 
-    if (!trackingNumber) {
-        throw new Error('Ekart tracking number is not available for this order yet.');
-    }
+        if (!trackingNumber) {
+            throw new Error('Ekart tracking number is not available for this order yet.');
+        }
 
-    const authHeaders = await buildAuthHeaders(config);
-    const { data } = await axios.delete(
-        joinUrl(config.baseUrl, config.cancelPath),
-        {
-            headers: {
-                ...authHeaders,
-                'Content-Type': 'application/json'
-            },
-            params: {
+        const authHeaders = await buildAuthHeaders(config);
+        const { data } = await axios.delete(
+            joinUrl(config.baseUrl, config.cancelPath),
+            {
+                headers: {
+                    ...authHeaders,
+                    'Content-Type': 'application/json'
+                },
+                params: {
+                    tracking_id: trackingNumber
+                },
+                timeout: 20000
+            }
+        );
+
+        return {
+            requestPayload: {
                 tracking_id: trackingNumber
             },
-            timeout: 20000
-        }
-    );
-
-    return {
-        requestPayload: {
-            tracking_id: trackingNumber
-        },
-        responsePayload: data
-    };
+            responsePayload: data
+        };
+    } catch (error) {
+        throw new Error(getEkartErrorMessage(error, 'Failed to cancel Ekart shipment.'));
+    }
 };

@@ -179,6 +179,11 @@ orderSchema.index(
     }
 );
 
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
+orderSchema.index({ 'shippingAddress.email': 1, createdAt: -1 });
+orderSchema.index({ 'shippingAddress.phone': 1, createdAt: -1 });
+
 const Order = mongoose.model('Order', orderSchema);
 
 export default Order;

@@ -30,6 +30,26 @@ const MANUAL_TRACKING_STATUSES = new Set([
     'Cancellation Requested'
 ]);
 
+const ORDER_LIST_SELECT = [
+    'displayId',
+    'invoiceNumber',
+    'transactionId',
+    'createdAt',
+    'updatedAt',
+    'status',
+    'paymentMethod',
+    'paymentResult',
+    'itemsPrice',
+    'shippingPrice',
+    'taxPrice',
+    'totalPrice',
+    'shippingAddress',
+    'orderItems',
+    'fulfillment',
+    'delhivery',
+    'ekart'
+].join(' ');
+
 const getEffectivePurchaseLimit = (product, availableStock) => {
     const stockLimit = Math.max(0, Number(availableStock) || 0);
     const configuredLimit = Number(product?.maxOrderQuantity);
@@ -140,6 +160,49 @@ const isOrderAccessibleByUser = (order, user) => {
         isAdmin,
         isAllowed: orderUserId === currentUserId || isAdmin
     };
+};
+
+const buildOrderListFilter = ({ search, status, user }) => {
+    const filter = {};
+
+    const normalizedSearch = String(search || '').trim();
+    if (normalizedSearch) {
+        const searchPattern = normalizedSearch
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('\\s*');
+        const searchRegex = { $regex: searchPattern, $options: 'i' };
+
+        const searchConditions = [
+            { displayId: searchRegex },
+            { 'shippingAddress.name': searchRegex },
+            { 'shippingAddress.email': searchRegex },
+            { 'shippingAddress.phone': searchRegex },
+            { 'orderItems.name': searchRegex }
+        ];
+
+        if (mongoose.Types.ObjectId.isValid(normalizedSearch)) {
+            searchConditions.push({ _id: normalizedSearch });
+        }
+
+        filter.$or = searchConditions;
+    }
+
+    const normalizedStatus = String(status || '').trim();
+    if (normalizedStatus && normalizedStatus !== 'All') {
+        filter.status = normalizedStatus;
+    }
+
+    const normalizedUser = String(user || '').trim();
+    if (normalizedUser) {
+        filter['shippingAddress.email'] = {
+            $regex: `^${normalizedUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+            $options: 'i'
+        };
+    }
+
+    return filter;
 };
 
 const getFulfillmentMode = (order) => {
@@ -1265,83 +1328,52 @@ export const getOrders = async (req, res) => {
     try {
         const { pageNumber, limit, search, status, user } = req.query;
         const shouldSyncPayments = String(req.query.syncPayments || 'true') !== 'false';
-        let filter = {};
-        
-        // Search Implementation
-        if (search) {
-             const normalizedSearch = String(search || '').trim();
-             const searchPattern = normalizedSearch
-                 .split(/\s+/)
-                 .filter(Boolean)
-                 .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-                 .join('\\s*');
-             const searchRegex = { $regex: searchPattern, $options: 'i' };
-             
-             let searchConditions = [
-                 { 'user.name': searchRegex },
-                 { 'displayId': searchRegex },
-                 { 'shippingAddress.name': searchRegex },
-                 { 'shippingAddress.email': searchRegex }
-             ];
+        const shouldSyncFulfillment = String(req.query.syncFulfillment || 'false') === 'true';
+        const shouldAuditPayments = String(req.query.includePaymentAudit || 'false') === 'true';
+        const filter = buildOrderListFilter({ search, status, user });
+        const hasPagination = pageNumber !== undefined || limit !== undefined;
+        const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
+        const page = Math.max(1, Number(pageNumber) || 1);
 
-             if (mongoose.Types.ObjectId.isValid(search)) {
-                searchConditions.push({ '_id': search });
-             }
-
-             filter.$or = searchConditions;
-             // Note: Searching nested user fields in a referenced document (populate) isn't directly possible in a simple find query 
-             // without aggregation or looking up user IDs first. 
-             // However, redundancy in Order model (shippingAddress) helps. 
-             // For strict user name search, we might need a separate lookup if not stored in Order.
-        }
-
-        if (status && status !== 'All') {
-            filter.status = status;
-        }
-        
-        // Filter by User Email (exact match)
-        if (user) {
-            // This assumes we can filter by user email directly or need to look up user first
-            // Since User is referenced, we need the User ID. 
-            // If the query passes an email, we might need to find the user first.
-            // Or rely on shippingAddress.email
-             filter['shippingAddress.email'] = user; 
-        }
-
-        if (pageNumber || limit) {
-             const pageSize = Number(limit) || 12;
-             const page = Number(pageNumber) || 1;
-             
-             const count = await Order.countDocuments(filter);
-             const orders = await Order.find(filter)
-                 .populate('user', 'name email phone')
-                 .sort({ createdAt: -1 })
-                 .limit(pageSize)
-                 .skip(pageSize * (page - 1));
-
-             const syncedOrders = shouldSyncPayments
-                 ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
-                 : orders;
-             const fullySyncedOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
-             const auditedOrders = await annotateDuplicatePayments(fullySyncedOrders);
-                 
-             return res.json({ 
-                 orders: auditedOrders, 
-                 page, 
-                 pages: Math.ceil(count / pageSize), 
-                 total: count 
-             });
-        }
-
-        const orders = await Order.find(filter) // Apply filter even without pagination
+        let query = Order.find(filter)
+            .select(ORDER_LIST_SELECT)
             .populate('user', 'name email phone')
             .sort({ createdAt: -1 });
+
+        if (hasPagination) {
+            query = query.limit(pageSize).skip(pageSize * (page - 1));
+        }
+
+        if (!shouldSyncFulfillment) {
+            query = query.lean();
+        }
+
+        const [count, rawOrders] = await Promise.all([
+            hasPagination ? Order.countDocuments(filter) : Promise.resolve(null),
+            query
+        ]);
+
         const syncedOrders = shouldSyncPayments
-            ? await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)))
-            : orders;
-        const fullySyncedOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
-        const auditedOrders = await annotateDuplicatePayments(fullySyncedOrders);
-        res.json(auditedOrders);
+            ? await Promise.all(rawOrders.map((order) => syncOrderPaymentFromGateway(order)))
+            : rawOrders;
+        const fulfillmentReadyOrders = shouldSyncFulfillment
+            ? await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)))
+            : syncedOrders;
+        const finalOrders = shouldAuditPayments
+            ? await annotateDuplicatePayments(fulfillmentReadyOrders)
+            : fulfillmentReadyOrders;
+
+        if (hasPagination) {
+            return res.json({
+                orders: finalOrders,
+                page,
+                pages: Math.max(1, Math.ceil((count || 0) / pageSize)),
+                total: count || 0,
+                limit: pageSize
+            });
+        }
+
+        res.json(finalOrders);
     } catch (error) {
         console.error('Get all orders error:', error);
         res.status(500).json({ message: error.message });
