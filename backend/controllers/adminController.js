@@ -1,4 +1,10 @@
 import Admin from '../models/Admin.js';
+import Product from '../models/Product.js';
+import Order from '../models/Order.js';
+import User from '../models/User.js';
+import Category from '../models/Category.js';
+import Coupon from '../models/Coupon.js';
+import Return from '../models/Return.js';
 import generateToken from '../utils/generateToken.js';
 
 // @desc    Auth admin & get token
@@ -100,5 +106,209 @@ export const updateAdminProfile = async (req, res) => {
     } catch (error) {
         console.error('Error updating admin profile:', error);
         res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get admin dashboard summary
+// @route   GET /api/admin/dashboard-summary
+// @access  Private/Admin
+export const getDashboardSummary = async (req, res) => {
+    try {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+        const [
+            totalProducts,
+            totalOrders,
+            totalUsers,
+            totalCategories,
+            activeCoupons,
+            pendingReturns,
+            productsForStock,
+            revenueBuckets,
+            todayOrdersCount,
+            pendingOrders,
+            recentOrders,
+            recentUsers,
+            recentReturns,
+            topCustomers
+        ] = await Promise.all([
+            Product.countDocuments(),
+            Order.countDocuments(),
+            User.countDocuments(),
+            Category.countDocuments(),
+            Coupon.countDocuments({ active: true, isOffer: { $ne: true } }),
+            Return.countDocuments({ status: 'Pending' }),
+            Product.find({}, 'id name image stock skus').lean(),
+            Order.aggregate([
+                {
+                    $facet: {
+                        totalRevenue: [
+                            { $group: { _id: null, value: { $sum: { $ifNull: ['$totalPrice', 0] } } } }
+                        ],
+                        currentMonthRevenue: [
+                            { $match: { createdAt: { $gte: currentMonthStart, $lt: nextMonthStart } } },
+                            { $group: { _id: null, value: { $sum: { $ifNull: ['$totalPrice', 0] } } } }
+                        ],
+                        previousMonthRevenue: [
+                            { $match: { createdAt: { $gte: previousMonthStart, $lt: currentMonthStart } } },
+                            { $group: { _id: null, value: { $sum: { $ifNull: ['$totalPrice', 0] } } } }
+                        ],
+                        todayRevenue: [
+                            { $match: { createdAt: { $gte: todayStart, $lt: tomorrowStart } } },
+                            { $group: { _id: null, value: { $sum: { $ifNull: ['$totalPrice', 0] } } } }
+                        ]
+                    }
+                }
+            ]),
+            Order.countDocuments({ createdAt: { $gte: todayStart, $lt: tomorrowStart } }),
+            Order.countDocuments({ status: { $in: ['Pending', 'Confirmed', 'Packed'] } }),
+            Order.find({}, 'displayId user shippingAddress createdAt')
+                .populate('user', 'name')
+                .sort({ createdAt: -1 })
+                .limit(6)
+                .lean(),
+            User.find({}, 'name createdAt').sort({ createdAt: -1 }).limit(6).lean(),
+            Return.find({}, 'orderId createdAt date').sort({ createdAt: -1 }).limit(6).lean(),
+            Order.aggregate([
+                {
+                    $group: {
+                        _id: '$user',
+                        spend: { $sum: { $ifNull: ['$totalPrice', 0] } },
+                        orders: { $sum: 1 }
+                    }
+                },
+                { $sort: { spend: -1 } },
+                { $limit: 5 },
+                {
+                    $lookup: {
+                        from: 'users',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'user'
+                    }
+                },
+                { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+                {
+                    $project: {
+                        _id: 0,
+                        id: '$user._id',
+                        name: { $ifNull: ['$user.name', 'Customer'] },
+                        email: '$user.email',
+                        spend: 1,
+                        orders: 1
+                    }
+                }
+            ])
+        ]);
+
+        const totalStockUnits = productsForStock.reduce((sum, product) => {
+            const skuStock = Array.isArray(product?.skus)
+                ? product.skus.reduce((skuSum, sku) => skuSum + (Number(sku?.stock) || 0), 0)
+                : 0;
+            const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
+                ? skuStock
+                : (Number(product?.stock) || 0);
+            return sum + computedStock;
+        }, 0);
+
+        const lowStockProducts = productsForStock
+            .map((product) => {
+                const skuStock = Array.isArray(product?.skus)
+                    ? product.skus.reduce((sum, sku) => sum + (Number(sku?.stock) || 0), 0)
+                    : 0;
+                const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
+                    ? skuStock
+                    : (Number(product?.stock) || 0);
+
+                return {
+                    id: product.id,
+                    name: product.name,
+                    image: product.image,
+                    computedStock
+                };
+            })
+            .filter((product) => product.computedStock > 0 && product.computedStock <= 5)
+            .sort((first, second) => first.computedStock - second.computedStock)
+            .slice(0, 5);
+
+        const outOfStockProducts = productsForStock.reduce((count, product) => {
+            const skuStock = Array.isArray(product?.skus)
+                ? product.skus.reduce((sum, sku) => sum + (Number(sku?.stock) || 0), 0)
+                : 0;
+            const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
+                ? skuStock
+                : (Number(product?.stock) || 0);
+            return count + (computedStock <= 0 ? 1 : 0);
+        }, 0);
+
+        const revenueFacet = revenueBuckets?.[0] || {};
+        const totalRevenue = Number(revenueFacet.totalRevenue?.[0]?.value || 0);
+        const monthRevenue = Number(revenueFacet.currentMonthRevenue?.[0]?.value || 0);
+        const previousMonthRevenue = Number(revenueFacet.previousMonthRevenue?.[0]?.value || 0);
+        const todayRevenue = Number(revenueFacet.todayRevenue?.[0]?.value || 0);
+        const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+        const revenueGrowthPct = previousMonthRevenue <= 0
+            ? (monthRevenue > 0 ? 100 : 0)
+            : ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100;
+
+        const recentActivity = [
+            ...recentOrders.map((order) => ({
+                type: 'order',
+                id: String(order._id),
+                text: `New order ${order.displayId || order._id} placed by ${order?.user?.name || order?.shippingAddress?.name || 'Customer'}`,
+                time: order.createdAt
+            })),
+            ...recentUsers.map((user) => ({
+                type: 'user',
+                id: String(user._id),
+                text: `New user ${user.name || 'someone'} registered`,
+                time: user.createdAt
+            })),
+            ...recentReturns.map((returnItem) => ({
+                type: 'return',
+                id: String(returnItem._id),
+                text: `Return requested for Order ${returnItem.orderId}`,
+                time: returnItem.createdAt || returnItem.date
+            }))
+        ]
+            .filter((item) => item.time)
+            .sort((first, second) => new Date(second.time).getTime() - new Date(first.time).getTime())
+            .slice(0, 6);
+
+        res.json({
+            metrics: {
+                totalProducts,
+                totalOrders,
+                totalUsers,
+                totalCategories,
+                activeCoupons,
+                totalStockUnits,
+                outOfStockProducts
+            },
+            revenue: {
+                todayRevenue,
+                monthRevenue,
+                previousMonthRevenue,
+                totalRevenue,
+                avgOrderValue,
+                todayOrdersCount,
+                revenueGrowthPct
+            },
+            tasks: {
+                pendingOrders,
+                pendingReturns
+            },
+            lowStockProducts,
+            recentActivity,
+            topCustomers
+        });
+    } catch (error) {
+        console.error('Error fetching dashboard summary:', error);
+        res.status(500).json({ message: error.message || 'Failed to fetch dashboard summary' });
     }
 };
