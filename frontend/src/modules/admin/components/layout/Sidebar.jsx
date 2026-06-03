@@ -1,99 +1,20 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import {
-    MdDashboard,
-    MdInventory,
-    MdCategory,
-    MdShoppingCart,
-    MdAssignmentReturn,
-    MdLocalOffer,
-    MdLocalShipping,
-    MdStorefront,
-    MdPeople,
-    MdSettings,
-    MdMenu,
-    MdClose,
-    MdDescription,
-    MdViewAgenda,
-    MdRateReview,
-    MdLocationOn,
-    MdHelpCenter,
-    MdViewCompact,
-    MdNotifications,
-    MdBusinessCenter,
-    MdPlayCircle,
-    MdVisibility,
-    MdPayment
-} from 'react-icons/md';
+import { MdMenu, MdClose } from 'react-icons/md';
+import useAdminAuthStore from '../../store/adminAuthStore';
+import { ADMIN_MENU_GROUPS, hasAdminPermission } from '../../constants/adminPermissions';
 
 import logo from '../../../../assets/indiankart-logo.png';
 
 const Sidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
-
-    const menuGroups = [
-        {
-            title: 'Operations',
-            items: [
-                { name: 'Dashboard', icon: MdDashboard, path: '/admin/dashboard' },
-                { name: 'Orders', icon: MdShoppingCart, path: '/admin/orders' },
-                { name: 'Returns', icon: MdAssignmentReturn, path: '/admin/returns' },
-                { name: 'Replacements', icon: MdAssignmentReturn, path: '/admin/replacements' },
-                { name: 'Delivery Slip', icon: MdLocalShipping, path: '/admin/delivery-slip' },
-                { name: 'Shipping Charges', icon: MdLocalShipping, path: '/admin/shipping-charges' },
-                { name: 'PIN Codes', icon: MdLocationOn, path: '/admin/pincodes' },
-            ]
-        },
-        {
-            title: 'Catalog',
-            items: [
-                { name: 'Products', icon: MdInventory, path: '/admin/products' },
-                { name: 'Max Selling Qty', icon: MdInventory, path: '/admin/products/max-selling-quantity' },
-                { name: 'Product Views', icon: MdVisibility, path: '/admin/product-views' },
-                { name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
-                { name: 'Categories', icon: MdCategory, path: '/admin/categories' },
-                { name: 'Category Page Builder', icon: MdViewAgenda, path: '/admin/categories/page-builder' },
-                { name: 'Subcategories', icon: MdCategory, path: '/admin/subcategories' },
-                { name: 'Subcategory Page Builder', icon: MdViewAgenda, path: '/admin/subcategories/page-builder' },
-                { name: 'Brands', icon: MdCategory, path: '/admin/brands' },
-            ]
-        },
-        {
-            title: 'Marketing',
-            items: [
-                { name: 'Coupons', icon: MdLocalOffer, path: '/admin/coupons' },
-                { name: 'Bank Offers', icon: MdLocalOffer, path: '/admin/bank-offers' },
-                { name: 'Play', icon: MdPlayCircle, path: '/admin/play' },
-            ]
-        },
-        {
-            title: 'Users & Support',
-            items: [
-                { name: 'Users', icon: MdPeople, path: '/admin/users' },
-                { name: 'Seller Requests', icon: MdStorefront, path: '/admin/seller-requests' },
-                { name: 'Reviews', icon: MdRateReview, path: '/admin/reviews' },
-                { name: 'Admin Notifications', icon: MdNotifications, path: '/admin/notifications' },
-                { name: 'User Notifications', icon: MdNotifications, path: '/admin/user-notifications' },
-                { name: 'B2B Enquiries', icon: MdBusinessCenter, path: '/admin/b2b' },
-            ]
-        },
-        {
-            title: 'Content',
-            items: [
-                { name: 'Static Pages', icon: MdDescription, path: '/admin/pages' },
-                { name: 'Help Center Content', icon: MdHelpCenter, path: '/admin/content/help-center' },
-                { name: 'Homepage Footer', icon: MdViewCompact, path: '/admin/footer-settings' },
-            ]
-        },
-        {
-            title: 'Configuration',
-            items: [
-                { name: 'API Credentials', icon: MdSettings, path: '/admin/api-credentials' },
-                { name: 'Store Settings', icon: MdSettings, path: '/admin/settings' },
-                { name: 'COD Advanced Payment', icon: MdPayment, path: '/admin/cod-advanced-payment' },
-            ]
-        }
-    ];
+    const adminUser = useAdminAuthStore((state) => state.adminUser);
+    const menuGroups = ADMIN_MENU_GROUPS
+        .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => hasAdminPermission(adminUser, item.key))
+        }))
+        .filter((group) => group.items.length > 0);
 
     return (
         <>
@@ -144,11 +65,7 @@ const Sidebar = () => {
                                         <NavLink
                                             key={item.path}
                                             to={item.path}
-                                            end={
-                                                item.path === '/admin/categories' ||
-                                                item.path === '/admin/products' ||
-                                                item.path === '/admin/subcategories'
-                                            }
+                                            end={['/admin/categories', '/admin/products', '/admin/subcategories'].includes(item.path)}
                                             className={({ isActive }) =>
                                                 `flex items-center gap-3 px-4 py-3 rounded-lg mb-1 transition-colors ${isActive
                                                     ? 'bg-blue-600 text-white'

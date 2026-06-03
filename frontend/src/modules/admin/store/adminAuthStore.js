@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
 import { requestForToken } from '../../../services/firebase';
+import { hasAdminPermission } from '../constants/adminPermissions';
 
 const setAdminTokenCache = (token) => {
     if (typeof window === 'undefined') {
@@ -34,7 +35,7 @@ const useAdminAuthStore = create(
                         ...(loginId.includes('@') ? { email: loginId } : { username: loginId })
                     };
                     const { data } = await API.post('/admin/login', payload);
-                    if (data.isAdmin || data.role === 'superadmin' || data.role === 'admin') {
+                    if (data.isAdmin || data.role === 'superadmin' || data.role === 'subadmin' || data.role === 'admin') {
                         setAdminTokenCache(data.token);
                         set({
                             isAuthenticated: true,
@@ -136,6 +137,10 @@ const useAdminAuthStore = create(
                     });
                     throw error;
                 }
+            },
+
+            hasSidebarAccess: (permissionKey) => {
+                return hasAdminPermission(get().adminUser, permissionKey);
             }
         }),
         {

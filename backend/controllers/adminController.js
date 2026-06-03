@@ -6,6 +6,33 @@ import Category from '../models/Category.js';
 import Coupon from '../models/Coupon.js';
 import Return from '../models/Return.js';
 import generateToken from '../utils/generateToken.js';
+import {
+    ADMIN_SIDEBAR_OPTIONS,
+    normalizeAdminRole,
+    normalizeSidebarPermissions
+} from '../constants/adminPermissions.js';
+
+const serializeAdmin = (adminDoc, includeMeta = false) => {
+    const role = normalizeAdminRole(adminDoc.role);
+    const sidebarPermissions = normalizeSidebarPermissions(role, adminDoc.permissions);
+
+    return {
+        _id: adminDoc._id,
+        name: adminDoc.name,
+        username: adminDoc.username,
+        email: adminDoc.email,
+        role,
+        sidebarPermissions,
+        isAdmin: true,
+        ...(includeMeta
+            ? {
+                createdAt: adminDoc.createdAt,
+                updatedAt: adminDoc.updatedAt,
+                lastLogin: adminDoc.lastLogin
+            }
+            : {})
+    };
+};
 
 // @desc    Auth admin & get token
 // @route   POST /api/admin/login
@@ -25,14 +52,12 @@ export const authAdmin = async (req, res) => {
     });
 
     if (adminQuery && (await adminQuery.matchPassword(password))) {
+        adminQuery.lastLogin = new Date();
+        await adminQuery.save();
+
         const token = generateToken(res, adminQuery._id, 'admin_jwt');
         res.json({
-            _id: adminQuery._id,
-            name: adminQuery.name,
-            username: adminQuery.username,
-            email: adminQuery.email,
-            role: adminQuery.role,
-            isAdmin: true,
+            ...serializeAdmin(adminQuery),
             token
         });
     } else {
@@ -60,15 +85,7 @@ export const logoutAdmin = (req, res) => {
 // @route   GET /api/admin/profile
 // @access  Private/Admin
 export const getAdminProfile = async (req, res) => {
-    const admin = {
-        _id: req.user._id,
-        name: req.user.name,
-        username: req.user.username,
-        email: req.user.email,
-        role: req.user.role,
-        isAdmin: true
-    };
-    res.status(200).json(admin);
+    res.status(200).json(serializeAdmin(req.user));
 };
 
 // @desc    Update admin profile
@@ -92,12 +109,7 @@ export const updateAdminProfile = async (req, res) => {
             const token = generateToken(res, updatedAdmin._id, 'admin_jwt');
 
             res.json({
-                _id: updatedAdmin._id,
-                name: updatedAdmin.name,
-                username: updatedAdmin.username,
-                email: updatedAdmin.email,
-                role: updatedAdmin.role,
-                isAdmin: true,
+                ...serializeAdmin(updatedAdmin),
                 token
             });
         } else {
@@ -106,6 +118,163 @@ export const updateAdminProfile = async (req, res) => {
     } catch (error) {
         console.error('Error updating admin profile:', error);
         res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get admin sidebar option catalog
+// @route   GET /api/admin/sidebar-options
+// @access  Private/Admin
+export const getAdminSidebarOptions = async (req, res) => {
+    res.json({ options: ADMIN_SIDEBAR_OPTIONS });
+};
+
+// @desc    List admins
+// @route   GET /api/admin/manage-admins
+// @access  Private/Superadmin
+export const listAdmins = async (req, res) => {
+    try {
+        const admins = await Admin.find({}).sort({ createdAt: -1 });
+        res.json(admins.map((adminDoc) => serializeAdmin(adminDoc, true)));
+    } catch (error) {
+        console.error('Error listing admins:', error);
+        res.status(500).json({ message: error.message || 'Failed to fetch admins' });
+    }
+};
+
+// @desc    Create admin
+// @route   POST /api/admin/manage-admins
+// @access  Private/Superadmin
+export const createAdmin = async (req, res) => {
+    try {
+        const {
+            name,
+            username,
+            email,
+            password,
+            role,
+            sidebarPermissions
+        } = req.body;
+
+        if (!name?.trim() || !email?.trim() || !password?.trim()) {
+            return res.status(400).json({ message: 'Name, email and password are required' });
+        }
+
+        const normalizedRole = normalizeAdminRole(role);
+        const normalizedEmail = email.toLowerCase().trim();
+        const normalizedUsername = username?.trim() ? username.toLowerCase().trim() : undefined;
+        const normalizedPermissions = normalizeSidebarPermissions(normalizedRole, sidebarPermissions);
+
+        if (normalizedRole === 'subadmin' && normalizedPermissions.length === 0) {
+            return res.status(400).json({ message: 'Select at least one sidebar option for subadmin' });
+        }
+
+        const duplicateAdmin = await Admin.findOne({
+            $or: [
+                { email: normalizedEmail },
+                ...(normalizedUsername ? [{ username: normalizedUsername }] : [])
+            ]
+        });
+
+        if (duplicateAdmin) {
+            return res.status(400).json({ message: 'Admin with this email or username already exists' });
+        }
+
+        const adminDoc = await Admin.create({
+            name: name.trim(),
+            username: normalizedUsername,
+            email: normalizedEmail,
+            password: password.trim(),
+            role: normalizedRole,
+            permissions: normalizedPermissions
+        });
+
+        res.status(201).json(serializeAdmin(adminDoc, true));
+    } catch (error) {
+        console.error('Error creating admin:', error);
+        res.status(500).json({ message: error.message || 'Failed to create admin' });
+    }
+};
+
+// @desc    Update admin access
+// @route   PUT /api/admin/manage-admins/:id
+// @access  Private/Superadmin
+export const updateAdminAccess = async (req, res) => {
+    try {
+        const adminDoc = await Admin.findById(req.params.id);
+
+        if (!adminDoc) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+ 
+        const nextRole = normalizeAdminRole(req.body.role || adminDoc.role);
+        const nextPermissions = normalizeSidebarPermissions(
+            nextRole,
+            req.body.sidebarPermissions ?? adminDoc.permissions
+        );
+
+        if (String(adminDoc._id) === String(req.user._id) && nextRole !== 'superadmin') {
+            return res.status(400).json({ message: 'You cannot remove your own superadmin access' });
+        }
+
+        if (nextRole === 'subadmin' && nextPermissions.length === 0) {
+            return res.status(400).json({ message: 'Select at least one sidebar option for subadmin' });
+        }
+
+        const nextEmail = req.body.email?.trim()?.toLowerCase();
+        const nextUsername = req.body.username?.trim()?.toLowerCase();
+
+        if (nextEmail || nextUsername) {
+            const duplicateAdmin = await Admin.findOne({
+                _id: { $ne: adminDoc._id },
+                $or: [
+                    ...(nextEmail ? [{ email: nextEmail }] : []),
+                    ...(nextUsername ? [{ username: nextUsername }] : [])
+                ]
+            });
+
+            if (duplicateAdmin) {
+                return res.status(400).json({ message: 'Admin with this email or username already exists' });
+            }
+        }
+
+        adminDoc.name = req.body.name?.trim() || adminDoc.name;
+        adminDoc.email = nextEmail || adminDoc.email;
+        adminDoc.username = req.body.username === '' ? undefined : (nextUsername || adminDoc.username);
+        adminDoc.role = nextRole;
+        adminDoc.permissions = nextPermissions;
+
+        if (req.body.password?.trim()) {
+            adminDoc.password = req.body.password.trim();
+        }
+
+        const updatedAdmin = await adminDoc.save();
+        res.json(serializeAdmin(updatedAdmin, true));
+    } catch (error) {
+        console.error('Error updating admin access:', error);
+        res.status(500).json({ message: error.message || 'Failed to update admin' });
+    }
+};
+
+// @desc    Delete admin
+// @route   DELETE /api/admin/manage-admins/:id
+// @access  Private/Superadmin
+export const deleteAdmin = async (req, res) => {
+    try {
+        const adminDoc = await Admin.findById(req.params.id);
+
+        if (!adminDoc) {
+            return res.status(404).json({ message: 'Admin not found' });
+        }
+
+        if (String(adminDoc._id) === String(req.user._id)) {
+            return res.status(400).json({ message: 'You cannot delete your own account' });
+        }
+
+        await adminDoc.deleteOne();
+        res.json({ message: 'Admin deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting admin:', error);
+        res.status(500).json({ message: error.message || 'Failed to delete admin' });
     }
 };
 

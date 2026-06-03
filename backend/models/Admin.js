@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
 
 const adminSchema = mongoose.Schema({
     name: {
@@ -26,10 +27,11 @@ const adminSchema = mongoose.Schema({
     },
     role: {
         type: String,
-        default: 'admin', // superadmin, editor, moderator
+        enum: ['superadmin', 'subadmin', 'admin'],
+        default: 'superadmin',
     },
     permissions: [{
-        type: String // e.g. 'manage_products', 'manage_users'
+        type: String
     }],
     lastLogin: {
         type: Date
@@ -45,6 +47,19 @@ const adminSchema = mongoose.Schema({
 adminSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };
+
+adminSchema.methods.getResolvedRole = function () {
+    return normalizeAdminRole(this.role);
+};
+
+adminSchema.methods.getResolvedPermissions = function () {
+    return normalizeSidebarPermissions(this.role, this.permissions);
+};
+
+adminSchema.pre('validate', function () {
+    this.role = normalizeAdminRole(this.role);
+    this.permissions = normalizeSidebarPermissions(this.role, this.permissions);
+});
 
 adminSchema.pre('save', async function () {
     if (!this.isModified('password')) {

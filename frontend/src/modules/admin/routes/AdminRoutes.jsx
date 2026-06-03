@@ -40,8 +40,21 @@ import ShippingCharges from '../pages/Settings/ShippingCharges';
 import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
 import B2BManager from '../pages/B2B/B2BManager';
 import CODAdvancedPayment from '../pages/Settings/CODAdvancedPayment';
+import AdminPermissionRoute from './AdminPermissionRoute';
+import AdminManagement from '../pages/AdminManagement';
+import useAdminAuthStore from '../store/adminAuthStore';
+import { getDefaultAdminRoute } from '../constants/adminPermissions';
 
 const HOME_PAGE_BUILDER_REDIRECT = '/admin/categories/page-builder?categoryName=For%20You';
+
+const withPermission = (permission, element) => (
+    <AdminPermissionRoute permission={permission}>{element}</AdminPermissionRoute>
+);
+
+const AdminIndexRedirect = () => {
+    const adminUser = useAdminAuthStore((state) => state.adminUser);
+    return <Navigate to={getDefaultAdminRoute(adminUser)} replace />;
+};
 
 const AdminRoutes = () => {
     return (
@@ -56,74 +69,77 @@ const AdminRoutes = () => {
                     </ProtectedAdminRoute>
                 }
             >
-                <Route index element={<Navigate to="dashboard" replace />} />
-                <Route path="dashboard" element={<Dashboard />} />
+                <Route index element={<AdminIndexRedirect />} />
+                <Route path="dashboard" element={withPermission('dashboard', <Dashboard />)} />
 
                 {/* Modules */}
-                <Route path="products" element={<ProductManager />} />
-                <Route path="products/max-selling-quantity" element={<MaxSellingQuantityManager />} />
-                <Route path="product-views" element={<ProductViews />} />
-                <Route path="product-views/:id" element={<ProductAnalytics />} />
-                <Route path="b2b" element={<B2BManager />} />
-                <Route path="products/new" element={<ProductForm />} />
-                <Route path="products/edit/:id" element={<ProductForm />} />
-                <Route path="stock" element={<StockManagement />} />
-                <Route path="categories" element={<CategoryList />} />
-                <Route path="categories/page-builder" element={<CategoryPageBuilder />} />
-                <Route path="categories/page-builder/section/:sectionId" element={<CategoryPageBuilder />} />
-                <Route path="subcategories" element={<SubCategoryList />} />
-                <Route path="subcategories/page-builder" element={<SubCategoryPageBuilder />} />
-                <Route path="subcategories/page-builder/section/:sectionId" element={<SubCategoryPageBuilder />} />
-                <Route path="brands" element={<BrandList />} />
-                <Route path="orders" element={<OrderList />} />
-                <Route path="orders/:id" element={<OrderDetail />} />
-                <Route path="delivery-slip" element={<DeliverySlip />} />
+                <Route path="products" element={withPermission('products', <ProductManager />)} />
+                <Route path="products/max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
+                <Route path="product-views" element={withPermission('productViews', <ProductViews />)} />
+                <Route path="product-views/:id" element={withPermission('productViews', <ProductAnalytics />)} />
+                <Route path="b2b" element={withPermission('b2b', <B2BManager />)} />
+                <Route path="products/new" element={withPermission('products', <ProductForm />)} />
+                <Route path="products/edit/:id" element={withPermission('products', <ProductForm />)} />
+                <Route path="stock" element={withPermission('stockManagement', <StockManagement />)} />
+                <Route path="categories" element={withPermission('categories', <CategoryList />)} />
+                <Route path="categories/page-builder" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                <Route path="categories/page-builder/section/:sectionId" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                <Route path="subcategories" element={withPermission('subcategories', <SubCategoryList />)} />
+                <Route path="subcategories/page-builder" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                <Route path="subcategories/page-builder/section/:sectionId" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                <Route path="brands" element={withPermission('brands', <BrandList />)} />
+                <Route path="orders" element={withPermission('orders', <OrderList />)} />
+                <Route path="orders/:id" element={withPermission('orders', <OrderDetail />)} />
+                <Route path="delivery-slip" element={withPermission('deliverySlip', <DeliverySlip />)} />
                 <Route
                     path="returns"
-                    element={
+                    element={withPermission(
+                        'returns',
                         <ReturnRequests
                             forcedType="Return"
                             pageTitle="Returns"
                             pageDescription="Manage lifecycle of return requests"
                         />
-                    }
+                    )}
                 />
                 <Route
                     path="replacements"
-                    element={
+                    element={withPermission(
+                        'replacements',
                         <ReturnRequests
                             forcedType="Replacement"
                             pageTitle="Replacements"
                             pageDescription="Manage lifecycle of replacement requests"
                         />
-                    }
+                    )}
                 />
-                <Route path="reviews" element={<ReviewList />} />
-                <Route path="coupons" element={<CouponManager />} />
-                <Route path="offers" element={<OfferList />} />
-                <Route path="offers/edit/:id" element={<OfferForm />} />
-                <Route path="play" element={<PlayManager />} />
-                <Route path="homepage" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
-                <Route path="users" element={<UserList />} />
-                <Route path="users/:id" element={<UserDetail />} />
-                <Route path="seller-requests" element={<SellerRequests />} />
-                <Route path="pages" element={<PageManager />} />
-                <Route path="content/layout" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
-                <Route path="content/sections" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
-                <Route path="content/banners" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
-                <Route path="content/help-center" element={<HelpCenterContentManager />} />
-                <Route path="content/home" element={<Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />} />
-                <Route path="pincodes" element={<PinCodeManager />} />
-                <Route path="bank-offers" element={<BankOfferManager />} />
-                <Route path="support" element={<SupportRequests />} />
-                <Route path="settings" element={<SettingsPage />} />
+                <Route path="reviews" element={withPermission('reviews', <ReviewList />)} />
+                <Route path="coupons" element={withPermission('coupons', <CouponManager />)} />
+                <Route path="offers" element={withPermission('coupons', <OfferList />)} />
+                <Route path="offers/edit/:id" element={withPermission('coupons', <OfferForm />)} />
+                <Route path="play" element={withPermission('play', <PlayManager />)} />
+                <Route path="homepage" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                <Route path="users" element={withPermission('users', <UserList />)} />
+                <Route path="users/:id" element={withPermission('users', <UserDetail />)} />
+                <Route path="seller-requests" element={withPermission('sellerRequests', <SellerRequests />)} />
+                <Route path="pages" element={withPermission('staticPages', <PageManager />)} />
+                <Route path="content/layout" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                <Route path="content/sections" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                <Route path="content/banners" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                <Route path="content/help-center" element={withPermission('helpCenterContent', <HelpCenterContentManager />)} />
+                <Route path="content/home" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                <Route path="pincodes" element={withPermission('pinCodes', <PinCodeManager />)} />
+                <Route path="bank-offers" element={withPermission('bankOffers', <BankOfferManager />)} />
+                <Route path="support" element={withPermission('users', <SupportRequests />)} />
+                <Route path="settings" element={withPermission('storeSettings', <SettingsPage />)} />
                 <Route path="razorpay-credentials" element={<Navigate to="/admin/api-credentials" replace />} />
-                <Route path="api-credentials" element={<RazorpayCredentials />} />
-                <Route path="shipping-charges" element={<ShippingCharges />} />
-                <Route path="cod-advanced-payment" element={<CODAdvancedPayment />} />
-                <Route path="footer-settings" element={<FooterManager />} />
-                <Route path="notifications" element={<AdminNotifications />} />
-                <Route path="user-notifications" element={<NotificationManager />} />
+                <Route path="api-credentials" element={withPermission('apiCredentials', <RazorpayCredentials />)} />
+                <Route path="shipping-charges" element={withPermission('shippingCharges', <ShippingCharges />)} />
+                <Route path="cod-advanced-payment" element={withPermission('codAdvancedPayment', <CODAdvancedPayment />)} />
+                <Route path="footer-settings" element={withPermission('homepageFooter', <FooterManager />)} />
+                <Route path="notifications" element={withPermission('adminNotifications', <AdminNotifications />)} />
+                <Route path="user-notifications" element={withPermission('userNotifications', <NotificationManager />)} />
+                <Route path="admin-management" element={withPermission('adminManagement', <AdminManagement />)} />
             </Route>
         </Routes>
     );

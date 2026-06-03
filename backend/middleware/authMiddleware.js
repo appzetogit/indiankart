@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Admin from '../models/Admin.js';
 import { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS } from '../controllers/authController.js';
+import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
 
 export const protect = async (req, res, next) => {
     let token;
@@ -48,6 +49,11 @@ export const protect = async (req, res, next) => {
                  res.status(401);
                  throw new Error('Not authorized, token failed');
             }
+
+            if (req.user?.email && typeof req.user.getResolvedRole === 'function') {
+                req.user.role = normalizeAdminRole(req.user.role);
+                req.user.permissions = normalizeSidebarPermissions(req.user.role, req.user.permissions);
+            }
             
             console.log('Authenticated User found:', req.user._id, 'Role:', req.user.role || 'User', 'IsAdmin:', req.user.isAdmin);
 
@@ -63,10 +69,18 @@ export const protect = async (req, res, next) => {
 };
 
 export const admin = (req, res, next) => {
-    if (req.user && (req.user.isAdmin || (req.user.role && ['admin', 'superadmin', 'editor', 'moderator'].includes(req.user.role)))) {
+    if (req.user && (req.user.isAdmin || (req.user.role && ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(req.user.role)))) {
         next();
     } else {
         console.log('Access denied. Not an admin. User:', req.user._id);
         res.status(401).json({ message: 'Not authorized as an admin' });
     }
+};
+
+export const requireSuperAdmin = (req, res, next) => {
+    if (req.user && normalizeAdminRole(req.user.role) === 'superadmin') {
+        return next();
+    }
+
+    return res.status(403).json({ message: 'Only superadmins can access this resource' });
 };
