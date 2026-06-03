@@ -25,6 +25,17 @@ const getInvoicePaymentMode = (order) => {
   return normalizedPaymentMethod === "COD" ? "COD" : "PREPAID";
 };
 
+const getCodAdvancedSummary = (order) => {
+  const codAdvancedAmount = Number(order?.codAdvancedAmount);
+  const remainingCodBalance = Number(order?.remainingCodBalance);
+
+  return {
+    isCodAdvancedPaid: Boolean(order?.isCodAdvancedPaid) && Number.isFinite(codAdvancedAmount) && codAdvancedAmount > 0,
+    codAdvancedAmount: Number.isFinite(codAdvancedAmount) ? codAdvancedAmount : 0,
+    remainingCodBalance: Number.isFinite(remainingCodBalance) ? remainingCodBalance : 0,
+  };
+};
+
 const BarcodeSvg = ({ value, height = 118 }) => {
   const svgRef = useRef(null);
 
@@ -227,6 +238,7 @@ export const InvoiceDisplay = React.forwardRef(
     const totalAmount = (item ? subtotal : orderGrandTotal) + handlingFee;
     const printedAt = new Date();
     const invoicePaymentMode = getInvoicePaymentMode(order);
+    const { isCodAdvancedPaid, codAdvancedAmount, remainingCodBalance } = getCodAdvancedSummary(order);
 
     return (
       <div ref={ref} className="invoice-root">
@@ -431,7 +443,7 @@ export const InvoiceDisplay = React.forwardRef(
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{order.displayId || order.id || order._id}</div>
                 </th>
                 <th style={{ width: "100px" }}>
-                  <div style={{ fontSize: "8px" }}>↑SURFACE</div>
+                  <div style={{ fontSize: "8px" }}>â†‘SURFACE</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{invoicePaymentMode}</div>
                 </th>
                 <th style={{ width: "30px", fontSize: "18px", textAlign: "center" }}>E</th>
@@ -636,14 +648,26 @@ export const InvoiceDisplay = React.forwardRef(
               {couponDiscount > 0 && (
                 <tr>
                   <td colSpan="8" className="text-right"><b>Coupon Applied{couponCode ? ` (${couponCode})` : ""}</b></td>
-                  <td className="text-right" style={{ color: "#0f9d58" }}>-₹{format(couponDiscount)}</td>
+                  <td className="text-right" style={{ color: "#0f9d58" }}>-Rs.{format(couponDiscount)}</td>
+                </tr>
+              )}
+              {isCodAdvancedPaid && (
+                <tr>
+                  <td colSpan="8" className="text-right"><b>COD Advance Paid Online</b></td>
+                  <td className="text-right" style={{ color: "#0f9d58" }}>Rs.{format(codAdvancedAmount)}</td>
                 </tr>
               )}
               <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                 <td colSpan="2">TOTAL QTY: {totalQty}</td>
                 <td colSpan="6" className="text-right">TOTAL PRICE:</td>
-                <td className="text-right">₹{format(totalAmount)}</td>
+                <td className="text-right">Rs.{format(totalAmount)}</td>
               </tr>
+              {isCodAdvancedPaid && (
+                <tr style={{ background: "#fff8e1", fontWeight: "bold" }}>
+                  <td colSpan="8" className="text-right">BALANCE COD COLLECTABLE AT DELIVERY:</td>
+                  <td className="text-right">Rs.{format(remainingCodBalance)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
           <div className="text-right" style={{ fontSize: "7px", marginTop: "2px", fontStyle: "italic", color: "#666" }}>

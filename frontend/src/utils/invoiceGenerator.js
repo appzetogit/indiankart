@@ -8,6 +8,23 @@ const getInvoiceNumber = (order) => {
     return `INV-${String(order?.displayId || order?.id || order?._id || '').toUpperCase()}`;
 };
 
+const toNumber = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getCodAdvancedSummary = (order) => {
+    const codAdvancedAmount = toNumber(order?.codAdvancedAmount);
+    const remainingCodBalance = toNumber(order?.remainingCodBalance);
+    const isCodAdvancedPaid = Boolean(order?.isCodAdvancedPaid) && codAdvancedAmount > 0;
+
+    return {
+        isCodAdvancedPaid,
+        codAdvancedAmount,
+        remainingCodBalance
+    };
+};
+
 /**
  * Generate and download invoice PDF for an order
  * @param {Object} order - Order object containing all order details
@@ -16,6 +33,7 @@ export const generateInvoice = (order, settings = {}) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
+    const { isCodAdvancedPaid, codAdvancedAmount, remainingCodBalance } = getCodAdvancedSummary(order);
 
     // Default settings if not provided
     const seller = {
@@ -234,6 +252,14 @@ export const generateInvoice = (order, settings = {}) => {
         doc.text(`-Rs.${Number(order.coupon.discount).toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
     }
 
+    if (isCodAdvancedPaid) {
+        yPos += 6;
+        doc.setTextColor(...lightColor);
+        doc.text('COD Advance Paid Online:', summaryX, yPos);
+        doc.setTextColor(16, 185, 129);
+        doc.text(`Rs.${codAdvancedAmount.toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
+    }
+
     yPos += 8;
     doc.setDrawColor(...primaryColor);
     doc.setLineWidth(0.5);
@@ -262,6 +288,14 @@ export const generateInvoice = (order, settings = {}) => {
     const statusColor = statusText === 'Paid' ? [16, 185, 129] : [245, 158, 11];
     doc.setTextColor(...statusColor);
     doc.text(statusText, valueX, yPos, { align: 'right' });
+
+    if (isCodAdvancedPaid) {
+        yPos += 6;
+        doc.setTextColor(...lightColor);
+        doc.text('Balance Collectable on Delivery:', summaryX, yPos);
+        doc.setTextColor(...darkColor);
+        doc.text(`Rs.${remainingCodBalance.toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
+    }
 
     // Footer
     yPos = pageHeight - 35;
