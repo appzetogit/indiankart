@@ -7,6 +7,7 @@ import Product from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
+import Agent from '../models/Agent.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
@@ -45,10 +46,17 @@ const ORDER_LIST_SELECT = [
     'totalPrice',
     'shippingAddress',
     'orderItems',
+    'referral',
     'fulfillment',
     'delhivery',
     'ekart'
 ].join(' ');
+
+const normalizeReferralCode = (value = '') =>
+    String(value || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
 
 const getEffectivePurchaseLimit = (product, availableStock) => {
     const stockLimit = Math.max(0, Number(availableStock) || 0);
@@ -759,6 +767,7 @@ export const addOrderItems = async (req, res) => {
             shippingPrice,
             totalPrice,
             coupon,
+            referral,
         } = req.body;
         const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
         const isOnlinePayment = normalizedPaymentMethod && normalizedPaymentMethod !== 'COD';
@@ -907,6 +916,31 @@ export const addOrderItems = async (req, res) => {
 
         const invoiceNumber = await reserveNextInvoiceNumber();
         const expectedCodAdvancedAmount = codAdvancedActive ? Math.min(totalPrice, settings.codAdvancedPaymentAmount) : 0;
+        const normalizedReferralCode = normalizeReferralCode(referral?.code);
+        let resolvedReferral = null;
+
+        if (normalizedReferralCode) {
+            const agent = await Agent.findOne({
+                referralCode: normalizedReferralCode,
+                isActive: true
+            }).lean();
+
+            if (!agent) {
+                return res.status(400).json({ message: 'Invalid or inactive referral code' });
+            }
+
+            const commissionPercent = Math.max(0, Number(agent.commissionPercent) || 0);
+            const referralBaseAmount = Math.max(0, Number(itemsPrice) || 0);
+            const commissionAmount = Number(((referralBaseAmount * commissionPercent) / 100).toFixed(2));
+
+            resolvedReferral = {
+                code: agent.referralCode,
+                agent: agent._id,
+                agentName: agent.name,
+                commissionPercent,
+                commissionAmount
+            };
+        }
 
         const order = new Order({
             displayId,
@@ -926,6 +960,7 @@ export const addOrderItems = async (req, res) => {
             shippingPrice,
             totalPrice,
             coupon,
+            referral: resolvedReferral,
             isPaid: codAdvancedActive ? false : verifiedPayment.isPaid,
             paidAt: codAdvancedActive ? null : verifiedPayment.paidAt,
             isCodAdvancedPaid: codAdvancedActive && expectedCodAdvancedAmount > 0,

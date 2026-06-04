@@ -33,6 +33,7 @@ import pinCodeRoutes from './routes/pinCodeRoutes.js';
 import bankOfferRoutes from './routes/bankOfferRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
+import agentRoutes from './routes/agentRoutes.js';
 
 import notificationRoutes from './routes/notificationRoutes.js';
 import fcmRoutes from './routes/fcmRoutes.js';
@@ -105,6 +106,7 @@ app.use('/api/pincodes', pinCodeRoutes);
 app.use('/api/bank-offers', bankOfferRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/agents', agentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/fcm', fcmRoutes);
 app.use('/api/seller-requests', sellerRequestRoutes);

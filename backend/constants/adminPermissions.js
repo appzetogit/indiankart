@@ -24,6 +24,7 @@ export const ADMIN_SIDEBAR_OPTIONS = [
     { key: 'adminNotifications', label: 'Admin Notifications', path: '/admin/notifications' },
     { key: 'userNotifications', label: 'User Notifications', path: '/admin/user-notifications' },
     { key: 'b2b', label: 'B2B Enquiries', path: '/admin/b2b' },
+    { key: 'agentManagement', label: 'Agent Management', path: '/admin/agent-management' },
     { key: 'staticPages', label: 'Static Pages', path: '/admin/pages' },
     { key: 'helpCenterContent', label: 'Help Center Content', path: '/admin/content/help-center' },
     { key: 'homepageFooter', label: 'Homepage Footer', path: '/admin/footer-settings' },

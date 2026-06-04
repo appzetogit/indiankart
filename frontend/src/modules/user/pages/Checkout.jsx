@@ -334,6 +334,10 @@ const Checkout = () => {
 
     const [couponInput, setCouponInput] = useState('');
     const [couponError, setCouponError] = useState('');
+    const [referralInput, setReferralInput] = useState('');
+    const [appliedReferral, setAppliedReferral] = useState(null);
+    const [referralError, setReferralError] = useState('');
+    const [isReferralLoading, setIsReferralLoading] = useState(false);
     const visibleCoupons = coupons.filter((coupon) => (
         Boolean(coupon?.code)
         && !isCouponExpired(coupon)
@@ -413,6 +417,34 @@ const Checkout = () => {
         removeCoupon();
         setCouponInput('');
         setCouponError('');
+    };
+
+    const handleApplyReferral = async (codeOverride = null) => {
+        const codeToApply = (codeOverride || referralInput).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        setReferralError('');
+
+        if (!codeToApply) {
+            return;
+        }
+
+        setIsReferralLoading(true);
+        try {
+            const { data } = await API.get(`/agents/referral/${codeToApply}`);
+            setAppliedReferral(data);
+            setReferralInput('');
+            toast.success(`Referral code ${data.referralCode} applied`);
+        } catch (error) {
+            setAppliedReferral(null);
+            setReferralError(error.response?.data?.message || 'Invalid referral code');
+        } finally {
+            setIsReferralLoading(false);
+        }
+    };
+
+    const handleRemoveReferral = () => {
+        setAppliedReferral(null);
+        setReferralInput('');
+        setReferralError('');
     };
 
     // New Address Form State
@@ -597,6 +629,11 @@ const Checkout = () => {
                     type: appliedCoupon.type
                 }
                 : null,
+            referral: appliedReferral
+                ? {
+                    code: appliedReferral.referralCode
+                }
+                : null,
         };
 
         if (paymentMethodOverride === 'COD') {
@@ -635,6 +672,7 @@ const Checkout = () => {
                                     const { data } = await API.post('/orders', paidOrderData);
                                     placeOrder(data, !buyNowItem);
                                     if (appliedCoupon) removeCoupon();
+                                    if (appliedReferral) handleRemoveReferral();
                                     setIsOrderSuccess(true);
                                     setTimeout(() => {
                                         navigate(`/my-orders/${data._id || data.id}`, { replace: true });
@@ -686,6 +724,7 @@ const Checkout = () => {
                 // If purchasing from cart, clear it. Pass true.
                 placeOrder(data, !buyNowItem);
                 if (appliedCoupon) removeCoupon();
+                if (appliedReferral) handleRemoveReferral();
                 setIsOrderSuccess(true);
                 setTimeout(() => {
                     navigate(`/my-orders/${data._id || data.id}`, { replace: true });
@@ -739,6 +778,7 @@ const Checkout = () => {
                                 const { data } = await API.post('/orders', paidOrderData);
                                 placeOrder(data, !buyNowItem);
                                 if (appliedCoupon) removeCoupon();
+                                if (appliedReferral) handleRemoveReferral();
                                 setIsOrderSuccess(true);
                                 setTimeout(() => {
                                     navigate(`/my-orders/${data._id || data.id}`, { replace: true });
@@ -1411,6 +1451,45 @@ const Checkout = () => {
                     )}
                 </div>
 
+                <div className="md:hidden space-y-4 mb-4">
+                    <div className="bg-white p-4 rounded-sm shadow-sm border border-gray-100">
+                        <div className="flex gap-3 mb-3">
+                            <input
+                                type="text"
+                                placeholder={appliedReferral ? `Applied: ${appliedReferral.referralCode}` : 'Enter Referral Code'}
+                                value={referralInput}
+                                onChange={(e) => setReferralInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                                className="flex-1 border-2 border-amber-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 font-black uppercase placeholder-amber-300 disabled:bg-gray-50 text-gray-900 shadow-sm bg-white"
+                                disabled={appliedReferral !== null || isReferralLoading}
+                            />
+                            {appliedReferral ? (
+                                <button
+                                    onClick={handleRemoveReferral}
+                                    className="bg-gradient-to-r from-red-500 to-pink-600 text-white font-black text-xs uppercase px-5 py-3 rounded-xl hover:shadow-lg transition-all shadow-md"
+                                >
+                                    Remove
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => handleApplyReferral()}
+                                    disabled={isReferralLoading}
+                                    className="bg-amber-500 hover:bg-amber-600 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer transition-all shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {isReferralLoading ? 'Checking' : 'Apply'}
+                                </button>
+                            )}
+                        </div>
+                        {referralError && (
+                            <p className="text-xs text-red-500 mt-2 font-medium">{referralError}</p>
+                        )}
+                        {appliedReferral && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                                Referral applied for <span className="font-black">{appliedReferral.name}</span>.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Right Column (Desktop Sidebar) */}
                 <div className="hidden md:block w-[320px] lg:w-[360px] shrink-0">
                     <div className="sticky top-20 space-y-4">
@@ -1469,6 +1548,49 @@ const Checkout = () => {
                         </div>
 
                         {/* Apply Coupon Sidebar */}
+                        <div className="bg-white p-4 rounded-sm shadow-sm border border-gray-100">
+                            <div className="flex gap-3 mb-3">
+                                <input
+                                    type="text"
+                                    placeholder={appliedReferral ? `Applied: ${appliedReferral.referralCode}` : 'Enter Referral Code'}
+                                    value={referralInput}
+                                    onChange={(e) => setReferralInput(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                                    className="flex-1 border-2 border-amber-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 font-black uppercase placeholder-amber-300 disabled:bg-gray-50 text-gray-900 shadow-sm bg-white"
+                                    disabled={appliedReferral !== null || isReferralLoading}
+                                />
+                                {appliedReferral ? (
+                                    <button
+                                        onClick={handleRemoveReferral}
+                                        className="bg-gradient-to-r from-red-500 to-pink-600 text-white font-black text-xs uppercase px-5 py-3 rounded-xl hover:shadow-lg transition-all shadow-md"
+                                    >
+                                        Remove
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleApplyReferral()}
+                                        disabled={isReferralLoading}
+                                        className="bg-amber-500 hover:bg-amber-600 text-white font-black text-sm uppercase px-6 py-3 rounded-xl cursor-pointer transition-all shadow-md hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {isReferralLoading ? 'Checking' : 'Apply'}
+                                    </button>
+                                )}
+                            </div>
+                            {referralError && (
+                                <p className="text-xs text-red-500 mt-2 font-medium">{referralError}</p>
+                            )}
+                            {appliedReferral && (
+                                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                                    Referral applied for <span className="font-black">{appliedReferral.name}</span>.
+                                </div>
+                            )}
+                            <div className="border-t border-gray-100 mt-4 pt-3">
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Agent Referral</p>
+                                <p className="mt-2 text-xs text-gray-500">
+                                    If an agent shared a referral code with you, apply it here before placing the order.
+                                </p>
+                            </div>
+                        </div>
+
                         <div className="bg-white p-4 rounded-sm shadow-sm border border-gray-100">
                             <div className="flex gap-3 mb-3">
                                 <input

@@ -13,7 +13,8 @@ import {
 } from '../controllers/adminController.js';
 import { protect, admin, requireSuperAdmin } from '../middleware/authMiddleware.js';
 
-const router = express.Router();
+const 
+router = express.Router();
 
 router.post('/login', authAdmin);
 router.post('/logout', logoutAdmin);

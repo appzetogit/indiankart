@@ -42,6 +42,7 @@ import B2BManager from '../pages/B2B/B2BManager';
 import CODAdvancedPayment from '../pages/Settings/CODAdvancedPayment';
 import AdminPermissionRoute from './AdminPermissionRoute';
 import AdminManagement from '../pages/AdminManagement';
+import AgentManagement from '../pages/AgentManagement';
 import useAdminAuthStore from '../store/adminAuthStore';
 import { getDefaultAdminRoute } from '../constants/adminPermissions';
 
@@ -139,6 +140,7 @@ const AdminRoutes = () => {
                 <Route path="footer-settings" element={withPermission('homepageFooter', <FooterManager />)} />
                 <Route path="notifications" element={withPermission('adminNotifications', <AdminNotifications />)} />
                 <Route path="user-notifications" element={withPermission('userNotifications', <NotificationManager />)} />
+                <Route path="agent-management" element={withPermission('agentManagement', <AgentManagement />)} />
                 <Route path="admin-management" element={withPermission('adminManagement', <AdminManagement />)} />
             </Route>
         </Routes>

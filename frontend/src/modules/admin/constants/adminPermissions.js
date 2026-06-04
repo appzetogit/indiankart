@@ -20,7 +20,8 @@ import {
     MdPlayCircle,
     MdVisibility,
     MdPayment,
-    MdAdminPanelSettings
+    MdAdminPanelSettings,
+    MdSupportAgent
 } from 'react-icons/md';
 
 export const ADMIN_MENU_GROUPS = [
@@ -67,6 +68,7 @@ export const ADMIN_MENU_GROUPS = [
             { key: 'adminNotifications', name: 'Admin Notifications', icon: MdNotifications, path: '/admin/notifications' },
             { key: 'userNotifications', name: 'User Notifications', icon: MdNotifications, path: '/admin/user-notifications' },
             { key: 'b2b', name: 'B2B Enquiries', icon: MdBusinessCenter, path: '/admin/b2b' },
+            { key: 'agentManagement', name: 'Agent Management', icon: MdSupportAgent, path: '/admin/agent-management' },
             { key: 'adminManagement', name: 'Admin Management', icon: MdAdminPanelSettings, path: '/admin/admin-management', assignable: false },
         ]
     },

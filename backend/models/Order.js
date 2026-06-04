@@ -72,6 +72,17 @@ const orderSchema = mongoose.Schema({
         discount: { type: Number, default: 0 },
         razorpayOfferId: { type: String },
     },
+    referral: {
+        code: { type: String, uppercase: true, trim: true },
+        agent: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Agent',
+            default: null
+        },
+        agentName: { type: String, default: '' },
+        commissionPercent: { type: Number, default: 0 },
+        commissionAmount: { type: Number, default: 0 }
+    },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
     isCodAdvancedPaid: { type: Boolean, default: false },
@@ -183,6 +194,8 @@ orderSchema.index({ createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'shippingAddress.email': 1, createdAt: -1 });
 orderSchema.index({ 'shippingAddress.phone': 1, createdAt: -1 });
+orderSchema.index({ 'referral.agent': 1, createdAt: -1 });
+orderSchema.index({ 'referral.code': 1, createdAt: -1 });
 
 const Order = mongoose.model('Order', orderSchema);
 

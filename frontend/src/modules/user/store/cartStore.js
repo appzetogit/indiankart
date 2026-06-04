@@ -182,18 +182,45 @@ export const useCartStore = create()(
 
             placeOrder: (order, shouldClearCart = true) => {
                 const normalizedOrder = {
-                    ...order,
                     id: order._id || order.id,
+                    _id: order._id || order.id,
                     date: order.createdAt || order.date,
+                    createdAt: order.createdAt || order.date,
+                    updatedAt: order.updatedAt || order.createdAt || order.date,
+                    displayId: order.displayId || '',
+                    totalPrice: Number(order.totalPrice || order.total || 0),
+                    itemsPrice: Number(order.itemsPrice || 0),
+                    shippingPrice: Number(order.shippingPrice || 0),
+                    taxPrice: Number(order.taxPrice || 0),
+                    isPaid: Boolean(order.isPaid),
+                    paymentMethod: order.paymentMethod || '',
+                    status: order.status || 'PLACED',
                     items: (order.orderItems || order.items || []).map(item => ({
-                        ...item,
                         id: item.product || item.id, // product is the number ID
+                        _id: item._id,
+                        product: item.product || item.id,
+                        name: item.name,
+                        image: item.image,
+                        price: Number(item.price || 0),
+                        qty: Number(item.qty || item.quantity || 1),
+                        quantity: Number(item.qty || item.quantity || 1),
+                        variant: item.variant,
                         status: item.status || order.status || 'PLACED'
                     })),
-                    status: order.status || 'PLACED'
+                    orderItems: (order.orderItems || order.items || []).map(item => ({
+                        _id: item._id,
+                        product: item.product || item.id,
+                        name: item.name,
+                        image: item.image,
+                        price: Number(item.price || 0),
+                        qty: Number(item.qty || item.quantity || 1),
+                        quantity: Number(item.qty || item.quantity || 1),
+                        variant: item.variant,
+                        status: item.status || order.status || 'PLACED'
+                    }))
                 };
                 set((state) => ({
-                    orders: [normalizedOrder, ...state.orders],
+                    orders: [normalizedOrder, ...state.orders].slice(0, 10),
                     cart: shouldClearCart ? [] : state.cart
                 }));
             },
@@ -357,7 +384,16 @@ export const useCartStore = create()(
         }),
         {
             name: 'cart-storage',
-            version: 2,
+            version: 3,
+            partialize: (state) => ({
+                cart: state.cart,
+                wishlist: state.wishlist,
+                savedForLater: state.savedForLater,
+                addresses: state.addresses,
+                language: state.language,
+                userProfile: state.userProfile,
+                appliedCoupon: state.appliedCoupon
+            }),
             migrate: (persistedState, version) => {
                 if (!persistedState) {
                     return persistedState;
@@ -367,6 +403,13 @@ export const useCartStore = create()(
                     return {
                         ...persistedState,
                         savedForLater: []
+                    };
+                }
+
+                 if (version < 3) {
+                    return {
+                        ...persistedState,
+                        orders: []
                     };
                 }
 
