@@ -143,7 +143,7 @@ const OrderList = () => {
                     pageNumber: currentPage,
                     limit: itemsPerPage,
                     syncPayments: false,
-                    syncFulfillment: false,
+                    syncFulfillment: true,
                     includePaymentAudit: false
                 };
 
@@ -358,7 +358,7 @@ const OrderList = () => {
         try {
             const params = {
                 syncPayments: false,
-                syncFulfillment: false,
+                syncFulfillment: true,
                 includePaymentAudit: false
             };
             if (searchTerm) params.search = searchTerm;

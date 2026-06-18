@@ -404,6 +404,7 @@ export async function verifyDeliveryOtp(orderId, otp) {
 
         if (isDeveloperBypass(otp)) {
              order.deliveryOtpVerified = true;
+             order.isDelivered = true;
              order.status = 'Delivered';
              order.deliveredAt = new Date();
              order.invoiceEnabled = true;
@@ -416,6 +417,7 @@ export async function verifyDeliveryOtp(orderId, otp) {
         }
 
         order.deliveryOtpVerified = true;
+        order.isDelivered = true;
         order.status = 'Delivered';
         order.deliveredAt = new Date();
         order.invoiceEnabled = true;
