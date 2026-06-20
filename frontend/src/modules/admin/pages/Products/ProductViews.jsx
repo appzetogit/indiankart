@@ -21,6 +21,7 @@ import Pagination from '../../components/common/Pagination';
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
 const LIVE_REFRESH_MS = 15000;
+const INDIA_TIME_ZONE = 'Asia/Kolkata';
 const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 const getKnownStateEntries = (product) => (
     (Array.isArray(product?.viewStatsByState) ? product.viewStatsByState : [])
@@ -31,6 +32,22 @@ const getKnownStateEntries = (product) => (
         .filter((entry) => entry.count > 0 && isKnownState(entry.state))
         .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state))
 );
+
+const getIndiaDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: INDIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+}).format(date);
+
+const formatDateLabel = (dateKey) => {
+    if (!dateKey) return '';
+    return new Date(`${dateKey}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: INDIA_TIME_ZONE
+    });
+};
 
 const getFriendlyPathLabel = (path = '') => {
     if (path === '/') return 'Home';
@@ -121,7 +138,7 @@ const ProductViews = () => {
     const todayLogins = Number(portalInsights?.authStats?.todayLogins || 0);
     const todayLogouts = Number(portalInsights?.authStats?.todayLogouts || 0);
     const liveWindowMinutes = Number(portalInsights?.authStats?.liveWindowMinutes || 5);
-    const todayDateKey = new Date().toISOString().split('T')[0];
+    const todayDateKey = getIndiaDateKey();
     const todayVisitors = Number(
         (portalInsights?.dailyStats || []).find((entry) => entry?.date === todayDateKey)?.visitors || 0
     );
@@ -133,11 +150,16 @@ const ProductViews = () => {
         : 0;
     const trendChartData = (portalInsights?.dailyStats || []).map((entry) => ({
         ...entry,
-        label: new Date(entry.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+        label: formatDateLabel(entry.date)
     }));
     const weeklyDistribution = portalInsights?.weeklyDistribution || [];
     const busiestDayLabel = portalInsights?.busiestDay?.date
-        ? new Date(portalInsights.busiestDay.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+        ? new Date(`${portalInsights.busiestDay.date}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            timeZone: INDIA_TIME_ZONE
+        })
         : 'No data yet';
     const uniqueStatesCount = useMemo(() => {
         const stateSet = new Set();

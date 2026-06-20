@@ -27,6 +27,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 
+const INDIA_TIME_ZONE = 'Asia/Kolkata';
+
+const getIndiaDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: INDIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+}).format(date);
+
+const parseIndiaDateKey = (dateKey) => {
+    if (!dateKey) return null;
+    const parsed = new Date(`${dateKey}T00:00:00+05:30`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatIndiaDateLabel = (dateKey) => {
+    const parsed = parseIndiaDateKey(dateKey);
+    if (!parsed) return '';
+    return parsed.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        timeZone: INDIA_TIME_ZONE
+    });
+};
+
 const ProductAnalytics = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -51,8 +76,23 @@ const ProductAnalytics = () => {
         fetchData();
     }, [id]);
 
+    const filteredDailyStats = useMemo(() => {
+        if (!Array.isArray(data?.dailyStats)) return [];
+        const rangeDays = timeRange === '7d' ? 7 : timeRange === '90d' ? 90 : 30;
+        const cutoff = new Date();
+        cutoff.setHours(0, 0, 0, 0);
+        cutoff.setDate(cutoff.getDate() - (rangeDays - 1));
+
+        return data.dailyStats.filter((entry) => {
+            const parsed = parseIndiaDateKey(entry?.date);
+            return parsed && parsed >= cutoff;
+        });
+    }, [data, timeRange]);
+
     const chartData = useMemo(() => {
-        if (!data?.dailyStats?.length) {
+        const source = filteredDailyStats;
+
+        if (!source.length) {
             // Provide some dummy data if empty for a better first impression
             return Array.from({ length: 7 }).map((_, i) => {
                 const d = new Date();
@@ -64,25 +104,79 @@ const ProductAnalytics = () => {
                 };
             });
         }
-        return data.dailyStats.map(stat => ({
+        return source.map(stat => ({
             ...stat,
-            date: new Date(stat.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            date: formatIndiaDateLabel(stat.date)
         }));
+    }, [filteredDailyStats]);
+
+    const totalVisitors = useMemo(() => (
+        Array.isArray(data?.dailyStats)
+            ? data.dailyStats.reduce((sum, entry) => sum + Number(entry?.visitors || 0), 0)
+            : 0
+    ), [data]);
+
+    const rangeTotals = useMemo(() => (
+        filteredDailyStats.reduce((acc, entry) => ({
+            views: acc.views + Number(entry?.views || 0),
+            visitors: acc.visitors + Number(entry?.visitors || 0)
+        }), { views: 0, visitors: 0 })
+    ), [filteredDailyStats]);
+
+    const weeklyVisitorRows = useMemo(() => {
+        const source = Array.isArray(data?.dailyStats) ? data.dailyStats : [];
+        const statsByDate = new Map(
+            source.map((entry) => [
+                String(entry?.date || '').trim(),
+                {
+                    views: Number(entry?.views || 0),
+                    visitors: Number(entry?.visitors || 0)
+                }
+            ])
+        );
+
+        return Array.from({ length: 7 }).map((_, index) => {
+            const date = new Date();
+            date.setHours(0, 0, 0, 0);
+            date.setDate(date.getDate() - index);
+            const dateKey = getIndiaDateKey(date);
+            const stat = statsByDate.get(dateKey) || { views: 0, visitors: 0 };
+
+            return {
+                dateKey,
+                label: new Date(`${dateKey}T00:00:00+05:30`).toLocaleDateString('en-IN', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                    timeZone: INDIA_TIME_ZONE
+                }),
+                views: stat.views,
+                visitors: stat.visitors
+            };
+        });
     }, [data]);
+
+    const weeklyVisitorsTotal = useMemo(() => (
+        weeklyVisitorRows.reduce((sum, row) => sum + Number(row.visitors || 0), 0)
+    ), [weeklyVisitorRows]);
 
     const summaryStats = useMemo(() => {
         if (!data?.dailyStats) return null;
         
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = getIndiaDateKey(now);
         const yesterday = new Date(now);
         yesterday.setDate(now.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const yesterdayStr = getIndiaDateKey(yesterday);
 
         const getStatsInRange = (days) => {
             const cutOff = new Date(now);
-            cutOff.setDate(now.getDate() - days);
-            return data.dailyStats.filter(s => new Date(s.date) >= cutOff);
+            cutOff.setHours(0, 0, 0, 0);
+            cutOff.setDate(now.getDate() - (days - 1));
+            return data.dailyStats.filter((s) => {
+                const parsed = parseIndiaDateKey(s?.date);
+                return parsed && parsed >= cutOff;
+            });
         };
 
         const sumFields = (entries) => entries.reduce((acc, curr) => ({
@@ -94,12 +188,14 @@ const ProductAnalytics = () => {
         const yesterdayEntry = data.dailyStats.find(s => s.date === yesterdayStr) || { views: 0, visitors: 0 };
         
         const thisMonth = data.dailyStats.filter(s => {
-            const d = new Date(s.date);
+            const d = parseIndiaDateKey(s?.date);
+            if (!d) return false;
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
 
         const thisYear = data.dailyStats.filter(s => {
-            const d = new Date(s.date);
+            const d = parseIndiaDateKey(s?.date);
+            if (!d) return false;
             return d.getFullYear() === now.getFullYear();
         });
 
@@ -110,6 +206,7 @@ const ProductAnalytics = () => {
             { label: 'Last 30 days', ...sumFields(getStatsInRange(30)) },
             { label: 'Last 60 days', ...sumFields(getStatsInRange(60)) },
             { label: 'Last 90 days', ...sumFields(getStatsInRange(90)) },
+            { label: 'This month', ...sumFields(thisMonth) },
             { label: 'Last 12 months', ...sumFields(data.dailyStats) }, // Max retention is 12m
             { label: 'This year (Jan-Today)', ...sumFields(thisYear) }
         ];
@@ -221,7 +318,7 @@ const ProductAnalytics = () => {
                     </div>
                     <p className="text-xs font-black uppercase tracking-widest text-gray-400">Unique Visits</p>
                     <h3 className="mt-2 text-3xl font-black text-gray-900">
-                        {Math.floor((data?.viewCount || 0) * 0.72).toLocaleString()}
+                        {totalVisitors.toLocaleString()}
                     </h3>
                 </motion.div>
                 
@@ -231,7 +328,7 @@ const ProductAnalytics = () => {
                     </div>
                     <p className="text-xs font-black uppercase tracking-widest text-gray-400">Total Visitors</p>
                     <h3 className="mt-2 text-3xl font-black text-gray-900">
-                        {Math.floor((data?.viewCount || 0) * 0.45).toLocaleString()}
+                        {rangeTotals.visitors.toLocaleString()}
                     </h3>
                 </motion.div>
 
@@ -239,8 +336,8 @@ const ProductAnalytics = () => {
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 mb-4">
                         <MdTrendingUp size={24} />
                     </div>
-                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Bounce Rate</p>
-                    <h3 className="mt-2 text-3xl font-black text-gray-900">24.8%</h3>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-400">Range Views</p>
+                    <h3 className="mt-2 text-3xl font-black text-gray-900">{rangeTotals.views.toLocaleString()}</h3>
                 </motion.div>
 
                 <motion.div initial={{ opacity: 0, x: -20, delay: 0.4 }} animate={{ opacity: 1, x: 0 }} className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -399,6 +496,60 @@ const ProductAnalytics = () => {
                                         <td className="py-4 text-right">
                                             <span className="text-xl font-black text-slate-900/90">{(row.views || 0).toLocaleString()}</span>
                                         </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </motion.div>
+
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.28 }}
+                className="rounded-[2.5rem] bg-white border border-gray-100 shadow-xl overflow-hidden"
+            >
+                <div className="flex flex-col gap-3 border-b border-gray-100 px-8 py-6 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h3 className="text-xl font-black text-gray-900">Last 7 Days Visitors</h3>
+                        <p className="text-sm font-medium text-gray-400">Date-wise visitor count from today back through the previous 6 days</p>
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-2xl bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
+                        <MdPeople size={18} />
+                        Weekly Visitors: {weeklyVisitorsTotal.toLocaleString()}
+                    </div>
+                </div>
+
+                <div className="p-8">
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {weeklyVisitorRows.map((row) => (
+                            <div key={row.dateKey} className="rounded-3xl border border-gray-100 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+                                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">{row.label}</p>
+                                <p className="mt-3 text-3xl font-black text-slate-900">{row.visitors.toLocaleString()}</p>
+                                <div className="mt-2 flex items-center justify-between text-xs font-bold text-gray-500">
+                                    <span>Visitors</span>
+                                    <span>{row.views.toLocaleString()} views</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-8 overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead>
+                                <tr className="border-b border-gray-50">
+                                    <th className="pb-4 text-xs font-black uppercase tracking-widest text-gray-400">Date</th>
+                                    <th className="pb-4 text-xs font-black uppercase tracking-widest text-gray-400 text-right">Visitors</th>
+                                    <th className="pb-4 text-xs font-black uppercase tracking-widest text-gray-400 text-right">Views</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {weeklyVisitorRows.map((row) => (
+                                    <tr key={`weekly-row-${row.dateKey}`} className="hover:bg-gray-50 transition-colors">
+                                        <td className="py-4 text-sm font-bold text-gray-700">{row.label}</td>
+                                        <td className="py-4 text-right text-lg font-black text-blue-600">{row.visitors.toLocaleString()}</td>
+                                        <td className="py-4 text-right text-lg font-black text-slate-900/90">{row.views.toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>

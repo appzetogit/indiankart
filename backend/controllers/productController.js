@@ -5,6 +5,7 @@ import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import PortalSession from '../models/PortalSession.js';
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
+const INDIA_TIME_ZONE = 'Asia/Kolkata';
 let activeVisibilityCache = {
     fetchedAt: 0,
     categories: [],
@@ -107,6 +108,29 @@ const pickTopViewState = (stateBreakdown = []) => (
 const getKnownStateBreakdown = (entries = []) => (
     getSortedStateBreakdown(entries).filter((entry) => !isUnknownViewState(entry?.state))
 );
+
+const formatIndiaDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: INDIA_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+}).format(date);
+
+const parseDateKey = (dateKey = '') => {
+    const normalized = String(dateKey || '').trim();
+    if (!normalized) return null;
+    const parsed = new Date(`${normalized}T00:00:00+05:30`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getWeekdayLabelFromDateKey = (dateKey = '') => {
+    const parsed = parseDateKey(dateKey);
+    if (!parsed) return null;
+    return new Intl.DateTimeFormat('en-US', {
+        timeZone: INDIA_TIME_ZONE,
+        weekday: 'short'
+    }).format(parsed);
+};
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -862,7 +886,7 @@ export const incrementProductView = async (req, res) => {
         }
 
         // --- Daily Stats tracking ---
-        const todayDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const todayDate = formatIndiaDateKey();
         const existingDailyEntry = Array.isArray(product.dailyViewStats)
             ? product.dailyViewStats.find((entry) => entry.date === todayDate)
             : null;
@@ -974,23 +998,23 @@ export const getPortalViewInsights = async (_req, res) => {
 
             const dailyStats = Array.isArray(product?.dailyViewStats) ? product.dailyViewStats : [];
             for (const entry of dailyStats) {
-                const entryDate = new Date(entry?.date);
-                if (Number.isNaN(entryDate.getTime())) continue;
+                const entryDateKey = String(entry?.date || '').trim();
+                const entryDate = parseDateKey(entryDateKey);
+                if (!entryDate || !entryDateKey) continue;
 
                 const views = Number(entry?.views || 0);
                 const visitors = Number(entry?.visitors || 0);
                 totalVisitors += visitors;
 
                 if (entryDate >= recentStart) {
-                    const dateKey = String(entry.date);
-                    const existing = recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 };
+                    const existing = recentDailyMap.get(entryDateKey) || { date: entryDateKey, views: 0, visitors: 0 };
                     existing.views += views;
                     existing.visitors += visitors;
-                    recentDailyMap.set(dateKey, existing);
+                    recentDailyMap.set(entryDateKey, existing);
                 }
 
-                const jsDay = entryDate.getDay();
-                const dayLabel = weekdayOrder[(jsDay + 6) % 7];
+                const dayLabel = getWeekdayLabelFromDateKey(entryDateKey);
+                if (!dayLabel || !weeklyMap.has(dayLabel)) continue;
                 const weekdayEntry = weeklyMap.get(dayLabel);
                 weekdayEntry.views += views;
                 weekdayEntry.visitors += visitors;
@@ -1001,7 +1025,7 @@ export const getPortalViewInsights = async (_req, res) => {
         for (let offset = 29; offset >= 0; offset -= 1) {
             const date = new Date(now);
             date.setDate(date.getDate() - offset);
-            const dateKey = date.toISOString().split('T')[0];
+            const dateKey = formatIndiaDateKey(date);
             dailyStats.push(recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 });
         }
 

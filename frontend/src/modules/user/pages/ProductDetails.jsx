@@ -22,6 +22,8 @@ const normalizeKnownState = (value) => {
     return trimmed;
 };
 
+const VIEW_DEDUPE_WINDOW_MS = 30 * 1000;
+
 const ProductSkeleton = () => {
     return (
         <div className="bg-white min-h-screen pb-24 font-sans animate-pulse px-4 md:px-0">
@@ -543,14 +545,6 @@ const ProductDetails = () => {
         };
     }, [pincode]);
 
-    const hasAddressContext = React.useMemo(() => {
-        const addressPool = [
-            ...(Array.isArray(addresses) ? addresses : []),
-            ...(Array.isArray(user?.addresses) ? user.addresses : [])
-        ];
-        return addressPool.length > 0;
-    }, [addresses, user]);
-
     const bestKnownState = React.useMemo(() => {
         const addressPool = [
             ...(Array.isArray(addresses) ? addresses : []),
@@ -587,13 +581,15 @@ const ProductDetails = () => {
     useEffect(() => {
         if (!id || !product || authLoading) return;
         if (isResolvingPincodeState) return;
-        if (isAuthenticated && hasAddressContext && bestKnownState === 'Unknown') return;
-        if (bestKnownState === 'Unknown') return;
 
         const sessionKey = `ik-product-viewed:${id}`;
-        if (sessionStorage.getItem(sessionKey)) return;
+        const lastTrackedAt = Number(sessionStorage.getItem(sessionKey) || 0);
+        const now = Date.now();
+        if (Number.isFinite(lastTrackedAt) && lastTrackedAt > 0 && (now - lastTrackedAt) < VIEW_DEDUPE_WINDOW_MS) {
+            return;
+        }
 
-        sessionStorage.setItem(sessionKey, 'pending');
+        sessionStorage.setItem(sessionKey, String(now));
 
         let active = true;
         const trackView = async () => {
@@ -602,7 +598,6 @@ const ProductDetails = () => {
                     ? { state: bestKnownState }
                     : {};
                 await API.post(`/products/${id}/view`, payload);
-                if (active) sessionStorage.setItem(sessionKey, '1');
             } catch (error) {
                 sessionStorage.removeItem(sessionKey);
                 console.error('Error tracking product view:', error);
@@ -614,7 +609,7 @@ const ProductDetails = () => {
         return () => {
             active = false;
         };
-    }, [id, product, bestKnownState, authLoading, isAuthenticated, hasAddressContext, isResolvingPincodeState]);
+    }, [id, product, bestKnownState, authLoading, isResolvingPincodeState]);
 
     useEffect(() => {
         if (currentImageIndex >= productImages.length) {
