@@ -6,18 +6,35 @@ import BottomNav from './BottomNav';
 import { useAuthStore } from '../../store/authStore';
 import API from '../../../../services/api';
 
+const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
+
+const ensurePortalSessionId = () => {
+    if (typeof window === 'undefined') return '';
+
+    const existing = localStorage.getItem(PORTAL_SESSION_STORAGE_KEY);
+    if (existing) return existing;
+
+    const nextId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    localStorage.setItem(PORTAL_SESSION_STORAGE_KEY, nextId);
+    return nextId;
+};
+
 const Layout = () => {
     const location = useLocation();
     const { isAuthenticated } = useAuthStore();
 
     useEffect(() => {
-        if (isAuthenticated) {
-            const lastState = localStorage.getItem('ik-last-known-state') || 'Unknown';
-            API.post('/auth/session/touch', {
-                path: location.pathname,
-                state: lastState
-            }).catch(err => console.error('Failed to touch user session:', err));
-        }
+        const sessionId = ensurePortalSessionId();
+        if (!sessionId) return;
+
+        const lastState = localStorage.getItem('ik-last-known-state') || 'Unknown';
+        API.post('/auth/session/touch', {
+            path: location.pathname,
+            state: lastState
+        }).catch(err => console.error('Failed to touch portal session:', err));
     }, [location.pathname, isAuthenticated]);
 
     const isPDP = location.pathname.includes('/product/');

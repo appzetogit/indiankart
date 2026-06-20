@@ -18,7 +18,7 @@ import {
     updateUserAddress,
     deleteUserAddress
 } from '../controllers/authController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, protectOptional } from '../middleware/authMiddleware.js';
 import { touchPortalSession } from '../utils/portalSessionTracking.js';
 
 const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
@@ -186,16 +186,16 @@ router.route('/profile/addresses/:addressId')
     .put(protect, updateUserAddress)
     .delete(protect, deleteUserAddress);
 
-router.post('/session/touch', protect, async (req, res) => {
+router.post('/session/touch', protectOptional, async (req, res) => {
     try {
         const sessionId = String(req.headers['x-user-session-id'] || '').trim();
         const { path, state } = req.body;
-        if (!sessionId || !req.user?._id) {
-            return res.status(400).json({ message: 'Session ID and User authentication required' });
+        if (!sessionId) {
+            return res.status(400).json({ message: 'Session ID is required' });
         }
         const session = await touchPortalSession({
             sessionId,
-            userId: req.user._id,
+            userId: req.user?._id || '',
             path,
             state
         });

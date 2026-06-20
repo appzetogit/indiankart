@@ -2,9 +2,9 @@ import mongoose from 'mongoose';
 
 const portalSessionSchema = mongoose.Schema({
     sessionId: { type: String, required: true, unique: true, index: true, trim: true },
-    userId: { type: String, required: true, index: true, trim: true },
-    userRole: { type: String, default: 'user', trim: true },
-    authMethod: { type: String, default: 'unknown', trim: true },
+    userId: { type: String, default: '', index: true, trim: true },
+    userRole: { type: String, default: 'guest', trim: true },
+    authMethod: { type: String, default: 'guest', trim: true },
     loginAt: { type: Date, default: Date.now, index: true },
     lastSeenAt: { type: Date, default: Date.now, index: true },
     logoutAt: { type: Date, default: null, index: true },

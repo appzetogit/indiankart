@@ -107,6 +107,7 @@ const StockManagement = () => {
                     <p className="text-sm text-gray-500 font-medium">Update inventory levels for products and variants</p>
                 </div>
                 <button
+                    type="button"
                     onClick={handleRefresh}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all font-bold text-sm shadow-sm"
                 >
@@ -164,6 +165,7 @@ const StockManagement = () => {
                                         <td className="px-4 py-3.5 text-center">
                                             {product.skus && product.skus.length > 0 ? (
                                                 <button
+                                                    type="button"
                                                     onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
                                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-[0.14em] hover:bg-blue-100 transition-all border border-blue-100 shadow-sm"
                                                 >
@@ -199,6 +201,7 @@ const StockManagement = () => {
                                         <td className="px-4 py-3.5 text-right">
                                             {(!product.skus || product.skus.length === 0) && (
                                                 <button
+                                                    type="button"
                                                     onClick={() => updateStock(product)}
                                                     disabled={editingStock[product.id] === undefined}
                                                     className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[product.id] !== undefined
@@ -240,6 +243,7 @@ const StockManagement = () => {
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 <button
+                                                    type="button"
                                                     onClick={() => updateStock(product, true, idx)}
                                                     disabled={editingStock[`${product.id}-${idx}`] === undefined}
                                                     className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[`${product.id}-${idx}`] !== undefined

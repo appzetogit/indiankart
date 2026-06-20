@@ -4,6 +4,8 @@ import API from '../../../services/api';
 import { useCartStore } from './cartStore';
 import { requestForToken } from '../../../services/firebase';
 
+const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
+
 const setUserTokenCache = (token) => {
     if (typeof window === 'undefined') {
         return;
@@ -13,6 +15,28 @@ const setUserTokenCache = (token) => {
         localStorage.setItem('user-auth-token', token);
     } else {
         localStorage.removeItem('user-auth-token');
+    }
+};
+
+const createPortalSessionId = () => {
+    if (typeof window === 'undefined') {
+        return '';
+    }
+
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const syncPortalSessionCache = (sessionId) => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    if (sessionId) {
+        localStorage.setItem(PORTAL_SESSION_STORAGE_KEY, sessionId);
+    } else {
+        localStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
     }
 };
 
@@ -57,6 +81,7 @@ export const useAuthStore = create(
                     // Ensure token is preserved if it exists in data or state
                     const currentSessionId = get().user?.sessionId || null;
                     setUserTokenCache(storedToken);
+                    syncPortalSessionCache(currentSessionId);
                     set({ user: { ...data, token: storedToken, sessionId: currentSessionId }, isAuthenticated: true, loading: false });
                     useCartStore.getState().setAddresses(data?.addresses || []);
                     get().registerFcmToken();
@@ -89,6 +114,7 @@ export const useAuthStore = create(
             const payload = { mobile, otp, userType, name, email };
             const { data } = await API.post('/auth/verify-otp', payload);
             setUserTokenCache(data?.token);
+            syncPortalSessionCache(data?.sessionId);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -108,6 +134,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/login', { email, password });
             setUserTokenCache(data?.token);
+            syncPortalSessionCache(data?.sessionId);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -126,6 +153,7 @@ export const useAuthStore = create(
         try {
             const { data } = await API.post('/auth/register', userData);
             setUserTokenCache(data?.token);
+            syncPortalSessionCache(data?.sessionId);
             set({ user: data, isAuthenticated: true, loading: false });
             useCartStore.getState().setAddresses(data?.addresses || []);
             get().registerFcmToken();
@@ -143,6 +171,7 @@ export const useAuthStore = create(
         try {
             await API.post('/auth/logout');
             setUserTokenCache(null);
+            syncPortalSessionCache(createPortalSessionId());
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
             useCartStore.getState().clearStore();
@@ -150,6 +179,7 @@ export const useAuthStore = create(
             console.error('Logout failed', error);
             // Force client-side logout anyway
             setUserTokenCache(null);
+            syncPortalSessionCache(createPortalSessionId());
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
         }
@@ -160,6 +190,7 @@ export const useAuthStore = create(
         try {
             await API.delete('/auth/profile');
             setUserTokenCache(null);
+            syncPortalSessionCache(createPortalSessionId());
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
             useCartStore.getState().clearStore();
@@ -187,6 +218,7 @@ export const useAuthStore = create(
                 : { ...data, sessionId: currentUser?.sessionId || data?.sessionId || null };
 
             setUserTokenCache(mergedUser?.token);
+            syncPortalSessionCache(mergedUser?.sessionId);
             set({ user: mergedUser, isAuthenticated: true });
             useCartStore.getState().setAddresses(mergedUser?.addresses || []);
             return mergedUser;

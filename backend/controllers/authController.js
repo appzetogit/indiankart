@@ -96,6 +96,11 @@ const normalizeAddressPayload = (payload = {}) => ({
     isDefault: Boolean(payload.isDefault)
 });
 
+const resolvePortalSessionId = (req) => {
+    const headerSessionId = String(req.headers['x-user-session-id'] || '').trim();
+    return headerSessionId || createPortalSessionId();
+};
+
 // ... (Existing Auth Functions) ...
 
 // ... (Keep existing login/otp functions same, just appending admin functions) ...
@@ -137,7 +142,7 @@ export const verifyLoginOtp = async (req, res) => {
                 !user.email.endsWith('@temp.local')
             );
             const token = generateToken(res, user._id, 'user_jwt');
-            const sessionId = createPortalSessionId();
+            const sessionId = resolvePortalSessionId(req);
             await recordPortalLogin({
                 sessionId,
                 userId: user._id,
@@ -194,7 +199,7 @@ export const verifyLoginOtp = async (req, res) => {
         const requiresProfile = !hasRealName || !hasRealEmail;
 
         const token = generateToken(res, user._id, 'user_jwt');
-        const sessionId = createPortalSessionId();
+        const sessionId = resolvePortalSessionId(req);
         await recordPortalLogin({
             sessionId,
             userId: user._id,
@@ -224,7 +229,7 @@ export const authUser = async (req, res) => {
     const user = await User.findOne({ email });
     if (user && (await user.matchPassword(password))) {
         const token = generateToken(res, user._id, 'user_jwt');
-        const sessionId = createPortalSessionId();
+        const sessionId = resolvePortalSessionId(req);
         await recordPortalLogin({
             sessionId,
             userId: user._id,
@@ -256,7 +261,7 @@ export const registerUser = async (req, res) => {
     const user = await User.create({ name, email, password });
     if (user) {
         const token = generateToken(res, user._id, 'user_jwt');
-        const sessionId = createPortalSessionId();
+        const sessionId = resolvePortalSessionId(req);
         await recordPortalLogin({
             sessionId,
             userId: user._id,

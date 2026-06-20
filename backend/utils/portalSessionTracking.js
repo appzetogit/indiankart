@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import PortalSession from '../models/PortalSession.js';
 
 const normalizeSessionId = (value = '') => String(value || '').trim();
+const normalizeUserId = (value = '') => String(value || '').trim();
 
 export const createPortalSessionId = () => crypto.randomUUID();
 
@@ -12,7 +13,7 @@ export const recordPortalLogin = async ({
     authMethod = 'unknown'
 }) => {
     const normalizedSessionId = normalizeSessionId(sessionId);
-    const normalizedUserId = String(userId || '').trim();
+    const normalizedUserId = normalizeUserId(userId);
 
     if (!normalizedSessionId || !normalizedUserId) return null;
 
@@ -59,20 +60,28 @@ export const recordPortalLogin = async ({
 
 export const touchPortalSession = async ({ sessionId, userId, path, state }) => {
     const normalizedSessionId = normalizeSessionId(sessionId);
-    const normalizedUserId = String(userId || '').trim();
+    const normalizedUserId = normalizeUserId(userId);
 
-    if (!normalizedSessionId || !normalizedUserId) return null;
+    if (!normalizedSessionId) return null;
 
     const updateObj = {
         lastSeenAt: new Date(),
-        logoutAt: null,
         isActive: true
     };
+
+    if (normalizedUserId) {
+        updateObj.userId = normalizedUserId;
+        updateObj.logoutAt = null;
+        updateObj.userRole = 'user';
+    } else {
+        updateObj.userRole = 'guest';
+        updateObj.authMethod = 'guest';
+    }
 
     // If a custom state is provided, use it. Otherwise, query database as fallback
     if (state && state !== 'Unknown') {
         updateObj.state = state;
-    } else {
+    } else if (normalizedUserId) {
         try {
             const User = (await import('../models/User.js')).default;
             const user = await User.findById(normalizedUserId).select('addresses state').lean();
@@ -107,9 +116,18 @@ export const touchPortalSession = async ({ sessionId, userId, path, state }) => 
     }
 
     return PortalSession.findOneAndUpdate(
-        { sessionId: normalizedSessionId, userId: normalizedUserId },
-        setObj,
-        { new: true }
+        { sessionId: normalizedSessionId },
+        {
+            ...setObj,
+            $setOnInsert: {
+                sessionId: normalizedSessionId,
+                userId: normalizedUserId,
+                userRole: normalizedUserId ? 'user' : 'guest',
+                authMethod: normalizedUserId ? 'unknown' : 'guest',
+                loginAt: new Date()
+            }
+        },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 };
 

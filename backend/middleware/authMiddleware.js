@@ -4,7 +4,7 @@ import Admin from '../models/Admin.js';
 import { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS } from '../controllers/authController.js';
 import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
 
-export const protect = async (req, res, next) => {
+const resolveAuthenticatedUser = async (req) => {
     let token;
 
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -27,45 +27,64 @@ export const protect = async (req, res, next) => {
     }
 
     if (token) {
-        try {
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-            console.log('Decoded Token:', decoded);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        console.log('Decoded Token:', decoded);
 
-            if (LEGACY_HARDCODED_USER_IDS[decoded.id]) {
-                req.user = await findOrCreateHardcodedLoginUser(LEGACY_HARDCODED_USER_IDS[decoded.id]);
-                req.user.isAdmin = false;
-                req.user.role = 'user';
-                return next();
-            }
-
-            req.user = await User.findById(decoded.id).select('-password');
-            if (!req.user) {
-                console.log('User not found in Users collection, checking Admin...');
-                req.user = await Admin.findById(decoded.id).select('-password');
-            }
-
-            if (!req.user) {
-                 console.log('User not found in Admin collection either.');
-                 res.status(401);
-                 throw new Error('Not authorized, token failed');
-            }
-
-            if (req.user?.email && typeof req.user.getResolvedRole === 'function') {
-                req.user.role = normalizeAdminRole(req.user.role);
-                req.user.permissions = normalizeSidebarPermissions(req.user.role, req.user.permissions);
-            }
-            
-            console.log('Authenticated User found:', req.user._id, 'Role:', req.user.role || 'User', 'IsAdmin:', req.user.isAdmin);
-
-            next();
-        } catch (error) {
-            console.error('Auth protect error:', error.message);
-            res.status(401).json({ message: 'Not authorized, token failed' });
+        if (LEGACY_HARDCODED_USER_IDS[decoded.id]) {
+            const user = await findOrCreateHardcodedLoginUser(LEGACY_HARDCODED_USER_IDS[decoded.id]);
+            user.isAdmin = false;
+            user.role = 'user';
+            return user;
         }
-    } else {
-        console.log('No token found in cookies. Cookies present:', Object.keys(req.cookies || {}));
-        res.status(401).json({ message: 'Not authorized, no token' });
+
+        let user = await User.findById(decoded.id).select('-password');
+        if (!user) {
+            console.log('User not found in Users collection, checking Admin...');
+            user = await Admin.findById(decoded.id).select('-password');
+        }
+
+        if (!user) {
+             console.log('User not found in Admin collection either.');
+             throw new Error('Not authorized, token failed');
+        }
+
+        if (user?.email && typeof user.getResolvedRole === 'function') {
+            user.role = normalizeAdminRole(user.role);
+            user.permissions = normalizeSidebarPermissions(user.role, user.permissions);
+        }
+        
+        console.log('Authenticated User found:', user._id, 'Role:', user.role || 'User', 'IsAdmin:', user.isAdmin);
+        return user;
     }
+
+    return null;
+};
+
+export const protect = async (req, res, next) => {
+    try {
+        const user = await resolveAuthenticatedUser(req);
+        if (!user) {
+            console.log('No token found in cookies. Cookies present:', Object.keys(req.cookies || {}));
+            return res.status(401).json({ message: 'Not authorized, no token' });
+        }
+
+        req.user = user;
+        next();
+    } catch (error) {
+        console.error('Auth protect error:', error.message);
+        res.status(401).json({ message: 'Not authorized, token failed' });
+    }
+};
+
+export const protectOptional = async (req, _res, next) => {
+    try {
+        const user = await resolveAuthenticatedUser(req);
+        req.user = user || null;
+    } catch (error) {
+        console.error('Optional auth skipped due to token error:', error.message);
+        req.user = null;
+    }
+    next();
 };
 
 export const admin = (req, res, next) => {

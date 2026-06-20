@@ -1,4 +1,7 @@
 import axios from 'axios';
+
+const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
+
 const API = axios.create({
     baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api',
     withCredentials: true,
@@ -40,6 +43,9 @@ API.interceptors.request.use((config) => {
         const userSessionId =
             userStorageState?.state?.user?.sessionId ||
             null;
+        const guestSessionId =
+            localStorage.getItem(PORTAL_SESSION_STORAGE_KEY) ||
+            null;
 
         // Keep admin/user sessions isolated:
         // admin pages -> admin token, user pages -> user token.
@@ -51,8 +57,11 @@ API.interceptors.request.use((config) => {
             delete config.headers.Authorization;
         }
 
-        if (userSessionId && !(isAdminContext || isAdminApiCall)) {
-            config.headers['X-User-Session-Id'] = userSessionId;
+        if (!(isAdminContext || isAdminApiCall)) {
+            const effectiveSessionId = userSessionId || guestSessionId;
+            if (effectiveSessionId) {
+                config.headers['X-User-Session-Id'] = effectiveSessionId;
+            }
         }
     } catch (error) {
         console.error('Error retrieving auth token:', error);

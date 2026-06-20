@@ -975,7 +975,7 @@ export const getProductViewInsights = async (req, res) => {
 export const getPortalViewInsights = async (_req, res) => {
     try {
         const products = await Product.find({})
-            .select('id viewCount dailyViewStats')
+            .select('id viewCount')
             .lean();
         const now = new Date();
         const liveThreshold = new Date(now.getTime() - (5 * 60 * 1000));
@@ -990,34 +990,57 @@ export const getPortalViewInsights = async (_req, res) => {
         const weekdayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         const weeklyMap = new Map(weekdayOrder.map((day) => [day, { day, views: 0, visitors: 0 }]));
 
+        const sessionsThreshold = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        const [
+            totalVisitors,
+            activeLoggedInUsers,
+            todayLogins,
+            todayLogouts,
+            totalLoginEvents,
+            allPortalSessions,
+            recentSessions
+        ] = await Promise.all([
+            PortalSession.countDocuments(),
+            PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold }, userRole: { $ne: 'guest' } }),
+            PortalSession.countDocuments({ loginAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
+            PortalSession.countDocuments({ logoutAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
+            PortalSession.countDocuments({ userRole: { $ne: 'guest' } }),
+            PortalSession.find({ loginAt: { $gte: recentStart } }).select('loginAt pagesVisited').lean(),
+            PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } }).sort({ lastSeenAt: -1 }).lean()
+        ]);
+
         let totalViews = 0;
-        let totalVisitors = 0;
 
-        for (const product of products) {
-            totalViews += Number(product?.viewCount || 0);
+        for (const session of allPortalSessions) {
+            const loginAt = session?.loginAt ? new Date(session.loginAt) : null;
+            if (loginAt && !Number.isNaN(loginAt.getTime()) && loginAt >= recentStart) {
+                const loginDateKey = formatIndiaDateKey(loginAt);
+                const existing = recentDailyMap.get(loginDateKey) || { date: loginDateKey, views: 0, visitors: 0 };
+                existing.visitors += 1;
+                recentDailyMap.set(loginDateKey, existing);
 
-            const dailyStats = Array.isArray(product?.dailyViewStats) ? product.dailyViewStats : [];
-            for (const entry of dailyStats) {
-                const entryDateKey = String(entry?.date || '').trim();
-                const entryDate = parseDateKey(entryDateKey);
-                if (!entryDate || !entryDateKey) continue;
-
-                const views = Number(entry?.views || 0);
-                const visitors = Number(entry?.visitors || 0);
-                totalVisitors += visitors;
-
-                if (entryDate >= recentStart) {
-                    const existing = recentDailyMap.get(entryDateKey) || { date: entryDateKey, views: 0, visitors: 0 };
-                    existing.views += views;
-                    existing.visitors += visitors;
-                    recentDailyMap.set(entryDateKey, existing);
+                const visitorDayLabel = getWeekdayLabelFromDateKey(loginDateKey);
+                if (visitorDayLabel && weeklyMap.has(visitorDayLabel)) {
+                    weeklyMap.get(visitorDayLabel).visitors += 1;
                 }
+            }
 
-                const dayLabel = getWeekdayLabelFromDateKey(entryDateKey);
-                if (!dayLabel || !weeklyMap.has(dayLabel)) continue;
-                const weekdayEntry = weeklyMap.get(dayLabel);
-                weekdayEntry.views += views;
-                weekdayEntry.visitors += visitors;
+            const pagesVisited = Array.isArray(session?.pagesVisited) ? session.pagesVisited : [];
+            totalViews += pagesVisited.length;
+
+            for (const page of pagesVisited) {
+                const visitedAt = page?.visitedAt ? new Date(page.visitedAt) : null;
+                if (!visitedAt || Number.isNaN(visitedAt.getTime()) || visitedAt < recentStart) continue;
+
+                const viewDateKey = formatIndiaDateKey(visitedAt);
+                const existing = recentDailyMap.get(viewDateKey) || { date: viewDateKey, views: 0, visitors: 0 };
+                existing.views += 1;
+                recentDailyMap.set(viewDateKey, existing);
+
+                const viewDayLabel = getWeekdayLabelFromDateKey(viewDateKey);
+                if (viewDayLabel && weeklyMap.has(viewDayLabel)) {
+                    weeklyMap.get(viewDayLabel).views += 1;
+                }
             }
         }
 
@@ -1037,20 +1060,6 @@ export const getPortalViewInsights = async (_req, res) => {
         const busiestDay = dailyStats.reduce((best, entry) => (
             Number(entry?.visitors || 0) > Number(best?.visitors || 0) ? entry : best
         ), dailyStats[0] || { date: '', views: 0, visitors: 0 });
-        const sessionsThreshold = new Date(now.getTime() - (24 * 60 * 60 * 1000));
-        const [
-            activeLoggedInUsers,
-            todayLogins,
-            todayLogouts,
-            totalLoginEvents,
-            recentSessions
-        ] = await Promise.all([
-            PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold } }),
-            PortalSession.countDocuments({ loginAt: { $gte: startOfToday } }),
-            PortalSession.countDocuments({ logoutAt: { $gte: startOfToday } }),
-            PortalSession.countDocuments(),
-            PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } }).sort({ lastSeenAt: -1 }).lean()
-        ]);
 
         // Resolve user details using an optimized in-memory mapping
         const userIds = [...new Set(recentSessions.map(s => s.userId).filter(Boolean))];

@@ -241,7 +241,7 @@ const ProductViews = () => {
                     </div>
                     <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-blue-500">Portal Visitors</p>
                     <p className="mt-2 text-3xl font-black text-gray-900">{totalPortalVisitors.toLocaleString()}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">Aggregated from all tracked product visits</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Tracked across guest and logged-in portal sessions</p>
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white">
@@ -283,7 +283,7 @@ const ProductViews = () => {
                         <div>
                             <h3 className="text-lg font-black text-gray-900">Portal Visit Trend</h3>
                             <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
-                                Daily people visiting the portal through product traffic
+                                Daily portal visitors and page activity
                             </p>
                         </div>
                         <MdTimeline className="text-blue-500" size={24} />
@@ -334,7 +334,7 @@ const ProductViews = () => {
                     <div className="mb-6">
                         <h3 className="text-lg font-black text-gray-900">Weekly Distribution</h3>
                         <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
-                            Which weekdays pull the most portal visitors
+                            Which weekdays bring the most portal visitors
                         </p>
                     </div>
                     <div className="h-[260px] w-full">
