@@ -297,7 +297,7 @@ export const getDashboardSummary = async (req, res) => {
             totalCategories,
             activeCoupons,
             pendingReturns,
-            productsForStock,
+            productStats,
             revenueBuckets,
             todayOrdersCount,
             pendingOrders,
@@ -312,7 +312,38 @@ export const getDashboardSummary = async (req, res) => {
             Category.countDocuments(),
             Coupon.countDocuments({ active: true, isOffer: { $ne: true } }),
             Return.countDocuments({ status: 'Pending' }),
-            Product.find({}, 'id name image stock skus').lean(),
+            Product.aggregate([
+                {
+                    $project: {
+                        computedStock: {
+                            $cond: {
+                                if: { $and: [ { $isArray: "$skus" }, { $gt: [ { $size: "$skus" }, 0 ] } ] },
+                                then: { $sum: "$skus.stock" },
+                                else: { $ifNull: [ "$stock", 0 ] }
+                            }
+                        },
+                        name: 1,
+                        image: 1,
+                        id: 1
+                    }
+                },
+                {
+                    $facet: {
+                        totalStock: [
+                            { $group: { _id: null, sum: { $sum: "$computedStock" } } }
+                        ],
+                        outOfStockCount: [
+                            { $match: { computedStock: { $lte: 0 } } },
+                            { $count: "count" }
+                        ],
+                        lowStock: [
+                            { $match: { computedStock: { $gt: 0, $lte: 5 } } },
+                            { $sort: { computedStock: 1 } },
+                            { $limit: 5 }
+                        ]
+                    }
+                }
+            ]),
             Order.aggregate([
                 {
                     $facet: {
@@ -375,45 +406,15 @@ export const getDashboardSummary = async (req, res) => {
             ])
         ]);
 
-        const totalStockUnits = productsForStock.reduce((sum, product) => {
-            const skuStock = Array.isArray(product?.skus)
-                ? product.skus.reduce((skuSum, sku) => skuSum + (Number(sku?.stock) || 0), 0)
-                : 0;
-            const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
-                ? skuStock
-                : (Number(product?.stock) || 0);
-            return sum + computedStock;
-        }, 0);
-
-        const lowStockProducts = productsForStock
-            .map((product) => {
-                const skuStock = Array.isArray(product?.skus)
-                    ? product.skus.reduce((sum, sku) => sum + (Number(sku?.stock) || 0), 0)
-                    : 0;
-                const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
-                    ? skuStock
-                    : (Number(product?.stock) || 0);
-
-                return {
-                    id: product.id,
-                    name: product.name,
-                    image: product.image,
-                    computedStock
-                };
-            })
-            .filter((product) => product.computedStock > 0 && product.computedStock <= 5)
-            .sort((first, second) => first.computedStock - second.computedStock)
-            .slice(0, 5);
-
-        const outOfStockProducts = productsForStock.reduce((count, product) => {
-            const skuStock = Array.isArray(product?.skus)
-                ? product.skus.reduce((sum, sku) => sum + (Number(sku?.stock) || 0), 0)
-                : 0;
-            const computedStock = Array.isArray(product?.skus) && product.skus.length > 0
-                ? skuStock
-                : (Number(product?.stock) || 0);
-            return count + (computedStock <= 0 ? 1 : 0);
-        }, 0);
+        const facetStock = productStats?.[0] || {};
+        const totalStockUnits = Number(facetStock.totalStock?.[0]?.sum || 0);
+        const outOfStockProducts = Number(facetStock.outOfStockCount?.[0]?.count || 0);
+        const lowStockProducts = (facetStock.lowStock || []).map(p => ({
+            id: p.id,
+            name: p.name,
+            image: p.image,
+            computedStock: p.computedStock
+        }));
 
         const revenueFacet = revenueBuckets?.[0] || {};
         const totalRevenue = Number(revenueFacet.totalRevenue?.[0]?.value || 0);

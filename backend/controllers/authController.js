@@ -457,6 +457,8 @@ export const getUsers = async (req, res) => {
             const statusValue = status.toLowerCase(); // frontend likely sends 'Active'/'Disabled'
             filter.status = statusValue === 'active' ? { $in: ['active', undefined] } : statusValue;
         }
+        // Project out heavy fields like addresses for directory lists/CSV exports
+        const projection = id ? '-password' : 'name email phone status createdAt';
 
         // --- Pagination Logic ---
         if (pageNumber || limit) {
@@ -465,20 +467,29 @@ export const getUsers = async (req, res) => {
 
             const count = await User.countDocuments(filter);
             const users = await User.find(filter)
-                .select('-password')
+                .select(projection)
                 .sort({ createdAt: -1 })
                 .limit(pageSize)
-                .skip(pageSize * (page - 1));
+                .skip(pageSize * (page - 1))
+                .lean();
 
-            // Fetch stats for paginated users
-            const usersWithStats = await Promise.all(users.map(async (user) => {
-                const orderCount = await Order.countDocuments({ user: user._id });
-                return {
-                    ...user._doc,
-                    joinedDate: user.createdAt,
-                    status: user.status || 'active',
-                    orderStats: { total: orderCount }
-                };
+            // Fetch order counts via single group aggregation
+            const userIds = users.map(u => u._id);
+            const orderCounts = await Order.aggregate([
+                { $match: { user: { $in: userIds } } },
+                { $group: { _id: '$user', count: { $sum: 1 } } }
+            ]);
+
+            const countsMap = orderCounts.reduce((map, item) => {
+                map[item._id.toString()] = item.count;
+                return map;
+            }, {});
+
+            const usersWithStats = users.map((user) => ({
+                ...user,
+                joinedDate: user.createdAt,
+                status: user.status || 'active',
+                orderStats: { total: countsMap[user._id.toString()] || 0 }
             }));
 
             return res.json({
@@ -490,19 +501,30 @@ export const getUsers = async (req, res) => {
         }
 
         // --- Fallback for non-paginated requests ---
-        const users = await User.find(filter).select('-password').sort({ createdAt: -1 });
+        const users = await User.find(filter)
+            .select(projection)
+            .sort({ createdAt: -1 })
+            .lean();
 
-        // Fetch order counts for each user
-        const usersWithStats = await Promise.all(users.map(async (user) => {
-            const orderCount = await Order.countDocuments({ user: user._id });
-            return {
-                ...user._doc,
-                joinedDate: user.createdAt,
-                status: user.status || 'active',
-                orderStats: {
-                    total: orderCount
-                }
-            };
+        // Fetch order counts via single group aggregation
+        const userIds = users.map(u => u._id);
+        const orderCounts = await Order.aggregate([
+            { $match: { user: { $in: userIds } } },
+            { $group: { _id: '$user', count: { $sum: 1 } } }
+        ]);
+
+        const countsMap = orderCounts.reduce((map, item) => {
+            map[item._id.toString()] = item.count;
+            return map;
+        }, {});
+
+        const usersWithStats = users.map((user) => ({
+            ...user,
+            joinedDate: user.createdAt,
+            status: user.status || 'active',
+            orderStats: {
+                total: countsMap[user._id.toString()] || 0
+            }
         }));
 
         res.json(usersWithStats);
