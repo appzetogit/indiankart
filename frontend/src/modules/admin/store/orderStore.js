@@ -64,17 +64,26 @@ const useOrderStore = create((set) => ({
     isLoading: false,
     error: null,
 
-    fetchOrders: async () => {
+    fetchOrders: async (params = {}) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.get('/orders');
-            const transformedOrders = data.map(order => transformOrder(order));
+            const normalizedParams = {
+                syncPayments: false,
+                syncFulfillment: false,
+                includePaymentAudit: false,
+                ...params
+            };
+            const { data } = await API.get('/orders', { params: normalizedParams });
+            const sourceOrders = Array.isArray(data?.orders) ? data.orders : (Array.isArray(data) ? data : []);
+            const transformedOrders = sourceOrders.map(order => transformOrder(order));
             set({ orders: transformedOrders, isLoading: false });
+            return transformedOrders;
         } catch (error) {
             set({ 
                 error: error.response?.data?.message || error.message, 
                 isLoading: false 
             });
+            throw error;
         }
     },
 

@@ -5,13 +5,15 @@ const useReturnStore = create((set) => ({
     returns: [],
     isLoading: false,
 
-    fetchReturns: async () => {
+    fetchReturns: async (params = {}) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.get('/returns');
+            const { data } = await API.get('/returns', { params });
             set({ returns: data, isLoading: false });
+            return data;
         } catch (error) {
             set({ isLoading: false });
+            throw error;
         }
     },
 

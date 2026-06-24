@@ -13,7 +13,6 @@ import { confirmToast } from '../../../../utils/toastUtils.jsx';
 import toast from 'react-hot-toast';
 import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 import Pagination from '../../../../components/Pagination';
-import API from '../../../../services/api';
 
 const NotificationManager = () => {
     const {
@@ -36,8 +35,6 @@ const NotificationManager = () => {
         target: 'All'
     });
     const [currentPage, setCurrentPage] = useState(1);
-    const [users, setUsers] = useState([]);
-
     const itemsPerPage = 20;
     const notificationTypes = ['General', 'Promotional', 'Order Update', 'New Arrival'];
     const targetAudiences = ['New Users', 'Active Users', 'Inactive Users'];
@@ -45,19 +42,6 @@ const NotificationManager = () => {
     useEffect(() => {
         fetchNotifications();
     }, [fetchNotifications]);
-
-    useEffect(() => {
-        const fetchAudienceUsers = async () => {
-            try {
-                const { data } = await API.get('/auth/users');
-                setUsers(Array.isArray(data?.users) ? data.users : (Array.isArray(data) ? data : []));
-            } catch (error) {
-                console.error('Fetch audience users error:', error);
-            }
-        };
-
-        fetchAudienceUsers();
-    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -165,35 +149,8 @@ const NotificationManager = () => {
         }
     };
 
-    const getAudienceUsers = (audience) => {
-        const normalizedAudience = String(audience || '').trim();
-
-        if (normalizedAudience === 'New Users') {
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            return users.filter((user) => new Date(user.createdAt || user.joinedDate || 0) >= thirtyDaysAgo);
-        }
-
-        if (normalizedAudience === 'Active Users') {
-            return users.filter((user) => (user.status || 'active') === 'active');
-        }
-
-        if (normalizedAudience === 'Inactive Users') {
-            return users.filter((user) => (user.status || 'active') === 'disabled');
-        }
-
-        return users;
-    };
-
     const getAudienceDisplay = (audience) => {
-        const names = getAudienceUsers(audience)
-            .map((user) => user.name || user.email || user.phone)
-            .filter(Boolean);
-
-        if (names.length === 0) {
-            return audience || 'N/A';
-        }
-
-        return names.join(', ');
+        return audience || 'N/A';
     };
 
     const formatNotificationDate = (value) => {

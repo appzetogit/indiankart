@@ -1,33 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 import { MdPayment, MdInfoOutline, MdCheckCircle, MdSecurity } from 'react-icons/md';
+import useSettingsStore from '../../store/settingsStore';
 
 const CODAdvancedPayment = () => {
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         codAdvancedPaymentEnabled: false,
         codAdvancedPaymentAmount: 0
     });
+    const settings = useSettingsStore((state) => state.settings);
+    const loading = useSettingsStore((state) => state.isLoading);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const { data } = await API.get('/settings');
-                setForm({
-                    codAdvancedPaymentEnabled: !!data?.codAdvancedPaymentEnabled,
-                    codAdvancedPaymentAmount: Number(data?.codAdvancedPaymentAmount ?? 0)
-                });
-            } catch (error) {
-                console.error('Failed to fetch COD advanced payment settings:', error);
-                toast.error('Failed to load configuration');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchSettings();
-    }, []);
+        fetchSettings().catch((error) => {
+            console.error('Failed to fetch COD advanced payment settings:', error);
+            toast.error('Failed to load configuration');
+        });
+    }, [fetchSettings]);
+
+    useEffect(() => {
+        if (!settings) return;
+        setForm({
+            codAdvancedPaymentEnabled: !!settings?.codAdvancedPaymentEnabled,
+            codAdvancedPaymentAmount: Number(settings?.codAdvancedPaymentAmount ?? 0)
+        });
+    }, [settings]);
 
     const handleToggle = () => {
         setForm((prev) => ({
@@ -65,13 +65,13 @@ const CODAdvancedPayment = () => {
             data.append('codAdvancedPaymentEnabled', String(form.codAdvancedPaymentEnabled));
             data.append('codAdvancedPaymentAmount', String(amount));
 
-            const res = await API.put('/settings', data, {
+            const res = await updateSettings(data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             setForm({
-                codAdvancedPaymentEnabled: !!res.data?.codAdvancedPaymentEnabled,
-                codAdvancedPaymentAmount: Number(res.data?.codAdvancedPaymentAmount ?? amount)
+                codAdvancedPaymentEnabled: !!res?.codAdvancedPaymentEnabled,
+                codAdvancedPaymentAmount: Number(res?.codAdvancedPaymentAmount ?? amount)
             });
             toast.success('COD Advanced Payment settings updated successfully');
         } catch (error) {
@@ -82,7 +82,7 @@ const CODAdvancedPayment = () => {
         }
     };
 
-    if (loading) {
+    if (loading && !settings) {
         return (
             <div className="flex h-screen items-center justify-center bg-gray-50/50">
                 <div className="flex flex-col items-center gap-3">

@@ -52,7 +52,8 @@ const B2BManager = () => {
             const { data } = await API.get('/products', {
                 params: {
                     all: 'true',
-                    category: categoryName
+                    category: categoryName,
+                    lite: 'true'
                 }
             });
             setProducts(Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []));

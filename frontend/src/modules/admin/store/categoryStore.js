@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import API from '../../../services/api';
 import toast from 'react-hot-toast';
 
+const CATEGORY_CACHE_TTL_MS = 2 * 60 * 1000;
+let categoriesFetchPromise = null;
+let categoriesFetchedAt = 0;
+
 const useCategoryStore = create((set, get) => ({
     categories: [],
     isLoading: false,
@@ -37,17 +41,41 @@ const useCategoryStore = create((set, get) => ({
     },
 
     // Actions
-    fetchCategories: async () => {
-        set({ isLoading: true });
-        try {
-            const { data } = await API.get('/categories?all=true');
-            set({ categories: get().sortByNewestFirst(data), isLoading: false });
-        } catch (error) {
-            set({
-                error: error.response?.data?.message || error.message,
-                isLoading: false
-            });
+    fetchCategories: async (force = false) => {
+        const hasFreshCache =
+            !force &&
+            get().categories.length > 0 &&
+            (Date.now() - categoriesFetchedAt) < CATEGORY_CACHE_TTL_MS;
+
+        if (hasFreshCache) {
+            return get().categories;
         }
+
+        if (categoriesFetchPromise) {
+            return categoriesFetchPromise;
+        }
+
+        set({ isLoading: true, error: null });
+
+        categoriesFetchPromise = (async () => {
+            try {
+                const { data } = await API.get('/categories?all=true');
+                const sortedCategories = get().sortByNewestFirst(data);
+                categoriesFetchedAt = Date.now();
+                set({ categories: sortedCategories, isLoading: false, error: null });
+                return sortedCategories;
+            } catch (error) {
+                set({
+                    error: error.response?.data?.message || error.message,
+                    isLoading: false
+                });
+                throw error;
+            } finally {
+                categoriesFetchPromise = null;
+            }
+        })();
+
+        return categoriesFetchPromise;
     },
 
     fetchCategoryById: async (id) => {
@@ -69,6 +97,7 @@ const useCategoryStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.post('/categories', categoryData);
+            categoriesFetchedAt = 0;
             await get().fetchCategories();
             return data;
         } catch (error) {
@@ -84,6 +113,7 @@ const useCategoryStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.put(`/categories/${id}`, updatedData);
+            categoriesFetchedAt = 0;
             await get().fetchCategories();
             return data;
         } catch (error) {
@@ -99,6 +129,7 @@ const useCategoryStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             await API.delete(`/categories/${id}`);
+            categoriesFetchedAt = Date.now();
             set((state) => ({
                 categories: state.categories.filter((c) => c.id !== id),
                 isLoading: false
@@ -158,6 +189,7 @@ const useCategoryStore = create((set, get) => ({
                 categories: get().sortByNewestFirst(updateRecursive(state.categories)),
                 isLoading: false
             }));
+            categoriesFetchedAt = Date.now();
         } catch (error) {
             set({
                 error: error.response?.data?.message || error.message,

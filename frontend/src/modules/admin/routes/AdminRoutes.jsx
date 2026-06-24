@@ -1,52 +1,58 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import AdminLogin from '../pages/AdminLogin';
-import AdminLayout from '../components/layout/AdminLayout';
-import Dashboard from '../pages/Dashboard';
-import CategoryList from '../pages/Categories/CategoryList';
-import CategoryPageBuilder from '../pages/Categories/CategoryPageBuilder';
-import SubCategoryList from '../pages/SubCategories/SubCategoryList';
-import SubCategoryPageBuilder from '../pages/SubCategories/SubCategoryPageBuilder';
-import BrandList from '../pages/Brands/BrandList';
-import PlayManager from '../pages/Play/PlayManager';
-import CouponManager from '../pages/Coupons/CouponManager';
-import OrderList from '../pages/Orders/OrderList';
-import OrderDetail from '../pages/Orders/OrderDetail';
-import DeliverySlip from '../pages/DeliverySlip/DeliverySlip';
-import ReturnRequests from '../pages/Returns/ReturnRequests';
+import Loader from '../../../components/common/Loader';
 import ProtectedAdminRoute from './ProtectedAdminRoute';
-import ProductManager from '../pages/Products/ProductManager';
-import ProductForm from '../pages/Products/ProductForm';
-import ProductViews from '../pages/Products/ProductViews';
-import ProductAnalytics from '../pages/Products/ProductAnalytics';
-import MaxSellingQuantityManager from '../pages/Products/MaxSellingQuantityManager';
-import UserList from '../pages/Users/UserList';
-import UserDetail from '../pages/Users/UserDetail';
-import SellerRequests from '../pages/Users/SellerRequests';
-import PageManager from '../pages/PageManager';
-import SupportRequests from '../pages/Support/SupportRequests';
-import HelpCenterContentManager from '../pages/Content/HelpCenterContentManager';
-import ReviewList from '../pages/Reviews/ReviewList';
-import PinCodeManager from '../pages/PinCodes/PinCodeManager';
-import BankOfferManager from '../pages/BankOffers/BankOfferManager';
-import SettingsPage from '../pages/Settings/SettingsPage';
-import OfferList from '../pages/Offers/OfferList';
-import OfferForm from '../pages/Offers/OfferForm';
-import StockManagement from '../pages/StockManagement/StockManagement';
-import FooterManager from '../pages/Settings/FooterManager';
-import NotificationManager from '../pages/Notifications/NotificationManager';
-import AdminNotifications from '../pages/Notifications/AdminNotifications';
-import ShippingCharges from '../pages/Settings/ShippingCharges';
-import RazorpayCredentials from '../pages/Settings/RazorpayCredentials';
-import B2BManager from '../pages/B2B/B2BManager';
-import CODAdvancedPayment from '../pages/Settings/CODAdvancedPayment';
 import AdminPermissionRoute from './AdminPermissionRoute';
-import AdminManagement from '../pages/AdminManagement';
-import AgentManagement from '../pages/AgentManagement';
 import useAdminAuthStore from '../store/adminAuthStore';
 import { getDefaultAdminRoute } from '../constants/adminPermissions';
 
 const HOME_PAGE_BUILDER_REDIRECT = '/admin/categories/page-builder?categoryName=For%20You';
+
+const AdminLogin = lazy(() => import('../pages/AdminLogin'));
+const AdminLayout = lazy(() => import('../components/layout/AdminLayout'));
+const Dashboard = lazy(() => import('../pages/Dashboard'));
+const CategoryList = lazy(() => import('../pages/Categories/CategoryList'));
+const CategoryPageBuilder = lazy(() => import('../pages/Categories/CategoryPageBuilder'));
+const SubCategoryList = lazy(() => import('../pages/SubCategories/SubCategoryList'));
+const SubCategoryPageBuilder = lazy(() => import('../pages/SubCategories/SubCategoryPageBuilder'));
+const BrandList = lazy(() => import('../pages/Brands/BrandList'));
+const PlayManager = lazy(() => import('../pages/Play/PlayManager'));
+const CouponManager = lazy(() => import('../pages/Coupons/CouponManager'));
+const OrderList = lazy(() => import('../pages/Orders/OrderList'));
+const OrderDetail = lazy(() => import('../pages/Orders/OrderDetail'));
+const DeliverySlip = lazy(() => import('../pages/DeliverySlip/DeliverySlip'));
+const ReturnRequests = lazy(() => import('../pages/Returns/ReturnRequests'));
+const ProductManager = lazy(() => import('../pages/Products/ProductManager'));
+const ProductForm = lazy(() => import('../pages/Products/ProductForm'));
+const ProductViews = lazy(() => import('../pages/Products/ProductViews'));
+const ProductAnalytics = lazy(() => import('../pages/Products/ProductAnalytics'));
+const MaxSellingQuantityManager = lazy(() => import('../pages/Products/MaxSellingQuantityManager'));
+const UserList = lazy(() => import('../pages/Users/UserList'));
+const UserDetail = lazy(() => import('../pages/Users/UserDetail'));
+const SellerRequests = lazy(() => import('../pages/Users/SellerRequests'));
+const PageManager = lazy(() => import('../pages/PageManager'));
+const SupportRequests = lazy(() => import('../pages/Support/SupportRequests'));
+const HelpCenterContentManager = lazy(() => import('../pages/Content/HelpCenterContentManager'));
+const ReviewList = lazy(() => import('../pages/Reviews/ReviewList'));
+const PinCodeManager = lazy(() => import('../pages/PinCodes/PinCodeManager'));
+const BankOfferManager = lazy(() => import('../pages/BankOffers/BankOfferManager'));
+const SettingsPage = lazy(() => import('../pages/Settings/SettingsPage'));
+const OfferList = lazy(() => import('../pages/Offers/OfferList'));
+const OfferForm = lazy(() => import('../pages/Offers/OfferForm'));
+const StockManagement = lazy(() => import('../pages/StockManagement/StockManagement'));
+const FooterManager = lazy(() => import('../pages/Settings/FooterManager'));
+const NotificationManager = lazy(() => import('../pages/Notifications/NotificationManager'));
+const AdminNotifications = lazy(() => import('../pages/Notifications/AdminNotifications'));
+const ShippingCharges = lazy(() => import('../pages/Settings/ShippingCharges'));
+const RazorpayCredentials = lazy(() => import('../pages/Settings/RazorpayCredentials'));
+const B2BManager = lazy(() => import('../pages/B2B/B2BManager'));
+const CODAdvancedPayment = lazy(() => import('../pages/Settings/CODAdvancedPayment'));
+const AdminManagement = lazy(() => import('../pages/AdminManagement'));
+const AgentManagement = lazy(() => import('../pages/AgentManagement'));
+
+const AdminRouteFallback = () => (
+    <Loader fullPage message="Loading admin workspace..." variant="shimmer" />
+);
 
 const withPermission = (permission, element) => (
     <AdminPermissionRoute permission={permission}>{element}</AdminPermissionRoute>
@@ -59,91 +65,93 @@ const AdminIndexRedirect = () => {
 
 const AdminRoutes = () => {
     return (
-        <Routes>
-            <Route path="login" element={<AdminLogin />} />
+        <Suspense fallback={<AdminRouteFallback />}>
+            <Routes>
+                <Route path="login" element={<AdminLogin />} />
 
-            <Route
-                path="/"
-                element={
-                    <ProtectedAdminRoute>
-                        <AdminLayout />
-                    </ProtectedAdminRoute>
-                }
-            >
-                <Route index element={<AdminIndexRedirect />} />
-                <Route path="dashboard" element={withPermission('dashboard', <Dashboard />)} />
+                <Route
+                    path="/"
+                    element={
+                        <ProtectedAdminRoute>
+                            <AdminLayout />
+                        </ProtectedAdminRoute>
+                    }
+                >
+                    <Route index element={<AdminIndexRedirect />} />
+                    <Route path="dashboard" element={withPermission('dashboard', <Dashboard />)} />
 
-                {/* Modules */}
-                <Route path="products" element={withPermission('products', <ProductManager />)} />
-                <Route path="products/max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
-                <Route path="product-views" element={withPermission('productViews', <ProductViews />)} />
-                <Route path="product-views/:id" element={withPermission('productViews', <ProductAnalytics />)} />
-                <Route path="b2b" element={withPermission('b2b', <B2BManager />)} />
-                <Route path="products/new" element={withPermission('products', <ProductForm />)} />
-                <Route path="products/edit/:id" element={withPermission('products', <ProductForm />)} />
-                <Route path="stock" element={withPermission('stockManagement', <StockManagement />)} />
-                <Route path="categories" element={withPermission('categories', <CategoryList />)} />
-                <Route path="categories/page-builder" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
-                <Route path="categories/page-builder/section/:sectionId" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
-                <Route path="subcategories" element={withPermission('subcategories', <SubCategoryList />)} />
-                <Route path="subcategories/page-builder" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
-                <Route path="subcategories/page-builder/section/:sectionId" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
-                <Route path="brands" element={withPermission('brands', <BrandList />)} />
-                <Route path="orders" element={withPermission('orders', <OrderList />)} />
-                <Route path="orders/:id" element={withPermission('orders', <OrderDetail />)} />
-                <Route path="delivery-slip" element={withPermission('deliverySlip', <DeliverySlip />)} />
-                <Route
-                    path="returns"
-                    element={withPermission(
-                        'returns',
-                        <ReturnRequests
-                            forcedType="Return"
-                            pageTitle="Returns"
-                            pageDescription="Manage lifecycle of return requests"
-                        />
-                    )}
-                />
-                <Route
-                    path="replacements"
-                    element={withPermission(
-                        'replacements',
-                        <ReturnRequests
-                            forcedType="Replacement"
-                            pageTitle="Replacements"
-                            pageDescription="Manage lifecycle of replacement requests"
-                        />
-                    )}
-                />
-                <Route path="reviews" element={withPermission('reviews', <ReviewList />)} />
-                <Route path="coupons" element={withPermission('coupons', <CouponManager />)} />
-                <Route path="offers" element={withPermission('coupons', <OfferList />)} />
-                <Route path="offers/edit/:id" element={withPermission('coupons', <OfferForm />)} />
-                <Route path="play" element={withPermission('play', <PlayManager />)} />
-                <Route path="homepage" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
-                <Route path="users" element={withPermission('users', <UserList />)} />
-                <Route path="users/:id" element={withPermission('users', <UserDetail />)} />
-                <Route path="seller-requests" element={withPermission('sellerRequests', <SellerRequests />)} />
-                <Route path="pages" element={withPermission('staticPages', <PageManager />)} />
-                <Route path="content/layout" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
-                <Route path="content/sections" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
-                <Route path="content/banners" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
-                <Route path="content/help-center" element={withPermission('helpCenterContent', <HelpCenterContentManager />)} />
-                <Route path="content/home" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
-                <Route path="pincodes" element={withPermission('pinCodes', <PinCodeManager />)} />
-                <Route path="bank-offers" element={withPermission('bankOffers', <BankOfferManager />)} />
-                <Route path="support" element={withPermission('users', <SupportRequests />)} />
-                <Route path="settings" element={withPermission('storeSettings', <SettingsPage />)} />
-                <Route path="razorpay-credentials" element={<Navigate to="/admin/api-credentials" replace />} />
-                <Route path="api-credentials" element={withPermission('apiCredentials', <RazorpayCredentials />)} />
-                <Route path="shipping-charges" element={withPermission('shippingCharges', <ShippingCharges />)} />
-                <Route path="cod-advanced-payment" element={withPermission('codAdvancedPayment', <CODAdvancedPayment />)} />
-                <Route path="footer-settings" element={withPermission('homepageFooter', <FooterManager />)} />
-                <Route path="notifications" element={withPermission('adminNotifications', <AdminNotifications />)} />
-                <Route path="user-notifications" element={withPermission('userNotifications', <NotificationManager />)} />
-                <Route path="agent-management" element={withPermission('agentManagement', <AgentManagement />)} />
-                <Route path="admin-management" element={withPermission('adminManagement', <AdminManagement />)} />
-            </Route>
-        </Routes>
+                    {/* Modules */}
+                    <Route path="products" element={withPermission('products', <ProductManager />)} />
+                    <Route path="products/max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
+                    <Route path="product-views" element={withPermission('productViews', <ProductViews />)} />
+                    <Route path="product-views/:id" element={withPermission('productViews', <ProductAnalytics />)} />
+                    <Route path="b2b" element={withPermission('b2b', <B2BManager />)} />
+                    <Route path="products/new" element={withPermission('products', <ProductForm />)} />
+                    <Route path="products/edit/:id" element={withPermission('products', <ProductForm />)} />
+                    <Route path="stock" element={withPermission('stockManagement', <StockManagement />)} />
+                    <Route path="categories" element={withPermission('categories', <CategoryList />)} />
+                    <Route path="categories/page-builder" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                    <Route path="categories/page-builder/section/:sectionId" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                    <Route path="subcategories" element={withPermission('subcategories', <SubCategoryList />)} />
+                    <Route path="subcategories/page-builder" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                    <Route path="subcategories/page-builder/section/:sectionId" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                    <Route path="brands" element={withPermission('brands', <BrandList />)} />
+                    <Route path="orders" element={withPermission('orders', <OrderList />)} />
+                    <Route path="orders/:id" element={withPermission('orders', <OrderDetail />)} />
+                    <Route path="delivery-slip" element={withPermission('deliverySlip', <DeliverySlip />)} />
+                    <Route
+                        path="returns"
+                        element={withPermission(
+                            'returns',
+                            <ReturnRequests
+                                forcedType="Return"
+                                pageTitle="Returns"
+                                pageDescription="Manage lifecycle of return requests"
+                            />
+                        )}
+                    />
+                    <Route
+                        path="replacements"
+                        element={withPermission(
+                            'replacements',
+                            <ReturnRequests
+                                forcedType="Replacement"
+                                pageTitle="Replacements"
+                                pageDescription="Manage lifecycle of replacement requests"
+                            />
+                        )}
+                    />
+                    <Route path="reviews" element={withPermission('reviews', <ReviewList />)} />
+                    <Route path="coupons" element={withPermission('coupons', <CouponManager />)} />
+                    <Route path="offers" element={withPermission('coupons', <OfferList />)} />
+                    <Route path="offers/edit/:id" element={withPermission('coupons', <OfferForm />)} />
+                    <Route path="play" element={withPermission('play', <PlayManager />)} />
+                    <Route path="homepage" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                    <Route path="users" element={withPermission('users', <UserList />)} />
+                    <Route path="users/:id" element={withPermission('users', <UserDetail />)} />
+                    <Route path="seller-requests" element={withPermission('sellerRequests', <SellerRequests />)} />
+                    <Route path="pages" element={withPermission('staticPages', <PageManager />)} />
+                    <Route path="content/layout" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                    <Route path="content/sections" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                    <Route path="content/banners" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                    <Route path="content/help-center" element={withPermission('helpCenterContent', <HelpCenterContentManager />)} />
+                    <Route path="content/home" element={withPermission('categoryPageBuilder', <Navigate to={HOME_PAGE_BUILDER_REDIRECT} replace />)} />
+                    <Route path="pincodes" element={withPermission('pinCodes', <PinCodeManager />)} />
+                    <Route path="bank-offers" element={withPermission('bankOffers', <BankOfferManager />)} />
+                    <Route path="support" element={withPermission('users', <SupportRequests />)} />
+                    <Route path="settings" element={withPermission('storeSettings', <SettingsPage />)} />
+                    <Route path="razorpay-credentials" element={<Navigate to="/admin/api-credentials" replace />} />
+                    <Route path="api-credentials" element={withPermission('apiCredentials', <RazorpayCredentials />)} />
+                    <Route path="shipping-charges" element={withPermission('shippingCharges', <ShippingCharges />)} />
+                    <Route path="cod-advanced-payment" element={withPermission('codAdvancedPayment', <CODAdvancedPayment />)} />
+                    <Route path="footer-settings" element={withPermission('homepageFooter', <FooterManager />)} />
+                    <Route path="notifications" element={withPermission('adminNotifications', <AdminNotifications />)} />
+                    <Route path="user-notifications" element={withPermission('userNotifications', <NotificationManager />)} />
+                    <Route path="agent-management" element={withPermission('agentManagement', <AgentManagement />)} />
+                    <Route path="admin-management" element={withPermission('adminManagement', <AdminManagement />)} />
+                </Route>
+            </Routes>
+        </Suspense>
     );
 };
 

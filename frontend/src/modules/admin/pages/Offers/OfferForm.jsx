@@ -38,7 +38,12 @@ const OfferForm = () => {
             setLoadingOptions(true);
             try {
                 const [productsRes, categoriesRes, subCategoriesRes] = await Promise.all([
-                    API.get('/products'),
+                    API.get('/products', {
+                        params: {
+                            all: 'true',
+                            lite: 'true'
+                        }
+                    }),
                     API.get('/categories'),
                     API.get('/subcategories')
                 ]);
@@ -90,17 +95,6 @@ const OfferForm = () => {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }));
-    };
-
-    const handleMultiSelect = (e, fieldName) => {
-        const options = e.target.options;
-        const selected = [];
-        for (let i = 0; i < options.length; i++) {
-            if (options[i].selected) {
-                selected.push(fieldName === 'linkedProducts' ? Number(options[i].value) : options[i].value);
-            }
-        }
-        setFormData(prev => ({ ...prev, [fieldName]: selected }));
     };
 
     // Add item to array

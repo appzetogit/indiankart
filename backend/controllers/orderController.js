@@ -170,7 +170,7 @@ const isOrderAccessibleByUser = (order, user) => {
     };
 };
 
-const buildOrderListFilter = ({ search, status, user }) => {
+const buildOrderListFilter = ({ search, status, user, userId }) => {
     const filter = {};
 
     const normalizedSearch = String(search || '').trim();
@@ -208,6 +208,11 @@ const buildOrderListFilter = ({ search, status, user }) => {
             $regex: `^${normalizedUser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
             $options: 'i'
         };
+    }
+
+    const normalizedUserId = String(userId || '').trim();
+    if (normalizedUserId && mongoose.Types.ObjectId.isValid(normalizedUserId)) {
+        filter.user = normalizedUserId;
     }
 
     return filter;
@@ -1361,11 +1366,11 @@ export const assignOrderFulfillment = async (req, res) => {
 // @access  Private/Admin
 export const getOrders = async (req, res) => {
     try {
-        const { pageNumber, limit, search, status, user } = req.query;
-        const shouldSyncPayments = String(req.query.syncPayments || 'true') !== 'false';
+        const { pageNumber, limit, search, status, user, userId } = req.query;
+        const shouldSyncPayments = String(req.query.syncPayments || 'false') !== 'false';
         const shouldSyncFulfillment = String(req.query.syncFulfillment || 'false') === 'true';
         const shouldAuditPayments = String(req.query.includePaymentAudit || 'false') === 'true';
-        const filter = buildOrderListFilter({ search, status, user });
+        const filter = buildOrderListFilter({ search, status, user, userId });
         const hasPagination = pageNumber !== undefined || limit !== undefined;
         const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
         const page = Math.max(1, Number(pageNumber) || 1);

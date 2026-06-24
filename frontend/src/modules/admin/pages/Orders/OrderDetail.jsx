@@ -8,6 +8,7 @@ import API from '../../../../services/api';
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier, getTrackingIdentifierLabel, getShippingError, getShippingPickupLocation, getShippingSyncedAt, isCourierMode } from '../../../../utils/shippingProvider';
 import { getOrderedItemDisplayName, getVariantDetails } from '../../../../utils/orderItemDisplay';
 import { getAdminPaymentStatus, getAdminPaymentStatusClass } from '../../utils/paymentStatus';
+import useSettingsStore from '../../store/settingsStore';
 
 const formatTrackingDate = (value) => {
     if (!value) return 'N/A';
@@ -53,10 +54,11 @@ const OrderDetail = () => {
 
     // Initialize selected status when modal opens
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-    const [settings, setSettings] = useState(null);
     const [trackingData, setTrackingData] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
     const [trackingError, setTrackingError] = useState('');
+    const settings = useSettingsStore((state) => state.settings);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
     const normalizeFulfillmentStatus = (status = '') => {
         const value = String(status || '').trim();
         if (value === 'Shipped') return 'Dispatched';
@@ -67,17 +69,10 @@ const OrderDetail = () => {
         if (!order || !order.invoiceNumber) {
             getOrderDetails(id);
         }
-        // Fetch settings for invoice
-        const fetchSettings = async () => {
-            try {
-                const { data } = await API.get('/settings');
-                setSettings(data);
-            } catch (error) {
-                console.error('Error fetching settings for invoice:', error);
-            }
-        };
-        fetchSettings();
-    }, [id, order, order?.invoiceNumber, getOrderDetails]);
+        fetchSettings().catch((error) => {
+            console.error('Error fetching settings for invoice:', error);
+        });
+    }, [id, order, order?.invoiceNumber, getOrderDetails, fetchSettings]);
 
     React.useEffect(() => {
         let cancelled = false;

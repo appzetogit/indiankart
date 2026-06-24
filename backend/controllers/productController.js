@@ -41,7 +41,7 @@ const getListProjection = (lite = false) => {
     if (!lite) return null;
     // Exclude heavy PDP-only fields for category/listing pages.
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
-    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity createdAt';
+    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity createdAt subCategories subCategory';
 };
 
 const normalizeSubCategoryIds = (value) => {

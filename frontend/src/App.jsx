@@ -1,5 +1,5 @@
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
 import { useAuthStore } from './modules/user/store/authStore';
 import { onMessageListener } from './services/firebase';
 import './App.css';

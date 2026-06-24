@@ -436,6 +436,7 @@ export const createReturnRequest = async (req, res) => {
 // @access  Private/Admin
 export const getReturns = async (req, res) => {
     try {
+        const normalizedUserId = String(req.query.userId || '').trim();
         const returns = await Return.find({}).sort({ date: -1 }).lean();
         
         // Populate displayId manually since orderId is String
@@ -450,11 +451,15 @@ export const getReturns = async (req, res) => {
             return acc;
         }, {});
 
-        const returnsWithDisplayId = returns.map(ret => ({
+        let returnsWithDisplayId = returns.map(ret => ({
             ...ret,
             orderDisplayId: orderMap[ret.orderId]?.displayId || ret.orderId,
             userId: ret.userId || orderMap[ret.orderId]?.userId || ''
         }));
+
+        if (normalizedUserId) {
+            returnsWithDisplayId = returnsWithDisplayId.filter((ret) => String(ret.userId || '') === normalizedUserId);
+        }
 
         res.json(returnsWithDisplayId);
     } catch (error) {

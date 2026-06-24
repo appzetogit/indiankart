@@ -430,8 +430,12 @@ export const updateUserProfile = async (req, res) => {
 // @access  Private/Admin
 export const getUsers = async (req, res) => {
     try {
-        const { pageNumber, limit, search, status } = req.query;
+        const { pageNumber, limit, search, status, id } = req.query;
         let filter = {};
+
+        if (id) {
+            filter._id = id;
+        }
 
         // Search Implementation
         if (search) {

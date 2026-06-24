@@ -15,7 +15,7 @@ const StockManagement = () => {
     const fetchProducts = async (showToast = false) => {
         try {
             setLoading(true);
-            const { data } = await API.get('/products?all=true');
+            const { data } = await API.get('/products?all=true&lite=true');
             setProducts(data);
             if (showToast) toast.success('Inventory synced successfully');
         } catch (error) {

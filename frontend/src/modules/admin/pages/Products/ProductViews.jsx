@@ -20,7 +20,7 @@ import Pagination from '../../components/common/Pagination';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
-const LIVE_REFRESH_MS = 15000;
+const LIVE_REFRESH_MS = 60000;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
 const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 const getKnownStateEntries = (product) => (
@@ -48,6 +48,8 @@ const formatDateLabel = (dateKey) => {
         timeZone: INDIA_TIME_ZONE
     });
 };
+
+const MotionDiv = motion.div;
 
 const getFriendlyPathLabel = (path = '') => {
     if (path === '/') return 'Home';
@@ -106,6 +108,9 @@ const ProductViews = () => {
 
     useEffect(() => {
         const intervalId = window.setInterval(() => {
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
             fetchProducts();
         }, LIVE_REFRESH_MS);
 
@@ -274,7 +279,7 @@ const ProductViews = () => {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">
-                <motion.div
+                <MotionDiv
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
@@ -324,9 +329,9 @@ const ProductViews = () => {
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
-                </motion.div>
+                </MotionDiv>
 
-                <motion.div
+                <MotionDiv
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
@@ -366,10 +371,10 @@ const ProductViews = () => {
                             </div>
                         ))}
                     </div>
-                </motion.div>
+                </MotionDiv>
             </div>
 
-            <motion.div
+            <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
@@ -397,10 +402,10 @@ const ProductViews = () => {
                         No state-level traffic data yet.
                     </div>
                 )}
-            </motion.div>
+            </MotionDiv>
 
             {/* Top Products Chart */}
-            <motion.div 
+            <MotionDiv 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
@@ -455,10 +460,10 @@ const ProductViews = () => {
                         View Full Stats
                     </button>
                 </div>
-            </motion.div>
+            </MotionDiv>
 
             {/* Live & Recent Portal Activity */}
-            <motion.div
+            <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
@@ -582,7 +587,7 @@ const ProductViews = () => {
                         </table>
                     </div>
                 </div>
-            </motion.div>
+            </MotionDiv>
 
             <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                 <div className="relative">

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import API from '../../../../services/api';
 import toast from 'react-hot-toast';
+import useSettingsStore from '../../store/settingsStore';
 
 const DEFAULT_FORM = {
     razorpayKeyId: '',
@@ -98,44 +98,43 @@ const SectionCard = ({ id, eyebrow, title, description, activeSection, setActive
 };
 
 const RazorpayCredentials = () => {
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [activeSection, setActiveSection] = useState('razorpay');
     const [form, setForm] = useState(DEFAULT_FORM);
+    const settings = useSettingsStore((state) => state.settings);
+    const loading = useSettingsStore((state) => state.isLoading);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const { data } = await API.get('/settings');
-                setForm({
-                    razorpayKeyId: data?.razorpayKeyId || '',
-                    razorpayKeySecret: '',
-                    deliveryApi: data?.deliveryApi || 'https://track.delhivery.com',
-                    delhiveryClientName: data?.delhiveryClientName || '',
-                    delhiveryPickupLocation: data?.delhiveryPickupLocation || '',
-                    delhiveryToken: '',
-                    ekartBaseUrl: data?.ekartBaseUrl || '',
-                    ekartTrackingBaseUrl: data?.ekartTrackingBaseUrl || '',
-                    ekartClientId: data?.ekartClientId || '',
-                    ekartClientName: data?.ekartClientName || '',
-                    ekartPickupLocation: data?.ekartPickupLocation || '',
-                    ekartUsername: data?.ekartUsername || '',
-                    ekartPassword: '',
-                    ekartApiKey: '',
-                    ekartCreateShipmentPath: data?.ekartCreateShipmentPath || '/api/v1/package/create',
-                    ekartTrackingPath: data?.ekartTrackingPath || '/api/v1/track/{id}',
-                    ekartCancelPath: data?.ekartCancelPath || '/api/v1/package/cancel'
-                });
-            } catch (error) {
-                console.error('Failed to fetch API credentials:', error);
-                toast.error('Failed to load API credentials');
-            } finally {
-                setLoading(false);
-            }
-        };
+        fetchSettings().catch((error) => {
+            console.error('Failed to fetch API credentials:', error);
+            toast.error('Failed to load API credentials');
+        });
+    }, [fetchSettings]);
 
-        fetchSettings();
-    }, []);
+    useEffect(() => {
+        if (!settings) return;
+        setForm({
+            razorpayKeyId: settings?.razorpayKeyId || '',
+            razorpayKeySecret: '',
+            deliveryApi: settings?.deliveryApi || 'https://track.delhivery.com',
+            delhiveryClientName: settings?.delhiveryClientName || '',
+            delhiveryPickupLocation: settings?.delhiveryPickupLocation || '',
+            delhiveryToken: '',
+            ekartBaseUrl: settings?.ekartBaseUrl || '',
+            ekartTrackingBaseUrl: settings?.ekartTrackingBaseUrl || '',
+            ekartClientId: settings?.ekartClientId || '',
+            ekartClientName: settings?.ekartClientName || '',
+            ekartPickupLocation: settings?.ekartPickupLocation || '',
+            ekartUsername: settings?.ekartUsername || '',
+            ekartPassword: '',
+            ekartApiKey: '',
+            ekartCreateShipmentPath: settings?.ekartCreateShipmentPath || '/api/v1/package/create',
+            ekartTrackingPath: settings?.ekartTrackingPath || '/api/v1/track/{id}',
+            ekartCancelPath: settings?.ekartCancelPath || '/api/v1/package/cancel'
+        });
+    }, [settings]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -166,28 +165,28 @@ const RazorpayCredentials = () => {
             data.append('ekartTrackingPath', form.ekartTrackingPath.trim());
             data.append('ekartCancelPath', form.ekartCancelPath.trim());
 
-            const res = await API.put('/settings', data, {
+            const res = await updateSettings(data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             setForm({
-                razorpayKeyId: res.data?.razorpayKeyId || '',
+                razorpayKeyId: res?.razorpayKeyId || '',
                 razorpayKeySecret: '',
-                deliveryApi: res.data?.deliveryApi || 'https://track.delhivery.com',
-                delhiveryClientName: res.data?.delhiveryClientName || '',
-                delhiveryPickupLocation: res.data?.delhiveryPickupLocation || '',
+                deliveryApi: res?.deliveryApi || 'https://track.delhivery.com',
+                delhiveryClientName: res?.delhiveryClientName || '',
+                delhiveryPickupLocation: res?.delhiveryPickupLocation || '',
                 delhiveryToken: '',
-                ekartBaseUrl: res.data?.ekartBaseUrl || '',
-                ekartTrackingBaseUrl: res.data?.ekartTrackingBaseUrl || '',
-                ekartClientId: res.data?.ekartClientId || '',
-                ekartClientName: res.data?.ekartClientName || '',
-                ekartPickupLocation: res.data?.ekartPickupLocation || '',
-                ekartUsername: res.data?.ekartUsername || '',
+                ekartBaseUrl: res?.ekartBaseUrl || '',
+                ekartTrackingBaseUrl: res?.ekartTrackingBaseUrl || '',
+                ekartClientId: res?.ekartClientId || '',
+                ekartClientName: res?.ekartClientName || '',
+                ekartPickupLocation: res?.ekartPickupLocation || '',
+                ekartUsername: res?.ekartUsername || '',
                 ekartPassword: '',
                 ekartApiKey: '',
-                ekartCreateShipmentPath: res.data?.ekartCreateShipmentPath || '/api/v1/package/create',
-                ekartTrackingPath: res.data?.ekartTrackingPath || '/api/v1/track/{id}',
-                ekartCancelPath: res.data?.ekartCancelPath || '/api/v1/package/cancel'
+                ekartCreateShipmentPath: res?.ekartCreateShipmentPath || '/api/v1/package/create',
+                ekartTrackingPath: res?.ekartTrackingPath || '/api/v1/track/{id}',
+                ekartCancelPath: res?.ekartCancelPath || '/api/v1/package/cancel'
             });
             toast.success('API credentials updated');
         } catch (error) {
@@ -219,7 +218,7 @@ const RazorpayCredentials = () => {
         }
     ]), []);
 
-    if (loading) {
+    if (loading && !settings) {
         return <div className="p-8 text-center text-gray-500 font-medium">Loading API credentials...</div>;
     }
 

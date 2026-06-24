@@ -6,16 +6,46 @@ const useUserStore = create((set) => ({
     isLoading: false,
     error: null,
 
-    fetchUsers: async () => {
+    fetchUsers: async (params = {}) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.get('/auth/users');
-            set({ users: data, isLoading: false });
+            const { data } = await API.get('/auth/users', { params });
+            const users = Array.isArray(data) ? data : (Array.isArray(data?.users) ? data.users : []);
+            set({ users, isLoading: false });
+            return users;
         } catch (error) {
             set({ 
                 error: error.response?.data?.message || error.message, 
                 isLoading: false 
             });
+            throw error;
+        }
+    },
+
+    fetchUserById: async (id) => {
+        set({ isLoading: true });
+        try {
+            const { data } = await API.get('/auth/users', {
+                params: { id }
+            });
+            const users = Array.isArray(data) ? data : (Array.isArray(data?.users) ? data.users : []);
+            const matchedUser = users.find((user) => String(user._id || user.id) === String(id)) || null;
+            set((state) => ({
+                users: matchedUser
+                    ? [
+                        matchedUser,
+                        ...state.users.filter((user) => String(user._id || user.id) !== String(id))
+                    ]
+                    : state.users,
+                isLoading: false
+            }));
+            return matchedUser;
+        } catch (error) {
+            set({
+                error: error.response?.data?.message || error.message,
+                isLoading: false
+            });
+            throw error;
         }
     },
 

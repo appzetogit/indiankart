@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
+const localStorageJsonCache = new Map();
 
 const API = axios.create({
     baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api',
@@ -10,9 +11,18 @@ const API = axios.create({
 const parseStoredState = (key) => {
     try {
         const rawValue = localStorage.getItem(key);
-        return rawValue ? JSON.parse(rawValue) : null;
+        const cachedEntry = localStorageJsonCache.get(key);
+
+        if (cachedEntry && cachedEntry.rawValue === rawValue) {
+            return cachedEntry.parsedValue;
+        }
+
+        const parsedValue = rawValue ? JSON.parse(rawValue) : null;
+        localStorageJsonCache.set(key, { rawValue, parsedValue });
+        return parsedValue;
     } catch (error) {
         console.error(`Error parsing localStorage key ${key}:`, error);
+        localStorageJsonCache.delete(key);
         return null;
     }
 };
@@ -20,7 +30,6 @@ const parseStoredState = (key) => {
 API.interceptors.request.use((config) => {
     try {
         const requestUrl = `${config.baseURL || ''}${config.url || ''}`;
-        const requestPath = config.url || '';
         const currentPath =
             typeof window !== 'undefined' ? window.location.pathname : '';
         const isAdminContext = currentPath.startsWith('/admin');

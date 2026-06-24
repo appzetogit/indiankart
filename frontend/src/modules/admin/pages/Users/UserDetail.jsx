@@ -24,16 +24,28 @@ const ORDER_TABS = ['All', 'Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out 
 const UserDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { users, toggleUserStatus, fetchUsers, isLoading: isUserLoading } = useUserStore();
+    const { users, toggleUserStatus, fetchUserById, isLoading: isUserLoading } = useUserStore();
     const { orders, fetchOrders, isLoading: isOrdersLoading } = useOrderStore();
     const { returns, fetchReturns, isLoading: isReturnsLoading } = useReturnStore();
     const [activeTab, setActiveTab] = useState('All');
 
     useEffect(() => {
-        fetchUsers();
-        fetchOrders();
-        fetchReturns();
-    }, [fetchUsers, fetchOrders, fetchReturns]);
+        fetchUserById(id).catch((error) => {
+            console.error('Failed to fetch user detail:', error);
+        });
+        fetchOrders({
+            userId: id,
+            limit: 100,
+            syncPayments: false,
+            syncFulfillment: false,
+            includePaymentAudit: false
+        }).catch((error) => {
+            console.error('Failed to fetch user orders:', error);
+        });
+        fetchReturns({ userId: id }).catch((error) => {
+            console.error('Failed to fetch user returns:', error);
+        });
+    }, [id, fetchUserById, fetchOrders, fetchReturns]);
 
     const user = users.find((u) => String(u.id || u._id) === String(id));
 

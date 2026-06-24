@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import toast from 'react-hot-toast';
 import API from '../../../services/api';
 
+const BRAND_CACHE_TTL_MS = 2 * 60 * 1000;
+let brandsFetchPromise = null;
+let brandsFetchedAt = 0;
+
 const useBrandStore = create((set, get) => ({
     brands: [],
     isLoading: false,
@@ -15,26 +19,51 @@ const useBrandStore = create((set, get) => ({
         });
     },
 
-    fetchBrands: async () => {
-        set({ isLoading: true });
-        try {
-            const { data } = await API.get('/brands');
-            set({ brands: get().sortByNewestFirst(data), isLoading: false, error: null });
-        } catch (error) {
-            set({
-                isLoading: false,
-                error: error.response?.data?.message || error.message || 'Failed to fetch brands'
-            });
-            toast.dismiss();
-            const toastId = toast.error('Failed to fetch brands', { duration: 1400 });
-            setTimeout(() => toast.remove(toastId), 1700);
+    fetchBrands: async (force = false) => {
+        const hasFreshCache =
+            !force &&
+            get().brands.length > 0 &&
+            (Date.now() - brandsFetchedAt) < BRAND_CACHE_TTL_MS;
+
+        if (hasFreshCache) {
+            return get().brands;
         }
+
+        if (brandsFetchPromise) {
+            return brandsFetchPromise;
+        }
+
+        set({ isLoading: true, error: null });
+
+        brandsFetchPromise = (async () => {
+            try {
+                const { data } = await API.get('/brands');
+                const sortedBrands = get().sortByNewestFirst(data);
+                brandsFetchedAt = Date.now();
+                set({ brands: sortedBrands, isLoading: false, error: null });
+                return sortedBrands;
+            } catch (error) {
+                set({
+                    isLoading: false,
+                    error: error.response?.data?.message || error.message || 'Failed to fetch brands'
+                });
+                toast.dismiss();
+                const toastId = toast.error('Failed to fetch brands', { duration: 1400 });
+                setTimeout(() => toast.remove(toastId), 1700);
+                throw error;
+            } finally {
+                brandsFetchPromise = null;
+            }
+        })();
+
+        return brandsFetchPromise;
     },
 
     addBrand: async (brandData) => {
         set({ isLoading: true });
         try {
             const { data } = await API.post('/brands', brandData);
+            brandsFetchedAt = Date.now();
             set((state) => ({
                 brands: get().sortByNewestFirst([data, ...state.brands]),
                 isLoading: false,
@@ -60,6 +89,7 @@ const useBrandStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             const { data } = await API.put(`/brands/${id}`, brandData);
+            brandsFetchedAt = Date.now();
             set((state) => ({
                 brands: get().sortByNewestFirst(
                     state.brands.map((item) => (String(item?._id || item?.id) === String(id) ? data : item))
@@ -87,6 +117,7 @@ const useBrandStore = create((set, get) => ({
         set({ isLoading: true });
         try {
             await API.delete(`/brands/${id}`);
+            brandsFetchedAt = Date.now();
             set((state) => ({
                 brands: state.brands.filter((item) => String(item?._id || item?.id) !== String(id)),
                 isLoading: false,

@@ -32,6 +32,12 @@ const getSubCategoryLabel = (product) => {
 };
 
 const getProductId = (product) => String(product?.id || product?._id || '');
+const parseSelectedProductIds = (value = '') => (
+    String(value || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+);
 
 const ProductManager = () => {
     const navigate = useNavigate();
@@ -49,32 +55,24 @@ const ProductManager = () => {
     const itemsPerPage = 20;
 
     const [localProducts, setLocalProducts] = useState([]);
-    const [loading, setLoading] = useState(false);
     const pickerMode = searchParams.get('picker') === 'category-builder';
     const pickerReturnTo = searchParams.get('returnTo') || '/admin/categories/page-builder';
     const pickerCategoryId = searchParams.get('categoryId') || '';
     const pickerSectionId = searchParams.get('sectionId') || '';
     const preselectedParam = searchParams.get('selected') || '';
-    const [pickerSelectedIds, setPickerSelectedIds] = useState([]);
-
-    useEffect(() => {
-        if (!pickerMode) return;
-        const parsed = preselectedParam
-            .split(',')
-            .map((id) => id.trim())
-            .filter(Boolean);
-        setPickerSelectedIds(parsed);
-    }, [pickerMode, preselectedParam]);
+    const [pickerSelectedIds, setPickerSelectedIds] = useState(() => (
+        pickerMode ? parseSelectedProductIds(preselectedParam) : []
+    ));
 
     useEffect(() => {
         let active = true;
         const fetchPaginatedProducts = async () => {
-            setLoading(true);
             try {
                 const params = {
                     pageNumber: currentPage,
                     limit: itemsPerPage,
-                    all: 'true'
+                    all: 'true',
+                    lite: 'true'
                 };
 
                 if (filterCategory !== 'All') {
@@ -101,8 +99,6 @@ const ProductManager = () => {
             } catch (error) {
                 console.error(error);
                 if (active) toast.error('Failed to fetch products');
-            } finally {
-                if (active) setLoading(false);
             }
         };
 
@@ -115,7 +111,7 @@ const ProductManager = () => {
 
     useEffect(() => {
         fetchCategories();
-    }, []);
+    }, [fetchCategories]);
 
     // Update handleDelete to refresh list
     const handleDelete = async (id) => {
@@ -133,6 +129,7 @@ const ProductManager = () => {
                         pageNumber: currentPage,
                         limit: itemsPerPage,
                         all: 'true',
+                        lite: 'true',
                         category: filterCategory !== 'All' ? filterCategory : undefined,
                         search: searchText || undefined
                     }
@@ -187,7 +184,7 @@ const ProductManager = () => {
                 products: selectedProducts
             }));
             navigate(pickerReturnTo);
-        } catch (error) {
+        } catch {
             toast.error('Failed to save selected products');
         }
     };

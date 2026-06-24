@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { MdLocalShipping, MdSearch, MdFilterList, MdDownload, MdCheckBox, MdCheckBoxOutlineBlank } from 'react-icons/md';
 import useOrderStore from '../../store/orderStore';
 import InvoiceGenerator, { BulkInvoiceGenerator } from '../../components/orders/InvoiceGenerator';
-import API from '../../../../services/api';
 import { matchesNormalizedSearch } from '../../utils/search';
+import useSettingsStore from '../../store/settingsStore';
 
 const DeliverySlip = () => {
     const navigate = useNavigate();
@@ -14,27 +13,27 @@ const DeliverySlip = () => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [settings, setSettings] = useState(null);
+    const settings = useSettingsStore((state) => state.settings);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+
+    async function loadOrders() {
+        setLoading(true);
+        await fetchOrders({
+            pageNumber: 1,
+            limit: 100,
+            syncPayments: false,
+            syncFulfillment: false,
+            includePaymentAudit: false
+        });
+        setLoading(false);
+    }
 
     useEffect(() => {
         loadOrders();
-        fetchSettings();
-    }, []);
-
-    const loadOrders = async () => {
-        setLoading(true);
-        await fetchOrders();
-        setLoading(false);
-    };
-
-    const fetchSettings = async () => {
-        try {
-            const { data } = await API.get('/settings');
-            setSettings(data);
-        } catch (error) {
+        fetchSettings().catch((error) => {
             console.error('Error fetching settings for invoice:', error);
-        }
-    };
+        });
+    }, [fetchSettings]);
 
     // Apply search and filter
     const filteredOrders = orders.filter(order => {

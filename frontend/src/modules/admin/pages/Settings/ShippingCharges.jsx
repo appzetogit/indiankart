@@ -1,35 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import API from '../../../../services/api';
 import toast from 'react-hot-toast';
+import useSettingsStore from '../../store/settingsStore';
 
 const ShippingCharges = () => {
-    const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState({
         shippingCharge: 40,
         minShippingOrderAmount: 0,
         maxShippingOrderAmount: 499
     });
+    const settings = useSettingsStore((state) => state.settings);
+    const loading = useSettingsStore((state) => state.isLoading);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+    const updateSettings = useSettingsStore((state) => state.updateSettings);
 
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const { data } = await API.get('/settings');
-                const fallbackMax = Number(data?.freeShippingThreshold ?? 500) - 1;
-                setForm({
-                    shippingCharge: Number(data?.shippingCharge ?? 40),
-                    minShippingOrderAmount: Number(data?.minShippingOrderAmount ?? 0),
-                    maxShippingOrderAmount: Number(data?.maxShippingOrderAmount ?? (fallbackMax >= 0 ? fallbackMax : 499))
-                });
-            } catch (error) {
-                console.error('Failed to fetch shipping settings:', error);
-                toast.error('Failed to load shipping settings');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchSettings();
-    }, []);
+        fetchSettings().catch((error) => {
+            console.error('Failed to fetch shipping settings:', error);
+            toast.error('Failed to load shipping settings');
+        });
+    }, [fetchSettings]);
+
+    useEffect(() => {
+        if (!settings) return;
+        const fallbackMax = Number(settings?.freeShippingThreshold ?? 500) - 1;
+        setForm({
+            shippingCharge: Number(settings?.shippingCharge ?? 40),
+            minShippingOrderAmount: Number(settings?.minShippingOrderAmount ?? 0),
+            maxShippingOrderAmount: Number(settings?.maxShippingOrderAmount ?? (fallbackMax >= 0 ? fallbackMax : 499))
+        });
+    }, [settings]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -70,14 +70,14 @@ const ShippingCharges = () => {
             data.append('minShippingOrderAmount', String(minShippingOrderAmount));
             data.append('maxShippingOrderAmount', String(maxShippingOrderAmount));
 
-            const res = await API.put('/settings', data, {
+            const res = await updateSettings(data, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             setForm({
-                shippingCharge: Number(res.data?.shippingCharge ?? shippingCharge),
-                minShippingOrderAmount: Number(res.data?.minShippingOrderAmount ?? minShippingOrderAmount),
-                maxShippingOrderAmount: Number(res.data?.maxShippingOrderAmount ?? maxShippingOrderAmount)
+                shippingCharge: Number(res?.shippingCharge ?? shippingCharge),
+                minShippingOrderAmount: Number(res?.minShippingOrderAmount ?? minShippingOrderAmount),
+                maxShippingOrderAmount: Number(res?.maxShippingOrderAmount ?? maxShippingOrderAmount)
             });
             toast.success('Shipping charges updated');
         } catch (error) {
@@ -88,7 +88,7 @@ const ShippingCharges = () => {
         }
     };
 
-    if (loading) {
+    if (loading && !settings) {
         return <div className="p-8 text-center text-gray-500 font-medium">Loading shipping charges...</div>;
     }
 

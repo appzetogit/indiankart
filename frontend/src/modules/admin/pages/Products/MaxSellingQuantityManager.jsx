@@ -16,7 +16,7 @@ const MaxSellingQuantityManager = () => {
     const fetchProducts = async (showToast = false) => {
         try {
             setLoading(true);
-            const { data } = await API.get('/products?all=true');
+            const { data } = await API.get('/products?all=true&lite=true');
             setProducts(Array.isArray(data) ? data : []);
             if (showToast) toast.success('Product limits synced successfully');
         } catch (error) {
