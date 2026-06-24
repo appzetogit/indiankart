@@ -18,7 +18,8 @@ const productSchema = mongoose.Schema({
     dailyViewStats: [{
         date: { type: String }, // 'YYYY-MM-DD'
         views: { type: Number, default: 0 },
-        visitors: { type: Number, default: 0 }
+        visitors: { type: Number, default: 0 },
+        visitedSessions: [{ type: String }]
     }],
     image: { type: String }, // Primary image
     images: [{ type: String }], // Gallery images

@@ -891,18 +891,32 @@ export const incrementProductView = async (req, res) => {
             ? product.dailyViewStats.find((entry) => entry.date === todayDate)
             : null;
 
+        const sessionId = String(req.headers['x-user-session-id'] || '').trim();
+
         if (existingDailyEntry) {
             existingDailyEntry.views = (Number(existingDailyEntry.views) || 0) + 1;
-            // Simulate visitors logic: 1 visitor for every ~1.5 views on average for demo purposes
-            if (Math.random() > 0.4) {
-                existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
+            
+            if (sessionId) {
+                if (!existingDailyEntry.visitedSessions) {
+                    existingDailyEntry.visitedSessions = [];
+                }
+                if (!existingDailyEntry.visitedSessions.includes(sessionId)) {
+                    existingDailyEntry.visitedSessions.push(sessionId);
+                    existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
+                }
+            } else {
+                // Fallback: simulate unique visitors if no session ID header is present
+                if (Math.random() > 0.4) {
+                    existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
+                }
             }
         } else {
             if (!product.dailyViewStats) product.dailyViewStats = [];
             product.dailyViewStats.push({
                 date: todayDate,
                 views: 1,
-                visitors: 1
+                visitors: 1,
+                visitedSessions: sessionId ? [sessionId] : []
             });
         }
 
@@ -911,6 +925,7 @@ export const incrementProductView = async (req, res) => {
             product.dailyViewStats = product.dailyViewStats.slice(-365);
         }
 
+        product.markModified('dailyViewStats');
         await product.save();
 
         const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);

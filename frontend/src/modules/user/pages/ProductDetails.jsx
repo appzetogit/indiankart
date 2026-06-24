@@ -582,7 +582,7 @@ const ProductDetails = () => {
         if (!id || !product || authLoading) return;
         if (isResolvingPincodeState) return;
 
-        const sessionKey = `ik-product-viewed:${id}`;
+        const sessionKey = `ik-product-viewed:${id}:${bestKnownState}`;
         const lastTrackedAt = Number(sessionStorage.getItem(sessionKey) || 0);
         const now = Date.now();
         if (Number.isFinite(lastTrackedAt) && lastTrackedAt > 0 && (now - lastTrackedAt) < VIEW_DEDUPE_WINDOW_MS) {
