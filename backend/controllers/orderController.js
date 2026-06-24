@@ -48,8 +48,19 @@ const ORDER_LIST_SELECT = [
     'orderItems',
     'referral',
     'fulfillment',
-    'delhivery',
-    'ekart'
+    'user',
+    'delhivery.waybill',
+    'delhivery.providerOrderId',
+    'delhivery.pickupLocation',
+    'delhivery.syncedAt',
+    'delhivery.cancelledAt',
+    'delhivery.lastError',
+    'ekart.trackingNumber',
+    'ekart.providerOrderId',
+    'ekart.pickupLocation',
+    'ekart.syncedAt',
+    'ekart.cancelledAt',
+    'ekart.lastError'
 ].join(' ');
 
 const normalizeReferralCode = (value = '') =>
