@@ -15,7 +15,7 @@ export const getCategories = async (req, res) => {
         const lite = req.query.lite === 'true' || req.query.lite === '1';
 
         const baseProjection = lite
-            ? 'id name icon active createdAt'
+            ? 'id name icon active createdAt b2bEnabled'
             : 'id name icon active createdAt b2bEnabled';
 
         const categories = await Category.find(query)

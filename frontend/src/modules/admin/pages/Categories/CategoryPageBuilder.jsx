@@ -316,7 +316,7 @@ const CategoryPageBuilder = () => {
     const requestedCategoryName = String(searchParams.get('categoryName') || '').trim().toLowerCase();
 
     const category = useMemo(() => catalog.find((item) => item.id === categoryId) || catalog[0] || null, [catalog, categoryId]);
-    const { products: allProducts = [], loading: productsLoading } = useProducts({ enabled: isSectionFormPage });
+    const { products: allProducts = [], loading: productsLoading } = useProducts({ enabled: isSectionFormPage, lite: true });
     const { subCategories: detailedSubCategories = [] } = useSubCategoriesByCategory(category?.dbId || category?._id || '');
     const existingSection = category?.pageSections?.find((item) => item.id === sectionId) || null;
     const section = isCreatingSection ? draftSection : existingSection;
@@ -819,7 +819,7 @@ const CategoryPageBuilder = () => {
                 window.setTimeout(() => setSectionSaveMessage(''), 1800);
                 navigate(`/admin/categories/page-builder?categoryId=${encodeURIComponent(categoryId)}`, { replace: true });
             }
-        } catch (err) {
+        } catch {
             if (type === 'layout') {
                 setLayoutSaveMessage('Save failed');
                 window.setTimeout(() => setLayoutSaveMessage(''), 1800);

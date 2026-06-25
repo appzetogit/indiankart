@@ -34,6 +34,12 @@ const serializeAdmin = (adminDoc, includeMeta = false) => {
     };
 };
 
+const DASHBOARD_SUMMARY_TTL_MS = 30 * 1000;
+let dashboardSummaryCache = {
+    payload: null,
+    expiresAt: 0
+};
+
 // @desc    Auth admin & get token
 // @route   POST /api/admin/login
 // @access  Public
@@ -283,6 +289,10 @@ export const deleteAdmin = async (req, res) => {
 // @access  Private/Admin
 export const getDashboardSummary = async (req, res) => {
     try {
+        if (dashboardSummaryCache.payload && dashboardSummaryCache.expiresAt > Date.now()) {
+            return res.json(dashboardSummaryCache.payload);
+        }
+
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -450,7 +460,7 @@ export const getDashboardSummary = async (req, res) => {
             .sort((first, second) => new Date(second.time).getTime() - new Date(first.time).getTime())
             .slice(0, 6);
 
-        res.json({
+        const payload = {
             metrics: {
                 totalProducts,
                 totalOrders,
@@ -476,7 +486,14 @@ export const getDashboardSummary = async (req, res) => {
             lowStockProducts,
             recentActivity,
             topCustomers
-        });
+        };
+
+        dashboardSummaryCache = {
+            payload,
+            expiresAt: Date.now() + DASHBOARD_SUMMARY_TTL_MS
+        };
+
+        res.json(payload);
     } catch (error) {
         console.error('Error fetching dashboard summary:', error);
         res.status(500).json({ message: error.message || 'Failed to fetch dashboard summary' });

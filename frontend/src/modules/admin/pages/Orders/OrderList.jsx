@@ -106,6 +106,29 @@ const OrderListLoadingState = ({ message = 'Loading orders...' }) => (
     </div>
 );
 
+const ORDER_LIST_CACHE_TTL_MS = 2 * 60 * 1000;
+let orderListCache = new Map();
+
+const buildOrderListCacheKey = ({ currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter }) => (
+    JSON.stringify({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: String(searchTerm || '').trim(),
+        status: String(statusFilter || 'All').trim(),
+        user: String(userEmailFilter || '').trim()
+    })
+);
+
+const getCachedOrderList = (cacheKey) => {
+    const cached = orderListCache.get(cacheKey);
+    if (!cached) return null;
+    if ((Date.now() - cached.fetchedAt) > ORDER_LIST_CACHE_TTL_MS) {
+        orderListCache.delete(cacheKey);
+        return null;
+    }
+    return cached;
+};
+
 const OrderList = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -113,10 +136,19 @@ const OrderList = () => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+    const itemsPerPage = 20;
+    const initialCacheKey = buildOrderListCacheKey({
+        currentPage: 1,
+        itemsPerPage,
+        searchTerm: '',
+        statusFilter: 'All',
+        userEmailFilter
+    });
+    const initialCachedOrders = getCachedOrderList(initialCacheKey);
     const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalOrders, setTotalOrders] = useState(0);
-    const [localOrders, setLocalOrders] = useState([]);
+    const [totalPages, setTotalPages] = useState(() => initialCachedOrders?.totalPages || 1);
+    const [totalOrders, setTotalOrders] = useState(() => initialCachedOrders?.totalOrders || 0);
+    const [localOrders, setLocalOrders] = useState(() => initialCachedOrders?.orders || []);
     const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
     const [bulkStatus, setBulkStatus] = useState('');
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
@@ -124,18 +156,34 @@ const OrderList = () => {
     const [serialInputs, setSerialInputs] = useState({});
     const [serialTypes, setSerialTypes] = useState({});
     const [serialSavingOrderId, setSerialSavingOrderId] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+    const [isLoading, setIsLoading] = useState(() => !initialCachedOrders);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(() => Boolean(initialCachedOrders));
     const [fetchError, setFetchError] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const latestRequestRef = useRef(0);
-    const itemsPerPage = 20;
 
     useEffect(() => {
+        const cacheKey = buildOrderListCacheKey({
+            currentPage,
+            itemsPerPage,
+            searchTerm,
+            statusFilter,
+            userEmailFilter
+        });
+        const cachedOrders = getCachedOrderList(cacheKey);
+
+        if (cachedOrders) {
+            setLocalOrders(cachedOrders.orders);
+            setTotalPages(cachedOrders.totalPages);
+            setTotalOrders(cachedOrders.totalOrders);
+            setHasLoadedOnce(true);
+            setIsLoading(false);
+        }
+
         const fetchPaginatedOrders = async () => {
             const requestId = latestRequestRef.current + 1;
             latestRequestRef.current = requestId;
-            setIsLoading(true);
+            setIsLoading(!cachedOrders);
             setFetchError('');
 
             try {
@@ -154,15 +202,30 @@ const OrderList = () => {
                 const { data } = await API.get('/orders', { params });
                 if (requestId !== latestRequestRef.current) return;
 
+                let nextOrders = [];
+                let nextTotalPages = 1;
+                let nextTotalOrders = 0;
+
                 if (data.orders) {
-                    setLocalOrders(data.orders.map((order) => transformOrder(order)));
-                    setTotalPages(data.pages || 1);
-                    setTotalOrders(Number(data.total) || 0);
+                    nextOrders = data.orders.map((order) => transformOrder(order));
+                    nextTotalPages = data.pages || 1;
+                    nextTotalOrders = Number(data.total) || 0;
                 } else {
-                    setLocalOrders(Array.isArray(data) ? data.map((order) => transformOrder(order)) : []);
-                    setTotalPages(1);
-                    setTotalOrders(Array.isArray(data) ? data.length : 0);
+                    nextOrders = Array.isArray(data) ? data.map((order) => transformOrder(order)) : [];
+                    nextTotalPages = 1;
+                    nextTotalOrders = Array.isArray(data) ? data.length : 0;
                 }
+
+                orderListCache.set(cacheKey, {
+                    orders: nextOrders,
+                    totalPages: nextTotalPages,
+                    totalOrders: nextTotalOrders,
+                    fetchedAt: Date.now()
+                });
+
+                setLocalOrders(nextOrders);
+                setTotalPages(nextTotalPages);
+                setTotalOrders(nextTotalOrders);
                 setHasLoadedOnce(true);
             } catch (error) {
                 console.error(error);
@@ -177,7 +240,7 @@ const OrderList = () => {
             }
         };
 
-        const timer = setTimeout(fetchPaginatedOrders, 300);
+        const timer = setTimeout(fetchPaginatedOrders, cachedOrders ? 0 : 300);
         return () => clearTimeout(timer);
     }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
 

@@ -162,19 +162,27 @@ const ProductManager = () => {
 
     const handlePickerSave = async () => {
         try {
-            const { data } = await API.get('/products', {
-                params: { all: 'true', limit: 1000 }
-            });
-            const allProducts = Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []);
             const selectedSet = new Set(pickerSelectedIds.map((id) => String(id)));
-            const selectedProducts = allProducts
-                .filter((product) => selectedSet.has(getProductId(product)))
-                .map((product) => ({
-                    id: getProductId(product),
-                    name: product?.name || '',
-                    image: product?.image || '',
-                    subtitle: product?.subtitle || ''
-                }));
+            let selectedProducts = [];
+
+            if (selectedSet.size > 0) {
+                const { data } = await API.get('/products', {
+                    params: {
+                        all: 'true',
+                        lite: 'true',
+                        ids: pickerSelectedIds.join(',')
+                    }
+                });
+                const allProducts = Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []);
+                selectedProducts = allProducts
+                    .filter((product) => selectedSet.has(getProductId(product)))
+                    .map((product) => ({
+                        id: getProductId(product),
+                        name: product?.name || '',
+                        image: product?.image || '',
+                        subtitle: product?.subtitle || ''
+                    }));
+            }
 
             localStorage.setItem(PRODUCT_PICKER_RESULT_KEY, JSON.stringify({
                 target: 'category-page-builder',

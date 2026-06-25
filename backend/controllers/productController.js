@@ -137,13 +137,21 @@ const getWeekdayLabelFromDateKey = (dateKey = '') => {
 // @access  Public
 export const getProducts = async (req, res) => {
     try {
-        const { category, subcategory, all, pageNumber, limit, search, keyword, lite } = req.query;
+        const { category, subcategory, all, pageNumber, limit, search, keyword, lite, ids } = req.query;
         let filter = {};
         const searchTerm = String(search || keyword || '').trim();
         const categoryTerm = decodeURIComponent(String(category || '').trim());
         const subCategoryTerm = decodeURIComponent(String(subcategory || '').trim());
         const isLite = lite === 'true' || lite === '1';
         const projection = getListProjection(isLite);
+        const normalizedIds = String(ids || '')
+            .split(',')
+            .map((value) => Number(String(value || '').trim()))
+            .filter((value) => Number.isFinite(value));
+
+        if (normalizedIds.length > 0) {
+            filter.id = { $in: [...new Set(normalizedIds)].slice(0, 500) };
+        }
 
         if (all !== 'true') {
             // Always filter by active categories and subcategories for public requests.

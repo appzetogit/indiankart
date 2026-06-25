@@ -59,7 +59,7 @@ const useCategoryStore = create((set, get) => ({
 
         categoriesFetchPromise = (async () => {
             try {
-                const { data } = await API.get('/categories?all=true');
+                const { data } = await API.get('/categories?all=true&lite=true');
                 const sortedCategories = get().sortByNewestFirst(data);
                 categoriesFetchedAt = Date.now();
                 set({ categories: sortedCategories, isLoading: false, error: null });

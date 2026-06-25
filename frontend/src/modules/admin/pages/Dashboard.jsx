@@ -76,33 +76,52 @@ const activityIconMap = {
     return: MdAssignment
 };
 
+const DASHBOARD_CACHE_TTL_MS = 60 * 1000;
+let dashboardSummaryCache = {
+    data: null,
+    fetchedAt: 0
+};
+
+const isDashboardCacheFresh = () => (
+    dashboardSummaryCache.data &&
+    (Date.now() - dashboardSummaryCache.fetchedAt) < DASHBOARD_CACHE_TTL_MS
+);
+
+const normalizeSummary = (data) => ({
+    ...defaultSummary,
+    ...data,
+    metrics: { ...defaultSummary.metrics, ...(data?.metrics || {}) },
+    revenue: { ...defaultSummary.revenue, ...(data?.revenue || {}) },
+    tasks: { ...defaultSummary.tasks, ...(data?.tasks || {}) },
+    lowStockProducts: Array.isArray(data?.lowStockProducts) ? data.lowStockProducts : [],
+    recentActivity: Array.isArray(data?.recentActivity) ? data.recentActivity : [],
+    topCustomers: Array.isArray(data?.topCustomers) ? data.topCustomers : []
+});
+
 const Dashboard = () => {
     const navigate = useNavigate();
     const supportRequests = useSupportStore((state) => state.supportRequests || []);
-    const [summary, setSummary] = useState(defaultSummary);
-    const [isLoading, setIsLoading] = useState(true);
+    const [summary, setSummary] = useState(() => (
+        dashboardSummaryCache.data ? normalizeSummary(dashboardSummaryCache.data) : defaultSummary
+    ));
+    const [isLoading, setIsLoading] = useState(() => !dashboardSummaryCache.data);
     const [error, setError] = useState('');
 
     useEffect(() => {
         let isMounted = true;
 
         const fetchSummary = async () => {
-            setIsLoading(true);
+            setIsLoading(!dashboardSummaryCache.data);
             setError('');
 
             try {
                 const { data } = await API.get('/admin/dashboard-summary');
                 if (!isMounted) return;
-                setSummary({
-                    ...defaultSummary,
-                    ...data,
-                    metrics: { ...defaultSummary.metrics, ...(data?.metrics || {}) },
-                    revenue: { ...defaultSummary.revenue, ...(data?.revenue || {}) },
-                    tasks: { ...defaultSummary.tasks, ...(data?.tasks || {}) },
-                    lowStockProducts: Array.isArray(data?.lowStockProducts) ? data.lowStockProducts : [],
-                    recentActivity: Array.isArray(data?.recentActivity) ? data.recentActivity : [],
-                    topCustomers: Array.isArray(data?.topCustomers) ? data.topCustomers : []
-                });
+                dashboardSummaryCache = {
+                    data,
+                    fetchedAt: Date.now()
+                };
+                setSummary(normalizeSummary(data));
             } catch (fetchError) {
                 if (!isMounted) return;
                 setError(fetchError.response?.data?.message || 'Failed to load dashboard');
@@ -113,7 +132,11 @@ const Dashboard = () => {
             }
         };
 
-        fetchSummary();
+        if (!isDashboardCacheFresh()) {
+            fetchSummary();
+        } else {
+            setIsLoading(false);
+        }
 
         return () => {
             isMounted = false;

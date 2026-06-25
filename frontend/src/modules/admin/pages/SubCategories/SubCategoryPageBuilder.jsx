@@ -24,8 +24,6 @@ const SELECT_LINK_VALUE = '__select__';
 const SELECTED_CATEGORY_STORAGE_KEY = 'subcategory-page-builder-selected-subcategory-v1';
 
 const normalizeText = (value) => String(value || '').trim();
-const isForYouCategoryName = (value) => normalizeText(value).toLowerCase() === 'for you';
-
 const buildCategoryPageRoute = (categoryName, subCategoryName = '') => {
     const base = `/category/${encodeURIComponent(normalizeText(categoryName))}`;
     return subCategoryName ? `${base}/${encodeURIComponent(normalizeText(subCategoryName))}` : base;
@@ -219,7 +217,7 @@ const enforceSectionItemRules = (items = [], sectionKind = 'image', mediaDisplay
 
 const isLockedSection = (section) => String(section?.id) === DEFAULT_SUBCATEGORIES_SECTION_ID || section?.locked;
 
-const withDefaultSections = (sections = [], categoryName = '') => {
+const withDefaultSections = (sections = []) => {
     const shouldIncludeDefaultSubcategories = true;
     const filtered = Array.isArray(sections) ? sections.filter(Boolean) : [];
     const filteredWithoutLocked = shouldIncludeDefaultSubcategories
@@ -323,8 +321,8 @@ const SubCategoryPageBuilder = () => {
     const requestedCategoryName = String(searchParams.get('categoryName') || '').trim().toLowerCase();
 
     const category = useMemo(() => catalog.find((item) => item.id === categoryId) || catalog[0] || null, [catalog, categoryId]);
-    const { products: allProducts = [], loading: productsLoading } = useProducts({ enabled: isSectionFormPage });
-    const detailedSubCategories = [];
+    const { products: allProducts = [], loading: productsLoading } = useProducts({ enabled: isSectionFormPage, lite: true });
+    const detailedSubCategories = useMemo(() => [], []);
     const existingSection = category?.pageSections?.find((item) => item.id === sectionId) || null;
     const section = isCreatingSection ? draftSection : existingSection;
     const getProduct = (id) => category?.products?.find((item) => item.id === id);
@@ -903,7 +901,7 @@ const SubCategoryPageBuilder = () => {
                 window.setTimeout(() => setSectionSaveMessage(''), 1800);
                 navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(categoryId)}`, { replace: true });
             }
-        } catch (err) {
+        } catch {
             if (type === 'layout') {
                 setLayoutSaveMessage('Save failed');
                 window.setTimeout(() => setLayoutSaveMessage(''), 1800);
