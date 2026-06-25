@@ -152,7 +152,14 @@ const useOrderStore = create((set) => ({
     getOrderDetails: async (id) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.get(`/orders/${id}`);
+            const { data } = await API.get(`/orders/${id}`, {
+                params: {
+                    ensureInvoice: true,
+                    syncPayment: false,
+                    syncFulfillment: false,
+                    includePaymentAudit: false
+                }
+            });
             const transformedOrder = transformOrder(data);
 
             set((state) => {

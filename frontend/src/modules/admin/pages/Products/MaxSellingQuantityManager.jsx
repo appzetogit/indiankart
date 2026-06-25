@@ -4,20 +4,24 @@ import { toast } from 'react-hot-toast';
 import API from '../../../../services/api';
 import Loader from '../../../../components/common/Loader';
 import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { getAdminListCache, setAdminListCache } from '../../utils/adminListCache';
 
 const normalizeSearchValue = (value = '') => String(value).toLowerCase().replace(/\s+/g, '');
+const MAX_QTY_PRODUCTS_CACHE_KEY = 'admin-products:max-qty-lite';
 
 const MaxSellingQuantityManager = () => {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [products, setProducts] = useState(() => getAdminListCache(MAX_QTY_PRODUCTS_CACHE_KEY) || []);
+    const [loading, setLoading] = useState(() => !getAdminListCache(MAX_QTY_PRODUCTS_CACHE_KEY));
     const [searchTerm, setSearchTerm] = useState('');
     const [editingLimits, setEditingLimits] = useState({});
 
     const fetchProducts = async (showToast = false) => {
         try {
-            setLoading(true);
+            setLoading(products.length === 0);
             const { data } = await API.get('/products?all=true&lite=true');
-            setProducts(Array.isArray(data) ? data : []);
+            const nextProducts = Array.isArray(data) ? data : [];
+            setAdminListCache(MAX_QTY_PRODUCTS_CACHE_KEY, nextProducts);
+            setProducts(nextProducts);
             if (showToast) toast.success('Product limits synced successfully');
         } catch (error) {
             console.error('Fetch max quantity products error:', error);
@@ -54,9 +58,13 @@ const MaxSellingQuantityManager = () => {
                 maxOrderQuantity: normalizedValue
             });
 
-            setProducts((prev) => prev.map((item) => (
-                item.id === product.id ? { ...item, maxOrderQuantity: data.maxOrderQuantity } : item
-            )));
+            setProducts((prev) => {
+                const nextProducts = prev.map((item) => (
+                    item.id === product.id ? { ...item, maxOrderQuantity: data.maxOrderQuantity } : item
+                ));
+                setAdminListCache(MAX_QTY_PRODUCTS_CACHE_KEY, nextProducts);
+                return nextProducts;
+            });
 
             setEditingLimits((prev) => {
                 const next = { ...prev };

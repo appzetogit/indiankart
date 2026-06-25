@@ -4,19 +4,24 @@ import API from '../../../../services/api';
 import { toast } from 'react-hot-toast';
 import Loader from '../../../../components/common/Loader';
 import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
+import { getAdminListCache, setAdminListCache } from '../../utils/adminListCache';
+
+const STOCK_PRODUCTS_CACHE_KEY = 'admin-products:stock-lite';
 
 const StockManagement = () => {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [products, setProducts] = useState(() => getAdminListCache(STOCK_PRODUCTS_CACHE_KEY) || []);
+    const [loading, setLoading] = useState(() => !getAdminListCache(STOCK_PRODUCTS_CACHE_KEY));
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedProduct, setExpandedProduct] = useState(null);
     const [editingStock, setEditingStock] = useState({}); // { productId: value, "productId-skuIndex": value }
 
     const fetchProducts = async (showToast = false) => {
         try {
-            setLoading(true);
+            setLoading(products.length === 0);
             const { data } = await API.get('/products?all=true&lite=true');
-            setProducts(data);
+            const nextProducts = Array.isArray(data) ? data : [];
+            setAdminListCache(STOCK_PRODUCTS_CACHE_KEY, nextProducts);
+            setProducts(nextProducts);
             if (showToast) toast.success('Inventory synced successfully');
         } catch (error) {
             console.error('Fetch products error:', error);
@@ -67,7 +72,8 @@ const StockManagement = () => {
             toast.success('Stock updated successfully!', { id: 'update-stock' });
 
             // Update local state instead of full refetch for better UX
-            setProducts(prev => prev.map(p => {
+            setProducts(prev => {
+                const nextProducts = prev.map(p => {
                 if (p.id === product.id) {
                     if (isSku) {
                         const derivedStock = payload.skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
@@ -76,7 +82,10 @@ const StockManagement = () => {
                     return { ...p, stock: payload.stock };
                 }
                 return p;
-            }));
+                });
+                setAdminListCache(STOCK_PRODUCTS_CACHE_KEY, nextProducts);
+                return nextProducts;
+            });
 
             // Clear editing state for this item
             const newEditing = { ...editingStock };

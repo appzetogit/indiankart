@@ -6,8 +6,10 @@ import Pagination from '../../../../components/Pagination';
 import API from '../../../../services/api'; import toast from 'react-hot-toast';
 import useCategoryStore from '../../store/categoryStore';
 import { confirmToast } from '../../../../utils/toastUtils.jsx';
+import { clearAdminListCache, getAdminListCache, setAdminListCache } from '../../utils/adminListCache';
 
 const PRODUCT_PICKER_RESULT_KEY = 'category-page-builder-product-picker-result-v1';
+const PRODUCT_LIST_CACHE_PREFIX = 'admin-products:list:';
 
 const getCategoryLabel = (product) => {
     const rawCategory = product?.category;
@@ -39,6 +41,15 @@ const parseSelectedProductIds = (value = '') => (
         .filter(Boolean)
 );
 
+const buildProductListCacheKey = ({ currentPage, itemsPerPage, searchTerm, filterCategory }) => (
+    `${PRODUCT_LIST_CACHE_PREFIX}${JSON.stringify({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: String(searchTerm || '').trim(),
+        category: String(filterCategory || 'All').trim()
+    })}`
+);
+
 const ProductManager = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -49,12 +60,19 @@ const ProductManager = () => {
     const [selectedProduct, setSelectedProduct] = useState(null);
 
     // Server-side Pagination State
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalProducts, setTotalProducts] = useState(0);
     const itemsPerPage = 20;
+    const initialCacheKey = buildProductListCacheKey({
+        currentPage: 1,
+        itemsPerPage,
+        searchTerm: '',
+        filterCategory: 'All'
+    });
+    const initialCachedList = getAdminListCache(initialCacheKey);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(() => initialCachedList?.totalPages || 1);
+    const [totalProducts, setTotalProducts] = useState(() => initialCachedList?.totalProducts || 0);
 
-    const [localProducts, setLocalProducts] = useState([]);
+    const [localProducts, setLocalProducts] = useState(() => initialCachedList?.products || []);
     const pickerMode = searchParams.get('picker') === 'category-builder';
     const pickerReturnTo = searchParams.get('returnTo') || '/admin/categories/page-builder';
     const pickerCategoryId = searchParams.get('categoryId') || '';
@@ -66,6 +84,20 @@ const ProductManager = () => {
 
     useEffect(() => {
         let active = true;
+        const cacheKey = buildProductListCacheKey({
+            currentPage,
+            itemsPerPage,
+            searchTerm,
+            filterCategory
+        });
+        const cachedList = getAdminListCache(cacheKey);
+
+        if (cachedList) {
+            setLocalProducts(cachedList.products);
+            setTotalPages(cachedList.totalPages);
+            setTotalProducts(cachedList.totalProducts);
+        }
+
         const fetchPaginatedProducts = async () => {
             try {
                 const params = {
@@ -86,23 +118,37 @@ const ProductManager = () => {
                 const { data } = await API.get('/products', { params });
 
                 if (!active) return;
+                let nextProducts = [];
+                let nextTotalPages = 1;
+                let nextTotalProducts = 0;
+
                 if (data.products) {
-                    setLocalProducts(data.products);
-                    setTotalPages(data.pages);
-                    setTotalProducts(data.total);
+                    nextProducts = data.products;
+                    nextTotalPages = data.pages;
+                    nextTotalProducts = data.total;
                 } else {
                     // Fallback if backend returns array (backward compat)
-                    setLocalProducts(data);
-                    setTotalPages(1);
-                    setTotalProducts(Array.isArray(data) ? data.length : 0);
+                    nextProducts = Array.isArray(data) ? data : [];
+                    nextTotalPages = 1;
+                    nextTotalProducts = Array.isArray(data) ? data.length : 0;
                 }
+
+                setAdminListCache(cacheKey, {
+                    products: nextProducts,
+                    totalPages: nextTotalPages,
+                    totalProducts: nextTotalProducts
+                });
+
+                setLocalProducts(nextProducts);
+                setTotalPages(nextTotalPages);
+                setTotalProducts(nextTotalProducts);
             } catch (error) {
                 console.error(error);
                 if (active) toast.error('Failed to fetch products');
             }
         };
 
-        const timer = setTimeout(fetchPaginatedProducts, 250);
+        const timer = setTimeout(fetchPaginatedProducts, cachedList ? 0 : 250);
         return () => {
             active = false;
             clearTimeout(timer);
@@ -122,6 +168,7 @@ const ProductManager = () => {
             confirmText: 'Delete Product',
             onConfirm: async () => {
                 await deleteProduct(id); // Store action
+                clearAdminListCache(PRODUCT_LIST_CACHE_PREFIX);
                 // Refresh local list
                 const searchText = searchTerm.trim();
                 const { data } = await API.get('/products', {
@@ -138,6 +185,16 @@ const ProductManager = () => {
                     setLocalProducts(data.products);
                     setTotalPages(data.pages);
                     setTotalProducts(data.total);
+                    setAdminListCache(buildProductListCacheKey({
+                        currentPage,
+                        itemsPerPage,
+                        searchTerm,
+                        filterCategory
+                    }), {
+                        products: data.products,
+                        totalPages: data.pages,
+                        totalProducts: data.total
+                    });
                 }
             }
         });

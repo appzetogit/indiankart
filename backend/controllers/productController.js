@@ -146,7 +146,9 @@ export const getProducts = async (req, res) => {
         const projection = getListProjection(isLite);
         const normalizedIds = String(ids || '')
             .split(',')
-            .map((value) => Number(String(value || '').trim()))
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)
+            .map((value) => Number(value))
             .filter((value) => Number.isFinite(value));
 
         if (normalizedIds.length > 0) {

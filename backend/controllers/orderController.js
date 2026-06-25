@@ -1174,12 +1174,26 @@ export const getOrderById = async (req, res) => {
 
             // Check if it's the owner or an admin
             if (isAllowed) {
-                await ensureOrderInvoiceNumber(order);
-                const syncedOrder = await syncOrderPaymentFromGateway(order);
-                const fullySyncedOrder = await syncOrderFulfillmentStatus(syncedOrder);
-                const [auditedOrder] = await annotateDuplicatePayments([fullySyncedOrder]);
-                await auditedOrder.populate('user', 'name email phone');
-                res.json(auditedOrder);
+                const shouldEnsureInvoice = String(req.query.ensureInvoice ?? 'true') !== 'false';
+                const shouldSyncPayment = String(req.query.syncPayment ?? 'true') !== 'false';
+                const shouldSyncFulfillment = String(req.query.syncFulfillment ?? 'true') === 'true';
+                const shouldIncludePaymentAudit = String(req.query.includePaymentAudit ?? 'true') === 'true';
+
+                if (shouldEnsureInvoice) {
+                    await ensureOrderInvoiceNumber(order);
+                }
+
+                const syncedOrder = shouldSyncPayment
+                    ? await syncOrderPaymentFromGateway(order)
+                    : order;
+                const fulfillmentReadyOrder = shouldSyncFulfillment
+                    ? await syncOrderFulfillmentStatus(syncedOrder)
+                    : syncedOrder;
+                const [finalOrder] = shouldIncludePaymentAudit
+                    ? await annotateDuplicatePayments([fulfillmentReadyOrder])
+                    : [fulfillmentReadyOrder];
+                await finalOrder.populate('user', 'name email phone');
+                res.json(finalOrder);
             } else {
                 res.status(401).json({ 
                     message: 'Not authorized to view this order',
