@@ -81,20 +81,32 @@ const AdminRoutes = () => {
                     <Route path="dashboard" element={withPermission('dashboard', <Dashboard />)} />
 
                     {/* Modules */}
-                    <Route path="products" element={withPermission('products', <ProductManager />)} />
-                    <Route path="products/max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
+                    {/* Products Module */}
+                    <Route path="products">
+                        <Route index element={withPermission('products', <ProductManager />)} />
+                        <Route path="max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
+                        <Route path="new" element={withPermission('products', <ProductForm />)} />
+                        <Route path="edit/:id" element={withPermission('products', <ProductForm />)} />
+                    </Route>
+
                     <Route path="product-views" element={withPermission('productViews', <ProductViews />)} />
                     <Route path="product-views/:id" element={withPermission('productViews', <ProductAnalytics />)} />
                     <Route path="b2b" element={withPermission('b2b', <B2BManager />)} />
-                    <Route path="products/new" element={withPermission('products', <ProductForm />)} />
-                    <Route path="products/edit/:id" element={withPermission('products', <ProductForm />)} />
                     <Route path="stock" element={withPermission('stockManagement', <StockManagement />)} />
-                    <Route path="categories" element={withPermission('categories', <CategoryList />)} />
-                    <Route path="categories/page-builder" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
-                    <Route path="categories/page-builder/section/:sectionId" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
-                    <Route path="subcategories" element={withPermission('subcategories', <SubCategoryList />)} />
-                    <Route path="subcategories/page-builder" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
-                    <Route path="subcategories/page-builder/section/:sectionId" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+
+                    {/* Categories Module */}
+                    <Route path="categories">
+                        <Route index element={withPermission('categories', <CategoryList />)} />
+                        <Route path="page-builder" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                        <Route path="page-builder/section/:sectionId" element={withPermission('categoryPageBuilder', <CategoryPageBuilder />)} />
+                    </Route>
+
+                    {/* Subcategories Module */}
+                    <Route path="subcategories">
+                        <Route index element={withPermission('subcategories', <SubCategoryList />)} />
+                        <Route path="page-builder" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                        <Route path="page-builder/section/:sectionId" element={withPermission('subCategoryPageBuilder', <SubCategoryPageBuilder />)} />
+                    </Route>
                     <Route path="brands" element={withPermission('brands', <BrandList />)} />
                     <Route path="orders" element={withPermission('orders', <OrderList />)} />
                     <Route path="orders/:id" element={withPermission('orders', <OrderDetail />)} />

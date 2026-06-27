@@ -8,6 +8,8 @@ import useBrandStore from '../../store/brandStore';
 import RichTextEditor from '../../components/RichTextEditor';
 import toast from 'react-hot-toast';
 
+const PRODUCTION_UPLOAD_LIMIT_BYTES = 1024 * 1024;
+
 const ProductForm = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -168,6 +170,53 @@ const ProductForm = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const collectPendingUploadFiles = () => {
+        const files = [];
+
+        if (formData.thumbnail?.type === 'file' && formData.thumbnail.content) {
+            files.push(formData.thumbnail.content);
+        }
+
+        (formData.galleryImages || []).forEach((img) => {
+            if (img?.type === 'file' && img.content) {
+                files.push(img.content);
+            }
+        });
+
+        (formData.description || []).forEach((section) => {
+            if (section?.image?.type === 'file' && section.image.content) {
+                files.push(section.image.content);
+            }
+        });
+
+        (formData.variantHeadings || []).forEach((heading) => {
+            (heading?.options || []).forEach((option) => {
+                if (option?.image?.type === 'file' && option.image.content) {
+                    files.push(option.image.content);
+                }
+
+                (option?.images || []).forEach((img) => {
+                    if (img?.type === 'file' && img.content) {
+                        files.push(img.content);
+                    }
+                });
+            });
+        });
+
+        return files;
+    };
+
+    const getPendingUploadSummary = () => {
+        const files = collectPendingUploadFiles();
+        const totalBytes = files.reduce((sum, file) => sum + (file?.size || 0), 0);
+
+        return {
+            files,
+            totalBytes,
+            totalMb: totalBytes / (1024 * 1024)
+        };
     };
 
     // --- Image Handlers ---
@@ -689,7 +738,15 @@ const ProductForm = () => {
             navigate('/admin/products', { replace: true });
         } catch (error) {
             console.error("Failed to save product:", error);
-            const message = error.response?.data?.message || "Failed to save product. Please try again.";
+            const { totalBytes, totalMb, files } = getPendingUploadSummary();
+            const isLikelyUploadLimitIssue =
+                error.message === 'Network Error' &&
+                files.length > 0 &&
+                totalBytes > PRODUCTION_UPLOAD_LIMIT_BYTES;
+
+            const message = isLikelyUploadLimitIssue
+                ? `Upload failed because the production server is currently rejecting files above about 1 MB total. Current upload: ${totalMb.toFixed(2)} MB. Reduce image sizes or increase nginx client_max_body_size on backend.indiankart.in.`
+                : error.response?.data?.message || "Failed to save product. Please try again.";
             toast.error(message);
         } finally {
             setIsSubmitting(false);
