@@ -20,7 +20,7 @@ import Pagination from '../../components/common/Pagination';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
-const LIVE_REFRESH_MS = 60000;
+const LIVE_REFRESH_MS = 15000;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
 const isKnownState = (value) => String(value || '').trim().toLowerCase() !== 'unknown';
 const getKnownStateEntries = (product) => (
@@ -79,6 +79,7 @@ const ProductViews = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [portalInsights, setPortalInsights] = useState(null);
+    const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
 
     const fetchProducts = async (showToast = false) => {
         try {
@@ -93,6 +94,7 @@ const ProductViews = () => {
             const sorted = [...list].sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
             setProducts(sorted);
             setPortalInsights(portalData);
+            setLastRefreshedAt(new Date());
             if (showToast) toast.success('Views refreshed');
         } catch (error) {
             console.error('Error fetching product views:', error);
@@ -114,7 +116,17 @@ const ProductViews = () => {
             fetchProducts();
         }, LIVE_REFRESH_MS);
 
-        return () => window.clearInterval(intervalId);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchProducts();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, []);
 
     const filteredProducts = useMemo(() => {
@@ -140,6 +152,7 @@ const ProductViews = () => {
     const totalPortalVisitors = Number(portalInsights?.totalVisitors || 0);
     const last7DaysVisitors = Number(portalInsights?.last7Days?.visitors || 0);
     const liveLoggedInUsers = Number(portalInsights?.authStats?.activeLoggedInUsers || 0);
+    const liveActiveAllUsers = Number(portalInsights?.authStats?.liveActiveAllUsers || 0);
     const todayLogins = Number(portalInsights?.authStats?.todayLogins || 0);
     const todayLogouts = Number(portalInsights?.authStats?.todayLogouts || 0);
     const liveWindowMinutes = Number(portalInsights?.authStats?.liveWindowMinutes || 5);
@@ -236,9 +249,9 @@ const ProductViews = () => {
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-fuchsia-600 text-white">
                         <MdPeople size={22} />
                     </div>
-                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-fuchsia-500">Live Logged In</p>
-                    <p className="mt-2 text-3xl font-black text-gray-900">{liveLoggedInUsers.toLocaleString()}</p>
-                    <p className="mt-1 text-xs font-semibold text-gray-500">Active in the last {liveWindowMinutes} minutes</p>
+                    <p className="mt-4 text-xs font-black uppercase tracking-[0.2em] text-fuchsia-500">Live Active Users</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{liveActiveAllUsers.toLocaleString()}</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">{liveLoggedInUsers} logged in · {liveWindowMinutes}min window</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-5 shadow-sm">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white">
@@ -274,8 +287,14 @@ const ProductViews = () => {
                 </div>
             </div>
 
-            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs font-semibold text-gray-500 shadow-sm">
-                Auto-refreshing every {Math.round(LIVE_REFRESH_MS / 1000)} seconds. Busiest day: {busiestDayLabel}. Average daily visitors over the current 30-day window: {avgDailyVisitors.toLocaleString()}. Today's logouts: {todayLogouts.toLocaleString()}.
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs font-semibold text-gray-500 shadow-sm flex items-center justify-between gap-4 flex-wrap">
+                <span>Auto-refreshing every {Math.round(LIVE_REFRESH_MS / 1000)}s · Busiest day: {busiestDayLabel} · Avg daily visitors: {avgDailyVisitors.toLocaleString()} · Today's logouts: {todayLogouts.toLocaleString()}</span>
+                {lastRefreshedAt && (
+                    <span className="inline-flex items-center gap-1.5 text-emerald-600 font-bold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Last synced: {lastRefreshedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                )}
             </div>
 
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,1fr)]">

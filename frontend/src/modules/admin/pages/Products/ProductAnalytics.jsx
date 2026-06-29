@@ -28,6 +28,7 @@ import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
+const LIVE_REFRESH_MS = 15000;
 
 const getIndiaDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
     timeZone: INDIA_TIME_ZONE,
@@ -58,15 +59,23 @@ const ProductAnalytics = () => {
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
     const [timeRange, setTimeRange] = useState('30d');
+    const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+    const [liveOnlineUsers, setLiveOnlineUsers] = useState(0);
 
-    const fetchData = async () => {
+    const fetchData = async (showToast = false) => {
         try {
-            setLoading(true);
-            const { data: insights } = await API.get(`/products/${id}/view-insights`);
+            if (!data) setLoading(true);
+            const [{ data: insights }, { data: portalData }] = await Promise.all([
+                API.get(`/products/${id}/view-insights`),
+                API.get('/products/view-insights/portal')
+            ]);
             setData(insights);
+            setLiveOnlineUsers(Number(portalData?.authStats?.activeLoggedInUsers || 0));
+            setLastRefreshedAt(new Date());
+            if (showToast) toast.success('Analytics refreshed');
         } catch (error) {
             console.error('Error fetching analytics:', error);
-            toast.error('Failed to load product analytics');
+            if (!data) toast.error('Failed to load product analytics');
         } finally {
             setLoading(false);
         }
@@ -74,6 +83,26 @@ const ProductAnalytics = () => {
 
     useEffect(() => {
         fetchData();
+    }, [id]);
+
+    // Auto-refresh every 15 seconds for live count sync
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            if (document.visibilityState !== 'visible') return;
+            fetchData();
+        }, LIVE_REFRESH_MS);
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchData();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, [id]);
 
     const filteredDailyStats = useMemo(() => {
@@ -239,13 +268,21 @@ const ProductAnalytics = () => {
                         <p className="text-sm font-medium text-gray-500 italic">Deep dive into performance metrics for this product</p>
                     </div>
                 </div>
-                <button
-                    onClick={fetchData}
-                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-sm font-black text-white hover:bg-slate-800 transition-all shadow-lg active:scale-95"
-                >
-                    <MdRefresh size={20} />
-                    Refresh Feed
-                </button>
+                <div className="flex items-center gap-3">
+                    {lastRefreshedAt && (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Synced: {lastRefreshedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                    )}
+                    <button
+                        onClick={() => fetchData(true)}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-sm font-black text-white hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+                    >
+                        <MdRefresh size={20} />
+                        Refresh Feed
+                    </button>
+                </div>
             </div>
 
             {/* Product Summary Card */}
@@ -474,7 +511,7 @@ const ProductAnalytics = () => {
                             <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                         </span>
                         <span className="text-sm font-black text-emerald-800 tracking-tight">Online Users: </span>
-                        <span className="text-lg font-black text-emerald-900">0</span>
+                        <span className="text-lg font-black text-emerald-900">{liveOnlineUsers}</span>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -652,6 +689,17 @@ const ProductAnalytics = () => {
                         </p>
                     </div>
                 </motion.div>
+            </div>
+
+            {/* Auto-refresh status bar */}
+            <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs font-semibold text-gray-400 shadow-sm flex items-center justify-between">
+                <span>Auto-refreshing every {Math.round(LIVE_REFRESH_MS / 1000)}s · Product ID: {id}</span>
+                {lastRefreshedAt && (
+                    <span className="inline-flex items-center gap-1.5 text-emerald-600 font-bold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live
+                    </span>
+                )}
             </div>
         </div>
     );

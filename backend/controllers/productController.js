@@ -915,10 +915,8 @@ export const incrementProductView = async (req, res) => {
                     existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
                 }
             } else {
-                // Fallback: simulate unique visitors if no session ID header is present
-                if (Math.random() > 0.4) {
-                    existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
-                }
+                // No session ID available — count as a unique visitor since we cannot deduplicate
+                existingDailyEntry.visitors = (Number(existingDailyEntry.visitors) || 0) + 1;
             }
         } else {
             if (!product.dailyViewStats) product.dailyViewStats = [];
@@ -1019,6 +1017,7 @@ export const getPortalViewInsights = async (_req, res) => {
         const [
             totalVisitors,
             activeLoggedInUsers,
+            liveActiveAllUsers,
             todayLogins,
             todayLogouts,
             totalLoginEvents,
@@ -1027,6 +1026,7 @@ export const getPortalViewInsights = async (_req, res) => {
         ] = await Promise.all([
             PortalSession.countDocuments(),
             PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold }, userRole: { $ne: 'guest' } }),
+            PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold } }),
             PortalSession.countDocuments({ loginAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ logoutAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ userRole: { $ne: 'guest' } }),
@@ -1115,6 +1115,7 @@ export const getPortalViewInsights = async (_req, res) => {
             recentSessions: populatedSessions,
             authStats: {
                 activeLoggedInUsers,
+                liveActiveAllUsers,
                 todayLogins,
                 todayLogouts,
                 totalLoginEvents,
