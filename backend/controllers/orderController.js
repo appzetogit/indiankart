@@ -579,6 +579,11 @@ const claimOnlinePayment = async (paymentMethod, paymentResult = {}) => {
 };
 
 const syncOrderPaymentFromGateway = async (order) => {
+    // 1. If order is already paid, no need to sync from gateway again!
+    if (order?.isPaid) {
+        return order;
+    }
+
     const normalizedPaymentMethod = String(order?.paymentMethod || '').trim().toUpperCase();
     if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
         return order;
@@ -592,6 +597,12 @@ const syncOrderPaymentFromGateway = async (order) => {
     ).trim();
 
     if (!paymentId) {
+        return order;
+    }
+
+    // 2. Rate limit: If sync happened within the last 2 minutes, do not sync from gateway again!
+    const lastUpdated = order?.paymentResult?.update_time;
+    if (lastUpdated && (Date.now() - new Date(lastUpdated).getTime() < 2 * 60 * 1000)) {
         return order;
     }
 
