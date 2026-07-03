@@ -879,12 +879,14 @@ const OrderDetail = () => {
                                         </>
                                     ) : !isFulfillmentAssigned ? (
                                         <>
-                                            <button
-                                                onClick={() => setShowCancelConfirm(true)}
-                                                className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
-                                            >
-                                                Cancel Order
-                                            </button>
+                                            {effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' ? (
+                                                <button
+                                                    onClick={() => setShowCancelConfirm(true)}
+                                                    className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-600 hover:text-white text-xs font-black uppercase tracking-widest transition-all shadow-sm"
+                                                >
+                                                    Cancel Order
+                                                </button>
+                                            ) : null}
                                         </>
                                     ) : (
                                         <>
