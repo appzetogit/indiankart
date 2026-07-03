@@ -126,10 +126,11 @@ const parseDateKey = (dateKey = '') => {
 const getWeekdayLabelFromDateKey = (dateKey = '') => {
     const parsed = parseDateKey(dateKey);
     if (!parsed) return null;
-    return new Intl.DateTimeFormat('en-US', {
+    const label = new Intl.DateTimeFormat('en-US', {
         timeZone: INDIA_TIME_ZONE,
         weekday: 'short'
     }).format(parsed);
+    return String(label || '').replace(/[^a-zA-Z]/g, '');
 };
 
 // @desc    Fetch all products
@@ -1030,24 +1031,23 @@ export const getPortalViewInsights = async (_req, res) => {
             PortalSession.countDocuments({ loginAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ logoutAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ userRole: { $ne: 'guest' } }),
-            PortalSession.find({ loginAt: { $gte: recentStart } }).select('loginAt pagesVisited').lean(),
+            PortalSession.find({ lastSeenAt: { $gte: recentStart } }).select('loginAt lastSeenAt pagesVisited').lean(),
             PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } }).sort({ lastSeenAt: -1 }).lean()
         ]);
 
         let totalViews = 0;
 
         for (const session of allPortalSessions) {
+            const visitedDates = new Set();
+
             const loginAt = session?.loginAt ? new Date(session.loginAt) : null;
             if (loginAt && !Number.isNaN(loginAt.getTime()) && loginAt >= recentStart) {
-                const loginDateKey = formatIndiaDateKey(loginAt);
-                const existing = recentDailyMap.get(loginDateKey) || { date: loginDateKey, views: 0, visitors: 0 };
-                existing.visitors += 1;
-                recentDailyMap.set(loginDateKey, existing);
+                visitedDates.add(formatIndiaDateKey(loginAt));
+            }
 
-                const visitorDayLabel = getWeekdayLabelFromDateKey(loginDateKey);
-                if (visitorDayLabel && weeklyMap.has(visitorDayLabel)) {
-                    weeklyMap.get(visitorDayLabel).visitors += 1;
-                }
+            const lastSeenAt = session?.lastSeenAt ? new Date(session.lastSeenAt) : null;
+            if (lastSeenAt && !Number.isNaN(lastSeenAt.getTime()) && lastSeenAt >= recentStart) {
+                visitedDates.add(formatIndiaDateKey(lastSeenAt));
             }
 
             const pagesVisited = Array.isArray(session?.pagesVisited) ? session.pagesVisited : [];
@@ -1055,19 +1055,108 @@ export const getPortalViewInsights = async (_req, res) => {
 
             for (const page of pagesVisited) {
                 const visitedAt = page?.visitedAt ? new Date(page.visitedAt) : null;
-                if (!visitedAt || Number.isNaN(visitedAt.getTime()) || visitedAt < recentStart) continue;
+                if (!visitedAt || Number.isNaN(visitedAt.getTime())) continue;
 
                 const viewDateKey = formatIndiaDateKey(visitedAt);
-                const existing = recentDailyMap.get(viewDateKey) || { date: viewDateKey, views: 0, visitors: 0 };
-                existing.views += 1;
-                recentDailyMap.set(viewDateKey, existing);
+                visitedDates.add(viewDateKey);
 
-                const viewDayLabel = getWeekdayLabelFromDateKey(viewDateKey);
-                if (viewDayLabel && weeklyMap.has(viewDayLabel)) {
-                    weeklyMap.get(viewDayLabel).views += 1;
+                if (visitedAt >= recentStart) {
+                    const existing = recentDailyMap.get(viewDateKey) || { date: viewDateKey, views: 0, visitors: 0 };
+                    existing.views += 1;
+                    recentDailyMap.set(viewDateKey, existing);
+
+                    const viewDayLabel = getWeekdayLabelFromDateKey(viewDateKey);
+                    if (viewDayLabel && weeklyMap.has(viewDayLabel)) {
+                        weeklyMap.get(viewDayLabel).views += 1;
+                    }
+                }
+            }
+
+            for (const dateKey of visitedDates) {
+                const dateVal = parseDateKey(dateKey);
+                if (!dateVal || dateVal < recentStart) continue;
+
+                const existing = recentDailyMap.get(dateKey) || { date: dateKey, views: 0, visitors: 0 };
+                existing.visitors += 1;
+                recentDailyMap.set(dateKey, existing);
+
+                const visitorDayLabel = getWeekdayLabelFromDateKey(dateKey);
+                if (visitorDayLabel && weeklyMap.has(visitorDayLabel)) {
+                    weeklyMap.get(visitorDayLabel).visitors += 1;
                 }
             }
         }
+
+        // Calculate page category distribution and engagement metrics
+        const categoryCounts = {
+            home: 0,
+            pdp: 0,
+            cart: 0,
+            checkout: 0,
+            categoryPage: 0,
+            account: 0,
+            other: 0
+        };
+
+        let bounces = 0;
+        let totalDurationMs = 0;
+        let timedSessionsCount = 0;
+        let totalPagesVisited = 0;
+
+        for (const session of allPortalSessions) {
+            const pages = Array.isArray(session?.pagesVisited) ? session.pagesVisited : [];
+            const pagesCount = pages.length;
+            totalPagesVisited += pagesCount;
+
+            if (pagesCount === 1) {
+                bounces += 1;
+            } else if (pagesCount > 1) {
+                const firstTime = new Date(pages[0].visitedAt).getTime();
+                const lastTime = new Date(pages[pagesCount - 1].visitedAt).getTime();
+                if (lastTime > firstTime) {
+                    totalDurationMs += (lastTime - firstTime);
+                    timedSessionsCount += 1;
+                }
+            }
+
+            for (const page of pages) {
+                const path = String(page?.path || '');
+                if (path === '/') {
+                    categoryCounts.home += 1;
+                } else if (path.includes('/product/')) {
+                    categoryCounts.pdp += 1;
+                } else if (path.includes('/cart')) {
+                    categoryCounts.cart += 1;
+                } else if (path.includes('/checkout')) {
+                    categoryCounts.checkout += 1;
+                } else if (path.includes('/category/') || path === '/categories') {
+                    categoryCounts.categoryPage += 1;
+                } else if (['/account', '/my-orders', '/addresses', '/settings', '/wishlist'].some(p => path.includes(p))) {
+                    categoryCounts.account += 1;
+                } else {
+                    categoryCounts.other += 1;
+                }
+            }
+        }
+
+        const pageDistribution = [
+            { name: 'Home', value: categoryCounts.home },
+            { name: 'Product Details', value: categoryCounts.pdp },
+            { name: 'Cart', value: categoryCounts.cart },
+            { name: 'Checkout', value: categoryCounts.checkout },
+            { name: 'Categories', value: categoryCounts.categoryPage },
+            { name: 'User Account', value: categoryCounts.account },
+            { name: 'Others', value: categoryCounts.other }
+        ].filter(item => item.value > 0);
+
+        const totalSessionsCount = allPortalSessions.length;
+        const bounceRate = totalSessionsCount > 0 ? Math.round((bounces / totalSessionsCount) * 100) : 0;
+        const avgSessionDurationMin = timedSessionsCount > 0
+            ? Number(((totalDurationMs / timedSessionsCount) / 1000 / 60).toFixed(1))
+            : 0;
+        const avgPageDepth = totalSessionsCount > 0
+            ? Number((totalPagesVisited / totalSessionsCount).toFixed(1))
+            : 1.0;
 
         const dailyStats = [];
         for (let offset = 29; offset >= 0; offset -= 1) {
@@ -1113,6 +1202,12 @@ export const getPortalViewInsights = async (_req, res) => {
             dailyStats,
             weeklyDistribution,
             recentSessions: populatedSessions,
+            pageDistribution,
+            engagementStats: {
+                bounceRate,
+                avgSessionDurationMin,
+                avgPageDepth
+            },
             authStats: {
                 activeLoggedInUsers,
                 liveActiveAllUsers,

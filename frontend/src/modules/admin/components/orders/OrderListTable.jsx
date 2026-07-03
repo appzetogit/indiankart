@@ -73,6 +73,7 @@ const OrderListTable = ({
                         <AdminTableHeaderCell className="whitespace-nowrap">Items</AdminTableHeaderCell>
                         <AdminTableHeaderCell className="whitespace-nowrap">Variants</AdminTableHeaderCell>
                         <AdminTableHeaderCell className="whitespace-nowrap text-center">Status</AdminTableHeaderCell>
+                        <AdminTableHeaderCell className="whitespace-nowrap text-center">Fulfillment</AdminTableHeaderCell>
                         <AdminTableHeaderCell className="whitespace-nowrap text-center">Payment</AdminTableHeaderCell>
                         <AdminTableHeaderCell className="whitespace-nowrap text-right">Amount</AdminTableHeaderCell>
                     </AdminTableHeaderRow>
@@ -95,7 +96,7 @@ const OrderListTable = ({
                             
                             {serialEditorOrderId === order.id && (
                                 <tr className="bg-indigo-50/40">
-                                    <td colSpan={9} className="px-3 py-4 md:px-6 md:py-5">
+                                    <td colSpan={10} className="px-3 py-4 md:px-6 md:py-5">
                                         <div className="rounded-2xl border border-indigo-100 bg-white p-3 md:p-4 shadow-sm">
                                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
                                                 <div>

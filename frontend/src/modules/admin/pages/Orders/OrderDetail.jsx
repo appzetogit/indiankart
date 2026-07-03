@@ -337,11 +337,13 @@ const OrderDetail = () => {
     const summaryItemsPrice = Number(order.itemsPrice ?? Math.max(0, (order.total || 0) - Number(order.shippingPrice || 0) - Number(order.taxPrice || 0)));
     const summaryShippingPrice = Number(order.shippingPrice || 0);
     const summaryTotal = Number(order.total || 0);
+    const isCodAdvancedPaid = Boolean(order.isCodAdvancedPaid) && Number(order.codAdvancedAmount) > 0;
+    const codAdvancedAmount = Number(order.codAdvancedAmount || 0);
+    const remainingCodBalance = Number(order.remainingCodBalance || 0);
     const customerProfileId = order.user?._id || order.user?.id;
 
     return (
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-8 animate-in fade-in duration-500">
-            {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-6 bg-white p-4 md:p-8 rounded-2xl md:rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-2 md:gap-6">
                     <button
@@ -483,9 +485,15 @@ const OrderDetail = () => {
                                     {summaryShippingPrice === 0 ? 'FREE' : `₹${summaryShippingPrice.toLocaleString()}`}
                                 </span>
                             </div>
+                            {isCodAdvancedPaid && (
+                                <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-[10px] md:text-xs font-bold text-green-600 uppercase">
+                                    <span>COD Advance Paid</span>
+                                    <span>-₹{codAdvancedAmount.toLocaleString()}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between w-full max-w-[160px] md:max-w-[200px] text-lg md:text-xl font-black text-gray-900 mt-1 md:mt-2">
-                                <span>TOTAL</span>
-                                <span>₹{summaryTotal.toLocaleString()}</span>
+                                <span>{isCodAdvancedPaid ? 'REMAINING COD' : 'TOTAL'}</span>
+                                <span>₹{(isCodAdvancedPaid ? remainingCodBalance : summaryTotal).toLocaleString()}</span>
                             </div>
                         </div>
                     </div>

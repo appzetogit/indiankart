@@ -103,6 +103,28 @@ const OrderListRow = ({
                 </span>
             </td>
 
+            {/* Fulfillment */}
+            <td className="px-3 py-3 text-center align-middle">
+                <div className="flex flex-col items-center">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-wider ${
+                        order.fulfillment?.mode === 'manual'
+                            ? 'bg-amber-50 text-amber-700 border-amber-100'
+                            : order.fulfillment?.mode === 'ekart'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                                : order.fulfillment?.mode === 'delhivery'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    : 'bg-gray-50 text-gray-500 border-gray-150'
+                    }`}>
+                        {order.fulfillment?.mode || 'unassigned'}
+                    </span>
+                    {(order.delhivery?.waybill || order.ekart?.trackingNumber) && (
+                        <span className="text-[8px] font-mono text-gray-500 mt-1 select-all hover:text-blue-600 transition-colors">
+                            {order.delhivery?.waybill || order.ekart?.trackingNumber}
+                        </span>
+                    )}
+                </div>
+            </td>
+
             {/* Payment */}
             <td className="px-3 py-3 text-center align-middle">
                 <div className="flex flex-col items-center">

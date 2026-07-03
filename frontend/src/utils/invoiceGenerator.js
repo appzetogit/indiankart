@@ -257,7 +257,7 @@ export const generateInvoice = (order, settings = {}) => {
         doc.setTextColor(...lightColor);
         doc.text('COD Advance Paid Online:', summaryX, yPos);
         doc.setTextColor(16, 185, 129);
-        doc.text(`Rs.${codAdvancedAmount.toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
+        doc.text(`-Rs.${codAdvancedAmount.toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
     }
 
     yPos += 8;
@@ -269,7 +269,7 @@ export const generateInvoice = (order, settings = {}) => {
     doc.setFont(undefined, 'bold');
     doc.setTextColor(...darkColor);
     doc.text('Total Amount:', summaryX, yPos);
-    doc.text(`Rs.${(order.totalPrice || order.total).toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
+    doc.text(`Rs.${(isCodAdvancedPaid ? remainingCodBalance : (order.totalPrice || order.total)).toLocaleString('en-IN')}`, valueX, yPos, { align: 'right' });
 
     yPos += 12;
 

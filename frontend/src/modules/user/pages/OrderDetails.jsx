@@ -1084,10 +1084,18 @@ const OrderDetails = () => {
                                         <span className="font-semibold text-green-600">- ₹{Number(order.coupon.discount).toLocaleString()}</span>
                                     </div>
                                 )}
+                                {order.isCodAdvancedPaid && Number(order.codAdvancedAmount) > 0 && (
+                                    <div className="flex justify-between text-sm text-green-600 font-bold">
+                                        <span>COD Advance Paid Online</span>
+                                        <span>- ₹{Number(order.codAdvancedAmount).toLocaleString()}</span>
+                                    </div>
+                                )}
                                 <div className="border-t border-dashed border-gray-300 pt-3 flex justify-between">
-                                    <span className="text-base font-bold text-gray-800">Total Amount</span>
+                                    <span className="text-base font-bold text-gray-800">
+                                        {order.isCodAdvancedPaid ? 'Remaining Amount (COD)' : 'Total Amount'}
+                                    </span>
                                     <span className="text-xl font-extrabold text-gray-900">
-                                        ₹{order.totalPrice.toLocaleString()}
+                                        ₹{(order.isCodAdvancedPaid ? Number(order.remainingCodBalance) : order.totalPrice).toLocaleString()}
                                     </span>
                                 </div>
                             </div>

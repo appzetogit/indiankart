@@ -152,6 +152,11 @@ const OrderList = () => {
     const [selectedOrderIds, setSelectedOrderIds] = useState(() => new Set());
     const [bulkStatus, setBulkStatus] = useState('');
     const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+    const [bulkFulfillmentMode, setBulkFulfillmentMode] = useState('');
+    const [isBulkFulfillmentUpdating, setIsBulkFulfillmentUpdating] = useState(false);
+    const [showBulkFulfillmentModal, setShowBulkFulfillmentModal] = useState(false);
+    const [bulkSerialInputs, setBulkSerialInputs] = useState({});
+    const [bulkSerialTypes, setBulkSerialTypes] = useState({});
     const [serialEditorOrderId, setSerialEditorOrderId] = useState('');
     const [serialInputs, setSerialInputs] = useState({});
     const [serialTypes, setSerialTypes] = useState({});
@@ -416,6 +421,97 @@ const OrderList = () => {
         }
     };
 
+    const handleBulkFulfillmentClick = () => {
+        if (!selectedOrderIds.size) {
+            toast.error('Select at least one order');
+            return;
+        }
+        if (!bulkFulfillmentMode) {
+            toast.error('Choose a fulfillment mode first');
+            return;
+        }
+
+        // Initialize bulk serial inputs for selected orders
+        const nextInputs = {};
+        const nextTypes = {};
+        const selectedOrdersList = localOrders.filter((o) => selectedOrderIds.has(o.id));
+
+        selectedOrdersList.forEach((order) => {
+            (order.items || []).forEach((item) => {
+                nextInputs[`${order.id}_${item._id}`] = item.serialNumber || '';
+                nextTypes[`${order.id}_${item._id}`] = item.serialType || 'Serial Number';
+            });
+        });
+
+        setBulkSerialInputs(nextInputs);
+        setBulkSerialTypes(nextTypes);
+        setShowBulkFulfillmentModal(true);
+    };
+
+    const handleBulkFulfillmentSubmit = async () => {
+        setIsBulkFulfillmentUpdating(true);
+        const selectedOrdersList = localOrders.filter((o) => selectedOrderIds.has(o.id));
+        const successes = [];
+        const failures = [];
+        const updatedOrdersMap = new Map();
+
+        for (const order of selectedOrdersList) {
+            try {
+                // 1. Build and save serial numbers/IMEIs for this order
+                const serialNumbers = (order.items || []).map((item) => {
+                    const serialVal = (bulkSerialInputs[`${order.id}_${item._id}`] || '').trim();
+                    const typeVal = bulkSerialTypes[`${order.id}_${item._id}`] || 'Serial Number';
+                    return {
+                        itemId: item._id,
+                        serial: serialVal,
+                        type: typeVal
+                    };
+                }).filter((s) => s.serial);
+
+                if (serialNumbers.length > 0) {
+                    await API.put(`/orders/${order.id}/status`, {
+                        status: order.baseStatus || order.status,
+                        serialNumbers
+                    });
+                }
+
+                // 2. Assign fulfillment mode
+                const { data } = await API.put(`/orders/${order.id}/fulfillment`, { mode: bulkFulfillmentMode });
+                successes.push(order.displayId || order.id);
+                updatedOrdersMap.set(order.id, transformOrder(data));
+            } catch (error) {
+                const errMsg = error.response?.data?.message || error.message || 'Fulfillment assignment failed';
+                failures.push({
+                    displayId: order.displayId || order.id,
+                    error: errMsg
+                });
+            }
+        }
+
+        // Update local orders state
+        if (successes.length > 0) {
+            setLocalOrders((prevOrders) =>
+                prevOrders.map((o) => (updatedOrdersMap.has(o.id) ? updatedOrdersMap.get(o.id) : o))
+            );
+        }
+
+        // Show feedback to user
+        if (successes.length > 0) {
+            toast.success(`Successfully assigned ${bulkFulfillmentMode} for: ${successes.join(', ')}`);
+        }
+        if (failures.length > 0) {
+            failures.forEach((f) => {
+                toast.error(`Order ${f.displayId}: ${f.error}`);
+            });
+        }
+
+        // Clear and close
+        setSelectedOrderIds(new Set());
+        setBulkFulfillmentMode('');
+        setShowBulkFulfillmentModal(false);
+        setIsBulkFulfillmentUpdating(false);
+    };
+
     const handleExportOrders = async () => {
         setIsExporting(true);
         try {
@@ -443,6 +539,7 @@ const OrderList = () => {
             const headers = [
                 'Order ID',
                 'Display ID',
+                'Invoice Number',
                 'Order Date',
                 'Customer Name',
                 'Customer Email',
@@ -450,12 +547,23 @@ const OrderList = () => {
                 'Status',
                 'Payment Method',
                 'Payment Status',
+                'Is Paid',
+                'Paid At',
+                'Delivered At',
                 'Items',
+                'Product IMEIs/Serials',
                 'Total Quantity',
                 'Items Price',
                 'Shipping Price',
                 'Tax Price',
+                'Coupon Code',
+                'Coupon Discount',
                 'Total Amount',
+                'Fulfillment Mode',
+                'Tracking/Waybill Number',
+                'Is Retailer',
+                'Shop Name',
+                'GST Number',
                 'Shipping Name',
                 'Shipping Street',
                 'Shipping City',
@@ -471,14 +579,35 @@ const OrderList = () => {
                     const variantText = item?.variant && Object.keys(item.variant).length > 0
                         ? ` (${Object.entries(item.variant).map(([key, value]) => `${key}: ${value}`).join(', ')})`
                         : '';
-                    return `${item.name} x${item.quantity}${variantText}`;
+                    const serialText = item.serialNumber
+                        ? ` [${item.serialType || 'Serial Number'}: ${item.serialNumber}]`
+                        : '';
+                    return `${item.name} x${item.quantity}${variantText}${serialText}`;
                 }).join(' | ');
 
+                const serialsSummary = items
+                    .filter((item) => item.serialNumber)
+                    .map((item) => `${item.name}: ${item.serialNumber} (${item.serialType || 'Serial Number'})`)
+                    .join(' | ');
+
                 const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+                const trackingNumber = order.delhivery?.waybill || order.ekart?.trackingNumber || '';
+                const fulfillmentMode = order.fulfillment?.mode || 'unassigned';
+                const invoiceNumber = order.invoiceNumber || '';
+                const isPaid = order.isPaid ? 'Yes' : 'No';
+                const paidAt = order.paidAt ? new Date(order.paidAt).toLocaleString('en-IN') : '';
+                const deliveredAt = order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('en-IN') : '';
+                const isRetailer = order.retailerDetails?.isRetailer ? 'Yes' : 'No';
+                const shopName = order.retailerDetails?.shopName || '';
+                const gstNumber = order.retailerDetails?.gstNumber || '';
+                const couponCode = order.coupon?.code || '';
+                const couponDiscount = Number(order.coupon?.discount || 0);
 
                 return [
                     order.id,
                     order.displayId || '',
+                    invoiceNumber,
                     order.date ? new Date(order.date).toLocaleString('en-IN') : '',
                     order.user?.name || order.shippingAddress?.name || '',
                     order.user?.email || order.shippingAddress?.email || '',
@@ -486,12 +615,23 @@ const OrderList = () => {
                     order.status || '',
                     order.payment?.method || '',
                     order.payment?.status || '',
+                    isPaid,
+                    paidAt,
+                    deliveredAt,
                     itemSummary,
+                    serialsSummary,
                     totalQuantity,
                     Number(order.itemsPrice || 0),
                     Number(order.shippingPrice || 0),
                     Number(order.taxPrice || 0),
+                    couponCode,
+                    couponDiscount,
                     Number(order.total || 0),
+                    fulfillmentMode,
+                    trackingNumber,
+                    isRetailer,
+                    shopName,
+                    gstNumber,
                     order.shippingAddress?.name || '',
                     order.shippingAddress?.street || '',
                     order.shippingAddress?.city || '',
@@ -571,14 +711,14 @@ const OrderList = () => {
                 <div className="bg-gray-950 text-white p-3 md:p-4 rounded-xl md:rounded-2xl border border-gray-800 shadow-sm flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
                     <div>
                         <p className="text-xs font-black uppercase tracking-tight">{selectedCount} selected</p>
-                        <p className="text-[10px] text-gray-300 font-bold">Bulk status updates save to the same order status source as single-order changes.</p>
+                        <p className="text-[10px] text-gray-300 font-bold">Bulk status updates or fulfillment updates will be applied to the selected orders.</p>
                     </div>
-                    <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 flex-wrap items-center">
                         <select
                             className="px-4 py-2 bg-white text-gray-900 border border-gray-700 rounded-lg outline-none text-xs font-black cursor-pointer"
                             value={bulkStatus}
                             onChange={(e) => setBulkStatus(e.target.value)}
-                            disabled={isBulkUpdating}
+                            disabled={isBulkUpdating || isBulkFulfillmentUpdating}
                         >
                             <option value="">Choose status</option>
                             {BULK_STATUS_OPTIONS.map((status) => (
@@ -588,10 +728,32 @@ const OrderList = () => {
                         <button
                             type="button"
                             onClick={handleBulkStatusUpdate}
-                            disabled={isBulkUpdating || !bulkStatus}
+                            disabled={isBulkUpdating || !bulkStatus || isBulkFulfillmentUpdating}
                             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-black transition-colors"
                         >
                             {isBulkUpdating ? 'Updating...' : 'Update Selected'}
+                        </button>
+
+                        <div className="hidden sm:block h-6 w-px bg-gray-800 mx-1" />
+
+                        <select
+                            className="px-4 py-2 bg-white text-gray-900 border border-gray-700 rounded-lg outline-none text-xs font-black cursor-pointer"
+                            value={bulkFulfillmentMode}
+                            onChange={(e) => setBulkFulfillmentMode(e.target.value)}
+                            disabled={isBulkUpdating || isBulkFulfillmentUpdating}
+                        >
+                            <option value="">Choose fulfillment</option>
+                            <option value="manual">Manual Delivery</option>
+                            <option value="ekart">Ekart</option>
+                            <option value="delhivery">Delhivery</option>
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleBulkFulfillmentClick}
+                            disabled={isBulkFulfillmentUpdating || isBulkUpdating || !bulkFulfillmentMode}
+                            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-xs font-black transition-colors"
+                        >
+                            {isBulkFulfillmentUpdating ? 'Assigning...' : 'Assign Fulfillment'}
                         </button>
                     </div>
                 </div>
@@ -631,6 +793,118 @@ const OrderList = () => {
                 />
             )}
                 </>
+            )}
+
+            {showBulkFulfillmentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm overflow-y-auto">
+                    <div className="relative w-full max-w-3xl rounded-3xl bg-white border border-gray-100 shadow-2xl p-6 md:p-8 animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between border-b border-gray-150 pb-4 mb-4">
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 uppercase tracking-wide">
+                                    Save Product IMEIs & Assign Fulfillment
+                                </h2>
+                                <p className="text-xs font-bold text-gray-500 mt-1 uppercase">
+                                    Assigning {selectedOrderIds.size} order(s) to: <span className="text-indigo-600 font-black">{bulkFulfillmentMode === 'manual' ? 'Manual Delivery' : bulkFulfillmentMode}</span>
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowBulkFulfillmentModal(false);
+                                    setBulkFulfillmentMode('');
+                                }}
+                                disabled={isBulkFulfillmentUpdating}
+                                className="text-gray-400 hover:text-gray-600 font-black text-lg p-1"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body - Scrollable list of orders */}
+                        <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-6 custom-scrollbar">
+                            {localOrders
+                                .filter((order) => selectedOrderIds.has(order.id))
+                                .map((order) => (
+                                    <div key={order.id} className="rounded-2xl border border-gray-100 bg-gray-50/50 p-4 space-y-3">
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                            <span className="text-xs font-black text-gray-900">{order.displayId || order.id}</span>
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase">
+                                                {order.user?.name || order.shippingAddress?.name || 'Unknown User'}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {(order.items || []).map((item, idx) => {
+                                                const inputKey = `${order.id}_${item._id}`;
+                                                return (
+                                                    <div key={item._id || idx} className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_160px_minmax(0,1fr)] gap-3 bg-white p-3 rounded-xl border border-gray-150/80 shadow-sm items-center">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <img
+                                                                src={item.image}
+                                                                alt={item.name}
+                                                                className="h-10 w-10 rounded object-cover flex-shrink-0 border border-gray-100"
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-black text-gray-900 truncate">{item.name}</p>
+                                                                <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Qty: {item.quantity}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-gray-400 uppercase mb-0.5">Type</label>
+                                                            <select
+                                                                value={bulkSerialTypes[inputKey] || 'Serial Number'}
+                                                                onChange={(e) => setBulkSerialTypes(prev => ({ ...prev, [inputKey]: e.target.value }))}
+                                                                disabled={isBulkFulfillmentUpdating}
+                                                                className="w-full rounded-lg border border-gray-250 bg-gray-50 px-2 py-1 text-xs font-bold text-gray-900 outline-none focus:border-indigo-400 focus:bg-white"
+                                                            >
+                                                                <option value="Serial Number">Serial Number</option>
+                                                                <option value="IMEI">IMEI</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-gray-400 uppercase mb-0.5">Number</label>
+                                                            <input
+                                                                type="text"
+                                                                value={bulkSerialInputs[inputKey] !== undefined ? bulkSerialInputs[inputKey] : ''}
+                                                                onChange={(e) => setBulkSerialInputs(prev => ({ ...prev, [inputKey]: e.target.value }))}
+                                                                disabled={isBulkFulfillmentUpdating}
+                                                                placeholder="Enter serial or IMEI"
+                                                                className="w-full rounded-lg border border-gray-250 bg-gray-50 px-2 py-1 text-xs font-mono text-gray-900 outline-none focus:border-indigo-400 focus:bg-white"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="border-t border-gray-150 pt-4 mt-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowBulkFulfillmentModal(false);
+                                    setBulkFulfillmentMode('');
+                                }}
+                                disabled={isBulkFulfillmentUpdating}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-black uppercase hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBulkFulfillmentSubmit}
+                                disabled={isBulkFulfillmentUpdating}
+                                className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase hover:bg-indigo-700 disabled:bg-indigo-300 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isBulkFulfillmentUpdating && <div className="h-3 w-3 rounded-full border border-white/30 border-t-white animate-spin" />}
+                                {isBulkFulfillmentUpdating ? 'Processing...' : `Confirm & Assign ${bulkFulfillmentMode}`}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

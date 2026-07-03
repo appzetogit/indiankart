@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MdRefresh, MdSearch, MdVisibility, MdBarChart, MdPeople, MdTimeline, MdToday } from 'react-icons/md';
+import { MdRefresh, MdSearch, MdVisibility, MdBarChart, MdPeople, MdTimeline, MdToday, MdCategory } from 'react-icons/md';
 import { 
     BarChart, 
     Bar, 
@@ -287,6 +287,24 @@ const ProductViews = () => {
                 </div>
             </div>
 
+            <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/20 to-white p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-500">Average Pages Visited</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{(portalInsights?.engagementStats?.avgPageDepth || 1.0).toLocaleString()} pages</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Average number of pages navigated per session</p>
+                </div>
+                <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/20 to-white p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">Average Session Duration</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{(portalInsights?.engagementStats?.avgSessionDurationMin || 0).toLocaleString()} mins</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Average active time spent per visitor session</p>
+                </div>
+                <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50/20 to-white p-5 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-rose-500">Bounce Rate</p>
+                    <p className="mt-2 text-3xl font-black text-gray-900">{(portalInsights?.engagementStats?.bounceRate || 0).toLocaleString()}%</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">Percentage of sessions with only single page views</p>
+                </div>
+            </div>
+
             <div className="rounded-2xl border border-gray-100 bg-white px-4 py-3 text-xs font-semibold text-gray-500 shadow-sm flex items-center justify-between gap-4 flex-wrap">
                 <span>Auto-refreshing every {Math.round(LIVE_REFRESH_MS / 1000)}s · Busiest day: {busiestDayLabel} · Avg daily visitors: {avgDailyVisitors.toLocaleString()} · Today's logouts: {todayLogouts.toLocaleString()}</span>
                 {lastRefreshedAt && (
@@ -423,63 +441,104 @@ const ProductViews = () => {
                 )}
             </MotionDiv>
 
-            {/* Top Products Chart */}
-            <MotionDiv 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
-            >
-                <div className="mb-6 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-black text-gray-900">Popular Products</h3>
-                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">Top 10 most viewed items</p>
+            {/* Advanced Analytics Charts Grid */}
+            <div className="grid gap-6 xl:grid-cols-2">
+                {/* Page Category Distribution Chart */}
+                <MotionDiv 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
+                >
+                    <div className="mb-6 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900">Page Category Traffic</h3>
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">Traffic share across portal sections</p>
+                        </div>
+                        <MdCategory className="text-blue-500" size={24} />
                     </div>
-                    <MdBarChart className="text-blue-500" size={24} />
-                </div>
-                
-                <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart 
-                            data={filteredProducts.slice(0, 10).map(p => ({ 
-                                name: p.name.length > 20 ? p.name.substring(0, 17) + '...' : p.name, 
-                                views: p.viewCount || 0,
-                                originalName: p.name 
-                            }))} 
-                            margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                            layout="vertical"
+                    
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart 
+                                data={portalInsights?.pageDistribution || []} 
+                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }} />
+                                <YAxis hide />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    formatter={(value) => [`${value} Views`, 'Views']}
+                                />
+                                <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={26}>
+                                    {(portalInsights?.pageDistribution || []).map((entry, index) => (
+                                        <Cell key={`cell-page-${index}`} fill={['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#6b7280'][index % 7]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </MotionDiv>
+
+                {/* Popular Products Chart */}
+                <MotionDiv 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
+                >
+                    <div className="mb-6 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900">Popular Products</h3>
+                            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-0.5">Top 10 most viewed items</p>
+                        </div>
+                        <MdBarChart className="text-blue-500" size={24} />
+                    </div>
+                    
+                    <div className="h-[300px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart 
+                                data={filteredProducts.slice(0, 10).map(p => ({ 
+                                    name: p.name.length > 20 ? p.name.substring(0, 17) + '...' : p.name, 
+                                    views: p.viewCount || 0,
+                                    originalName: p.name 
+                                }))} 
+                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                                layout="vertical"
+                            >
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    dataKey="name" 
+                                    type="category" 
+                                    axisLine={false} 
+                                    tickLine={false} 
+                                    width={120}
+                                    tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }}
+                                />
+                                <Tooltip 
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                    cursor={{ fill: '#f8fafc' }}
+                                    formatter={(value) => [`${value} Views`, 'Views']}
+                                    labelStyle={{ display: 'none' }}
+                                />
+                                <Bar dataKey="views" radius={[0, 8, 8, 0]} barSize={20}>
+                                    {filteredProducts.slice(0, 10).map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'][index % 5]} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                        <button 
+                            type="button"
+                            onClick={() => navigate(`/admin/product-views/${getProductId(filteredProducts[0])}`)}
+                            className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline"
                         >
-                            <XAxis type="number" hide />
-                            <YAxis 
-                                dataKey="name" 
-                                type="category" 
-                                axisLine={false} 
-                                tickLine={false} 
-                                width={120}
-                                tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }}
-                            />
-                            <Tooltip 
-                                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                cursor={{ fill: '#f8fafc' }}
-                                formatter={(value) => [`${value} Views`, 'Views']}
-                                labelStyle={{ display: 'none' }}
-                            />
-                            <Bar dataKey="views" radius={[0, 8, 8, 0]} barSize={20}>
-                                {filteredProducts.slice(0, 10).map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'][index % 5]} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
-                <div className="mt-4 flex justify-end">
-                    <button 
-                        onClick={() => navigate(`/admin/product-views/${getProductId(filteredProducts[0])}`)}
-                        className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline"
-                    >
-                        View Full Stats
-                    </button>
-                </div>
-            </MotionDiv>
+                            View Full Stats
+                        </button>
+                    </div>
+                </MotionDiv>
+            </div>
 
             {/* Live & Recent Portal Activity */}
             <MotionDiv

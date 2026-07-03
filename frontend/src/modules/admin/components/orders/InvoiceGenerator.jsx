@@ -654,13 +654,17 @@ export const InvoiceDisplay = React.forwardRef(
               {isCodAdvancedPaid && (
                 <tr>
                   <td colSpan="8" className="text-right"><b>COD Advance Paid Online</b></td>
-                  <td className="text-right" style={{ color: "#0f9d58" }}>Rs.{format(codAdvancedAmount)}</td>
+                  <td className="text-right" style={{ color: "#0f9d58" }}>-Rs.{format(codAdvancedAmount)}</td>
                 </tr>
               )}
               <tr style={{ background: "#f5f5f5", fontWeight: "bold" }}>
                 <td colSpan="2">TOTAL QTY: {totalQty}</td>
-                <td colSpan="6" className="text-right">TOTAL PRICE:</td>
-                <td className="text-right">Rs.{format(totalAmount)}</td>
+                <td colSpan="6" className="text-right">
+                  {isCodAdvancedPaid ? "TOTAL AMOUNT DUE / COLLECTABLE:" : "TOTAL PRICE:"}
+                </td>
+                <td className="text-right">
+                  Rs.{format(isCodAdvancedPaid ? remainingCodBalance : totalAmount)}
+                </td>
               </tr>
               {isCodAdvancedPaid && (
                 <tr style={{ background: "#fff8e1", fontWeight: "bold" }}>
