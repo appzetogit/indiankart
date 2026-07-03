@@ -58,7 +58,7 @@ export const recordPortalLogin = async ({
     );
 };
 
-export const touchPortalSession = async ({ sessionId, userId, path, state }) => {
+export const touchPortalSession = async ({ sessionId, userId, path, state, referrer }) => {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const normalizedUserId = normalizeUserId(userId);
 
@@ -120,17 +120,13 @@ export const touchPortalSession = async ({ sessionId, userId, path, state }) => 
         {
             ...setObj,
             $setOnInsert: {
-                sessionId: normalizedSessionId,
-                userId: normalizedUserId,
-                userRole: normalizedUserId ? 'user' : 'guest',
-                authMethod: normalizedUserId ? 'unknown' : 'guest',
-                loginAt: new Date()
+                loginAt: new Date(),
+                referrer: referrer || 'Direct'
             }
         },
         { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 };
-
 export const recordPortalLogout = async ({ sessionId, userId }) => {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const normalizedUserId = String(userId || '').trim();

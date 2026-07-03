@@ -411,34 +411,144 @@ const ProductViews = () => {
                 </MotionDiv>
             </div>
 
+            {/* Acquisition and Regional traffic */}
+            <div className="grid gap-6 xl:grid-cols-2">
+                {/* Traffic From Different States */}
+                <MotionDiv
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900">Traffic From Different States</h3>
+                                <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
+                                    Top states sending product-page traffic
+                                </p>
+                            </div>
+                        </div>
+                        {topTrafficStates.length > 0 ? (
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                {topTrafficStates.map((entry, index) => (
+                                    <div key={entry.state} className="rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3">
+                                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">#{index + 1} State</div>
+                                        <div className="mt-2 text-base font-black text-gray-900 truncate" title={entry.state}>{entry.state}</div>
+                                        <div className="mt-1 text-sm font-bold text-blue-600">{entry.count.toLocaleString()} views</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm font-semibold text-gray-400">
+                                No state-level traffic data yet.
+                            </div>
+                        )}
+                    </div>
+                </MotionDiv>
+
+                {/* Top Referral Sources */}
+                <MotionDiv
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="mb-5 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-gray-900">Top Referral Sources</h3>
+                                <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
+                                    Where your portal visitors are arriving from
+                                </p>
+                            </div>
+                        </div>
+                        {portalInsights?.referrerDistribution && portalInsights.referrerDistribution.length > 0 ? (
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                {portalInsights.referrerDistribution.map((entry, index) => (
+                                    <div key={entry.name} className="rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3">
+                                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">#{index + 1} Source</div>
+                                        <div className="mt-2 text-base font-black text-gray-900 truncate" title={entry.name}>{entry.name}</div>
+                                        <div className="mt-1 text-sm font-bold text-emerald-600">{entry.value.toLocaleString()} sessions</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm font-semibold text-gray-400">
+                                No referral tracking data yet.
+                            </div>
+                        )}
+                    </div>
+                </MotionDiv>
+            </div>
+
+            {/* Funnel Conversion Analysis */}
             <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
             >
-                <div className="mb-5 flex items-center justify-between">
-                    <div>
-                        <h3 className="text-lg font-black text-gray-900">Traffic From Different States</h3>
-                        <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
-                            Top states sending product-page traffic
-                        </p>
+                <div className="mb-6">
+                    <h3 className="text-lg font-black text-gray-900">Purchase Funnel Conversion</h3>
+                    <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
+                        Conversion rates from visitor touch to successful purchase
+                    </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-5">
+                    {/* Step 1: Sessions */}
+                    <div className="relative rounded-2xl bg-gray-50/50 p-4 border border-gray-100">
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 1</div>
+                        <div className="mt-2 text-xl font-black text-gray-900">{(portalInsights?.conversionFunnel?.totalSessions || 0).toLocaleString()}</div>
+                        <div className="mt-1 text-xs font-semibold text-gray-600">Total Visits</div>
+                        <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-blue-500" style={{ width: '100%' }}></div>
+                        </div>
+                        <div className="mt-1.5 text-[10px] font-bold text-blue-600">100% Benchmark</div>
+                    </div>
+
+                    {/* Step 2: Product Views */}
+                    <div className="relative rounded-2xl bg-gray-50/50 p-4 border border-gray-100">
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 2</div>
+                        <div className="mt-2 text-xl font-black text-gray-900">{(portalInsights?.conversionFunnel?.viewedPdp || 0).toLocaleString()}</div>
+                        <div className="mt-1 text-xs font-semibold text-gray-600">Product Views</div>
+                        <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.round(((portalInsights?.conversionFunnel?.viewedPdp || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}%` }}></div>
+                        </div>
+                        <div className="mt-1.5 text-[10px] font-bold text-indigo-600">{Math.round(((portalInsights?.conversionFunnel?.viewedPdp || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}% of visits</div>
+                    </div>
+
+                    {/* Step 3: Cart Visits */}
+                    <div className="relative rounded-2xl bg-gray-50/50 p-4 border border-gray-100">
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 3</div>
+                        <div className="mt-2 text-xl font-black text-gray-900">{(portalInsights?.conversionFunnel?.visitedCart || 0).toLocaleString()}</div>
+                        <div className="mt-1 text-xs font-semibold text-gray-600">Cart Adds</div>
+                        <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.round(((portalInsights?.conversionFunnel?.visitedCart || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}%` }}></div>
+                        </div>
+                        <div className="mt-1.5 text-[10px] font-bold text-amber-600">{Math.round(((portalInsights?.conversionFunnel?.visitedCart || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}% of visits</div>
+                    </div>
+
+                    {/* Step 4: Checkout Entries */}
+                    <div className="relative rounded-2xl bg-gray-50/50 p-4 border border-gray-100">
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 4</div>
+                        <div className="mt-2 text-xl font-black text-gray-900">{(portalInsights?.conversionFunnel?.initiatedCheckout || 0).toLocaleString()}</div>
+                        <div className="mt-1 text-xs font-semibold text-gray-600">Checkout Initials</div>
+                        <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-rose-500" style={{ width: `${Math.round(((portalInsights?.conversionFunnel?.initiatedCheckout || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}%` }}></div>
+                        </div>
+                        <div className="mt-1.5 text-[10px] font-bold text-rose-600">{Math.round(((portalInsights?.conversionFunnel?.initiatedCheckout || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}% of visits</div>
+                    </div>
+
+                    {/* Step 5: Purchases */}
+                    <div className="relative rounded-2xl bg-gray-50/50 p-4 border border-gray-100">
+                        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Step 5</div>
+                        <div className="mt-2 text-xl font-black text-gray-900">{(portalInsights?.conversionFunnel?.purchased || 0).toLocaleString()}</div>
+                        <div className="mt-1 text-xs font-semibold text-gray-600">Purchases</div>
+                        <div className="mt-3 h-2 w-full rounded-full bg-gray-100">
+                            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.round(((portalInsights?.conversionFunnel?.purchased || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}%` }}></div>
+                        </div>
+                        <div className="mt-1.5 text-[10px] font-bold text-emerald-600">{Math.round(((portalInsights?.conversionFunnel?.purchased || 0) / Math.max(portalInsights?.conversionFunnel?.totalSessions || 1, 1)) * 100)}% conversion</div>
                     </div>
                 </div>
-                {topTrafficStates.length > 0 ? (
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                        {topTrafficStates.map((entry, index) => (
-                            <div key={entry.state} className="rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3">
-                                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">#{index + 1} State</div>
-                                <div className="mt-2 text-lg font-black text-gray-900">{entry.state}</div>
-                                <div className="mt-1 text-sm font-bold text-blue-600">{entry.count.toLocaleString()} views</div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm font-semibold text-gray-400">
-                        No state-level traffic data yet.
-                    </div>
-                )}
             </MotionDiv>
 
             {/* Advanced Analytics Charts Grid */}

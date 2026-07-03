@@ -10,6 +10,7 @@ const portalSessionSchema = mongoose.Schema({
     logoutAt: { type: Date, default: null, index: true },
     isActive: { type: Boolean, default: true, index: true },
     state: { type: String, default: 'Unknown', trim: true },
+    referrer: { type: String, default: 'Direct', trim: true },
     pagesVisited: [{
         path: { type: String, required: true },
         visitedAt: { type: Date, default: Date.now }

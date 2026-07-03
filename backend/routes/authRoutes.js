@@ -189,7 +189,7 @@ router.route('/profile/addresses/:addressId')
 router.post('/session/touch', protectOptional, async (req, res) => {
     try {
         const sessionId = String(req.headers['x-user-session-id'] || '').trim();
-        const { path, state } = req.body;
+        const { path, state, referrer } = req.body;
         if (!sessionId) {
             return res.status(400).json({ message: 'Session ID is required' });
         }
@@ -197,7 +197,8 @@ router.post('/session/touch', protectOptional, async (req, res) => {
             sessionId,
             userId: req.user?._id || '',
             path,
-            state
+            state,
+            referrer
         });
         res.json(session);
     } catch (error) {

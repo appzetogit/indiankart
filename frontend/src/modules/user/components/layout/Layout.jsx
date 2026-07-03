@@ -31,9 +31,11 @@ const Layout = () => {
         if (!sessionId) return;
 
         const lastState = localStorage.getItem('ik-last-known-state') || 'Unknown';
+        const referrer = typeof document !== 'undefined' ? document.referrer : '';
         API.post('/auth/session/touch', {
             path: location.pathname,
-            state: lastState
+            state: lastState,
+            referrer
         }).catch(err => console.error('Failed to touch portal session:', err));
     }, [location.pathname, isAuthenticated]);
 

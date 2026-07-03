@@ -1158,6 +1158,65 @@ export const getPortalViewInsights = async (_req, res) => {
             ? Number((totalPagesVisited / totalSessionsCount).toFixed(1))
             : 1.0;
 
+        // Calculate conversion funnel and referrer distribution
+        let viewedPdpCount = 0;
+        let visitedCartCount = 0;
+        let initiatedCheckoutCount = 0;
+        let purchasedCount = 0;
+
+        const referrerMap = {};
+
+        for (const session of allPortalSessions) {
+            // Referrer tracking
+            const ref = String(session.referrer || 'Direct').trim();
+            let cleanRef = 'Direct';
+            if (ref && ref !== 'Direct' && ref !== '') {
+                try {
+                    const urlObj = new URL(ref);
+                    cleanRef = urlObj.hostname || ref;
+                } catch (e) {
+                    cleanRef = ref;
+                }
+            }
+            if (cleanRef.includes('localhost') || cleanRef.includes('127.0.0.1')) {
+                cleanRef = 'Direct';
+            }
+            referrerMap[cleanRef] = (referrerMap[cleanRef] || 0) + 1;
+
+            // Funnel tracking
+            const pages = Array.isArray(session?.pagesVisited) ? session.pagesVisited : [];
+            let hasPdp = false;
+            let hasCart = false;
+            let hasCheckout = false;
+            let hasSuccess = false;
+
+            for (const page of pages) {
+                const path = String(page?.path || '');
+                if (path.includes('/product/')) hasPdp = true;
+                if (path.includes('/cart')) hasCart = true;
+                if (path.includes('/checkout')) hasCheckout = true;
+                if (path.includes('/order-success')) hasSuccess = true;
+            }
+
+            if (hasPdp) viewedPdpCount += 1;
+            if (hasCart) visitedCartCount += 1;
+            if (hasCheckout) initiatedCheckoutCount += 1;
+            if (hasSuccess) purchasedCount += 1;
+        }
+
+        const referrerDistribution = Object.entries(referrerMap)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        const conversionFunnel = {
+            totalSessions: totalSessionsCount,
+            viewedPdp: viewedPdpCount,
+            visitedCart: visitedCartCount,
+            initiatedCheckout: initiatedCheckoutCount,
+            purchased: purchasedCount
+        };
+
         const dailyStats = [];
         for (let offset = 29; offset >= 0; offset -= 1) {
             const date = new Date(now);
@@ -1208,6 +1267,8 @@ export const getPortalViewInsights = async (_req, res) => {
                 avgSessionDurationMin,
                 avgPageDepth
             },
+            referrerDistribution,
+            conversionFunnel,
             authStats: {
                 activeLoggedInUsers,
                 liveActiveAllUsers,
