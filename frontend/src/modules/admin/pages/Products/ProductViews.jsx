@@ -203,6 +203,18 @@ const ProductViews = () => {
         navigate(`/admin/product-views/${getProductId(product)}`);
     };
 
+    if (loading && !portalInsights) {
+        return (
+            <div className="flex min-h-[450px] flex-col items-center justify-center space-y-4 py-20 bg-gray-50/50 rounded-3xl border border-dashed border-gray-200">
+                <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+                <div className="text-center">
+                    <h3 className="text-base font-black text-gray-900 animate-pulse">Calculating Insights...</h3>
+                    <p className="mt-1 text-xs font-semibold text-gray-400 uppercase tracking-widest">Aggregating live visitor traffic and funnel stats</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -214,11 +226,12 @@ const ProductViews = () => {
                 </div>
                 <button
                     type="button"
+                    disabled={loading}
                     onClick={() => fetchProducts(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-70 transition-opacity"
                 >
-                    <MdRefresh size={18} />
-                    Refresh
+                    <MdRefresh size={18} className={loading ? 'animate-spin' : ''} />
+                    {loading ? 'Calculating...' : 'Refresh'}
                 </button>
             </div>
 
