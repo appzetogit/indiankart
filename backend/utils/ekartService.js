@@ -123,32 +123,32 @@ const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUp
     : 'Prepaid';
 
 const RAW_TO_USER_TRACKING_STEP = {
-    Created: 'Processing',
-    Booked: 'Processing',
-    Pending: 'Processing',
-    Processing: 'Processing',
-    Manifested: 'Processing',
-    'Shipment Created': 'Processing',
-    Scheduled: 'Scheduled',
-    'Pickup Scheduled': 'Scheduled',
-    'Not Picked': 'Not Picked',
-    Picked: 'Picked Up',
-    'Picked Up': 'Picked Up',
-    Dispatched: 'Dispatched',
-    Shipped: 'Dispatched',
-    'In Transit': 'In Transit',
-    Transit: 'In Transit',
-    'Out for Delivery': 'Out for Delivery',
-    OFD: 'Out for Delivery',
-    Delivered: 'Delivered',
-    Cancelled: 'Cancelled',
-    RTO: 'RTO',
-    DTO: 'DTO',
-    Collected: 'Collected'
+    created: 'Processing',
+    booked: 'Processing',
+    pending: 'Processing',
+    processing: 'Processing',
+    manifested: 'Processing',
+    'shipment created': 'Processing',
+    scheduled: 'Scheduled',
+    'pickup scheduled': 'Scheduled',
+    'not picked': 'Not Picked',
+    picked: 'Picked Up',
+    'picked up': 'Picked Up',
+    dispatched: 'Dispatched',
+    shipped: 'Dispatched',
+    'in transit': 'In Transit',
+    transit: 'In Transit',
+    'out for delivery': 'Out for Delivery',
+    ofd: 'Out for Delivery',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+    rto: 'RTO',
+    dto: 'DTO',
+    collected: 'Collected'
 };
 
 const getMappedTrackingStep = (rawStatus = '') => {
-    const normalized = sanitizeText(rawStatus);
+    const normalized = sanitizeText(rawStatus).toLowerCase();
     return RAW_TO_USER_TRACKING_STEP[normalized] || '';
 };
 

@@ -103,6 +103,9 @@ const TrackOrder = () => {
                 const { data } = await API.get(`/orders/${orderId}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
+                if (data?.status && order && data.status !== order.status) {
+                    fetchOrder();
+                }
             } catch (err) {
                 if (cancelled) return;
                 setTrackingData(null);

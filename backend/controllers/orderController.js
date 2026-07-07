@@ -1089,7 +1089,8 @@ export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
         const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
-        const auditedOrders = await annotateDuplicatePayments(syncedOrders);
+        const fulfillmentReadyOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
+        const auditedOrders = await annotateDuplicatePayments(fulfillmentReadyOrders);
         res.json(auditedOrders);
     } catch (error) {
         console.error('Get my orders error:', error);

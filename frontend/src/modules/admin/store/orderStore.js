@@ -156,7 +156,7 @@ const useOrderStore = create((set) => ({
                 params: {
                     ensureInvoice: true,
                     syncPayment: false,
-                    syncFulfillment: false,
+                    syncFulfillment: true,
                     includePaymentAudit: false
                 }
             });

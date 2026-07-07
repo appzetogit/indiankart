@@ -196,7 +196,7 @@ const OrderList = () => {
                     pageNumber: currentPage,
                     limit: itemsPerPage,
                     syncPayments: false,
-                    syncFulfillment: false,
+                    syncFulfillment: true,
                     includePaymentAudit: false
                 };
 

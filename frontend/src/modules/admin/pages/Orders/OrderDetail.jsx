@@ -93,6 +93,9 @@ const OrderDetail = () => {
                 const { data } = await API.get(`/orders/${id}/shipping-tracking`);
                 if (cancelled) return;
                 setTrackingData(data?.tracking || null);
+                if (data?.status && order && data.status !== order.status) {
+                    getOrderDetails(id);
+                }
             } catch (error) {
                 if (cancelled) return;
                 setTrackingError(error.response?.data?.message || 'Unable to fetch live courier status');

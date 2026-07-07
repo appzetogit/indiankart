@@ -136,23 +136,23 @@ const parseScanTime = (scanDetail = {}) => (
 );
 
 const RAW_TO_USER_TRACKING_STEP = {
-    Manifested: 'Processing',
-    'Not Picked': 'Not Picked',
-    'Picked Up': 'Picked Up',
-    Pending: 'Processing',
-    Scheduled: 'Processing',
-    Dispatched: 'Dispatched',
-    'In Transit': 'In Transit',
-    'Out for Delivery': 'Out for Delivery',
-    Delivered: 'Delivered',
-    Cancelled: 'Cancelled',
-    RTO: 'RTO',
-    DTO: 'DTO',
-    Collected: 'Collected'
+    manifested: 'Processing',
+    'not picked': 'Not Picked',
+    'picked up': 'Picked Up',
+    pending: 'Processing',
+    scheduled: 'Processing',
+    dispatched: 'Dispatched',
+    'in transit': 'In Transit',
+    'out for delivery': 'Out for Delivery',
+    delivered: 'Delivered',
+    cancelled: 'Cancelled',
+    rto: 'RTO',
+    dto: 'DTO',
+    collected: 'Collected'
 };
 
 const getMappedTrackingStep = (rawStatus = '') => {
-    const normalized = sanitizeText(rawStatus);
+    const normalized = sanitizeText(rawStatus).toLowerCase();
     return RAW_TO_USER_TRACKING_STEP[normalized] || '';
 };
 
