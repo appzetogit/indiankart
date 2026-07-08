@@ -9,7 +9,9 @@ import {
     updateProductStock,
     incrementProductView,
     getProductViewInsights,
-    getPortalViewInsights
+    getPortalViewInsights,
+    exportStockExcel,
+    importStockExcel
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
@@ -27,7 +29,15 @@ const uploadMiddleware = (req, res, next) => {
 router.route('/')
     .get(getProducts)
     .post(protect, admin, uploadMiddleware, createProduct);
+
+router.route('/stock/export')
+    .get(protect, admin, exportStockExcel);
+
+router.route('/stock/import')
+    .post(protect, admin, upload.single('file'), importStockExcel);
+
 router.route('/:id')
+
     .get(getProductById)
     .put(protect, admin, uploadMiddleware, updateProduct)
     .delete(protect, admin, deleteProduct);

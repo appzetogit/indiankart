@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MdSearch, MdInventory, MdExpandMore, MdExpandLess, MdSave, MdRefresh } from 'react-icons/md';
+import { MdSearch, MdInventory, MdExpandMore, MdExpandLess, MdSave, MdRefresh, MdFileDownload, MdFileUpload, MdClose, MdCheckCircle, MdWarning } from 'react-icons/md';
 import API from '../../../../services/api';
 import { toast } from 'react-hot-toast';
 import Loader from '../../../../components/common/Loader';
@@ -14,6 +14,10 @@ const StockManagement = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedProduct, setExpandedProduct] = useState(null);
     const [editingStock, setEditingStock] = useState({}); // { productId: value, "productId-skuIndex": value }
+    const [exporting, setExporting] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState(null);
+    const [showResultModal, setShowResultModal] = useState(false);
 
     const fetchProducts = async (showToast = false) => {
         try {
@@ -35,7 +39,73 @@ const StockManagement = () => {
         setSearchTerm('');
         setEditingStock({});
         setExpandedProduct(null);
+        setImportResult(null);
         fetchProducts(true);
+    };
+
+    const handleExport = async () => {
+        try {
+            setExporting(true);
+            toast.loading('Generating Excel sheet...', { id: 'export-stock' });
+            
+            const response = await API.get('/products/stock/export', {
+                responseType: 'blob'
+            });
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `indiakart_stock_update_${new Date().toISOString().split('T')[0]}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            toast.success('Inventory sheet downloaded!', { id: 'export-stock' });
+        } catch (error) {
+            console.error('Export Stock Error:', error);
+            toast.error('Failed to export stock sheet', { id: 'export-stock' });
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        e.target.value = null;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            setImporting(true);
+            toast.loading('Uploading and importing stock...', { id: 'import-stock' });
+
+            const { data } = await API.post('/products/stock/import', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            setImportResult(data);
+            setShowResultModal(true);
+
+            if (data.success) {
+                toast.success('Stock import completed!', { id: 'import-stock' });
+                fetchProducts(false);
+            } else {
+                toast.error('Stock import completed with errors.', { id: 'import-stock' });
+            }
+        } catch (error) {
+            console.error('Import Stock Error:', error);
+            const errMsg = error.response?.data?.message || 'Failed to upload and import stock file.';
+            toast.error(errMsg, { id: 'import-stock' });
+        } finally {
+            setImporting(false);
+        }
     };
 
     useEffect(() => {
@@ -71,23 +141,21 @@ const StockManagement = () => {
             await API.put(`/products/${product.id}/stock`, payload);
             toast.success('Stock updated successfully!', { id: 'update-stock' });
 
-            // Update local state instead of full refetch for better UX
             setProducts(prev => {
                 const nextProducts = prev.map(p => {
-                if (p.id === product.id) {
-                    if (isSku) {
-                        const derivedStock = payload.skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
-                        return { ...p, skus: payload.skus, stock: derivedStock };
+                    if (p.id === product.id) {
+                        if (isSku) {
+                            const derivedStock = payload.skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
+                            return { ...p, skus: payload.skus, stock: derivedStock };
+                        }
+                        return { ...p, stock: payload.stock };
                     }
-                    return { ...p, stock: payload.stock };
-                }
-                return p;
+                    return p;
                 });
                 setAdminListCache(STOCK_PRODUCTS_CACHE_KEY, nextProducts);
                 return nextProducts;
             });
 
-            // Clear editing state for this item
             const newEditing = { ...editingStock };
             delete newEditing[editKey];
             setEditingStock(newEditing);
@@ -115,13 +183,36 @@ const StockManagement = () => {
                     </h1>
                     <p className="text-sm text-gray-500 font-medium">Update inventory levels for products and variants</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={handleRefresh}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all font-bold text-sm shadow-sm"
-                >
-                    <MdRefresh size={20} className={loading ? 'animate-spin' : ''} /> Refresh
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={handleRefresh}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all font-bold text-sm shadow-sm"
+                    >
+                        <MdRefresh size={20} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                    
+                    <button
+                        type="button"
+                        onClick={handleExport}
+                        disabled={exporting || loading}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all font-bold text-sm border border-blue-100 shadow-sm"
+                    >
+                        <MdFileDownload size={20} /> Export Excel
+                    </button>
+
+                    <label className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all font-bold text-sm border border-emerald-100 shadow-sm cursor-pointer animate-none">
+                        <MdFileUpload size={20} />
+                        <span>Import Excel</span>
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            className="hidden"
+                            onChange={handleImport}
+                            disabled={importing || loading}
+                        />
+                    </label>
+                </div>
             </div>
 
             {/* Controls */}
@@ -282,6 +373,95 @@ const StockManagement = () => {
                     </div>
                 )}
             </div>
+
+            {/* Result Report Modal */}
+            {showResultModal && importResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-gray-100 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                            <h3 className="text-lg font-black text-gray-900 flex items-center gap-2">
+                                <MdInventory className="text-blue-600" /> Stock Import Report
+                            </h3>
+                            <button
+                                onClick={() => setShowResultModal(false)}
+                                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <MdClose size={20} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-center">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider animate-none">Processed Rows</p>
+                                    <p className="text-2xl font-black text-gray-800 mt-1">{importResult.summary?.totalRowsProcessed || 0}</p>
+                                </div>
+                                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 text-center">
+                                    <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider animate-none">Updated Products</p>
+                                    <p className="text-2xl font-black text-emerald-700 mt-1">{importResult.summary?.updatedProductsCount || 0}</p>
+                                </div>
+                                <div className={`p-4 rounded-xl text-center border ${
+                                    (importResult.summary?.errorsCount || 0) > 0
+                                        ? 'bg-red-50 border-red-100'
+                                        : 'bg-gray-50 border-gray-100'
+                                }`}>
+                                    <p className={`text-xs font-bold uppercase tracking-wider animate-none ${
+                                        (importResult.summary?.errorsCount || 0) > 0 ? 'text-red-500' : 'text-gray-400'
+                                    }`}>Errors / Warnings</p>
+                                    <p className={`text-2xl font-black mt-1 ${
+                                        (importResult.summary?.errorsCount || 0) > 0 ? 'text-red-600' : 'text-gray-800'
+                                    }`}>{importResult.summary?.errorsCount || 0}</p>
+                                </div>
+                            </div>
+
+                            {/* Success Banner */}
+                            {importResult.summary?.errorsCount === 0 && (
+                                <div className="flex flex-col items-center justify-center py-6 px-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-center space-y-2">
+                                    <MdCheckCircle className="text-emerald-500 animate-bounce" size={48} />
+                                    <h4 className="text-base font-black text-emerald-800">All Updates Applied Cleanly!</h4>
+                                    <p className="text-sm text-emerald-600 font-medium max-w-md">
+                                        The spreadsheet was successfully validated and processed. All changes are now live in the database.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Warnings/Errors section */}
+                            {importResult.summary?.errorsCount > 0 && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-amber-600">
+                                        <MdWarning size={20} />
+                                        <h4 className="text-sm font-black uppercase tracking-wider">Validation Warnings & Errors</h4>
+                                    </div>
+                                    <p className="text-xs font-medium text-gray-500">
+                                        Some rows could not be updated. Please correct these issues in your spreadsheet and upload again.
+                                    </p>
+                                    <div className="max-h-60 overflow-y-auto border border-red-100 bg-red-50/20 rounded-xl divide-y divide-red-100/50">
+                                        {importResult.summary.errors.map((err, idx) => (
+                                            <div key={idx} className="p-3 text-xs font-semibold text-red-700 flex items-start gap-2">
+                                                <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5"></span>
+                                                <span>{err}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                            <button
+                                onClick={() => setShowResultModal(false)}
+                                className="px-5 py-2 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
+                            >
+                                Close Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

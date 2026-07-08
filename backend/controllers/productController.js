@@ -3,6 +3,8 @@ import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import PortalSession from '../models/PortalSession.js';
+import ExcelJS from 'exceljs';
+
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
@@ -1282,3 +1284,316 @@ export const getPortalViewInsights = async (_req, res) => {
         return res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Export current stock to Excel sheet
+// @route   GET /api/products/stock/export
+// @access  Private/Admin
+export const exportStockExcel = async (req, res) => {
+    try {
+        const products = await Product.find({}).sort({ name: 1 });
+        
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Stock Management');
+        
+        // Add title and instructions
+        worksheet.mergeCells('A1:H1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'IndiaKart Bulk Stock Update Sheet';
+        titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFF' } };
+        titleCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: '1E3A8A' } // Navy Blue
+        };
+        titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(1).height = 40;
+        
+        worksheet.mergeCells('A2:H2');
+        const instructionCell = worksheet.getCell('A2');
+        instructionCell.value = 'INSTRUCTIONS: Only enter values in the "New Stock" column (Column H). Leave it blank if there is no change. Do NOT modify any other column.';
+        instructionCell.font = { name: 'Arial', size: 10, italic: true, bold: true, color: { argb: 'B91C1C' } }; // Dark red
+        instructionCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        worksheet.getRow(2).height = 25;
+        
+        // Header Row (Row 4)
+        const headers = [
+            'Product ID',
+            'Product Name',
+            'Brand',
+            'Has Variants',
+            'Variant Combination',
+            'Variant Index',
+            'Current Stock',
+            'New Stock'
+        ];
+        
+        const headerRow = worksheet.getRow(4);
+        headerRow.values = headers;
+        headerRow.height = 28;
+        
+        // Style headers
+        headers.forEach((h, colIndex) => {
+            const cell = headerRow.getCell(colIndex + 1);
+            cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFF' } };
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: '2563EB' } // Blue
+            };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'D1D5DB' } },
+                bottom: { style: 'medium', color: { argb: '1E40AF' } },
+                left: { style: 'thin', color: { argb: 'D1D5DB' } },
+                right: { style: 'thin', color: { argb: 'D1D5DB' } }
+            };
+        });
+        
+        // Data rows
+        let rowIndex = 5;
+        products.forEach(product => {
+            if (product.skus && product.skus.length > 0) {
+                // Has variants, add a row for each SKU
+                product.skus.forEach((sku, skuIdx) => {
+                    const row = worksheet.getRow(rowIndex);
+                    
+                    // Format combination object/Map to string
+                    let comboStr = '';
+                    if (sku.combination instanceof Map) {
+                        comboStr = Array.from(sku.combination.entries())
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(', ');
+                    } else if (sku.combination && typeof sku.combination === 'object') {
+                        comboStr = Object.entries(sku.combination)
+                            .map(([k, v]) => `${k}: ${v}`)
+                            .join(', ');
+                    }
+                    
+                    row.values = [
+                        product.id,
+                        product.name,
+                        product.brand || 'N/A',
+                        'Yes',
+                        comboStr,
+                        skuIdx,
+                        sku.stock || 0,
+                        '' // New Stock (blank)
+                    ];
+                    
+                    styleDataRow(row, rowIndex);
+                    rowIndex++;
+                });
+            } else {
+                // No variants, add one row
+                const row = worksheet.getRow(rowIndex);
+                row.values = [
+                    product.id,
+                    product.name,
+                    product.brand || 'N/A',
+                    'No',
+                    'N/A',
+                    -1,
+                    product.stock || 0,
+                    '' // New Stock (blank)
+                ];
+                
+                styleDataRow(row, rowIndex);
+                rowIndex++;
+            }
+        });
+        
+        // Adjust column widths
+        worksheet.columns.forEach((column, i) => {
+            let maxLen = 0;
+            column.eachCell({ includeEmpty: true }, (cell, rowNum) => {
+                if (rowNum > 2) {
+                    const val = cell.value ? String(cell.value) : '';
+                    if (val.length > maxLen) maxLen = val.length;
+                }
+            });
+            column.width = Math.max(maxLen + 4, 12);
+        });
+        
+        function styleDataRow(row, rIdx) {
+            const isEven = rIdx % 2 === 0;
+            const bgHex = isEven ? 'F9FAFB' : 'FFFFFF'; // Zebra striping
+            
+            for (let c = 1; c <= 8; c++) {
+                const cell = row.getCell(c);
+                cell.font = { name: 'Arial', size: 10 };
+                cell.alignment = { vertical: 'middle', horizontal: (c === 1 || c === 6 || c === 7 || c === 8) ? 'center' : 'left' };
+                
+                if (c < 8) {
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: bgHex }
+                    };
+                    cell.border = {
+                        top: { style: 'thin', color: { argb: 'E5E7EB' } },
+                        bottom: { style: 'thin', color: { argb: 'E5E7EB' } },
+                        left: { style: 'thin', color: { argb: 'E5E7EB' } },
+                        right: { style: 'thin', color: { argb: 'E5E7EB' } }
+                    };
+                    if (c === 1 || c === 4 || c === 6) {
+                        cell.font = { name: 'Arial', size: 9, color: { argb: '6B7280' } };
+                    }
+                } else {
+                    // New Stock column
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'ECFDF5' } // Light green
+                    };
+                    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: '047857' } };
+                    cell.border = {
+                        top: { style: 'medium', color: { argb: '10B981' } },
+                        bottom: { style: 'medium', color: { argb: '10B981' } },
+                        left: { style: 'medium', color: { argb: '10B981' } },
+                        right: { style: 'medium', color: { argb: '10B981' } }
+                    };
+                }
+            }
+        }
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="indiakart_stock_update.xlsx"');
+        
+        await workbook.xlsx.write(res);
+        res.end();
+        
+    } catch (error) {
+        console.error('Export Stock Error:', error);
+        res.status(500).json({ message: 'Failed to export stock sheet', error: error.message });
+    }
+};
+
+// @desc    Import stock from uploaded Excel sheet
+// @route   POST /api/products/stock/import
+// @access  Private/Admin
+export const importStockExcel = async (req, res) => {
+    try {
+        if (!req.file || !req.file.buffer) {
+            return res.status(400).json({ message: 'Please upload an Excel spreadsheet file.' });
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(req.file.buffer);
+        const worksheet = workbook.worksheets[0];
+        
+        if (!worksheet) {
+            return res.status(400).json({ message: 'Excel worksheet is empty or invalid.' });
+        }
+
+        let updatedProductsCount = 0;
+        let totalRowsProcessed = 0;
+        const errors = [];
+
+        // Group updates by product ID
+        const updates = {};
+
+        const totalRows = worksheet.rowCount;
+        for (let rowNumber = 5; rowNumber <= totalRows; rowNumber++) {
+            const row = worksheet.getRow(rowNumber);
+            const productIdVal = row.getCell(1).value;
+            if (!productIdVal) continue; // Skip empty rows or title rows
+
+            const productId = Number(productIdVal);
+            if (isNaN(productId)) {
+                errors.push(`Row ${rowNumber}: Invalid Product ID "${productIdVal}".`);
+                continue;
+            }
+
+            const variantIndexVal = row.getCell(6).value;
+            const newStockVal = row.getCell(8).value;
+
+            totalRowsProcessed++;
+
+            // Check if stock value was provided
+            const newStockStr = (newStockVal !== null && newStockVal !== undefined) ? String(newStockVal).trim() : '';
+            if (newStockStr === '') {
+                continue; // No stock change requested
+            }
+
+            const newStockNum = Number(newStockStr);
+            if (isNaN(newStockNum) || newStockNum < 0 || !Number.isInteger(newStockNum)) {
+                errors.push(`Row ${rowNumber} (ID ${productId}): Invalid stock value "${newStockStr}". Must be a non-negative integer.`);
+                continue;
+            }
+
+            const variantIndex = (variantIndexVal !== null && variantIndexVal !== undefined) ? Number(variantIndexVal) : -1;
+
+            if (!updates[productId]) {
+                updates[productId] = {
+                    variantUpdates: {}
+                };
+            }
+
+            if (variantIndex >= 0) {
+                updates[productId].variantUpdates[variantIndex] = newStockNum;
+            } else {
+                updates[productId].parentStock = newStockNum;
+            }
+        }
+
+        // Apply updates to the database
+        for (const [productIdStr, productUpdate] of Object.entries(updates)) {
+            const productId = Number(productIdStr);
+            const product = await Product.findOne({ id: productId });
+            if (!product) {
+                errors.push(`Product ID ${productId}: Not found in database.`);
+                continue;
+            }
+
+            let hasChanges = false;
+
+            if (product.skus && product.skus.length > 0) {
+                // Apply variant updates
+                for (const [vIdxStr, newStock] of Object.entries(productUpdate.variantUpdates)) {
+                    const idx = Number(vIdxStr);
+                    if (idx >= 0 && idx < product.skus.length) {
+                        product.skus[idx].stock = newStock;
+                        hasChanges = true;
+                    } else {
+                        errors.push(`Product "${product.name}" (ID ${productId}): Invalid variant index ${idx}.`);
+                    }
+                }
+
+                if (hasChanges) {
+                    product.markModified('skus');
+                    // Sync parent stock with sum of variant stock
+                    product.stock = product.skus.reduce((sum, sku) => sum + (Number(sku.stock) || 0), 0);
+                }
+            } else {
+                // Non-variant product
+                if (productUpdate.parentStock !== undefined) {
+                    product.stock = productUpdate.parentStock;
+                    hasChanges = true;
+                }
+            }
+
+            if (hasChanges) {
+                await product.save();
+                updatedProductsCount++;
+            }
+        }
+
+        res.json({
+            success: errors.length === 0 || updatedProductsCount > 0,
+            message: errors.length === 0
+                ? `Stock updated: ${updatedProductsCount} products updated successfully.`
+                : `Stock updated: ${updatedProductsCount} products updated, but ${errors.length} validation errors occurred.`,
+            summary: {
+                totalRowsProcessed,
+                updatedProductsCount,
+                errorsCount: errors.length,
+                errors
+            }
+        });
+
+    } catch (error) {
+        console.error('Import Stock Error:', error);
+        res.status(500).json({ message: 'Failed to parse and import stock file.', error: error.message });
+    }
+};
+
