@@ -140,7 +140,7 @@ const getWeekdayLabelFromDateKey = (dateKey = '') => {
 // @access  Public
 export const getProducts = async (req, res) => {
     try {
-        const { category, subcategory, all, pageNumber, limit, search, keyword, lite, ids } = req.query;
+        const { category, subcategory, all, pageNumber, limit, search, keyword, lite, ids, stockStatus } = req.query;
         let filter = {};
         const searchTerm = String(search || keyword || '').trim();
         const categoryTerm = decodeURIComponent(String(category || '').trim());
@@ -250,8 +250,36 @@ export const getProducts = async (req, res) => {
             }
         }
 
-        if (all === 'true' && categoryTerm) {
-            filter.category = new RegExp(`^${escapeRegex(categoryTerm)}$`, 'i');
+        if (all === 'true') {
+            if (categoryTerm) {
+                filter.category = new RegExp(`^${escapeRegex(categoryTerm)}$`, 'i');
+            }
+            if (subCategoryTerm) {
+                const subRegex = new RegExp(`^${escapeRegex(subCategoryTerm)}$`, 'i');
+                const orConditions = [
+                    { tags: subRegex },
+                    { brand: subRegex },
+                    { subcategoryBrand: subRegex }
+                ];
+                if (/^[0-9a-fA-F]{24}$/.test(subCategoryTerm)) {
+                    orConditions.push({ subCategories: subCategoryTerm });
+                    orConditions.push({ subCategory: subCategoryTerm });
+                }
+                filter.$and = [
+                    ...(filter.$and || []),
+                    { $or: orConditions }
+                ];
+            }
+        }
+
+        if (stockStatus) {
+            if (stockStatus === 'Low Stock') {
+                filter.stock = { $gt: 0, $lte: 5 };
+            } else if (stockStatus === 'Out of Stock') {
+                filter.stock = 0;
+            } else if (stockStatus === 'In Stock') {
+                filter.stock = { $gt: 5 };
+            }
         }
 
         if (searchTerm) {

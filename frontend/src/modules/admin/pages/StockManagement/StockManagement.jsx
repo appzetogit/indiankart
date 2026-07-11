@@ -12,8 +12,8 @@ import Pagination from '../../components/common/Pagination';
 const STOCK_PRODUCTS_CACHE_KEY = 'admin-products:stock-lite';
 
 const StockManagement = () => {
-    const [products, setProducts] = useState(() => getAdminListCache(STOCK_PRODUCTS_CACHE_KEY) || []);
-    const [loading, setLoading] = useState(() => !getAdminListCache(STOCK_PRODUCTS_CACHE_KEY));
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedProduct, setExpandedProduct] = useState(null);
     const [editingStock, setEditingStock] = useState({}); // { productId: value, "productId-skuIndex": value }
@@ -33,14 +33,43 @@ const StockManagement = () => {
     const [stockStatusFilter, setStockStatusFilter] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(20);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalProducts, setTotalProducts] = useState(0);
 
     const fetchProducts = async (showToast = false) => {
         try {
-            setLoading(products.length === 0);
-            const { data } = await API.get('/products?all=true&lite=true');
-            const nextProducts = Array.isArray(data) ? data : [];
-            setAdminListCache(STOCK_PRODUCTS_CACHE_KEY, nextProducts);
-            setProducts(nextProducts);
+            setLoading(true);
+            const params = {
+                pageNumber: currentPage,
+                limit: itemsPerPage,
+                all: 'true',
+                lite: 'true'
+            };
+
+            if (selectedCategory && selectedCategory !== 'All') {
+                params.category = selectedCategory;
+            }
+            if (selectedSubCategory && selectedSubCategory !== 'All') {
+                params.subcategory = selectedSubCategory;
+            }
+            if (stockStatusFilter && stockStatusFilter !== 'All') {
+                params.stockStatus = stockStatusFilter;
+            }
+            const searchText = searchTerm.trim();
+            if (searchText) {
+                params.search = searchText;
+            }
+
+            const { data } = await API.get('/products', { params });
+            if (data && data.products) {
+                setProducts(data.products);
+                setTotalPages(data.pages || 1);
+                setTotalProducts(data.total || 0);
+            } else {
+                setProducts(Array.isArray(data) ? data : []);
+                setTotalPages(1);
+                setTotalProducts(Array.isArray(data) ? data.length : 0);
+            }
             if (showToast) toast.success('Inventory synced successfully');
         } catch (error) {
             console.error('Fetch products error:', error);
@@ -50,16 +79,20 @@ const StockManagement = () => {
         }
     };
 
-    const handleRefresh = () => {
-        setSearchTerm('');
-        setSelectedCategory('All');
-        setSelectedSubCategory('All');
-        setStockStatusFilter('All');
-        setCurrentPage(1);
+    const handleRefresh = async () => {
         setEditingStock({});
         setExpandedProduct(null);
         setImportResult(null);
-        fetchProducts(true);
+        if (searchTerm === '' && selectedCategory === 'All' && selectedSubCategory === 'All' && stockStatusFilter === 'All' && currentPage === 1) {
+            await fetchProducts(true);
+        } else {
+            setSearchTerm('');
+            setSelectedCategory('All');
+            setSelectedSubCategory('All');
+            setStockStatusFilter('All');
+            setCurrentPage(1);
+            toast.success('Inventory synced successfully');
+        }
     };
 
     const handleExport = async () => {
@@ -129,6 +162,9 @@ const StockManagement = () => {
 
     useEffect(() => {
         fetchProducts();
+    }, [currentPage, itemsPerPage, selectedCategory, selectedSubCategory, stockStatusFilter, searchTerm]);
+
+    useEffect(() => {
         fetchCategories();
         fetchSubCategories();
     }, [fetchCategories, fetchSubCategories]);
@@ -173,7 +209,6 @@ const StockManagement = () => {
                     }
                     return p;
                 });
-                setAdminListCache(STOCK_PRODUCTS_CACHE_KEY, nextProducts);
                 return nextProducts;
             });
 
@@ -234,50 +269,7 @@ const StockManagement = () => {
         });
     }, [subCategories, selectedCategory, categories]);
 
-    const normalizedSearchTerm = normalizeSearchValue(searchTerm);
 
-    const filteredProducts = useMemo(() => {
-        return products.filter((p) => {
-            const matchesSearch = !normalizedSearchTerm ||
-                normalizeSearchValue(p.name).includes(normalizedSearchTerm) ||
-                normalizeSearchValue(p.brand).includes(normalizedSearchTerm);
-
-            const matchesCategory = !selectedCategory || selectedCategory === 'All' ||
-                p.category === selectedCategory;
-
-            const matchesSubCategory = !selectedSubCategory || selectedSubCategory === 'All' ||
-                (p.subCategories && p.subCategories.some(subId => String(subId?._id || subId) === String(selectedSubCategory))) ||
-                (p.subCategory && String(p.subCategory?._id || p.subCategory) === String(selectedSubCategory));
-
-            let matchesStock = true;
-            const stockLevel = Number(p.stock) || 0;
-            if (stockStatusFilter === 'Low Stock') {
-                matchesStock = stockLevel > 0 && stockLevel <= 5;
-            } else if (stockStatusFilter === 'Out of Stock') {
-                matchesStock = stockLevel === 0;
-            } else if (stockStatusFilter === 'In Stock') {
-                matchesStock = stockLevel > 5;
-            }
-
-            return matchesSearch && matchesCategory && matchesSubCategory && matchesStock;
-        });
-    }, [products, normalizedSearchTerm, selectedCategory, selectedSubCategory, stockStatusFilter]);
-
-    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-
-    // Adjust page if it exceeds total pages after filtering
-    useEffect(() => {
-        if (currentPage > totalPages && totalPages > 0) {
-            setCurrentPage(totalPages);
-        }
-    }, [filteredProducts.length, totalPages, currentPage]);
-
-    const paginatedProducts = useMemo(() => {
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
-    }, [filteredProducts, currentPage, itemsPerPage]);
-
-    if (loading && products.length === 0) return <Loader fullPage message="Fetching inventory..." />;
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
@@ -414,8 +406,8 @@ const StockManagement = () => {
             </div>
 
             {/* Product List */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden min-h-[300px] flex flex-col justify-between">
+                <div className="overflow-x-auto flex-1">
                     <table className="w-full text-left border-collapse">
                         <AdminTableHead>
                             <AdminTableHeaderRow>
@@ -427,132 +419,140 @@ const StockManagement = () => {
                             </AdminTableHeaderRow>
                         </AdminTableHead>
                         <tbody className="divide-y divide-gray-200">
-                            {paginatedProducts.map(product => (
-                                <React.Fragment key={product.id}>
-                                    <tr className={`hover:bg-blue-50/10 transition-colors group ${expandedProduct === product.id ? 'bg-blue-50/30' : ''}`}>
-                                        <td className="px-4 py-3.5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
-                                                    <img src={product.image} className="w-full h-full object-contain p-1" alt="" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <h4 className="text-sm font-black text-gray-800 truncate max-w-[220px]">{product.name}</h4>
-                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.14em]">{product.brand || 'No Brand'}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            <span className="inline-flex text-[11px] font-bold text-gray-600 px-2 py-1 bg-gray-100 rounded-md">
-                                                {product.category}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3.5 text-center">
-                                            {product.skus && product.skus.length > 0 ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
-                                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-[0.14em] hover:bg-blue-100 transition-all border border-blue-100 shadow-sm"
-                                                >
-                                                    {product.skus.length} variants
-                                                    {expandedProduct === product.id ? <MdExpandLess /> : <MdExpandMore />}
-                                                </button>
-                                            ) : (
-                                                <span className="text-[10px] font-black text-gray-300 uppercase italic tracking-widest">No Variants</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3.5">
-                                            <div className="flex items-center justify-center gap-2">
-                                                <input
-                                                    type="number"
-                                                    disabled={product.skus && product.skus.length > 0}
-                                                    className={`w-16 px-2 py-1.5 text-center rounded-lg border-2 font-black text-sm transition-all outline-none ${product.skus && product.skus.length > 0
-                                                            ? 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'
-                                                            : 'bg-white border-blue-50 focus:border-blue-500 text-gray-900 group-hover:shadow-lg'
-                                                        }`}
-                                                    value={
-                                                        editingStock[product.id] ??
-                                                        (product.skus && product.skus.length > 0
-                                                            ? product.skus.reduce((acc, s) => acc + (Number(s.stock) || 0), 0)
-                                                            : product.stock)
-                                                    }
-                                                    onChange={(e) => handleStockChange(product.id, e.target.value)}
-                                                />
-                                                {product.stock <= 5 && !product.skus?.length && (
-                                                    <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3.5 text-right">
-                                            {(!product.skus || product.skus.length === 0) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => updateStock(product)}
-                                                    disabled={editingStock[product.id] === undefined}
-                                                    className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[product.id] !== undefined
-                                                            ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
-                                                            : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
-                                                        }`}
-                                                >
-                                                    <MdSave size={18} />
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-
-                                    {/* Variant Rows */}
-                                    {expandedProduct === product.id && product.skus?.map((sku, idx) => (
-                                        <tr key={`${product.id}-${idx}`} className="bg-gray-50/80 animate-in slide-in-from-top-2 duration-300 border-l-4 border-blue-500">
-                                            <td className="pl-14 pr-4 py-3" colSpan={2}>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={5} className="py-20 text-center">
+                                        <Loader message="Fetching inventory..." />
+                                    </td>
+                                </tr>
+                            ) : (
+                                products.map(product => (
+                                    <React.Fragment key={product.id}>
+                                        <tr className={`hover:bg-blue-50/10 transition-colors group ${expandedProduct === product.id ? 'bg-blue-50/30' : ''}`}>
+                                            <td className="px-4 py-3.5">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {Object.entries(sku.combination).map(([key, value]) => (
-                                                            <div key={key} className="flex flex-col">
-                                                                <span className="text-[10px] font-bold text-gray-400 leading-none mb-1">{key}</span>
-                                                                <span className="text-[11px] font-black text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-100">{value}</span>
-                                                            </div>
-                                                        ))}
+                                                    <div className="h-10 w-10 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden flex-shrink-0">
+                                                        <img src={product.image} className="w-full h-full object-contain p-1" alt="" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <h4 className="text-sm font-black text-gray-800 truncate max-w-[220px]">{product.name}</h4>
+                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.14em]">{product.brand || 'No Brand'}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td></td>
-                                            <td className="px-4 py-3">
+                                            <td className="px-4 py-3.5">
+                                                <span className="inline-flex text-[11px] font-bold text-gray-600 px-2 py-1 bg-gray-100 rounded-md">
+                                                    {product.category}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-center">
+                                                {product.skus && product.skus.length > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedProduct(expandedProduct === product.id ? null : product.id)}
+                                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black uppercase tracking-[0.14em] hover:bg-blue-100 transition-all border border-blue-100 shadow-sm"
+                                                    >
+                                                        {product.skus.length} variants
+                                                        {expandedProduct === product.id ? <MdExpandLess /> : <MdExpandMore />}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-[10px] font-black text-gray-300 uppercase italic tracking-widest">No Variants</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3.5">
                                                 <div className="flex items-center justify-center gap-2">
                                                     <input
                                                         type="number"
-                                                        className="w-16 px-2 py-1.5 text-center rounded-lg border-2 bg-white border-blue-100 focus:border-blue-500 text-gray-900 font-black text-sm transition-all outline-none"
-                                                        value={editingStock[`${product.id}-${idx}`] ?? sku.stock}
-                                                        onChange={(e) => handleStockChange(`${product.id}-${idx}`, e.target.value)}
+                                                        disabled={product.skus && product.skus.length > 0}
+                                                        className={`w-16 px-2 py-1.5 text-center rounded-lg border-2 font-black text-sm transition-all outline-none ${product.skus && product.skus.length > 0
+                                                                ? 'bg-gray-100 border-transparent text-gray-400 cursor-not-allowed'
+                                                                : 'bg-white border-blue-50 focus:border-blue-500 text-gray-900 group-hover:shadow-lg'
+                                                            }`}
+                                                        value={
+                                                            editingStock[product.id] ??
+                                                            (product.skus && product.skus.length > 0
+                                                                ? product.skus.reduce((acc, s) => acc + (Number(s.stock) || 0), 0)
+                                                                : product.stock)
+                                                        }
+                                                        onChange={(e) => handleStockChange(product.id, e.target.value)}
                                                     />
+                                                    {product.stock <= 5 && !product.skus?.length && (
+                                                        <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping"></span>
+                                                    )}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => updateStock(product, true, idx)}
-                                                    disabled={editingStock[`${product.id}-${idx}`] === undefined}
-                                                    className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[`${product.id}-${idx}`] !== undefined
-                                                            ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
-                                                            : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
-                                                        }`}
-                                                >
-                                                    <MdSave size={18} />
-                                                </button>
+                                            <td className="px-4 py-3.5 text-right">
+                                                {(!product.skus || product.skus.length === 0) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateStock(product)}
+                                                        disabled={editingStock[product.id] === undefined}
+                                                        className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[product.id] !== undefined
+                                                                ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
+                                                                : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        <MdSave size={18} />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
-                                    ))}
-                                </React.Fragment>
-                            ))}
+
+                                        {/* Variant Rows */}
+                                        {expandedProduct === product.id && product.skus?.map((sku, idx) => (
+                                            <tr key={`${product.id}-${idx}`} className="bg-gray-50/80 animate-in slide-in-from-top-2 duration-300 border-l-4 border-blue-500">
+                                                <td className="pl-14 pr-4 py-3" colSpan={2}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {Object.entries(sku.combination).map(([key, value]) => (
+                                                                <div key={key} className="flex flex-col">
+                                                                    <span className="text-[10px] font-bold text-gray-400 leading-none mb-1">{key}</span>
+                                                                    <span className="text-[11px] font-black text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-100">{value}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td></td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <input
+                                                            type="number"
+                                                            className="w-16 px-2 py-1.5 text-center rounded-lg border-2 bg-white border-blue-100 focus:border-blue-500 text-gray-900 font-black text-sm transition-all outline-none"
+                                                            value={editingStock[`${product.id}-${idx}`] ?? sku.stock}
+                                                            onChange={(e) => handleStockChange(`${product.id}-${idx}`, e.target.value)}
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateStock(product, true, idx)}
+                                                        disabled={editingStock[`${product.id}-${idx}`] === undefined}
+                                                        className={`p-2 rounded-lg transition-all shadow-sm border ${editingStock[`${product.id}-${idx}`] !== undefined
+                                                                ? 'bg-blue-600 text-white border-blue-700 hover:scale-105 active:scale-95'
+                                                                : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        <MdSave size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </React.Fragment>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
-                {totalPages > 1 && (
+                {totalPages > 1 && !loading && (
                     <Pagination
                         currentPage={currentPage}
                         totalPages={totalPages}
                         onPageChange={(page) => setCurrentPage(page)}
                     />
                 )}
-                {filteredProducts.length === 0 && (
+                {!loading && products.length === 0 && (
                     <div className="p-20 text-center space-y-4">
                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
                             <MdSearch size={32} className="text-gray-300" />
