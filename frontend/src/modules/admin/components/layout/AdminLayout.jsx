@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import AdminHeader from './AdminHeader';
+import Loader from '../../../../components/common/Loader';
 
 const AdminLayout = () => {
     return (
@@ -15,7 +16,9 @@ const AdminLayout = () => {
                     data-lenis-prevent
                     className="flex-1 overflow-y-auto overflow-x-auto p-2 md:p-4"
                 >
-                    <Outlet />
+                    <Suspense fallback={<Loader message="Loading content..." />}>
+                        <Outlet />
+                    </Suspense>
                 </main>
             </div>
         </div>

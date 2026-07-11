@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MdSearch, MdInventory, MdExpandMore, MdExpandLess, MdSave, MdRefresh, MdFileDownload, MdFileUpload, MdClose, MdCheckCircle, MdWarning } from 'react-icons/md';
 import API from '../../../../services/api';
 import { toast } from 'react-hot-toast';
 import Loader from '../../../../components/common/Loader';
 import { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 import { getAdminListCache, setAdminListCache } from '../../utils/adminListCache';
+import useCategoryStore from '../../store/categoryStore';
+import useSubCategoryStore from '../../store/subCategoryStore';
+import Pagination from '../../components/common/Pagination';
 
 const STOCK_PRODUCTS_CACHE_KEY = 'admin-products:stock-lite';
 
@@ -18,6 +21,18 @@ const StockManagement = () => {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState(null);
     const [showResultModal, setShowResultModal] = useState(false);
+
+    // Filters and Pagination State
+    const categories = useCategoryStore((state) => state.categories);
+    const fetchCategories = useCategoryStore((state) => state.fetchCategories);
+    const subCategories = useSubCategoryStore((state) => state.subCategories);
+    const fetchSubCategories = useSubCategoryStore((state) => state.fetchSubCategories);
+
+    const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedSubCategory, setSelectedSubCategory] = useState('All');
+    const [stockStatusFilter, setStockStatusFilter] = useState('All');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(20);
 
     const fetchProducts = async (showToast = false) => {
         try {
@@ -37,6 +52,10 @@ const StockManagement = () => {
 
     const handleRefresh = () => {
         setSearchTerm('');
+        setSelectedCategory('All');
+        setSelectedSubCategory('All');
+        setStockStatusFilter('All');
+        setCurrentPage(1);
         setEditingStock({});
         setExpandedProduct(null);
         setImportResult(null);
@@ -110,7 +129,9 @@ const StockManagement = () => {
 
     useEffect(() => {
         fetchProducts();
-    }, []);
+        fetchCategories();
+        fetchSubCategories();
+    }, [fetchCategories, fetchSubCategories]);
 
     const handleStockChange = (id, value) => {
         setEditingStock(prev => ({ ...prev, [id]: value }));
@@ -166,11 +187,95 @@ const StockManagement = () => {
         }
     };
 
+    const handleCategoryChange = (e) => {
+        setSelectedCategory(e.target.value);
+        setSelectedSubCategory('All');
+        setCurrentPage(1);
+    };
+
+    const handleSubCategoryChange = (e) => {
+        setSelectedSubCategory(e.target.value);
+        setCurrentPage(1);
+    };
+
+    const handleStockStatusChange = (e) => {
+        setStockStatusFilter(e.target.value);
+        setCurrentPage(1);
+    };
+
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+        setCurrentPage(1);
+    };
+
+    const handleItemsPerPageChange = (e) => {
+        setItemsPerPage(Number(e.target.value));
+        setCurrentPage(1);
+    };
+
+    const handleClearFilters = () => {
+        setSearchTerm('');
+        setSelectedCategory('All');
+        setSelectedSubCategory('All');
+        setStockStatusFilter('All');
+        setCurrentPage(1);
+    };
+
+    const filteredSubCategories = useMemo(() => {
+        if (!selectedCategory || selectedCategory === 'All') {
+            return subCategories;
+        }
+        const selectedCategoryObj = categories.find(c => c.name === selectedCategory);
+        if (!selectedCategoryObj) return [];
+        const catId = selectedCategoryObj.id || selectedCategoryObj._id;
+        return subCategories.filter(sub => {
+            const subCatId = sub.category?._id || sub.category;
+            return String(subCatId) === String(catId);
+        });
+    }, [subCategories, selectedCategory, categories]);
+
     const normalizedSearchTerm = normalizeSearchValue(searchTerm);
-    const filteredProducts = products.filter((p) =>
-        normalizeSearchValue(p.name).includes(normalizedSearchTerm) ||
-        normalizeSearchValue(p.brand).includes(normalizedSearchTerm)
-    );
+
+    const filteredProducts = useMemo(() => {
+        return products.filter((p) => {
+            const matchesSearch = !normalizedSearchTerm ||
+                normalizeSearchValue(p.name).includes(normalizedSearchTerm) ||
+                normalizeSearchValue(p.brand).includes(normalizedSearchTerm);
+
+            const matchesCategory = !selectedCategory || selectedCategory === 'All' ||
+                p.category === selectedCategory;
+
+            const matchesSubCategory = !selectedSubCategory || selectedSubCategory === 'All' ||
+                (p.subCategories && p.subCategories.some(subId => String(subId?._id || subId) === String(selectedSubCategory))) ||
+                (p.subCategory && String(p.subCategory?._id || p.subCategory) === String(selectedSubCategory));
+
+            let matchesStock = true;
+            const stockLevel = Number(p.stock) || 0;
+            if (stockStatusFilter === 'Low Stock') {
+                matchesStock = stockLevel > 0 && stockLevel <= 5;
+            } else if (stockStatusFilter === 'Out of Stock') {
+                matchesStock = stockLevel === 0;
+            } else if (stockStatusFilter === 'In Stock') {
+                matchesStock = stockLevel > 5;
+            }
+
+            return matchesSearch && matchesCategory && matchesSubCategory && matchesStock;
+        });
+    }, [products, normalizedSearchTerm, selectedCategory, selectedSubCategory, stockStatusFilter]);
+
+    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+
+    // Adjust page if it exceeds total pages after filtering
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(totalPages);
+        }
+    }, [filteredProducts.length, totalPages, currentPage]);
+
+    const paginatedProducts = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredProducts, currentPage, itemsPerPage]);
 
     if (loading && products.length === 0) return <Loader fullPage message="Fetching inventory..." />;
 
@@ -216,16 +321,95 @@ const StockManagement = () => {
             </div>
 
             {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                <div className="relative">
-                    <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Search products by name or brand..."
-                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-medium text-gray-900 placeholder:text-gray-500"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col lg:flex-row gap-4">
+                    {/* Search Bar */}
+                    <div className="relative flex-1">
+                        <MdSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                        <input
+                            type="text"
+                            placeholder="Search products by name or brand..."
+                            className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-medium text-gray-900 placeholder:text-gray-500"
+                            value={searchTerm}
+                            onChange={handleSearchChange}
+                        />
+                    </div>
+                    
+                    {/* Items Per Page Selector */}
+                    <div className="flex items-center gap-2 lg:w-48">
+                        <span className="text-xs font-bold text-gray-400 uppercase whitespace-nowrap">Page Size:</span>
+                        <select
+                            value={itemsPerPage}
+                            onChange={handleItemsPerPageChange}
+                            className="w-full px-3 py-2.5 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-semibold text-gray-700 cursor-pointer"
+                        >
+                            <option value={10}>10 items</option>
+                            <option value={20}>20 items</option>
+                            <option value={50}>50 items</option>
+                            <option value={100}>100 items</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Filters Row */}
+                <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+                    <div className="flex flex-col gap-1 min-w-[150px] flex-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Category</label>
+                        <select
+                            value={selectedCategory}
+                            onChange={handleCategoryChange}
+                            className="px-3 py-2 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-semibold text-gray-700 cursor-pointer animate-none"
+                        >
+                            <option value="All">All Categories</option>
+                            {categories.map((cat) => (
+                                <option key={cat.id || cat._id} value={cat.name}>
+                                    {cat.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1 min-w-[180px] flex-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Subcategory</label>
+                        <select
+                            value={selectedSubCategory}
+                            onChange={handleSubCategoryChange}
+                            className="px-3 py-2 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-semibold text-gray-700 cursor-pointer animate-none"
+                        >
+                            <option value="All">All Subcategories</option>
+                            {filteredSubCategories.map((sub) => (
+                                <option key={sub._id || sub.id} value={sub._id || sub.id}>
+                                    {sub.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1 min-w-[140px] flex-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Stock Status</label>
+                        <select
+                            value={stockStatusFilter}
+                            onChange={handleStockStatusChange}
+                            className="px-3 py-2 bg-gray-50 border border-transparent rounded-xl focus:bg-white focus:border-blue-500 outline-none transition-all text-sm font-semibold text-gray-700 cursor-pointer animate-none"
+                        >
+                            <option value="All">All Levels</option>
+                            <option value="In Stock">In Stock (&gt; 5)</option>
+                            <option value="Low Stock">Low Stock (≤ 5)</option>
+                            <option value="Out of Stock">Out of Stock</option>
+                        </select>
+                    </div>
+
+                    {(searchTerm || selectedCategory !== 'All' || selectedSubCategory !== 'All' || stockStatusFilter !== 'All') && (
+                        <div className="flex flex-col gap-1 self-end">
+                            <button
+                                type="button"
+                                onClick={handleClearFilters}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-all font-bold text-sm border border-red-100 shadow-sm"
+                            >
+                                <MdClose size={18} /> Clear Filters
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -243,7 +427,7 @@ const StockManagement = () => {
                             </AdminTableHeaderRow>
                         </AdminTableHead>
                         <tbody className="divide-y divide-gray-200">
-                            {filteredProducts.map(product => (
+                            {paginatedProducts.map(product => (
                                 <React.Fragment key={product.id}>
                                     <tr className={`hover:bg-blue-50/10 transition-colors group ${expandedProduct === product.id ? 'bg-blue-50/30' : ''}`}>
                                         <td className="px-4 py-3.5">
@@ -361,6 +545,13 @@ const StockManagement = () => {
                         </tbody>
                     </table>
                 </div>
+                {totalPages > 1 && (
+                    <Pagination
+                        currentPage={currentPage}
+                        totalPages={totalPages}
+                        onPageChange={(page) => setCurrentPage(page)}
+                    />
+                )}
                 {filteredProducts.length === 0 && (
                     <div className="p-20 text-center space-y-4">
                         <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto">
@@ -368,7 +559,7 @@ const StockManagement = () => {
                         </div>
                         <div>
                             <p className="text-gray-900 font-black tracking-tight">No products found</p>
-                            <p className="text-sm text-gray-500 font-medium">Try adjusting your search terms</p>
+                            <p className="text-sm text-gray-500 font-medium">Try adjusting your search terms or filters</p>
                         </div>
                     </div>
                 )}
