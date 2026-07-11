@@ -76,9 +76,9 @@ app.use(cors({
         const isAllowed =
             allowedOrigins.includes(origin) ||
             origin.endsWith('.vercel.app') ||
-            origin.endsWith('.indiankart.in') ||
-            origin === 'https://indiankart.in' ||
-            origin === 'https://www.indiankart.in';
+            origin.includes('indiankart.in') ||
+            origin.includes('localhost') ||
+            origin.includes('127.0.0.1');
 
         if (isAllowed) {
             callback(null, true);
