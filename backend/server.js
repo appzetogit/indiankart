@@ -44,6 +44,19 @@ import headerRoutes from './routes/headerRoutes.js';
 
 const app = express();
 
+// Request logging middleware
+app.use((req, res, next) => {
+    const start = Date.now();
+
+    res.on("finish", () => {
+        console.log(
+            `${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - start}ms)`
+        );
+    });
+
+    next();
+});
+
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
