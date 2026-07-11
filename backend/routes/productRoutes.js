@@ -9,6 +9,7 @@ import {
     updateProductStock,
     incrementProductView,
     getProductViewInsights,
+    getProductViewProducts,
     getPortalViewInsights,
     exportStockExcel,
     importStockExcel
@@ -36,6 +37,12 @@ router.route('/stock/export')
 router.route('/stock/import')
     .post(protect, admin, upload.single('file'), importStockExcel);
 
+router.route('/view-insights/products')
+    .get(protect, admin, getProductViewProducts);
+
+router.route('/view-insights/portal')
+    .get(protect, admin, getPortalViewInsights);
+
 router.route('/:id')
 
     .get(getProductById)
@@ -44,9 +51,6 @@ router.route('/:id')
 
 router.route('/:id/stock')
     .put(protect, admin, updateProductStock);
-
-router.route('/view-insights/portal')
-    .get(protect, admin, getPortalViewInsights);
 
 router.route('/:id/view-insights')
     .get(protect, admin, getProductViewInsights);

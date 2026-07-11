@@ -80,6 +80,7 @@ const ProductViews = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [portalInsights, setPortalInsights] = useState(null);
     const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+    const [portalInsightsError, setPortalInsightsError] = useState(false);
     const isFetchingRef = useRef(false);
 
     const fetchProducts = async (showToast = false) => {
@@ -90,18 +91,40 @@ const ProductViews = () => {
         try {
             isFetchingRef.current = true;
             setLoading(true);
-            const [{ data }, { data: portalData }] = await Promise.all([
-                API.get('/products', {
-                    params: { all: 'true', lite: 'true' }
+            const [productsResult, portalResult] = await Promise.allSettled([
+                API.get('/products/view-insights/products', {
+                    timeout: 20000
                 }),
-                API.get('/products/view-insights/portal')
+                API.get('/products/view-insights/portal', {
+                    timeout: 20000
+                })
             ]);
-            const list = Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []);
-            const sorted = [...list].sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
-            setProducts(sorted);
-            setPortalInsights(portalData);
+
+            if (productsResult.status === 'fulfilled') {
+                const { data } = productsResult.value;
+                const list = Array.isArray(data?.products) ? data.products : (Array.isArray(data) ? data : []);
+                const sorted = [...list].sort((a, b) => Number(b.viewCount || 0) - Number(a.viewCount || 0));
+                setProducts(sorted);
+            } else {
+                throw productsResult.reason;
+            }
+
+            if (portalResult.status === 'fulfilled') {
+                setPortalInsights(portalResult.value.data);
+                setPortalInsightsError(false);
+            } else {
+                console.error('Error fetching portal insights:', portalResult.reason);
+                setPortalInsightsError(true);
+            }
+
             setLastRefreshedAt(new Date());
-            if (showToast) toast.success('Views refreshed');
+            if (showToast) {
+                if (portalResult.status === 'fulfilled') {
+                    toast.success('Views refreshed');
+                } else {
+                    toast.success('Products refreshed');
+                }
+            }
         } catch (error) {
             console.error('Error fetching product views:', error);
             toast.error('Failed to load product views');
@@ -306,6 +329,12 @@ const ProductViews = () => {
                     <p className="mt-1 text-xs font-semibold text-gray-500">Recent visitor movement across the portal</p>
                 </div>
             </div>
+
+            {portalInsightsError && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                    Portal analytics are taking too long right now, so this page is showing product view data first and will keep retrying the live insights in the background.
+                </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/20 to-white p-5 shadow-sm">

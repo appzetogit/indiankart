@@ -7,6 +7,8 @@ import ExcelJS from 'exceljs';
 
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
+const PORTAL_ANALYTICS_SESSION_LIMIT = 5000;
+const PORTAL_RECENT_SESSIONS_LIMIT = 100;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
 let activeVisibilityCache = {
     fetchedAt: 0,
@@ -1023,6 +1025,23 @@ export const getProductViewInsights = async (req, res) => {
     }
 };
 
+// @desc    Get the lightweight product list used by the product views dashboard
+// @route   GET /api/products/view-insights/products
+// @access  Private/Admin
+export const getProductViewProducts = async (_req, res) => {
+    try {
+        const products = await Product.find({})
+            .select('id name image brand category viewCount viewStatsByState')
+            .sort({ viewCount: -1, id: 1 })
+            .lean();
+
+        return res.json(products);
+    } catch (error) {
+        console.error('Error fetching product view products:', error);
+        return res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Get portal-wide product view insights
 // @route   GET /api/products/view-insights/portal
 // @access  Private/Admin
@@ -1062,11 +1081,15 @@ export const getPortalViewInsights = async (_req, res) => {
             PortalSession.countDocuments({ loginAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ logoutAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ userRole: { $ne: 'guest' } }),
-            PortalSession.find({ lastSeenAt: { $gte: recentStart } }).select(analyticsSessionFields).lean(),
+            PortalSession.find({ lastSeenAt: { $gte: recentStart } })
+                .select(analyticsSessionFields)
+                .sort({ lastSeenAt: -1 })
+                .limit(PORTAL_ANALYTICS_SESSION_LIMIT)
+                .lean(),
             PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } })
                 .select(recentSessionFields)
                 .sort({ lastSeenAt: -1 })
-                .limit(100)
+                .limit(PORTAL_RECENT_SESSIONS_LIMIT)
                 .lean()
         ]);
 
