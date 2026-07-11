@@ -110,7 +110,6 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
                     type: couponRecord.type
                 };
             }
-            }
         }
     }
 
