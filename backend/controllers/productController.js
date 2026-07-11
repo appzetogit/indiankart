@@ -1028,9 +1028,6 @@ export const getProductViewInsights = async (req, res) => {
 // @access  Private/Admin
 export const getPortalViewInsights = async (_req, res) => {
     try {
-        const products = await Product.find({})
-            .select('id viewCount')
-            .lean();
         const now = new Date();
         const liveThreshold = new Date(now.getTime() - (5 * 60 * 1000));
         const startOfToday = new Date(now);
@@ -1045,7 +1042,10 @@ export const getPortalViewInsights = async (_req, res) => {
         const weeklyMap = new Map(weekdayOrder.map((day) => [day, { day, views: 0, visitors: 0 }]));
 
         const sessionsThreshold = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        const analyticsSessionFields = 'loginAt lastSeenAt pagesVisited.path pagesVisited.visitedAt referrer';
+        const recentSessionFields = 'sessionId userId userRole authMethod loginAt lastSeenAt logoutAt isActive state pagesVisited.path pagesVisited.visitedAt';
         const [
+            trackedProducts,
             totalVisitors,
             activeLoggedInUsers,
             liveActiveAllUsers,
@@ -1055,14 +1055,19 @@ export const getPortalViewInsights = async (_req, res) => {
             allPortalSessions,
             recentSessions
         ] = await Promise.all([
+            Product.countDocuments(),
             PortalSession.countDocuments(),
             PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ isActive: true, lastSeenAt: { $gte: liveThreshold } }),
             PortalSession.countDocuments({ loginAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ logoutAt: { $gte: startOfToday }, userRole: { $ne: 'guest' } }),
             PortalSession.countDocuments({ userRole: { $ne: 'guest' } }),
-            PortalSession.find({ lastSeenAt: { $gte: recentStart } }).select('loginAt lastSeenAt pagesVisited').lean(),
-            PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } }).sort({ lastSeenAt: -1 }).lean()
+            PortalSession.find({ lastSeenAt: { $gte: recentStart } }).select(analyticsSessionFields).lean(),
+            PortalSession.find({ lastSeenAt: { $gte: sessionsThreshold } })
+                .select(recentSessionFields)
+                .sort({ lastSeenAt: -1 })
+                .limit(100)
+                .lean()
         ]);
 
         let totalViews = 0;
@@ -1283,7 +1288,7 @@ export const getPortalViewInsights = async (_req, res) => {
         });
 
         return res.json({
-            trackedProducts: products.length,
+            trackedProducts,
             totalViews,
             totalVisitors,
             last7Days,

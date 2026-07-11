@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MdRefresh, MdSearch, MdVisibility, MdBarChart, MdPeople, MdTimeline, MdToday, MdCategory } from 'react-icons/md';
 import { 
@@ -80,9 +80,15 @@ const ProductViews = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [portalInsights, setPortalInsights] = useState(null);
     const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+    const isFetchingRef = useRef(false);
 
     const fetchProducts = async (showToast = false) => {
+        if (isFetchingRef.current) {
+            return;
+        }
+
         try {
+            isFetchingRef.current = true;
             setLoading(true);
             const [{ data }, { data: portalData }] = await Promise.all([
                 API.get('/products', {
@@ -100,6 +106,7 @@ const ProductViews = () => {
             console.error('Error fetching product views:', error);
             toast.error('Failed to load product views');
         } finally {
+            isFetchingRef.current = false;
             setLoading(false);
         }
     };
