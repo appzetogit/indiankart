@@ -59,7 +59,7 @@ app.use((req, res, next) => {
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim().replace(/^["']|["']$/g, ''))
     : [
         'http://localhost:5173',
         'http://127.0.0.1:5173',
@@ -76,6 +76,7 @@ app.use(cors({
         const isAllowed =
             allowedOrigins.includes(origin) ||
             origin.endsWith('.vercel.app') ||
+            origin.endsWith('.indiankart.in') ||
             origin === 'https://indiankart.in' ||
             origin === 'https://www.indiankart.in';
 
@@ -83,12 +84,11 @@ app.use(cors({
             callback(null, true);
         } else {
             console.log('CORS blocked origin:', origin);
-            callback(new Error('Not allowed by CORS'));
+            callback(null, false);
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'X-User-Session-Id']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
