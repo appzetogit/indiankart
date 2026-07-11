@@ -528,10 +528,18 @@ const CategoryLandingSections = ({ categoryName }) => {
     const isForYouCategory = String(categoryName || '').trim().toLowerCase() === 'for you';
     const hasSubcategoriesSection = sections.some((section) => section.sectionKind === 'subcategories');
 
+    const loadedSectionsRef = useRef(loadedSections);
+    const loadingSectionIdsRef = useRef(loadingSectionIds);
+
+    useEffect(() => {
+        loadedSectionsRef.current = loadedSections;
+        loadingSectionIdsRef.current = loadingSectionIds;
+    }, [loadedSections, loadingSectionIds]);
+
     const loadSectionPayload = useCallback(async (sectionId) => {
         const normalizedSectionId = String(sectionId || '').trim();
         if (!normalizedSectionId) return;
-        if (loadedSections[normalizedSectionId] || loadingSectionIds[normalizedSectionId]) return;
+        if (loadedSectionsRef.current[normalizedSectionId] || loadingSectionIdsRef.current[normalizedSectionId]) return;
 
         setLoadingSectionIds((prev) => ({ ...prev, [normalizedSectionId]: true }));
         try {
@@ -546,7 +554,7 @@ const CategoryLandingSections = ({ categoryName }) => {
         } finally {
             setLoadingSectionIds((prev) => ({ ...prev, [normalizedSectionId]: false }));
         }
-    }, [categoryName, loadedSections, loadingSectionIds]);
+    }, [categoryName]);
 
     useEffect(() => {
         const eagerSections = sections

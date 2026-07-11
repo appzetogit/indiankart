@@ -154,7 +154,7 @@ const CategoryPage = () => {
             }
 
             try {
-                const [{ data: subData }, { data: brandData }, { data: productData }] = await Promise.all([
+                const results = await Promise.allSettled([
                     API.get('/subcategories'),
                     API.get('/brands'),
                     API.get(`/products?category=${encodeURIComponent(decodeURIComponent(categoryName || ''))}&subcategory=${encodeURIComponent(decodeURIComponent(routeSegments[0] || ''))}&lite=true`)
@@ -162,9 +162,10 @@ const CategoryPage = () => {
 
                 if (!active) return;
 
-                const subcategories = Array.isArray(subData) ? subData : [];
-                const brands = Array.isArray(brandData) ? brandData : [];
-                const products = Array.isArray(productData) ? productData : (Array.isArray(productData?.products) ? productData.products : []);
+                const subcategories = results[0].status === 'fulfilled' && Array.isArray(results[0].value?.data) ? results[0].value.data : [];
+                const brands = results[1].status === 'fulfilled' && Array.isArray(results[1].value?.data) ? results[1].value.data : [];
+                const productRaw = results[2].status === 'fulfilled' ? results[2].value?.data : null;
+                const products = Array.isArray(productRaw) ? productRaw : (Array.isArray(productRaw?.products) ? productRaw.products : []);
 
                 const selectedSubCategory = subcategories.find((sub) => (
                     String(sub?.name || '').trim().toLowerCase() === currentSubCategoryName &&

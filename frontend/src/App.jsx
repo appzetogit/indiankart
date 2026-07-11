@@ -38,7 +38,7 @@ function App() {
     checkAuth();
 
     // Firebase foreground notifications
-    onMessageListener().then(payload => {
+    const unsubscribe = onMessageListener((payload) => {
       if (!payload?.notification) return;
 
       toast.success(`${payload.notification.title}: ${payload.notification.body}`, {
@@ -46,7 +46,13 @@ function App() {
         position: 'top-right'
       });
       console.log('Received foreground message: ', payload);
-    }).catch(err => console.log('failed: ', err));
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [checkAuth]);
 
   return (

@@ -495,12 +495,14 @@ const SubCategoryLandingSections = ({ categoryName, subCategoryName }) => {
 
         const fetchMasterData = async () => {
             try {
-                const [{ data: subData }, { data: brandData }] = await Promise.all([
+                const results = await Promise.allSettled([
                     API.get('/subcategories'),
                     API.get('/brands')
                 ]);
 
                 if (!active) return;
+                const subData = results[0].status === 'fulfilled' ? results[0].value?.data : [];
+                const brandData = results[1].status === 'fulfilled' ? results[1].value?.data : [];
                 setAllSubCategories(Array.isArray(subData) ? subData : []);
                 setAllBrands(Array.isArray(brandData) ? brandData : []);
             } catch {

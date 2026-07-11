@@ -4,11 +4,11 @@ import './index.css'
 import App from './App.jsx'
 
 const app = import.meta.env.DEV ? (
-  <App />
-) : (
   <StrictMode>
     <App />
   </StrictMode>
-)
+) : (
+  <App />
+);
 
 createRoot(document.getElementById('root')).render(app)

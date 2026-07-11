@@ -22,33 +22,48 @@ const MyOrders = () => {
     const fetchOrders = async () => {
         try {
             setLoading(true);
-            const { data } = await API.get('/orders/myorders');
-            setOrders(data);
-            const liveStatusEntries = await Promise.all(
-                (Array.isArray(data) ? data : []).map(async (order) => {
-                    const fulfillmentMode = getFulfillmentMode(order);
-                    const trackingIdentifier = fulfillmentMode === 'delhivery'
-                        ? order?.delhivery?.waybill
-                        : order?.ekart?.trackingNumber;
-                    if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier) {
-                        return [String(order?._id || ''), ''];
-                    }
-
-                    try {
-                        const { data: trackingResponse } = await API.get(`/orders/${order._id}/shipping-tracking`);
-                        return [String(order._id), String(trackingResponse?.tracking?.currentStatus || '').trim()];
-                    } catch (trackingError) {
-                        return [String(order._id), ''];
-                    }
-                })
-            );
-            setLiveStatuses(Object.fromEntries(liveStatusEntries));
-            setCurrentPage(1);
             setError(null);
+            const { data } = await API.get('/orders/myorders');
+            const ordersList = Array.isArray(data) ? data : [];
+            setOrders(ordersList);
+            setCurrentPage(1);
+            setLoading(false);
+
+            // Fetch live statuses asynchronously in the background so it doesn't block rendering of orders.
+            const trackingPromises = ordersList.map(async (order) => {
+                const fulfillmentMode = getFulfillmentMode(order);
+                const trackingIdentifier = fulfillmentMode === 'delhivery'
+                    ? order?.delhivery?.waybill
+                    : order?.ekart?.trackingNumber;
+                if (!['delhivery', 'ekart'].includes(fulfillmentMode) || !trackingIdentifier) {
+                    return [String(order?._id || ''), ''];
+                }
+
+                try {
+                    const { data: trackingResponse } = await API.get(`/orders/${order._id}/shipping-tracking`);
+                    return [String(order._id), String(trackingResponse?.tracking?.currentStatus || '').trim()];
+                } catch (trackingError) {
+                    return [String(order._id), ''];
+                }
+            });
+
+            const liveStatusEntries = await Promise.allSettled(trackingPromises);
+            const statusMap = {};
+            liveStatusEntries.forEach((result, idx) => {
+                if (result.status === 'fulfilled') {
+                    const [id, status] = result.value;
+                    statusMap[id] = status;
+                } else {
+                    const order = ordersList[idx];
+                    if (order) {
+                        statusMap[String(order._id || '')] = '';
+                    }
+                }
+            });
+            setLiveStatuses(statusMap);
         } catch (err) {
             console.error('Fetch orders error:', err);
             setError(err.response?.data?.message || 'Failed to fetch orders');
-        } finally {
             setLoading(false);
         }
     };

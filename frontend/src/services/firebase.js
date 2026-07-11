@@ -79,25 +79,32 @@ export const requestForToken = async () => {
     }
 };
 
-export const onMessageListener = () =>
-    new Promise((resolve) => {
-        isSupported()
-            .then((messagingSupported) => {
-                if (!app || !messagingSupported) {
-                    resolve(null);
-                    return;
-                }
+export const onMessageListener = (callback) => {
+    let unsubscribe = null;
+    let isCancelled = false;
 
-                if (!messaging) {
-                    messaging = getMessaging(app);
-                }
+    isSupported()
+        .then((messagingSupported) => {
+            if (isCancelled) return;
+            if (!app || !messagingSupported) return;
 
-                onMessage(messaging, (payload) => {
-                    console.log("payload", payload);
-                    resolve(payload);
-                });
-            })
-            .catch(() => resolve(null));
-    });
+            if (!messaging) {
+                messaging = getMessaging(app);
+            }
+
+            unsubscribe = onMessage(messaging, (payload) => {
+                console.log("payload", payload);
+                callback(payload);
+            });
+        })
+        .catch((err) => console.error("Firebase isSupported check failed:", err));
+
+    return () => {
+        isCancelled = true;
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
+};
 
 export default app;

@@ -11,6 +11,7 @@ import Agent from '../models/Agent.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
+import { calculateOrderPrices } from '../utils/priceCalculator.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Confirmed',
@@ -456,7 +457,7 @@ const getRazorpayCredentials = async () => {
     };
 };
 
-const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}) => {
+const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}, expectedAmount) => {
     const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
     if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
         return { isPaid: false, paidAt: null, paymentResult: null };
@@ -490,6 +491,14 @@ const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}) =>
 
     if (!isCaptured) {
         throw new Error('Payment is not captured. Order was not created.');
+    }
+
+    if (expectedAmount !== undefined) {
+        // Razorpay payment.amount is in paise (e.g. 100 paise = 1 INR)
+        const expectedAmountInPaise = Math.round(expectedAmount * 100);
+        if (Math.abs(Number(payment.amount) - expectedAmountInPaise) > 1) {
+            throw new Error('Payment amount mismatch. Order was not created.');
+        }
     }
 
     return {
@@ -789,15 +798,28 @@ export const addOrderItems = async (req, res) => {
             shippingAddress,
             retailerDetails,
             paymentMethod,
-            itemsPrice,
-            taxPrice,
-            shippingPrice,
-            totalPrice,
             coupon,
             referral,
         } = req.body;
         const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
         const isOnlinePayment = normalizedPaymentMethod && normalizedPaymentMethod !== 'COD';
+
+        if (!orderItems || orderItems.length === 0) {
+            return res.status(400).json({ message: 'No order items' });
+        }
+
+        // Calculate prices securely on the backend from database values
+        const calculatedPrices = await calculateOrderPrices({
+            orderItems,
+            shippingAddress,
+            coupon
+        });
+
+        const itemsPrice = calculatedPrices.itemsPrice;
+        const shippingPrice = calculatedPrices.shippingPrice;
+        const taxPrice = calculatedPrices.taxPrice;
+        const totalPrice = calculatedPrices.totalPrice;
+        const resolvedCoupon = calculatedPrices.coupon;
 
         const settings = await Setting.findOne().lean();
         const codAdvancedActive = normalizedPaymentMethod === 'COD' && 
@@ -811,12 +833,12 @@ export const addOrderItems = async (req, res) => {
                 if (!req.body.paymentResult) {
                     return res.status(400).json({ message: 'COD advanced pre-payment details are required.' });
                 }
-                verifiedPayment = await verifyCapturedOnlinePayment('ONLINE', req.body.paymentResult);
+                verifiedPayment = await verifyCapturedOnlinePayment('ONLINE', req.body.paymentResult, expectedCodAdvancedAmount);
             } else {
                 verifiedPayment = { isPaid: false, paidAt: null, paymentResult: null };
             }
         } else {
-            verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult);
+            verifiedPayment = await verifyCapturedOnlinePayment(paymentMethod, req.body.paymentResult, totalPrice);
         }
 
         const existingOnlineOrder = await findExistingOnlineOrder(
@@ -826,10 +848,6 @@ export const addOrderItems = async (req, res) => {
 
         if (existingOnlineOrder) {
             return res.status(200).json(existingOnlineOrder);
-        }
-
-        if (!orderItems || orderItems.length === 0) {
-            return res.status(400).json({ message: 'No order items' });
         }
 
         // Validate Pincode Serviceability
@@ -986,7 +1004,7 @@ export const addOrderItems = async (req, res) => {
             taxPrice,
             shippingPrice,
             totalPrice,
-            coupon,
+            coupon: resolvedCoupon,
             referral: resolvedReferral,
             isPaid: codAdvancedActive ? false : verifiedPayment.isPaid,
             paidAt: codAdvancedActive ? null : verifiedPayment.paidAt,
