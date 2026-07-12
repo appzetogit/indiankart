@@ -2,6 +2,94 @@ import PinCode from '../models/PinCode.js';
 import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
 
+const VALID_DELIVERY_UNITS = new Set(['minutes', 'hours', 'days']);
+const HEADER_ALIASES = {
+    code: ['pincode', 'pin code', 'postal code', 'postalcode', 'zip', 'zipcode', 'code', 'pin'],
+    isCOD: ['iscod', 'cod', 'cashondelivery', 'cash on delivery'],
+    deliveryTime: ['deliverytime', 'delivery time', 'eta', 'estimated time', 'tat', 'sla'],
+    deliveryUnit: ['deliveryunit', 'delivery unit', 'eta unit', 'time unit', 'tat unit', 'sla unit']
+};
+
+const normalizeKey = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const normalizePinCode = (value = '') => String(value).trim();
+
+const normalizeBoolean = (value, defaultValue = true) => {
+    if (value === null || value === undefined || String(value).trim() === '') {
+        return defaultValue;
+    }
+
+    const normalized = String(value).trim().toLowerCase();
+    if (['false', 'no', '0', 'n', 'off'].includes(normalized)) return false;
+    if (['true', 'yes', '1', 'y', 'on'].includes(normalized)) return true;
+    return defaultValue;
+};
+
+const normalizeDeliveryTime = (value, defaultValue = 3) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+};
+
+const normalizeDeliveryUnit = (value, defaultValue = 'days') => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return VALID_DELIVERY_UNITS.has(normalized) ? normalized : defaultValue;
+};
+
+const getValueFromRow = (row, possibleNames) => {
+    const normalizedNames = new Set(possibleNames.map(normalizeKey));
+    for (const [key, value] of Object.entries(row)) {
+        if (normalizedNames.has(normalizeKey(key))) {
+            return value;
+        }
+    }
+    return null;
+};
+
+const extractWorksheetRows = (worksheet) => {
+    const headerRow = worksheet.getRow(1);
+    const headers = (headerRow.values || [])
+        .slice(1)
+        .map((header) => String(header || '').trim());
+
+    if (headers.length === 0 || headers.every((header) => !header)) {
+        throw new Error('Header row is missing in uploaded file');
+    }
+
+    const dataRows = [];
+    for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex++) {
+        const row = worksheet.getRow(rowIndex);
+        const values = (row.values || []).slice(1);
+        const rowObject = {};
+
+        headers.forEach((header, index) => {
+            if (header) {
+                rowObject[header] = values[index];
+            }
+        });
+
+        const hasData = Object.values(rowObject).some((value) => (
+            value !== null && value !== undefined && String(value).trim() !== ''
+        ));
+
+        if (hasData) {
+            dataRows.push({ rowNumber: rowIndex, row: rowObject });
+        }
+    }
+
+    return dataRows;
+};
+
+const buildImportPayload = (row) => {
+    const code = normalizePinCode(getValueFromRow(row, HEADER_ALIASES.code));
+
+    return {
+        code,
+        isCOD: normalizeBoolean(getValueFromRow(row, HEADER_ALIASES.isCOD), true),
+        deliveryTime: normalizeDeliveryTime(getValueFromRow(row, HEADER_ALIASES.deliveryTime), 3),
+        deliveryUnit: normalizeDeliveryUnit(getValueFromRow(row, HEADER_ALIASES.deliveryUnit), 'days')
+    };
+};
+
 // @desc    Add a new serviceable PIN code
 // @route   POST /api/pincodes
 // @access  Private/Admin
@@ -39,8 +127,31 @@ const addPinCode = async (req, res) => {
 // @route   GET /api/pincodes
 // @access  Private/Admin
 const getPinCodes = async (req, res) => {
-    const pinCodes = await PinCode.find({}).sort({ createdAt: -1 }).lean();
-    res.json(pinCodes);
+    const hasPaginationParams = req.query.page || req.query.limit;
+
+    if (!hasPaginationParams) {
+        const pinCodes = await PinCode.find({}).sort({ createdAt: -1 }).lean();
+        return res.json(pinCodes);
+    }
+
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const [pinCodes, totalCount] = await Promise.all([
+        PinCode.find({}).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        PinCode.countDocuments({})
+    ]);
+
+    res.json({
+        items: pinCodes,
+        pagination: {
+            page,
+            limit,
+            totalCount,
+            totalPages: Math.max(Math.ceil(totalCount / limit), 1)
+        }
+    });
 };
 
 // @desc    Delete a PIN code
@@ -113,7 +224,7 @@ const updatePinCode = async (req, res) => {
 const bulkImportPinCodes = async (req, res) => {
     try {
         if (!req.file) {
-            return res.status(400).json({ message: 'Please upload an Excel file' });
+            return res.status(400).json({ message: 'Please upload a .xlsx or .csv file' });
         }
         if (!req.file.buffer || req.file.buffer.length === 0) {
             return res.status(400).json({ message: 'Uploaded file is empty' });
@@ -140,7 +251,12 @@ const bulkImportPinCodes = async (req, res) => {
 
         try {
             if (isCSV) {
-                await workbook.csv.read(Readable.from(req.file.buffer));
+                await workbook.csv.read(Readable.from(req.file.buffer), {
+                    parserOptions: {
+                        trim: true,
+                        skipEmptyLines: true
+                    }
+                });
             } else {
                 await workbook.xlsx.load(req.file.buffer);
             }
@@ -154,45 +270,16 @@ const bulkImportPinCodes = async (req, res) => {
             return res.status(400).json({ message: 'No worksheet found in uploaded file' });
         }
 
-        const headerRow = worksheet.getRow(1);
-        const headers = (headerRow.values || [])
-            .slice(1)
-            .map((h) => String(h || '').trim());
-
-        if (headers.length === 0 || headers.every(h => !h)) {
-            return res.status(400).json({ message: 'Header row is missing in uploaded file' });
-        }
-
-        const dataRows = [];
-        for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex++) {
-            const row = worksheet.getRow(rowIndex);
-            const values = (row.values || []).slice(1);
-
-            const rowObj = {};
-            headers.forEach((header, idx) => {
-                if (header) rowObj[header] = values[idx];
-            });
-
-            const hasData = Object.values(rowObj).some(value =>
-                value !== null && value !== undefined && String(value).trim() !== ''
-            );
-            if (hasData) dataRows.push({ rowNumber: rowIndex, row: rowObj });
+        let dataRows;
+        try {
+            dataRows = extractWorksheetRows(worksheet);
+        } catch (validationError) {
+            return res.status(400).json({ message: validationError.message });
         }
 
         if (dataRows.length === 0) {
             return res.status(400).json({ message: 'Excel/CSV file has no data rows' });
         }
-
-        const normalize = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-        const getValueFromRow = (row, possibleNames) => {
-            const normalizedNameSet = new Set(possibleNames.map(normalize));
-            for (const [key, val] of Object.entries(row)) {
-                if (normalizedNameSet.has(normalize(key)) && val !== undefined && val !== null && String(val).trim() !== '') {
-                    return val;
-                }
-            }
-            return null;
-        };
 
         const results = {
             successful: 0,
@@ -201,49 +288,87 @@ const bulkImportPinCodes = async (req, res) => {
             total: dataRows.length
         };
 
-        for (let i = 0; i < dataRows.length; i++) {
-            const { rowNumber, row } = dataRows[i];
+        const seenCodesInFile = new Set();
+        const validRows = [];
 
-            // Flexible column matching
-            const pincode = getValueFromRow(row, ['Pincode', 'pincode', 'code', 'Code', 'PIN', 'pin']);
-            const isCODVal = getValueFromRow(row, ['isCOD', 'COD', 'cod', 'CashOnDelivery']);
-            const deliveryTimeVal = getValueFromRow(row, ['deliveryTime', 'Delivery Time', 'ETA', 'Estimated Time']);
-            const deliveryUnitVal = getValueFromRow(row, ['deliveryUnit', 'Delivery Unit', 'ETA Unit']);
-            const isCOD = ['false', 'no', '0'].includes(String(isCODVal).toLowerCase()) ? false : true;
-            const parsedDeliveryTime = Number(deliveryTimeVal);
-            const normalizedDeliveryUnit = ['minutes', 'hours', 'days'].includes(String(deliveryUnitVal || '').toLowerCase())
-                ? String(deliveryUnitVal).toLowerCase()
-                : 'days';
+        for (const { rowNumber, row } of dataRows) {
+            const payload = buildImportPayload(row);
 
-            // Validate row data
-            if (!pincode) {
+            if (!payload.code) {
                 results.errors.push(`Row ${rowNumber}: Missing pincode`);
                 continue;
             }
 
-            // Check if pincode already exists
-            const existing = await PinCode.findOne({ code: String(pincode).trim() });
-            if (existing) {
+            if (seenCodesInFile.has(payload.code)) {
                 results.skipped++;
+                results.errors.push(`Row ${rowNumber}: Duplicate pincode ${payload.code} in uploaded file`);
                 continue;
             }
 
+            seenCodesInFile.add(payload.code);
+            validRows.push({ rowNumber, payload });
+        }
+
+        if (validRows.length === 0) {
+            return res.status(400).json({
+                message: 'No valid rows found in uploaded file',
+                results
+            });
+        }
+
+        const existingCodes = new Set(
+            (await PinCode.find({ code: { $in: validRows.map(({ payload }) => payload.code) } }, { code: 1 }).lean())
+                .map((pinCode) => pinCode.code)
+        );
+
+        const documentsToInsert = [];
+
+        for (const { rowNumber, payload } of validRows) {
+            if (existingCodes.has(payload.code)) {
+                results.skipped++;
+                results.errors.push(`Row ${rowNumber}: Pincode ${payload.code} already exists`);
+                continue;
+            }
+
+            documentsToInsert.push({ rowNumber, ...payload });
+        }
+
+        if (documentsToInsert.length > 0) {
             try {
-                await PinCode.create({
-                    code: String(pincode).trim(),
-                    isCOD: isCOD,
-                    deliveryTime: Number.isFinite(parsedDeliveryTime) && parsedDeliveryTime > 0 ? parsedDeliveryTime : 3,
-                    deliveryUnit: normalizedDeliveryUnit
-                });
-                results.successful++;
+                const insertResult = await PinCode.insertMany(
+                    documentsToInsert.map(({ rowNumber, ...document }) => document),
+                    { ordered: false }
+                );
+                results.successful += insertResult.length;
             } catch (error) {
-                results.errors.push(`Row ${rowNumber}: ${error.message}`);
+                const writeErrors = error?.writeErrors || [];
+                const failedIndexes = new Set();
+
+                for (const writeError of writeErrors) {
+                    failedIndexes.add(writeError.index);
+                    const failedRow = documentsToInsert[writeError.index];
+                    const reason = writeError.errmsg || writeError.message || 'Insert failed';
+                    results.errors.push(`Row ${failedRow?.rowNumber || 'unknown'}: ${reason}`);
+                    results.skipped++;
+                }
+
+                const succeededCount = documentsToInsert.length - failedIndexes.size;
+                results.successful += Math.max(succeededCount, 0);
+
+                if (writeErrors.length === 0) {
+                    throw error;
+                }
             }
         }
 
         res.json({
             message: 'Bulk import completed',
-            results
+            results,
+            meta: {
+                fileName: req.file.originalname,
+                fileSize: req.file.size,
+                processedAt: new Date().toISOString()
+            }
         });
     } catch (error) {
         console.error('Bulk import error:', error);

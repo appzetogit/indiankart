@@ -16,7 +16,7 @@ const storage = multer.memoryStorage();
 const upload = multer({
     storage,
     limits: {
-        fileSize: 5 * 1024 * 1024
+        fileSize: 10 * 1024 * 1024
     },
     fileFilter: (req, file, cb) => {
         const fileName = (file.originalname || '').toLowerCase();
@@ -46,7 +46,7 @@ router.route('/bulk-import').post(
 
             if (err instanceof multer.MulterError) {
                 if (err.code === 'LIMIT_FILE_SIZE') {
-                    return res.status(400).json({ message: 'File is too large. Maximum size is 5MB' });
+                    return res.status(400).json({ message: 'File is too large. Maximum size is 10MB' });
                 }
                 return res.status(400).json({ message: `Upload error: ${err.message}` });
             }

@@ -3,7 +3,19 @@ import { MdLocationOn, MdDelete, MdAdd, MdUpload, MdDownload } from 'react-icons
 import usePinCodeStore from '../../store/pinCodeStore';
 
 const PinCodeManager = () => {
-    const { pinCodes, fetchPinCodes, addPinCode, deletePinCode, bulkImportPinCodes, updatePinCode, isLoading } = usePinCodeStore();
+    const {
+        pinCodes,
+        fetchPinCodes,
+        addPinCode,
+        deletePinCode,
+        bulkImportPinCodes,
+        updatePinCode,
+        isLoading,
+        currentPage,
+        totalCount,
+        totalPages,
+        setCurrentPage
+    } = usePinCodeStore();
     const [formData, setFormData] = useState({
         code: '',
         isCOD: true,
@@ -13,6 +25,24 @@ const PinCodeManager = () => {
     const [importResults, setImportResults] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
 
+    const importSummaryStyles = {
+        success: {
+            container: 'bg-green-50 border-green-200',
+            title: 'text-green-900',
+            body: 'text-green-800'
+        },
+        partial: {
+            container: 'bg-amber-50 border-amber-200',
+            title: 'text-amber-900',
+            body: 'text-amber-800'
+        },
+        error: {
+            container: 'bg-red-50 border-red-200',
+            title: 'text-red-900',
+            body: 'text-red-800'
+        }
+    };
+
     // Toggle COD status for a pincode
     const toggleCOD = async (id, currentStatus) => {
         await updatePinCode(id, { isCOD: !currentStatus });
@@ -21,6 +51,12 @@ const PinCodeManager = () => {
     useEffect(() => {
         fetchPinCodes();
     }, [fetchPinCodes]);
+
+    const visiblePages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((page) => (
+        page === 1 ||
+        page === totalPages ||
+        Math.abs(page - currentPage) <= 1
+    ));
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -142,16 +178,27 @@ const PinCodeManager = () => {
 
                 {/* Import Results */}
                 {importResults && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                        <h3 className="font-bold text-blue-900 mb-2">Import Summary</h3>
+                    <div className={`mt-4 p-4 border rounded-xl ${importSummaryStyles[importResults.status || 'success'].container}`}>
+                        <h3 className={`font-bold mb-2 ${importSummaryStyles[importResults.status || 'success'].title}`}>
+                            {importResults.status === 'success' && 'Import completed successfully'}
+                            {importResults.status === 'partial' && 'Import completed with some issues'}
+                            {importResults.status === 'error' && 'Import failed'}
+                        </h3>
+                        <p className={`text-sm mb-3 ${importSummaryStyles[importResults.status || 'success'].body}`}>
+                            {importResults.message}
+                        </p>
                         <div className="text-sm space-y-1">
                             <p className="text-gray-700"><span className="font-bold">Total Rows:</span> {importResults.total}</p>
-                            <p className="text-green-700"><span className="font-bold">Successful:</span> {importResults.successful}</p>
-                            <p className="text-yellow-700"><span className="font-bold">Skipped (Duplicates):</span> {importResults.skipped}</p>
+                            <p className="text-green-700"><span className="font-bold">Added:</span> {importResults.successful}</p>
+                            <p className="text-yellow-700"><span className="font-bold">Skipped:</span> {importResults.skipped}</p>
+                            <p className="text-red-700"><span className="font-bold">Errors:</span> {importResults.errors?.length || 0}</p>
+                            {importResults.meta?.fileName && (
+                                <p className="text-gray-700"><span className="font-bold">File:</span> {importResults.meta.fileName}</p>
+                            )}
                             {importResults.errors && importResults.errors.length > 0 && (
                                 <div className="mt-2">
-                                    <p className="text-red-700 font-bold">Errors:</p>
-                                    <ul className="list-disc list-inside text-red-600 text-xs">
+                                    <p className="text-red-700 font-bold">Row Details:</p>
+                                    <ul className="list-disc list-inside text-red-600 text-xs max-h-40 overflow-y-auto">
                                         {importResults.errors.map((err, idx) => (
                                             <li key={idx}>{err}</li>
                                         ))}
@@ -182,6 +229,7 @@ const PinCodeManager = () => {
                                 className="hidden"
                             />
                         </label>
+                        <p className="text-xs text-gray-500 mt-2">Supported formats: `.xlsx`, `.csv`. Large files and duplicate rows are handled automatically.</p>
                     </div>
                     <button
                         onClick={downloadTemplate}
@@ -196,7 +244,8 @@ const PinCodeManager = () => {
             {/* List of PIN Codes */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-2 md:p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-700">Serviceable Locations ({pinCodes.length})</h3>
+                    <h3 className="font-bold text-gray-700">Serviceable Locations ({totalCount})</h3>
+                    <span className="text-xs md:text-sm text-gray-500">Page {currentPage} of {totalPages}</span>
                 </div>
 
                 {pinCodes.length === 0 ? (
@@ -246,6 +295,51 @@ const PinCodeManager = () => {
                                 </button>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {totalPages > 1 && (
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between px-3 py-4 md:px-4 border-t border-gray-100 bg-gray-50">
+                        <p className="text-sm text-gray-500">
+                            Showing page {currentPage} of {totalPages}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                onClick={() => setCurrentPage(currentPage - 1)}
+                                disabled={currentPage === 1 || isLoading}
+                                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 hover:text-blue-600"
+                            >
+                                Previous
+                            </button>
+                            {visiblePages.map((page, index) => {
+                                const previousPage = visiblePages[index - 1];
+                                const showGap = previousPage && page - previousPage > 1;
+
+                                return (
+                                    <React.Fragment key={page}>
+                                        {showGap && <span className="px-1 text-gray-400">...</span>}
+                                        <button
+                                            onClick={() => setCurrentPage(page)}
+                                            disabled={isLoading}
+                                            className={`min-w-10 px-3 py-2 rounded-lg text-sm font-semibold border transition ${
+                                                page === currentPage
+                                                    ? 'bg-blue-600 text-white border-blue-600'
+                                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                                            }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            })}
+                            <button
+                                onClick={() => setCurrentPage(currentPage + 1)}
+                                disabled={currentPage === totalPages || isLoading}
+                                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:border-blue-300 hover:text-blue-600"
+                            >
+                                Next
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

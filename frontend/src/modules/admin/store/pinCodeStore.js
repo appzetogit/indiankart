@@ -5,12 +5,24 @@ import toast from 'react-hot-toast';
 const usePinCodeStore = create((set, get) => ({
     pinCodes: [],
     isLoading: false,
+    currentPage: 1,
+    pageSize: 25,
+    totalCount: 0,
+    totalPages: 1,
     
-    fetchPinCodes: async () => {
+    fetchPinCodes: async (page = get().currentPage) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.get('/pincodes');
-            set({ pinCodes: data, isLoading: false });
+            const limit = get().pageSize;
+            const { data } = await API.get(`/pincodes?page=${page}&limit=${limit}`);
+            set({
+                pinCodes: data.items || [],
+                currentPage: data.pagination?.page || page,
+                pageSize: data.pagination?.limit || limit,
+                totalCount: data.pagination?.totalCount || 0,
+                totalPages: data.pagination?.totalPages || 1,
+                isLoading: false
+            });
         } catch (error) {
             set({ isLoading: false });
             console.error(error);
@@ -21,11 +33,8 @@ const usePinCodeStore = create((set, get) => ({
     addPinCode: async (pinData) => {
         set({ isLoading: true });
         try {
-            const { data } = await API.post('/pincodes', pinData);
-            set(state => ({ 
-                pinCodes: [data, ...state.pinCodes],
-                isLoading: false 
-            }));
+            await API.post('/pincodes', pinData);
+            await get().fetchPinCodes(1);
             toast.success('PIN Code added successfully');
             return true;
         } catch (error) {
@@ -41,9 +50,9 @@ const usePinCodeStore = create((set, get) => ({
         
         try {
             await API.delete(`/pincodes/${id}`);
-            set(state => ({
-                pinCodes: state.pinCodes.filter(p => p._id !== id)
-            }));
+            const { currentPage, pinCodes } = get();
+            const nextPage = pinCodes.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+            await get().fetchPinCodes(nextPage);
             toast.success('PIN Code deleted');
         } catch (error) {
             toast.error('Failed to delete PIN Code');
@@ -65,26 +74,50 @@ const usePinCodeStore = create((set, get) => ({
         }
     },
 
+    setCurrentPage: async (page) => {
+        await get().fetchPinCodes(page);
+    },
+
     bulkImportPinCodes: async (file) => {
         try {
             const formData = new FormData();
             formData.append('file', file);
             
-            const { data } = await API.post('/pincodes/bulk-import', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            const { data } = await API.post('/pincodes/bulk-import', formData);
             
             // Refresh the pincode list
-            get().fetchPinCodes();
-            
-            toast.success(`Import completed: ${data.results.successful} added, ${data.results.skipped} skipped`);
-            return data.results;
+            await get().fetchPinCodes(1);
+
+            const summary = {
+                status: data.results?.errors?.length
+                    ? (data.results?.successful > 0 ? 'partial' : 'error')
+                    : 'success',
+                message: data.message || 'Bulk import completed',
+                ...data.results,
+                meta: data.meta || null
+            };
+
+            if (summary.status === 'success') {
+                toast.success(`Import complete: ${summary.successful} added`);
+            } else if (summary.status === 'partial') {
+                toast.success(`Import partially complete: ${summary.successful} added, ${summary.skipped} skipped`);
+            } else {
+                toast.error(summary.message);
+            }
+
+            return summary;
         } catch (error) {
             const message = error.response?.data?.message || 'Failed to import Excel file';
+            const results = error.response?.data?.results;
             toast.error(message);
-            return null;
+            return {
+                status: 'error',
+                message,
+                total: results?.total || 0,
+                successful: results?.successful || 0,
+                skipped: results?.skipped || 0,
+                errors: results?.errors || []
+            };
         }
     }
 }));
