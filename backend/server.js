@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
+import { randomUUID } from 'node:crypto';
 
 dotenv.config();
 
@@ -47,11 +48,14 @@ const app = express();
 // Request logging middleware
 app.use((req, res, next) => {
     const start = Date.now();
+    const requestId = req.get('X-Request-Id') || randomUUID();
+    req.requestId = requestId;
+    res.set('X-Request-Id', requestId);
 
     res.on("finish", () => {
-        console.log(
-            `${req.method} ${req.originalUrl} -> ${res.statusCode} (${Date.now() - start}ms)`
-        );
+        const durationMs = Date.now() - start;
+        const log = durationMs >= 1000 ? console.warn : console.log;
+        log(`[${requestId}] ${req.method} ${req.originalUrl} -> ${res.statusCode} (${durationMs}ms)`);
     });
 
     next();

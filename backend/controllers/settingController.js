@@ -194,10 +194,22 @@ const loadSectionProducts = async (items = []) => {
 // @access  Private/Admin
 const getSettings = async (req, res) => {
     try {
-        let settings = await Setting.findOne();
+        const checkoutFields = [
+            'sellerName',
+            'logoUrl',
+            'shippingCharge',
+            'freeShippingThreshold',
+            'minShippingOrderAmount',
+            'maxShippingOrderAmount',
+            'codAdvancedPaymentEnabled',
+            'codAdvancedPaymentAmount'
+        ].join(' ');
+        const query = Setting.findOne();
+        if (req.query.view === 'checkout') query.select(checkoutFields);
+        let settings = await query.lean();
         if (!settings) {
             // Create default settings if not exists
-            settings = await Setting.create({
+            const createdSettings = await Setting.create({
                 sellerName: 'My E-com Store',
                 sellerAddress: '123 E-com St, Digital City',
                 shippingCharge: 40,
@@ -207,7 +219,11 @@ const getSettings = async (req, res) => {
                 categoryPageCatalog: [],
                 subCategoryPageCatalog: []
             });
+            settings = req.query.view === 'checkout'
+                ? await Setting.findById(createdSettings._id).select(checkoutFields).lean()
+                : createdSettings.toObject();
         }
+        res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
         res.json(settings);
     } catch (error) {
         res.status(500).json({ message: error.message });

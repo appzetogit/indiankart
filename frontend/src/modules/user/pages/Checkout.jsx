@@ -252,7 +252,7 @@ const Checkout = () => {
     useEffect(() => {
         const fetchShippingSettings = async () => {
             try {
-                const { data } = await API.get('/settings');
+                const { data } = await API.get('/settings', { params: { view: 'checkout' } });
                 const fallbackMax = Number(data?.freeShippingThreshold ?? 500) - 1;
                 setShippingConfig({
                     shippingCharge: Number(data?.shippingCharge ?? 40),

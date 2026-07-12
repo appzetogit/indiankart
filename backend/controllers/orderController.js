@@ -1024,8 +1024,8 @@ export const addOrderItems = async (req, res) => {
             });
         }
 
-        // 2. Reduce Stock (Post-creation)
-        for (const item of createdOrder.orderItems) {
+        // Reduce stock concurrently; all items were validated before order creation.
+        const stockResults = await Promise.all(createdOrder.orderItems.map(async (item) => {
             const product = productsById.get(Number(item.product));
             if (product) {
                 const update = { $inc: { stock: -item.qty } };
@@ -1052,10 +1052,10 @@ export const addOrderItems = async (req, res) => {
                     { new: true }
                 );
 
+                const alerts = [];
                 if (updatedProduct) {
-                    // Overall Low Stock Alert
                     if (updatedProduct.stock <= 5) {
-                        await Notification.create({
+                        alerts.push({
                             type: 'stock',
                             title: 'Low Stock Alert',
                             message: `Product "${updatedProduct.name}" is running low on stock (${updatedProduct.stock} remaining).`,
@@ -1071,7 +1071,7 @@ export const addOrderItems = async (req, res) => {
                             return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
                         });
                         if (updatedSku && updatedSku.stock <= 5) {
-                            await Notification.create({
+                            alerts.push({
                                 type: 'stock',
                                 title: 'Low Stock Alert (Variant)',
                                 message: `Product "${updatedProduct.name}" variant has low stock (${updatedSku.stock} remaining).`,
@@ -1080,11 +1080,13 @@ export const addOrderItems = async (req, res) => {
                         }
                     }
                 }
+                return alerts;
             }
-        }
+            return [];
+        }));
 
-        // Create Order Notification
-        await Notification.create({
+        const notifications = stockResults.flat();
+        notifications.push({
             type: 'order',
             title: 'New Order Received',
             message: `Order #${createdOrder._id.toString().slice(-6).toUpperCase()} placed by ${req.user.name} for ₹${totalPrice}`,
@@ -1092,6 +1094,11 @@ export const addOrderItems = async (req, res) => {
         });
 
         res.status(201).json(createdOrder);
+
+        // Notifications are best-effort side effects and must not hold checkout open.
+        Notification.insertMany(notifications).catch((notificationError) => {
+            console.error(`[${req.requestId || 'no-request-id'}] Order notification error:`, notificationError);
+        });
     } catch (error) {
         if (claimedPayment?._id && !createdOrderId) {
             await PaymentClaim.findByIdAndDelete(claimedPayment._id).catch(() => {});

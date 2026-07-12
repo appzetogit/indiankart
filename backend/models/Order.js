@@ -191,7 +191,6 @@ orderSchema.index(
 );
 
 orderSchema.index({ createdAt: -1 });
-orderSchema.index({ displayId: 1 });
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ 'shippingAddress.email': 1, createdAt: -1 });
