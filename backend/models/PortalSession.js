@@ -20,6 +20,9 @@ const portalSessionSchema = mongoose.Schema({
 });
 
 portalSessionSchema.index({ isActive: 1, lastSeenAt: -1 });
+// Admin analytics filters by activity window and role on every refresh.
+portalSessionSchema.index({ userRole: 1, loginAt: -1 });
+portalSessionSchema.index({ userRole: 1, logoutAt: -1 });
 
 const PortalSession = mongoose.model('PortalSession', portalSessionSchema);
 

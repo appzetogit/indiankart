@@ -25,6 +25,7 @@ const brandSchema = mongoose.Schema({
 });
 
 brandSchema.index({ subcategory: 1, name: 1 }, { unique: true });
+brandSchema.index({ createdAt: -1 });
 
 const Brand = mongoose.model('Brand', brandSchema);
 

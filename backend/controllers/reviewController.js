@@ -63,7 +63,7 @@ export const getProductReviews = async (req, res) => {
         const reviews = await Review.find({ 
             product: product._id, 
             status: 'approved' 
-        }).sort({ createdAt: -1 });
+        }).sort({ createdAt: -1 }).lean();
 
         res.json(reviews);
     } catch (error) {
@@ -79,7 +79,8 @@ export const getAllReviews = async (req, res) => {
         const reviews = await Review.find({})
             .populate('product', 'name id image')
             .populate('user', 'name email')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
         res.json(reviews);
     } catch (error) {
         res.status(500).json({ message: error.message });

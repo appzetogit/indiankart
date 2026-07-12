@@ -13,6 +13,7 @@ export const getSubCategories = async (req, res) => {
         const subCategories = await SubCategory.find({})
             .populate('category', 'name')
             .select('name category isActive createdAt')
+            .sort({ createdAt: -1 })
             .lean();
         res.json(subCategories);
     } catch (error) {
@@ -28,6 +29,7 @@ export const getSubCategoriesByCategory = async (req, res) => {
         const subCategories = await SubCategory.find({ category: req.params.categoryId })
             .populate('category', 'name')
             .select('name image category isActive createdAt')
+            .sort({ createdAt: -1 })
             .lean();
         res.json(subCategories);
     } catch (error) {

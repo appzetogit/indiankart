@@ -30,5 +30,8 @@ const pinCodeSchema = mongoose.Schema({
     timestamps: true
 });
 
+pinCodeSchema.index({ createdAt: -1 });
+pinCodeSchema.index({ isActive: 1, code: 1 });
+
 const PinCode = mongoose.model('PinCode', pinCodeSchema);
 export default PinCode;

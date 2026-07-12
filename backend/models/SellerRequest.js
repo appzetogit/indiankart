@@ -60,6 +60,10 @@ const sellerRequestSchema = new mongoose.Schema({
     timestamps: true
 });
 
+sellerRequestSchema.index({ createdAt: -1 });
+sellerRequestSchema.index({ status: 1, createdAt: -1 });
+sellerRequestSchema.index({ userId: 1, createdAt: -1 });
+
 const SellerRequest = mongoose.model('SellerRequest', sellerRequestSchema);
 
 export default SellerRequest;

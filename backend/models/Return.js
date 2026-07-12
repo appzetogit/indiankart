@@ -54,5 +54,10 @@ const returnSchema = mongoose.Schema({
     timestamps: true,
 });
 
+returnSchema.index({ date: -1 });
+returnSchema.index({ status: 1, createdAt: -1 });
+returnSchema.index({ orderId: 1, date: -1 });
+returnSchema.index({ userId: 1, date: -1 });
+
 const Return = mongoose.model('Return', returnSchema);
 export default Return;

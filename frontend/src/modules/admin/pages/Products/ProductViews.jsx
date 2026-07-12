@@ -92,12 +92,8 @@ const ProductViews = () => {
             isFetchingRef.current = true;
             setLoading(true);
             const [productsResult, portalResult] = await Promise.allSettled([
-                API.get('/products/view-insights/products', {
-                    timeout: 20000
-                }),
-                API.get('/products/view-insights/portal', {
-                    timeout: 20000
-                })
+                API.get('/products/view-insights/products'),
+                API.get('/products/view-insights/portal')
             ]);
 
             if (productsResult.status === 'fulfilled') {

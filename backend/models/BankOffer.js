@@ -80,5 +80,8 @@ const bankOfferSchema = mongoose.Schema({
     timestamps: true
 });
 
+bankOfferSchema.index({ createdAt: -1 });
+bankOfferSchema.index({ isActive: 1, createdAt: -1 });
+
 const BankOffer = mongoose.model('BankOffer', bankOfferSchema);
 export default BankOffer;

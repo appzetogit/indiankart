@@ -57,6 +57,9 @@ const userSchema = mongoose.Schema({
     timestamps: true,
 });
 
+userSchema.index({ createdAt: -1 });
+userSchema.index({ status: 1, createdAt: -1 });
+
 userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);
 };

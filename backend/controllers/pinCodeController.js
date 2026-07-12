@@ -39,7 +39,7 @@ const addPinCode = async (req, res) => {
 // @route   GET /api/pincodes
 // @access  Private/Admin
 const getPinCodes = async (req, res) => {
-    const pinCodes = await PinCode.find({}).sort({ createdAt: -1 });
+    const pinCodes = await PinCode.find({}).sort({ createdAt: -1 }).lean();
     res.json(pinCodes);
 };
 

@@ -7,6 +7,7 @@ import ExcelJS from 'exceljs';
 
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
+const PORTAL_INSIGHTS_CACHE_TTL_MS = 30 * 1000;
 const PORTAL_ANALYTICS_SESSION_LIMIT = 5000;
 const PORTAL_RECENT_SESSIONS_LIMIT = 100;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
@@ -1024,6 +1025,7 @@ export const getProductViewInsights = async (req, res) => {
         return res.status(500).json({ message: error.message });
     }
 };
+let portalInsightsCache = { fetchedAt: 0, data: null };
 
 // @desc    Get the lightweight product list used by the product views dashboard
 // @route   GET /api/products/view-insights/products
@@ -1047,6 +1049,13 @@ export const getProductViewProducts = async (_req, res) => {
 // @access  Private/Admin
 export const getPortalViewInsights = async (_req, res) => {
     try {
+        if (
+            portalInsightsCache.data &&
+            (Date.now() - portalInsightsCache.fetchedAt) < PORTAL_INSIGHTS_CACHE_TTL_MS
+        ) {
+            return res.json(portalInsightsCache.data);
+        }
+
         const now = new Date();
         const liveThreshold = new Date(now.getTime() - (5 * 60 * 1000));
         const startOfToday = new Date(now);
@@ -1310,7 +1319,7 @@ export const getPortalViewInsights = async (_req, res) => {
             };
         });
 
-        return res.json({
+        const responseData = {
             trackedProducts,
             totalViews,
             totalVisitors,
@@ -1335,7 +1344,10 @@ export const getPortalViewInsights = async (_req, res) => {
                 totalLoginEvents,
                 liveWindowMinutes: 5
             }
-        });
+        };
+
+        portalInsightsCache = { fetchedAt: Date.now(), data: responseData };
+        return res.json(responseData);
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }

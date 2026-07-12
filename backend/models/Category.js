@@ -13,6 +13,8 @@ const categorySchema = mongoose.Schema({
     toObject: { virtuals: true }
 });
 
+categorySchema.index({ active: 1, createdAt: -1 });
+
 // Reverse populate with virtuals
 categorySchema.virtual('subCategories', {
     ref: 'SubCategory',

@@ -2,11 +2,15 @@ import axios from 'axios';
 
 const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
 const localStorageJsonCache = new Map();
+const configuredTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS);
+const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : 30000;
 
 const API = axios.create({
     baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000/api',
     withCredentials: true,
-    timeout: 10000, // 10 seconds timeout to prevent requests from hanging forever
+    timeout: API_TIMEOUT_MS,
 });
 
 const parseStoredState = (key) => {
@@ -78,5 +82,25 @@ API.interceptors.request.use((config) => {
     }
     return config;
 });
+
+API.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        const config = error.config;
+        const method = config?.method?.toLowerCase();
+        const isReadOnlyRequest = method === 'get' || method === 'head';
+        const isTransientFailure =
+            error.code === 'ECONNABORTED' ||
+            error.code === 'ETIMEDOUT' ||
+            error.code === 'ERR_NETWORK';
+
+        if (config && isReadOnlyRequest && isTransientFailure && !config._readRetryAttempted) {
+            config._readRetryAttempted = true;
+            return API.request(config);
+        }
+
+        return Promise.reject(error);
+    }
+);
 
 export default API;

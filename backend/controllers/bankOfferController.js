@@ -117,7 +117,7 @@ const updateBankOffer = async (req, res) => {
 // @route   GET /api/bank-offers
 // @access  Private/Admin (or Public if needed for checkout)
 const getBankOffers = async (req, res) => {
-    const offers = await BankOffer.find({}).sort({ createdAt: -1 });
+    const offers = await BankOffer.find({}).sort({ createdAt: -1 }).lean();
     res.json(offers);
 };
 
@@ -157,7 +157,8 @@ const getActiveBankOffers = async (req, res) => {
     try {
         const offers = await BankOffer.find({ isActive: true })
             .select('offerName description bankName discountType discountValue razorpayOfferId isUniversal applicableCategories applicableSubCategories applicableBrands applicableProducts')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
         res.json(offers);
     } catch (error) {
         console.error(error);

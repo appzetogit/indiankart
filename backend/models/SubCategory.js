@@ -28,6 +28,9 @@ const subCategorySchema = mongoose.Schema({
     timestamps: true,
 });
 
+subCategorySchema.index({ category: 1, isActive: 1, createdAt: -1 });
+subCategorySchema.index({ createdAt: -1 });
+
 const SubCategory = mongoose.model('SubCategory', subCategorySchema);
 
 export default SubCategory;

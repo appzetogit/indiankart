@@ -69,7 +69,10 @@ export const submitSellerRequest = async (req, res) => {
 // @access  Private/Admin
 export const getSellerRequests = async (req, res) => {
     try {
-        const requests = await SellerRequest.find().populate('userId', 'name email');
+        const requests = await SellerRequest.find()
+            .populate('userId', 'name email')
+            .sort({ createdAt: -1 })
+            .lean();
         res.json(requests);
     } catch (error) {
         res.status(500).json({ message: error.message });
