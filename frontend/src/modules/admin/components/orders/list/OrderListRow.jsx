@@ -12,9 +12,12 @@ const OrderListRow = ({
     getStatusStyle,
     getStatusIcon,
     getVariantSummary,
+    syncingOrderIds,
     onOpenSerialEditor,
     serialEditorOrderId
 }) => {
+    const isSyncingLiveStatus = syncingOrderIds?.has(order.id);
+
     return (
         <tr className="hover:bg-blue-50/10 transition-colors group">
             {/* Checkbox */}
@@ -97,10 +100,18 @@ const OrderListRow = ({
 
             {/* Status */}
             <td className="px-3 py-3 text-center align-middle">
-                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-tight shadow-sm ${getStatusStyle(order.status)}`}>
-                    {getStatusIcon(order.status)}
-                    {order.status}
-                </span>
+                <div className="flex flex-col items-center gap-1">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[9px] font-black uppercase tracking-tight shadow-sm ${getStatusStyle(order.status)}`}>
+                        {getStatusIcon(order.status)}
+                        {order.status}
+                    </span>
+                    {isSyncingLiveStatus && (
+                        <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.12em] text-blue-600">
+                            <span className="h-2.5 w-2.5 rounded-full border border-blue-200 border-t-blue-600 animate-spin" />
+                            Syncing
+                        </span>
+                    )}
+                </div>
             </td>
 
             {/* Fulfillment */}

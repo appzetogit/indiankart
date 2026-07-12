@@ -107,6 +107,7 @@ const OrderListLoadingState = ({ message = 'Loading orders...' }) => (
 );
 
 const ORDER_LIST_CACHE_TTL_MS = 2 * 60 * 1000;
+const ORDER_LIST_LIVE_SYNC_COOLDOWN_MS = 60 * 1000;
 let orderListCache = new Map();
 
 const buildOrderListCacheKey = ({ currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter }) => (
@@ -166,6 +167,9 @@ const OrderList = () => {
     const [fetchError, setFetchError] = useState('');
     const [isExporting, setIsExporting] = useState(false);
     const latestRequestRef = useRef(0);
+    const liveSyncRunRef = useRef(0);
+    const liveSyncCooldownRef = useRef(new Map());
+    const [syncingOrderIds, setSyncingOrderIds] = useState(() => new Set());
 
     useEffect(() => {
         const cacheKey = buildOrderListCacheKey({
@@ -196,7 +200,8 @@ const OrderList = () => {
                     pageNumber: currentPage,
                     limit: itemsPerPage,
                     syncPayments: false,
-                    syncFulfillment: true,
+                    // Keep the list view fast; live courier sync belongs on detail actions.
+                    syncFulfillment: false,
                     includePaymentAudit: false
                 };
 
@@ -256,10 +261,109 @@ const OrderList = () => {
         setSerialTypes({});
     }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
 
+    useEffect(() => {
+        if (!localOrders.length || isLoading || fetchError) {
+            setSyncingOrderIds(new Set());
+            return undefined;
+        }
+
+        const cacheKey = buildOrderListCacheKey({
+            currentPage,
+            itemsPerPage,
+            searchTerm,
+            statusFilter,
+            userEmailFilter
+        });
+        const lastSyncedAt = liveSyncCooldownRef.current.get(cacheKey);
+        if (lastSyncedAt && (Date.now() - lastSyncedAt) < ORDER_LIST_LIVE_SYNC_COOLDOWN_MS) {
+            setSyncingOrderIds(new Set());
+            return undefined;
+        }
+
+        const eligibleOrders = localOrders.filter((order) => {
+            const mode = String(order.fulfillment?.mode || '').trim().toLowerCase();
+            const hasTrackingId = Boolean(order.delhivery?.waybill || order.ekart?.trackingNumber);
+            return ['delhivery', 'ekart'].includes(mode)
+                && hasTrackingId
+                && !['Delivered', 'Cancelled'].includes(order.status);
+        });
+
+        if (!eligibleOrders.length) {
+            setSyncingOrderIds(new Set());
+            return undefined;
+        }
+
+        const syncRunId = liveSyncRunRef.current + 1;
+        liveSyncRunRef.current = syncRunId;
+        liveSyncCooldownRef.current.set(cacheKey, Date.now());
+        const eligibleOrderIds = new Set(eligibleOrders.map((order) => order.id));
+        setSyncingOrderIds(eligibleOrderIds);
+
+        const updateOrderCacheEntry = (orderId, updatedOrder) => {
+            const cachedEntry = orderListCache.get(cacheKey);
+            if (!cachedEntry) return;
+
+            orderListCache.set(cacheKey, {
+                ...cachedEntry,
+                orders: cachedEntry.orders.map((entry) => (
+                    entry.id === orderId ? updatedOrder : entry
+                ))
+            });
+        };
+
+        const syncOrder = async (order) => {
+            try {
+                const { data } = await API.get(`/orders/${order.id}`, {
+                    params: {
+                        ensureInvoice: false,
+                        syncPayment: false,
+                        syncFulfillment: true,
+                        includePaymentAudit: false
+                    }
+                });
+
+                if (liveSyncRunRef.current !== syncRunId) return;
+
+                const transformedOrder = transformOrder(data);
+                setLocalOrders((orders) => orders.map((entry) => (
+                    entry.id === order.id ? transformedOrder : entry
+                )));
+                updateOrderCacheEntry(order.id, transformedOrder);
+            } catch (error) {
+                console.error(`Failed to sync live tracking for order ${order.id}:`, error);
+            } finally {
+                if (liveSyncRunRef.current !== syncRunId) return;
+                setSyncingOrderIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(order.id);
+                    return next;
+                });
+            }
+        };
+
+        const runSyncQueue = async () => {
+            const concurrency = 3;
+            for (let index = 0; index < eligibleOrders.length; index += concurrency) {
+                const batch = eligibleOrders.slice(index, index + concurrency);
+                await Promise.all(batch.map(syncOrder));
+                if (liveSyncRunRef.current !== syncRunId) return;
+            }
+        };
+
+        runSyncQueue();
+
+        return () => {
+            if (liveSyncRunRef.current === syncRunId) {
+                liveSyncRunRef.current += 1;
+            }
+        };
+    }, [localOrders, isLoading, fetchError, currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter]);
+
     const filteredOrders = localOrders;
     const selectedCount = selectedOrderIds.size;
     const allVisibleSelected = filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderIds.has(order.id));
     const someVisibleSelected = filteredOrders.some((order) => selectedOrderIds.has(order.id));
+    const isLiveSyncing = syncingOrderIds.size > 0;
 
     const getStatusStyle = (status) => {
         switch (status) {
@@ -779,6 +883,7 @@ const OrderList = () => {
                     onToggleOrder={handleToggleOrder}
                     getStatusStyle={getStatusStyle}
                     getStatusIcon={getStatusIcon}
+                    syncingOrderIds={syncingOrderIds}
                     serialEditorOrderId={serialEditorOrderId}
                     onOpenSerialEditor={handleOpenSerialEditor}
                     onResetSerialEditor={resetSerialEditor}
@@ -790,6 +895,7 @@ const OrderList = () => {
                     serialSavingOrderId={serialSavingOrderId}
                     navigate={navigate}
                     isRefreshing={isLoading}
+                    isLiveSyncing={isLiveSyncing}
                 />
             )}
                 </>

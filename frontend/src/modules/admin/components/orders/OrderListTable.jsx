@@ -25,6 +25,7 @@ const OrderListTable = ({
     onToggleOrder,
     getStatusStyle,
     getStatusIcon,
+    syncingOrderIds,
     serialEditorOrderId,
     onOpenSerialEditor,
     onResetSerialEditor,
@@ -34,9 +35,16 @@ const OrderListTable = ({
     setSerialInputs,
     setSerialTypes,
     serialSavingOrderId,
-    navigate
+    navigate,
+    isLiveSyncing
 }) => (
     <div className="space-y-4">
+        {isLiveSyncing && (
+            <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-blue-700">
+                <div className="h-4 w-4 rounded-full border-2 border-blue-200 border-t-blue-700 animate-spin" />
+                <span className="text-xs font-black uppercase tracking-[0.14em]">Syncing live courier statuses for visible orders</span>
+            </div>
+        )}
         <div className="relative md:mx-0">
             {isRefreshing && (
                 <div className="absolute inset-0 z-30 flex items-start justify-center rounded-2xl bg-white/65 pt-10 backdrop-blur-[1px]">
@@ -90,6 +98,7 @@ const OrderListTable = ({
                                 getStatusStyle={getStatusStyle}
                                 getStatusIcon={getStatusIcon}
                                 getVariantSummary={getVariantSummary}
+                                syncingOrderIds={syncingOrderIds}
                                 onOpenSerialEditor={onOpenSerialEditor}
                                 serialEditorOrderId={serialEditorOrderId}
                             />
