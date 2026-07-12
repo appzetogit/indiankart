@@ -820,8 +820,9 @@ export const addOrderItems = async (req, res) => {
         const taxPrice = calculatedPrices.taxPrice;
         const totalPrice = calculatedPrices.totalPrice;
         const resolvedCoupon = calculatedPrices.coupon;
+        const productsById = calculatedPrices.productsById;
 
-        const settings = await Setting.findOne().lean();
+        const settings = calculatedPrices.settings;
         const codAdvancedActive = normalizedPaymentMethod === 'COD' && 
             settings?.codAdvancedPaymentEnabled && 
             settings?.codAdvancedPaymentAmount > 0;
@@ -904,7 +905,7 @@ export const addOrderItems = async (req, res) => {
 
         // 1. Initial Stock Validation (Pre-creation)
         for (const item of orderItems) {
-            const product = await Product.findOne({ id: item.product || item._id });
+            const product = productsById.get(Number(item.product || item._id));
             if (!product) {
                 return res.status(404).json({ message: `Product not found: ${item.name}` });
             }
@@ -1025,7 +1026,7 @@ export const addOrderItems = async (req, res) => {
 
         // 2. Reduce Stock (Post-creation)
         for (const item of createdOrder.orderItems) {
-            const product = await Product.findOne({ id: item.product });
+            const product = productsById.get(Number(item.product));
             if (product) {
                 const update = { $inc: { stock: -item.qty } };
                 

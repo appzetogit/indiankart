@@ -95,7 +95,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Connect to Database
-connectDB();
+await connectDB();
 
 // Routes
 app.use('/api/auth', authRoutes);

@@ -34,10 +34,17 @@ const findMatchingSkuForVariant = (product, variant) => {
 
 export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon }) => {
     let calculatedItemsPrice = 0;
-    
+
+    const productIds = [...new Set(orderItems.map((item) => Number(item.product || item._id)))];
+    const [products, settings] = await Promise.all([
+        Product.find({ id: { $in: productIds } }),
+        Setting.findOne().lean()
+    ]);
+    const productsById = new Map(products.map((product) => [Number(product.id), product]));
+
     // 1. Calculate base items price using DB prices
     for (const item of orderItems) {
-        const product = await Product.findOne({ id: item.product || item._id });
+        const product = productsById.get(Number(item.product || item._id));
         if (!product) {
             throw new Error(`Product not found: ${item.name}`);
         }
@@ -56,7 +63,6 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
     calculatedItemsPrice = Number(calculatedItemsPrice.toFixed(2));
 
     // 2. Shipping Charges
-    const settings = await Setting.findOne().lean();
     let calculatedShippingPrice = 0;
     
     if (shippingAddress) {
@@ -121,6 +127,8 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
         taxPrice: 0,
         totalPrice: Number(calculatedTotalPrice.toFixed(2)),
         discount: calculatedDiscount,
-        coupon: appliedCoupon
+        coupon: appliedCoupon,
+        settings,
+        productsById
     };
 };
