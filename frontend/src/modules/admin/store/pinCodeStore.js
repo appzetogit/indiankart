@@ -98,9 +98,9 @@ const usePinCodeStore = create((set, get) => ({
             };
 
             if (summary.status === 'success') {
-                toast.success(`Import complete: ${summary.successful} added`);
+                toast.success(`Import complete: ${summary.successful} added, ${summary.updated || 0} updated`);
             } else if (summary.status === 'partial') {
-                toast.success(`Import partially complete: ${summary.successful} added, ${summary.skipped} skipped`);
+                toast.success(`Import partially complete: ${summary.successful} added, ${summary.updated || 0} updated, ${summary.skipped} skipped`);
             } else {
                 toast.error(summary.message);
             }
@@ -115,6 +115,7 @@ const usePinCodeStore = create((set, get) => ({
                 message,
                 total: results?.total || 0,
                 successful: results?.successful || 0,
+                updated: results?.updated || 0,
                 skipped: results?.skipped || 0,
                 errors: results?.errors || []
             };

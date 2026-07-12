@@ -5,6 +5,7 @@ import {
     getPinCodes,
     deletePinCode,
     checkPinCode,
+    exportPinCodes,
     bulkImportPinCodes,
     updatePinCode
 } from '../controllers/pinCodeController.js';
@@ -37,6 +38,7 @@ const upload = multer({
 });
 
 router.route('/').post(protect, admin, addPinCode).get(protect, admin, getPinCodes);
+router.route('/export').get(protect, admin, exportPinCodes);
 router.route('/bulk-import').post(
     protect,
     admin,

@@ -2,6 +2,7 @@ import express from 'express';
 import FcmToken from '../models/FcmToken.js';
 
 const router = express.Router();
+const isDuplicateKeyError = (error) => error?.code === 11000;
 
 // Save or update token
 // POST /api/fcm/token
@@ -16,17 +17,31 @@ router.post('/token', async (req, res) => {
             });
         }
 
-        await FcmToken.findOneAndUpdate(
-            { userId: String(userId), token: String(token) },
-            {
-                userId: String(userId),
-                token: String(token),
-                platform: platform ? String(platform).toLowerCase() : null,
-                deviceId: deviceId ? String(deviceId) : null,
-                updatedAt: new Date()
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+        const normalizedToken = String(token);
+        const tokenDocument = {
+            userId: String(userId),
+            token: normalizedToken,
+            platform: platform ? String(platform).toLowerCase() : null,
+            deviceId: deviceId ? String(deviceId) : null,
+            updatedAt: new Date()
+        };
+
+        try {
+            await FcmToken.findOneAndUpdate(
+                { token: normalizedToken },
+                tokenDocument,
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+        } catch (error) {
+            if (!isDuplicateKeyError(error)) {
+                throw error;
+            }
+
+            await FcmToken.updateOne(
+                { token: normalizedToken },
+                { $set: tokenDocument }
+            );
+        }
 
         return res.json({ success: true, message: 'Token saved' });
     } catch (error) {

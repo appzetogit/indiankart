@@ -35,6 +35,8 @@ const normalizePlatform = (platform = 'web') => {
     return platformMap[String(platform).toLowerCase()] || null;
 };
 
+const isDuplicateKeyError = (error) => error?.code === 11000;
+
 const saveFcmToken = async (req, res, forcedPlatform = null) => {
     try {
         console.log('FCM Token endpoint hit:', {
@@ -99,17 +101,31 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
             return res.status(404).json({ message: 'User or Admin not found' });
         }
 
-        // Always update the FcmToken collection
-        await FcmToken.findOneAndUpdate(
-            { userId: String(userId), token: fcmToken },
-            {
-                userId: String(userId),
-                token: fcmToken,
-                platform: normalizedPlatform,
-                updatedAt: new Date()
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+        const tokenDocument = {
+            userId: String(userId),
+            token: fcmToken,
+            platform: normalizedPlatform,
+            updatedAt: new Date()
+        };
+
+        try {
+            // Token is globally unique, so upsert by token and reassign ownership if needed.
+            await FcmToken.findOneAndUpdate(
+                { token: fcmToken },
+                tokenDocument,
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+        } catch (error) {
+            if (!isDuplicateKeyError(error)) {
+                throw error;
+            }
+
+            // Concurrent saves can still race on insert; retry as a plain update.
+            await FcmToken.updateOne(
+                { token: fcmToken },
+                { $set: tokenDocument }
+            );
+        }
 
         return res.json({
             message: 'FCM Token saved successfully',

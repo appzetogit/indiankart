@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { MdLocationOn, MdDelete, MdAdd, MdUpload, MdDownload } from 'react-icons/md';
 import usePinCodeStore from '../../store/pinCodeStore';
+import API from '../../../../services/api';
+import toast from 'react-hot-toast';
 
 const PinCodeManager = () => {
     const {
@@ -24,6 +26,7 @@ const PinCodeManager = () => {
     });
     const [importResults, setImportResults] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const importSummaryStyles = {
         success: {
@@ -86,15 +89,32 @@ const PinCodeManager = () => {
         e.target.value = '';
     };
 
-    const downloadTemplate = () => {
-        const csvContent = "Pincode,isCOD,deliveryTime,deliveryUnit\n110001,true,30,minutes\n400001,false,24,hours\n560001,true,3,days";
-        const blob = new Blob([csvContent], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'pincode_template.csv';
-        a.click();
-        window.URL.revokeObjectURL(url);
+    const downloadCurrentPinCodes = async () => {
+        try {
+            setIsExporting(true);
+            const response = await API.get('/pincodes/export', {
+                responseType: 'blob'
+            });
+
+            const contentDisposition = response.headers['content-disposition'] || '';
+            const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+            const fileName = fileNameMatch?.[1] || 'indiakart_pincodes.csv';
+
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = fileName;
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success('Current pincode list downloaded');
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to download current pincodes');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     return (
@@ -190,6 +210,7 @@ const PinCodeManager = () => {
                         <div className="text-sm space-y-1">
                             <p className="text-gray-700"><span className="font-bold">Total Rows:</span> {importResults.total}</p>
                             <p className="text-green-700"><span className="font-bold">Added:</span> {importResults.successful}</p>
+                            <p className="text-blue-700"><span className="font-bold">Updated:</span> {importResults.updated || 0}</p>
                             <p className="text-yellow-700"><span className="font-bold">Skipped:</span> {importResults.skipped}</p>
                             <p className="text-red-700"><span className="font-bold">Errors:</span> {importResults.errors?.length || 0}</p>
                             {importResults.meta?.fileName && (
@@ -232,11 +253,12 @@ const PinCodeManager = () => {
                         <p className="text-xs text-gray-500 mt-2">Supported formats: `.xlsx`, `.csv`. Large files and duplicate rows are handled automatically.</p>
                     </div>
                     <button
-                        onClick={downloadTemplate}
-                        className="px-4 py-2.5 bg-white text-purple-600 border border-purple-300 font-bold rounded-xl hover:bg-purple-50 transition flex items-center gap-2"
+                        onClick={downloadCurrentPinCodes}
+                        disabled={isExporting}
+                        className="px-4 py-2.5 bg-white text-purple-600 border border-purple-300 font-bold rounded-xl hover:bg-purple-50 transition flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         <MdDownload size={18} />
-                        Download Template
+                        {isExporting ? 'Downloading...' : 'Download Current CSV'}
                     </button>
                 </div>
             </div>

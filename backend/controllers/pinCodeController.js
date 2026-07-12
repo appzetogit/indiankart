@@ -218,6 +218,48 @@ const updatePinCode = async (req, res) => {
     }
 };
 
+// @desc    Export all PIN codes as CSV
+// @route   GET /api/pincodes/export
+// @access  Private/Admin
+const exportPinCodes = async (req, res) => {
+    try {
+        const pinCodes = await PinCode.find({})
+            .sort({ code: 1 })
+            .select('code isCOD deliveryTime deliveryUnit')
+            .lean();
+
+        const escapeCsvValue = (value) => {
+            const stringValue = String(value ?? '');
+            if (/[",\n]/.test(stringValue)) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+            return stringValue;
+        };
+
+        const rows = [
+            ['Pincode', 'isCOD', 'deliveryTime', 'deliveryUnit'],
+            ...pinCodes.map((pinCode) => ([
+                pinCode.code,
+                pinCode.isCOD !== false,
+                pinCode.deliveryTime ?? 3,
+                pinCode.deliveryUnit || 'days'
+            ]))
+        ];
+
+        const csvContent = rows
+            .map((row) => row.map(escapeCsvValue).join(','))
+            .join('\n');
+
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="indiakart_pincodes_${dateStamp}.csv"`);
+        res.status(200).send(csvContent);
+    } catch (error) {
+        console.error('Export PIN codes error:', error);
+        res.status(500).json({ message: 'Failed to export PIN codes', error: error.message });
+    }
+};
+
 // @desc    Bulk import PIN codes from Excel
 // @route   POST /api/pincodes/bulk-import
 // @access  Private/Admin
@@ -283,6 +325,7 @@ const bulkImportPinCodes = async (req, res) => {
 
         const results = {
             successful: 0,
+            updated: 0,
             skipped: 0,
             errors: [],
             total: dataRows.length
@@ -316,21 +359,57 @@ const bulkImportPinCodes = async (req, res) => {
             });
         }
 
-        const existingCodes = new Set(
-            (await PinCode.find({ code: { $in: validRows.map(({ payload }) => payload.code) } }, { code: 1 }).lean())
-                .map((pinCode) => pinCode.code)
+        const existingPinCodes = await PinCode.find({ code: { $in: validRows.map(({ payload }) => payload.code) } })
+            .select('_id code isCOD deliveryTime deliveryUnit')
+            .lean();
+        const existingPinCodeMap = new Map(
+            existingPinCodes.map((pinCode) => [pinCode.code, pinCode])
         );
 
         const documentsToInsert = [];
+        const bulkUpdates = [];
 
         for (const { rowNumber, payload } of validRows) {
-            if (existingCodes.has(payload.code)) {
-                results.skipped++;
-                results.errors.push(`Row ${rowNumber}: Pincode ${payload.code} already exists`);
+            const existingPinCode = existingPinCodeMap.get(payload.code);
+
+            if (existingPinCode) {
+                const hasChanges =
+                    existingPinCode.isCOD !== payload.isCOD ||
+                    existingPinCode.deliveryTime !== payload.deliveryTime ||
+                    existingPinCode.deliveryUnit !== payload.deliveryUnit;
+
+                if (!hasChanges) {
+                    results.skipped++;
+                } else {
+                    bulkUpdates.push({
+                        updateOne: {
+                            filter: { _id: existingPinCode._id },
+                            update: {
+                                $set: {
+                                    isCOD: payload.isCOD,
+                                    deliveryTime: payload.deliveryTime,
+                                    deliveryUnit: payload.deliveryUnit,
+                                    updatedAt: new Date()
+                                }
+                            }
+                        }
+                    });
+                }
+
                 continue;
             }
 
             documentsToInsert.push({ rowNumber, ...payload });
+        }
+
+        if (bulkUpdates.length > 0) {
+            try {
+                const updateResult = await PinCode.bulkWrite(bulkUpdates, { ordered: false });
+                results.updated += updateResult.modifiedCount || 0;
+            } catch (error) {
+                console.error('Bulk update error:', error);
+                results.errors.push(`Failed to update some existing pincodes: ${error.message}`);
+            }
         }
 
         if (documentsToInsert.length > 0) {
@@ -381,6 +460,7 @@ export {
     getPinCodes,
     deletePinCode,
     checkPinCode,
+    exportPinCodes,
     bulkImportPinCodes,
     updatePinCode
 };
