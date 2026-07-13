@@ -2,7 +2,6 @@ import Setting from '../models/Setting.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
-import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 const normalizeSettingKey = (value) => String(value || '').trim().toLowerCase();
 const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
@@ -544,8 +543,6 @@ const updateSettings = async (req, res) => {
         }
     } catch (error) {
         res.status(500).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -567,8 +564,6 @@ const uploadCategoryPageImage = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: error.message || 'Image upload failed' });
-    } finally {
-        await cleanupUploadedFiles(req.file);
     }
 };
 

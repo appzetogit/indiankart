@@ -3,6 +3,21 @@ import { getOrderedItemDisplayName } from '../../../../../utils/orderItemDisplay
 import { getAdminPaymentStatusClass } from '../../../utils/paymentStatus';
 import OrderListRowActions from './OrderListRowActions';
 
+const formatDeliveredAt = (value) => {
+    if (!value) return '';
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    return parsed.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+};
+
 const OrderListRow = ({
     order,
     index,
@@ -17,6 +32,12 @@ const OrderListRow = ({
     serialEditorOrderId
 }) => {
     const isSyncingLiveStatus = syncingOrderIds?.has(order.id);
+    const fulfillmentMode = String(order.fulfillment?.mode || 'unassigned').trim().toLowerCase();
+    const trackingId = order.delhivery?.waybill || order.ekart?.trackingNumber || '';
+    const isCourierDelivered = ['ekart', 'delhivery'].includes(fulfillmentMode)
+        && order.status === 'Delivered'
+        && Boolean(order.deliveredAt);
+    const deliveredAtLabel = formatDeliveredAt(order.deliveredAt);
 
     return (
         <tr className="hover:bg-blue-50/10 transition-colors group">
@@ -105,6 +126,16 @@ const OrderListRow = ({
                         {getStatusIcon(order.status)}
                         {order.status}
                     </span>
+                    {isCourierDelivered && deliveredAtLabel && (
+                        <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-lime-50 px-3 py-2 text-left shadow-sm">
+                            <p className="text-[8px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                                Delivered On
+                            </p>
+                            <p className="mt-1 text-[11px] font-black leading-tight text-gray-900">
+                                {deliveredAtLabel}
+                            </p>
+                        </div>
+                    )}
                     {isSyncingLiveStatus && (
                         <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.12em] text-blue-600">
                             <span className="h-2.5 w-2.5 rounded-full border border-blue-200 border-t-blue-600 animate-spin" />
@@ -118,20 +149,27 @@ const OrderListRow = ({
             <td className="px-3 py-3 text-center align-middle">
                 <div className="flex flex-col items-center">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-wider ${
-                        order.fulfillment?.mode === 'manual'
+                        fulfillmentMode === 'manual'
                             ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : order.fulfillment?.mode === 'ekart'
+                            : fulfillmentMode === 'ekart'
                                 ? 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                                : order.fulfillment?.mode === 'delhivery'
+                                : fulfillmentMode === 'delhivery'
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                     : 'bg-gray-50 text-gray-500 border-gray-150'
                     }`}>
-                        {order.fulfillment?.mode || 'unassigned'}
+                        {fulfillmentMode || 'unassigned'}
                     </span>
-                    {(order.delhivery?.waybill || order.ekart?.trackingNumber) && (
-                        <span className="text-[8px] font-mono text-gray-500 mt-1 select-all hover:text-blue-600 transition-colors">
-                            {order.delhivery?.waybill || order.ekart?.trackingNumber}
-                        </span>
+                    {trackingId && (
+                        <div className="mt-1 flex flex-col items-center gap-1">
+                            <span className="text-[8px] font-mono text-gray-500 select-all hover:text-blue-600 transition-colors">
+                                {trackingId}
+                            </span>
+                            {isCourierDelivered && (
+                                <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-white">
+                                    Proof of delivery synced
+                                </span>
+                            )}
+                        </div>
                     )}
                 </div>
             </td>

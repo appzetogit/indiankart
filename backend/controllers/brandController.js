@@ -1,7 +1,6 @@
 import Brand from '../models/Brand.js';
 import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
-import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
@@ -101,8 +100,6 @@ export const createBrand = async (req, res) => {
             return res.status(409).json({ message: 'A brand with this name already exists in selected subcategory' });
         }
         res.status(500).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.file);
     }
 };
 
@@ -165,8 +162,6 @@ export const updateBrand = async (req, res) => {
             return res.status(409).json({ message: 'A brand with this name already exists in selected subcategory' });
         }
         res.status(500).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.file);
     }
 };
 

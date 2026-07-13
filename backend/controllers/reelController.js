@@ -1,6 +1,5 @@
 import Reel from '../models/Reel.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
-import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 // @desc    Get all reels
 // @route   GET /api/reels
@@ -40,8 +39,6 @@ export const createReel = async (req, res) => {
         res.status(201).json(createdReel);
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.file);
     }
 };
 
@@ -73,8 +70,6 @@ export const updateReel = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.file);
     }
 };
 

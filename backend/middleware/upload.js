@@ -10,18 +10,14 @@ fs.mkdirSync(uploadTempDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadTempDir),
   filename: (_req, file, cb) => {
-    const safeExtension = path.extname(file.originalname || '').slice(0, 16);
-    cb(null, `${Date.now()}-${crypto.randomUUID()}${safeExtension}`);
+    const ext = path.extname(file.originalname || '').slice(0, 16);
+    cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
   }
 });
 
 const upload = multer({
   storage,
-  limits: {
-    fileSize: 15 * 1024 * 1024,
-    files: 80,
-    parts: 120
-  }
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 export default upload;

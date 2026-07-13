@@ -2,7 +2,6 @@ import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
 import Product from '../models/Product.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
-import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const exactNameRegex = (name) => new RegExp(`^${escapeRegex(name)}$`, 'i');
@@ -104,8 +103,6 @@ export const createCategory = async (req, res) => {
         res.status(201).json(createdCategory);
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -161,8 +158,6 @@ export const updateCategory = async (req, res) => {
         res.json(updatedCategory);
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.files);
     }
 };
 

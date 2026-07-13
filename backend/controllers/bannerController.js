@@ -1,9 +1,5 @@
 import Banner from '../models/Banner.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
-import { mapWithConcurrency } from '../utils/asyncUtils.js';
-import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
-
-const CLOUDINARY_UPLOAD_CONCURRENCY = 4;
 
 // @desc    Get all banners
 // @route   GET /api/banners
@@ -54,10 +50,10 @@ export const createBanner = async (req, res) => {
         // Handle Slides Images
         if (req.files && req.files.slide_images) {
             const slideFiles = req.files.slide_images;
-            const uploadedSlideUrls = await mapWithConcurrency(
-                slideFiles,
-                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
-                CLOUDINARY_UPLOAD_CONCURRENCY
+            const uploadedSlideUrls = await Promise.all(
+                slideFiles.map(file =>
+                    uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' })
+                )
             );
             if (Array.isArray(slides)) {
                 let fallbackUploadIndex = 0;
@@ -80,10 +76,10 @@ export const createBanner = async (req, res) => {
 
         if (req.files && req.files.slide_mobile_images) {
             const slideMobileFiles = req.files.slide_mobile_images;
-            const uploadedSlideMobileUrls = await mapWithConcurrency(
-                slideMobileFiles,
-                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
-                CLOUDINARY_UPLOAD_CONCURRENCY
+            const uploadedSlideMobileUrls = await Promise.all(
+                slideMobileFiles.map(file =>
+                    uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' })
+                )
             );
             if (Array.isArray(slides)) {
                 let fallbackUploadIndex = 0;
@@ -142,8 +138,6 @@ export const createBanner = async (req, res) => {
         res.status(201).json(createdBanner);
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -173,10 +167,10 @@ export const updateBanner = async (req, res) => {
 
                 if (req.files && req.files.slide_images) {
                     const slideFiles = req.files.slide_images;
-                    const uploadedSlideUrls = await mapWithConcurrency(
-                        slideFiles,
-                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
-                        CLOUDINARY_UPLOAD_CONCURRENCY
+                    const uploadedSlideUrls = await Promise.all(
+                        slideFiles.map(file =>
+                            uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' })
+                        )
                     );
                     if (Array.isArray(slides)) {
                         let fallbackUploadIndex = 0;
@@ -199,10 +193,10 @@ export const updateBanner = async (req, res) => {
 
                 if (req.files && req.files.slide_mobile_images) {
                     const slideMobileFiles = req.files.slide_mobile_images;
-                    const uploadedSlideMobileUrls = await mapWithConcurrency(
-                        slideMobileFiles,
-                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
-                        CLOUDINARY_UPLOAD_CONCURRENCY
+                    const uploadedSlideMobileUrls = await Promise.all(
+                        slideMobileFiles.map(file =>
+                            uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' })
+                        )
                     );
                     if (Array.isArray(slides)) {
                         let fallbackUploadIndex = 0;
@@ -279,8 +273,6 @@ export const updateBanner = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
-    } finally {
-        await cleanupUploadedFiles(req.files);
     }
 };
 
