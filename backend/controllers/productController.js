@@ -4,6 +4,9 @@ import SubCategory from '../models/SubCategory.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import PortalSession from '../models/PortalSession.js';
 import ExcelJS from 'exceljs';
+import { promises as fs } from 'node:fs';
+import { mapWithConcurrency } from '../utils/asyncUtils.js';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -11,6 +14,7 @@ const PORTAL_INSIGHTS_CACHE_TTL_MS = 30 * 1000;
 const PORTAL_ANALYTICS_SESSION_LIMIT = 5000;
 const PORTAL_RECENT_SESSIONS_LIMIT = 100;
 const INDIA_TIME_ZONE = 'Asia/Kolkata';
+const CLOUDINARY_UPLOAD_CONCURRENCY = 4;
 let activeVisibilityCache = {
     fetchedAt: 0,
     categories: [],
@@ -411,9 +415,9 @@ export const createProduct = async (req, res) => {
         };
 
         let image = req.body.image;
-        if (req.files && req.files.image && req.files.image[0]?.buffer) {
+        if (req.files && req.files.image && req.files.image[0]) {
             const uploadedMain = await uploadBufferToCloudinary(
-                req.files.image[0].buffer,
+                req.files.image[0],
                 { folder: 'ecom_uploads/products' }
             );
             image = uploadedMain.secure_url;
@@ -425,10 +429,10 @@ export const createProduct = async (req, res) => {
         }
         
         if (req.files && req.files.images) {
-            const uploadedImagesResults = await Promise.all(
-                req.files.images.map(file =>
-                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products' })
-                )
+            const uploadedImagesResults = await mapWithConcurrency(
+                req.files.images,
+                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products' }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             const uploadedImages = uploadedImagesResults.map(r => r.secure_url);
             images = [...images, ...uploadedImages];
@@ -456,10 +460,10 @@ export const createProduct = async (req, res) => {
 
         if (req.files && req.files.variant_images) {
             const variantFiles = req.files.variant_images;
-            const uploadedVariantResults = await Promise.all(
-                variantFiles.map(file =>
-                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/variants' })
-                )
+            const uploadedVariantResults = await mapWithConcurrency(
+                variantFiles,
+                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products/variants' }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             const variantUrls = uploadedVariantResults.map(r => r.secure_url);
             if (Array.isArray(variantHeadings)) {
@@ -493,10 +497,10 @@ export const createProduct = async (req, res) => {
         let description = parseJSON(body.description);
         if (req.files && req.files.description_images) {
             const descFiles = req.files.description_images;
-            const uploadedDescResults = await Promise.all(
-                descFiles.map(file =>
-                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/descriptions' })
-                )
+            const uploadedDescResults = await mapWithConcurrency(
+                descFiles,
+                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products/descriptions' }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             const descUrls = uploadedDescResults.map(r => r.secure_url);
             if (Array.isArray(description)) {
@@ -572,6 +576,8 @@ export const createProduct = async (req, res) => {
         res.status(201).json(createdProduct);
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -610,9 +616,9 @@ export const updateProduct = async (req, res) => {
 
         if (product) {
             let image = req.body.image;
-            if (req.files && req.files.image && req.files.image[0]?.buffer) {
+            if (req.files && req.files.image && req.files.image[0]) {
                 const uploadedMain = await uploadBufferToCloudinary(
-                    req.files.image[0].buffer,
+                    req.files.image[0],
                     { folder: 'ecom_uploads/products' }
                 );
                 image = uploadedMain.secure_url;
@@ -629,10 +635,10 @@ export const updateProduct = async (req, res) => {
             }
 
             if (req.files && req.files.images) {
-                const uploadedImagesResults = await Promise.all(
-                    req.files.images.map(file =>
-                        uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products' })
-                    )
+                const uploadedImagesResults = await mapWithConcurrency(
+                    req.files.images,
+                    (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products' }),
+                    CLOUDINARY_UPLOAD_CONCURRENCY
                 );
                 const uploadedImages = uploadedImagesResults.map(r => r.secure_url);
                 images = [...images, ...uploadedImages];
@@ -685,10 +691,10 @@ export const updateProduct = async (req, res) => {
                 let variantHeadings = parseJSON(updateData.variantHeadings);
                 if (req.files && req.files.variant_images) {
                     const variantFiles = req.files.variant_images;
-                    const uploadedVariantResults = await Promise.all(
-                        variantFiles.map(file =>
-                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/variants' })
-                        )
+                    const uploadedVariantResults = await mapWithConcurrency(
+                        variantFiles,
+                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products/variants' }),
+                        CLOUDINARY_UPLOAD_CONCURRENCY
                     );
                     const variantUrls = uploadedVariantResults.map(r => r.secure_url);
                     if (Array.isArray(variantHeadings)) {
@@ -725,10 +731,10 @@ export const updateProduct = async (req, res) => {
                 let description = parseJSON(updateData.description);
                 if (req.files && req.files.description_images) {
                     const descFiles = req.files.description_images;
-                    const uploadedDescResults = await Promise.all(
-                        descFiles.map(file =>
-                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/products/descriptions' })
-                        )
+                    const uploadedDescResults = await mapWithConcurrency(
+                        descFiles,
+                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/products/descriptions' }),
+                        CLOUDINARY_UPLOAD_CONCURRENCY
                     );
                     const descUrls = uploadedDescResults.map(r => r.secure_url);
                     if (Array.isArray(description)) {
@@ -840,6 +846,8 @@ export const updateProduct = async (req, res) => {
             message: error.message, 
             stack: error.stack 
         });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -1541,12 +1549,13 @@ export const exportStockExcel = async (req, res) => {
 // @access  Private/Admin
 export const importStockExcel = async (req, res) => {
     try {
-        if (!req.file || !req.file.buffer) {
+        if (!req.file?.path) {
             return res.status(400).json({ message: 'Please upload an Excel spreadsheet file.' });
         }
 
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(req.file.buffer);
+        const workbookBuffer = await fs.readFile(req.file.path);
+        await workbook.xlsx.load(workbookBuffer);
         const worksheet = workbook.worksheets[0];
         
         if (!worksheet) {
@@ -1662,6 +1671,8 @@ export const importStockExcel = async (req, res) => {
     } catch (error) {
         console.error('Import Stock Error:', error);
         res.status(500).json({ message: 'Failed to parse and import stock file.', error: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.file);
     }
 };
 

@@ -1,5 +1,6 @@
 import Reel from '../models/Reel.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 // @desc    Get all reels
 // @route   GET /api/reels
@@ -21,8 +22,8 @@ export const createReel = async (req, res) => {
         const { productLink, active } = req.body;
         let videoUrl = req.body.videoUrl;
 
-        if (req.file && req.file.buffer) {
-            const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+        if (req.file) {
+            const uploaded = await uploadBufferToCloudinary(req.file, {
                 resource_type: 'video',
             });
             videoUrl = uploaded.secure_url;
@@ -39,6 +40,8 @@ export const createReel = async (req, res) => {
         res.status(201).json(createdReel);
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.file);
     }
 };
 
@@ -50,8 +53,8 @@ export const updateReel = async (req, res) => {
         const reel = await Reel.findById(req.params.id);
         if (reel) {
             let videoUrl = req.body.videoUrl;
-            if (req.file && req.file.buffer) {
-                const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+            if (req.file) {
+                const uploaded = await uploadBufferToCloudinary(req.file, {
                     resource_type: 'video',
                 });
                 videoUrl = uploaded.secure_url;
@@ -70,6 +73,8 @@ export const updateReel = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.file);
     }
 };
 

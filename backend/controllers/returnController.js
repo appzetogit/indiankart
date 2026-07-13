@@ -5,6 +5,10 @@ import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
+import { mapWithConcurrency } from '../utils/asyncUtils.js';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
+
+const CLOUDINARY_UPLOAD_CONCURRENCY = 3;
 
 const RETURN_WINDOW_DAYS = 7;
 const NON_REJECTED_RETURN_STATUSES = new Set([
@@ -191,13 +195,13 @@ export const createReturnRequest = async (req, res) => {
         }
 
         if (proofFiles.length > 0) {
-            const uploadResults = await Promise.all(
-                proofFiles.map((file) =>
-                    uploadBufferToCloudinary(file.buffer, {
-                        folder: 'ecom_uploads/returns/proofs',
-                        resource_type: 'auto'
-                    })
-                )
+            const uploadResults = await mapWithConcurrency(
+                proofFiles,
+                (file) => uploadBufferToCloudinary(file, {
+                    folder: 'ecom_uploads/returns/proofs',
+                    resource_type: 'auto'
+                }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             uploadedProofMedia.push(...uploadResults.map((result) => result.secure_url).filter(Boolean));
         }
@@ -427,6 +431,8 @@ export const createReturnRequest = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server Error: ' + error.message });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 

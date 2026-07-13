@@ -12,6 +12,7 @@ import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderC
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
 import { calculateOrderPrices } from '../utils/priceCalculator.js';
+import { mapWithConcurrency } from '../utils/asyncUtils.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Confirmed',
@@ -63,6 +64,7 @@ const ORDER_LIST_SELECT = [
     'ekart.cancelledAt',
     'ekart.lastError'
 ].join(' ');
+const ORDER_SYNC_CONCURRENCY = 10;
 
 const normalizeReferralCode = (value = '') =>
     String(value || '')
@@ -1114,8 +1116,8 @@ export const addOrderItems = async (req, res) => {
 export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
-        const syncedOrders = await Promise.all(orders.map((order) => syncOrderPaymentFromGateway(order)));
-        const fulfillmentReadyOrders = await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)));
+        const syncedOrders = await mapWithConcurrency(orders, (order) => syncOrderPaymentFromGateway(order), ORDER_SYNC_CONCURRENCY);
+        const fulfillmentReadyOrders = await mapWithConcurrency(syncedOrders, (order) => syncOrderFulfillmentStatus(order), ORDER_SYNC_CONCURRENCY);
         const auditedOrders = await annotateDuplicatePayments(fulfillmentReadyOrders);
         res.json(auditedOrders);
     } catch (error) {
@@ -1457,10 +1459,10 @@ export const getOrders = async (req, res) => {
         ]);
 
         const syncedOrders = shouldSyncPayments
-            ? await Promise.all(rawOrders.map((order) => syncOrderPaymentFromGateway(order)))
+            ? await mapWithConcurrency(rawOrders, (order) => syncOrderPaymentFromGateway(order), ORDER_SYNC_CONCURRENCY)
             : rawOrders;
         const fulfillmentReadyOrders = shouldSyncFulfillment
-            ? await Promise.all(syncedOrders.map((order) => syncOrderFulfillmentStatus(order)))
+            ? await mapWithConcurrency(syncedOrders, (order) => syncOrderFulfillmentStatus(order), ORDER_SYNC_CONCURRENCY)
             : syncedOrders;
         const finalOrders = shouldAuditPayments
             ? await annotateDuplicatePayments(fulfillmentReadyOrders)

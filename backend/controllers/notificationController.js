@@ -2,6 +2,10 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import FcmToken from '../models/FcmToken.js';
 import firebaseAdmin from '../config/firebase.js';
+import { mapWithConcurrency } from '../utils/asyncUtils.js';
+
+const FCM_BATCH_SIZE = 500;
+const TOKEN_CLEANUP_CONCURRENCY = 5;
 
 // @desc    Get all notifications
 // @route   GET /api/notifications
@@ -85,9 +89,6 @@ export const sendPushNotification = async (req, res) => {
             await Admin.updateMany({ fcmToken: token }, { $unset: { fcmToken: 1 } });
         };
 
-        // 1. Get target tokens from both Users and Admins
-        let targetTokens = [];
-
         const tokenProjection = 'fcmToken fcmTokenWeb fcmTokenMobile';
         const hasAnyTokenQuery = {
             $or: [
@@ -96,68 +97,34 @@ export const sendPushNotification = async (req, res) => {
                 { fcmToken: { $ne: null, $exists: true } }
             ]
         };
-        const flattenUserTokens = (users) =>
-            users.flatMap((u) => [u.fcmTokenWeb, u.fcmTokenMobile, u.fcmToken]).filter(Boolean);
-        const getFcmCollectionTokens = async (userIds = null) => {
-            const query = userIds
-                ? { userId: { $in: userIds.map((id) => String(id)) } }
-                : {};
-            const docs = await FcmToken.find(query).select('token');
-            return docs.map((d) => d.token).filter(Boolean);
-        };
+        const flattenUserTokens = (user) =>
+            [user?.fcmTokenWeb, user?.fcmTokenMobile, user?.fcmToken].filter(Boolean);
 
         const normalizedAudience = (targetAudience || 'All Users').trim();
+        const Admin = (await import('../models/Admin.js')).default;
+        const seenTokens = new Set();
+        let totalTargetTokens = 0;
 
-        if (normalizedAudience === 'All Users') {
-            const users = await User.find(hasAnyTokenQuery).select(tokenProjection);
-            const userTokens = flattenUserTokens(users);
-            const collectionTokens = await getFcmCollectionTokens();
-
-            const Admin = (await import('../models/Admin.js')).default;
-            const admins = await Admin.find({ fcmToken: { $ne: null, $exists: true } }).select('fcmToken');
-            const adminTokens = admins.map((a) => a.fcmToken).filter(Boolean);
-
-            targetTokens = Array.from(new Set([...userTokens, ...collectionTokens, ...adminTokens]));
-            console.log(
-                `Users: ${userTokens.length}, Collection: ${collectionTokens.length}, Admins: ${adminTokens.length}`
-            );
-        } else if (normalizedAudience === 'New Users') {
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-            const users = await User.find({
-                createdAt: { $gte: thirtyDaysAgo }
-            }).select(`${tokenProjection} _id`);
-            const collectionTokens = await getFcmCollectionTokens(users.map((u) => u._id));
-            targetTokens = Array.from(new Set([...flattenUserTokens(users), ...collectionTokens]));
-        } else if (normalizedAudience === 'Active Users') {
-            const users = await User.find({
-                status: 'active'
-            }).select(`${tokenProjection} _id`);
-            const collectionTokens = await getFcmCollectionTokens(users.map((u) => u._id));
-            targetTokens = Array.from(new Set([...flattenUserTokens(users), ...collectionTokens]));
-        } else if (normalizedAudience === 'Inactive Users') {
-            const users = await User.find({
-                status: 'disabled'
-            }).select(`${tokenProjection} _id`);
-            const collectionTokens = await getFcmCollectionTokens(users.map((u) => u._id));
-            targetTokens = Array.from(new Set([...flattenUserTokens(users), ...collectionTokens]));
-        } else {
-            const users = await User.find({}).select(`${tokenProjection} _id`);
-            const collectionTokens = await getFcmCollectionTokens(users.map((u) => u._id));
-            targetTokens = Array.from(new Set([...flattenUserTokens(users), ...collectionTokens]));
-        }
-
-        console.log(`Total target tokens found: ${targetTokens.length}`);
-
-        // 2. Send via Firebase if tokens exist
         let firebaseSent = false;
         let successCount = 0;
         let failureCount = 0;
         const failureReasons = [];
-        if (targetTokens.length > 0 && firebaseAdmin) {
-            console.log('Sending via Firebase...');
+        const sendTokenBatch = async (tokens) => {
+            const uniqueBatch = tokens.filter((token) => {
+                if (!token || seenTokens.has(token)) return false;
+                seenTokens.add(token);
+                return true;
+            });
 
-            // Use per-token payloads for better failure visibility
-            const messages = targetTokens.map((token) => ({
+            if (uniqueBatch.length === 0) return;
+
+            totalTargetTokens += uniqueBatch.length;
+
+            if (!firebaseAdmin) {
+                return;
+            }
+
+            const messages = uniqueBatch.map((token) => ({
                 token,
                 notification: {
                     title,
@@ -175,46 +142,144 @@ export const sendPushNotification = async (req, res) => {
                 }
             }));
 
-            try {
-                const batchResponse = await firebaseAdmin.messaging().sendEach(messages);
-                console.log(`Firebase sent: ${batchResponse.successCount} success, ${batchResponse.failureCount} failures`);
-                successCount = batchResponse.successCount;
-                failureCount = batchResponse.failureCount;
+            const batchResponse = await firebaseAdmin.messaging().sendEach(messages);
+            successCount += batchResponse.successCount;
+            failureCount += batchResponse.failureCount;
 
-                if (batchResponse.failureCount > 0) {
-                    const cleanupTasks = [];
-                    batchResponse.responses.forEach((resp, idx) => {
-                        if (!resp.success) {
-                            const code = resp.error?.code || 'unknown_error';
-                            const errorMessage = resp.error?.message || 'Unknown Firebase error';
-                            failureReasons.push({ token: targetTokens[idx], code, message: errorMessage });
-                            console.error(`Failed to send to token ${idx}:`, resp.error);
-
-                            if (invalidTokenCodes.has(code)) {
-                                cleanupTasks.push(removeInvalidTokenEverywhere(targetTokens[idx]));
-                            }
+            if (batchResponse.failureCount > 0) {
+                const invalidTokens = [];
+                batchResponse.responses.forEach((resp, idx) => {
+                    if (!resp.success) {
+                        const code = resp.error?.code || 'unknown_error';
+                        const errorMessage = resp.error?.message || 'Unknown Firebase error';
+                        failureReasons.push({ token: uniqueBatch[idx], code, message: errorMessage });
+                        if (invalidTokenCodes.has(code)) {
+                            invalidTokens.push(uniqueBatch[idx]);
                         }
-                    });
-                    if (cleanupTasks.length > 0) {
-                        await Promise.allSettled(cleanupTasks);
                     }
-                }
-
-                firebaseSent = batchResponse.successCount > 0;
-            } catch (firebaseError) {
-                console.error('Firebase send error:', firebaseError);
-                failureReasons.push({
-                    code: firebaseError?.code || 'firebase_send_error',
-                    message: firebaseError?.message || 'Firebase send failed'
                 });
+
+                await mapWithConcurrency(
+                    invalidTokens,
+                    (token) => removeInvalidTokenEverywhere(token),
+                    TOKEN_CLEANUP_CONCURRENCY
+                );
             }
-        } else if (!firebaseAdmin) {
+
+            firebaseSent = firebaseSent || batchResponse.successCount > 0;
+        };
+
+        const flushTokenBuffer = async (tokenBuffer) => {
+            if (tokenBuffer.length === 0) return [];
+            await sendTokenBatch(tokenBuffer);
+            return [];
+        };
+
+        const streamUserTokens = async (userQuery) => {
+            let tokenBuffer = [];
+            const cursor = User.find(userQuery).select(`${tokenProjection} _id`).lean().cursor();
+
+            for await (const user of cursor) {
+                tokenBuffer.push(...flattenUserTokens(user));
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+
+            return flushTokenBuffer(tokenBuffer);
+        };
+
+        const streamCollectionTokens = async (query = {}) => {
+            let tokenBuffer = [];
+            const cursor = FcmToken.find(query).select('token').lean().cursor();
+
+            for await (const doc of cursor) {
+                if (doc?.token) {
+                    tokenBuffer.push(doc.token);
+                }
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+
+            return flushTokenBuffer(tokenBuffer);
+        };
+
+        const streamAdminTokens = async () => {
+            let tokenBuffer = [];
+            const cursor = Admin.find({ fcmToken: { $ne: null, $exists: true } }).select('fcmToken').lean().cursor();
+
+            for await (const admin of cursor) {
+                if (admin?.fcmToken) {
+                    tokenBuffer.push(admin.fcmToken);
+                }
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+
+            return flushTokenBuffer(tokenBuffer);
+        };
+
+        if (normalizedAudience === 'All Users') {
+            await streamUserTokens(hasAnyTokenQuery);
+            await streamCollectionTokens();
+            await streamAdminTokens();
+        } else if (normalizedAudience === 'New Users') {
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const userIds = [];
+            const cursor = User.find({ createdAt: { $gte: thirtyDaysAgo } }).select(`${tokenProjection} _id`).lean().cursor();
+            let tokenBuffer = [];
+
+            for await (const user of cursor) {
+                userIds.push(String(user._id));
+                tokenBuffer.push(...flattenUserTokens(user));
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+            await flushTokenBuffer(tokenBuffer);
+            await streamCollectionTokens({ userId: { $in: userIds } });
+        } else if (normalizedAudience === 'Active Users' || normalizedAudience === 'Inactive Users') {
+            const status = normalizedAudience === 'Active Users' ? 'active' : 'disabled';
+            const userIds = [];
+            const cursor = User.find({ status }).select(`${tokenProjection} _id`).lean().cursor();
+            let tokenBuffer = [];
+
+            for await (const user of cursor) {
+                userIds.push(String(user._id));
+                tokenBuffer.push(...flattenUserTokens(user));
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+            await flushTokenBuffer(tokenBuffer);
+            await streamCollectionTokens({ userId: { $in: userIds } });
+        } else {
+            const userIds = [];
+            const cursor = User.find({}).select(`${tokenProjection} _id`).lean().cursor();
+            let tokenBuffer = [];
+
+            for await (const user of cursor) {
+                userIds.push(String(user._id));
+                tokenBuffer.push(...flattenUserTokens(user));
+                if (tokenBuffer.length >= FCM_BATCH_SIZE) {
+                    tokenBuffer = await flushTokenBuffer(tokenBuffer);
+                }
+            }
+            await flushTokenBuffer(tokenBuffer);
+            await streamCollectionTokens({ userId: { $in: userIds } });
+        }
+
+        if (!firebaseAdmin && totalTargetTokens > 0) {
             console.warn('Firebase Admin not initialized');
             failureReasons.push({
                 code: 'firebase_not_initialized',
                 message: 'Firebase Admin SDK is not initialized on backend'
             });
-        } else {
+        }
+
+        if (totalTargetTokens === 0) {
             console.warn('No FCM tokens available');
             failureReasons.push({
                 code: 'no_tokens',
@@ -239,7 +304,7 @@ export const sendPushNotification = async (req, res) => {
             title,
             message,
             type: typeToSchema[normalizedTypeKey] || 'general',
-            status: firebaseSent ? 'sent' : (targetTokens.length > 0 ? 'failed' : 'pending'),
+            status: firebaseSent ? 'sent' : (totalTargetTokens > 0 ? 'failed' : 'pending'),
             targetAudience
         });
 
@@ -248,7 +313,7 @@ export const sendPushNotification = async (req, res) => {
         res.status(201).json({
             ...notification._doc,
             firebaseSent,
-            tokensTargeted: targetTokens.length,
+            tokensTargeted: totalTargetTokens,
             firebaseSuccessCount: successCount,
             firebaseFailureCount: failureCount,
             failureReasons

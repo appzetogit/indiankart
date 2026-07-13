@@ -1,5 +1,9 @@
 import Banner from '../models/Banner.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import { mapWithConcurrency } from '../utils/asyncUtils.js';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
+
+const CLOUDINARY_UPLOAD_CONCURRENCY = 4;
 
 // @desc    Get all banners
 // @route   GET /api/banners
@@ -50,10 +54,10 @@ export const createBanner = async (req, res) => {
         // Handle Slides Images
         if (req.files && req.files.slide_images) {
             const slideFiles = req.files.slide_images;
-            const uploadedSlideUrls = await Promise.all(
-                slideFiles.map(file =>
-                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
-                )
+            const uploadedSlideUrls = await mapWithConcurrency(
+                slideFiles,
+                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             if (Array.isArray(slides)) {
                 let fallbackUploadIndex = 0;
@@ -76,10 +80,10 @@ export const createBanner = async (req, res) => {
 
         if (req.files && req.files.slide_mobile_images) {
             const slideMobileFiles = req.files.slide_mobile_images;
-            const uploadedSlideMobileUrls = await Promise.all(
-                slideMobileFiles.map(file =>
-                    uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
-                )
+            const uploadedSlideMobileUrls = await mapWithConcurrency(
+                slideMobileFiles,
+                (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
+                CLOUDINARY_UPLOAD_CONCURRENCY
             );
             if (Array.isArray(slides)) {
                 let fallbackUploadIndex = 0;
@@ -101,26 +105,26 @@ export const createBanner = async (req, res) => {
         }
 
         // Handle Hero Image
-        if (req.files && req.files.hero_image && req.files.hero_image[0]?.buffer) {
+        if (req.files && req.files.hero_image && req.files.hero_image[0]) {
             const uploadedHero = await uploadBufferToCloudinary(
-                req.files.hero_image[0].buffer,
+                req.files.hero_image[0],
                 { folder: 'ecom_uploads/banners' }
             );
             content.imageUrl = uploadedHero.secure_url;
         }
 
         // Handle Background Image
-        if (req.files && req.files.background_image && req.files.background_image[0]?.buffer) {
+        if (req.files && req.files.background_image && req.files.background_image[0]) {
             const uploadedBg = await uploadBufferToCloudinary(
-                req.files.background_image[0].buffer,
+                req.files.background_image[0],
                 { folder: 'ecom_uploads/banners' }
             );
             content.backgroundImageUrl = uploadedBg.secure_url;
         }
 
-        if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]?.buffer) {
+        if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]) {
             const uploadedMobileBg = await uploadBufferToCloudinary(
-                req.files.background_mobile_image[0].buffer,
+                req.files.background_mobile_image[0],
                 { folder: 'ecom_uploads/banners' }
             );
             content.mobileBackgroundImageUrl = uploadedMobileBg.secure_url;
@@ -138,6 +142,8 @@ export const createBanner = async (req, res) => {
         res.status(201).json(createdBanner);
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -167,10 +173,10 @@ export const updateBanner = async (req, res) => {
 
                 if (req.files && req.files.slide_images) {
                     const slideFiles = req.files.slide_images;
-                    const uploadedSlideUrls = await Promise.all(
-                        slideFiles.map(file =>
-                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
-                        )
+                    const uploadedSlideUrls = await mapWithConcurrency(
+                        slideFiles,
+                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
+                        CLOUDINARY_UPLOAD_CONCURRENCY
                     );
                     if (Array.isArray(slides)) {
                         let fallbackUploadIndex = 0;
@@ -193,10 +199,10 @@ export const updateBanner = async (req, res) => {
 
                 if (req.files && req.files.slide_mobile_images) {
                     const slideMobileFiles = req.files.slide_mobile_images;
-                    const uploadedSlideMobileUrls = await Promise.all(
-                        slideMobileFiles.map(file =>
-                            uploadBufferToCloudinary(file.buffer, { folder: 'ecom_uploads/banners' })
-                        )
+                    const uploadedSlideMobileUrls = await mapWithConcurrency(
+                        slideMobileFiles,
+                        (file) => uploadBufferToCloudinary(file, { folder: 'ecom_uploads/banners' }),
+                        CLOUDINARY_UPLOAD_CONCURRENCY
                     );
                     if (Array.isArray(slides)) {
                         let fallbackUploadIndex = 0;
@@ -227,9 +233,9 @@ export const updateBanner = async (req, res) => {
                 // Sanitize linkedOffer
                 if (content.linkedOffer === "") content.linkedOffer = null;
 
-                if (req.files && req.files.hero_image && req.files.hero_image[0]?.buffer) {
+                if (req.files && req.files.hero_image && req.files.hero_image[0]) {
                     const uploadedHero = await uploadBufferToCloudinary(
-                        req.files.hero_image[0].buffer,
+                        req.files.hero_image[0],
                         { folder: 'ecom_uploads/banners' }
                     );
                     content.imageUrl = uploadedHero.secure_url;
@@ -238,9 +244,9 @@ export const updateBanner = async (req, res) => {
                      content.imageUrl = req.body.hero_image_url;
                 }
 
-                if (req.files && req.files.background_image && req.files.background_image[0]?.buffer) {
+                if (req.files && req.files.background_image && req.files.background_image[0]) {
                     const uploadedBg = await uploadBufferToCloudinary(
-                        req.files.background_image[0].buffer,
+                        req.files.background_image[0],
                         { folder: 'ecom_uploads/banners' }
                     );
                     content.backgroundImageUrl = uploadedBg.secure_url;
@@ -248,9 +254,9 @@ export const updateBanner = async (req, res) => {
                     content.backgroundImageUrl = req.body.background_image_url;
                 }
 
-                if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]?.buffer) {
+                if (req.files && req.files.background_mobile_image && req.files.background_mobile_image[0]) {
                     const uploadedMobileBg = await uploadBufferToCloudinary(
-                        req.files.background_mobile_image[0].buffer,
+                        req.files.background_mobile_image[0],
                         { folder: 'ecom_uploads/banners' }
                     );
                     content.mobileBackgroundImageUrl = uploadedMobileBg.secure_url;
@@ -273,6 +279,8 @@ export const updateBanner = async (req, res) => {
         }
     } catch (error) {
         res.status(400).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 

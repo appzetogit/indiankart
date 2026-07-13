@@ -1,6 +1,8 @@
 import PinCode from '../models/PinCode.js';
 import ExcelJS from 'exceljs';
 import { Readable } from 'stream';
+import { promises as fs } from 'node:fs';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 const VALID_DELIVERY_UNITS = new Set(['minutes', 'hours', 'days']);
 const HEADER_ALIASES = {
@@ -268,7 +270,12 @@ const bulkImportPinCodes = async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ message: 'Please upload a .xlsx or .csv file' });
         }
-        if (!req.file.buffer || req.file.buffer.length === 0) {
+        if (!req.file.path) {
+            return res.status(400).json({ message: 'Uploaded file could not be read' });
+        }
+
+        const fileBuffer = await fs.readFile(req.file.path);
+        if (fileBuffer.length === 0) {
             return res.status(400).json({ message: 'Uploaded file is empty' });
         }
 
@@ -293,14 +300,14 @@ const bulkImportPinCodes = async (req, res) => {
 
         try {
             if (isCSV) {
-                await workbook.csv.read(Readable.from(req.file.buffer), {
+                await workbook.csv.read(Readable.from(fileBuffer), {
                     parserOptions: {
                         trim: true,
                         skipEmptyLines: true
                     }
                 });
             } else {
-                await workbook.xlsx.load(req.file.buffer);
+                await workbook.xlsx.load(fileBuffer);
             }
         } catch (parseError) {
             console.error('Parse error:', parseError);
@@ -452,6 +459,8 @@ const bulkImportPinCodes = async (req, res) => {
     } catch (error) {
         console.error('Bulk import error:', error);
         res.status(500).json({ message: 'Error processing Excel file', error: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.file);
     }
 };
 

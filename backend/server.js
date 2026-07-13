@@ -7,6 +7,10 @@ import { randomUUID } from 'node:crypto';
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET is required');
+}
+
 import connectDB from './config/db.js';
 
 import authRoutes from './routes/authRoutes.js';
@@ -72,17 +76,34 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
         'https://www.indiankart.in'
     ];
 
+const allowedOriginSet = new Set(
+    allowedOrigins
+        .map((origin) => {
+            try {
+                const parsed = new URL(origin);
+                return `${parsed.protocol}//${parsed.host}`;
+            } catch {
+                return '';
+            }
+        })
+        .filter(Boolean)
+);
+
 app.use(cors({
     origin: function (origin, callback) {
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
 
-        const isAllowed =
-            allowedOrigins.includes(origin) ||
-            origin.endsWith('.vercel.app') ||
-            origin.includes('indiankart.in') ||
-            origin.includes('localhost') ||
-            origin.includes('127.0.0.1');
+        let normalizedOrigin = '';
+        try {
+            const parsedOrigin = new URL(origin);
+            normalizedOrigin = `${parsedOrigin.protocol}//${parsedOrigin.host}`;
+        } catch (_error) {
+            console.log('CORS blocked invalid origin:', origin);
+            return callback(null, false);
+        }
+
+        const isAllowed = allowedOriginSet.has(normalizedOrigin);
 
         if (isAllowed) {
             callback(null, true);

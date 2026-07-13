@@ -1,7 +1,13 @@
 import jwt from 'jsonwebtoken';
 
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+    throw new Error('JWT_SECRET is required');
+}
+
 const generateToken = (res, userId, cookieName = 'user_jwt') => {
-    const token = jwt.sign({ id: userId }, process.env.JWT_SECRET || 'secret', {
+    const token = jwt.sign({ id: userId }, jwtSecret, {
         expiresIn: '30d',
     });
 

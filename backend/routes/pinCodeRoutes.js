@@ -10,10 +10,23 @@ import {
     updatePinCode
 } from '../controllers/pinCodeController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import multer from 'multer';
 
 // Configure Multer for Excel file upload
-const storage = multer.memoryStorage();
+const uploadTempDir = path.join(os.tmpdir(), 'indiakart-uploads');
+fs.mkdirSync(uploadTempDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadTempDir),
+    filename: (_req, file, cb) => {
+        const safeExtension = path.extname(file.originalname || '').slice(0, 16);
+        cb(null, `${Date.now()}-${crypto.randomUUID()}${safeExtension}`);
+    }
+});
 const upload = multer({
     storage,
     limits: {

@@ -2,6 +2,7 @@ import Setting from '../models/Setting.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 
 const normalizeSettingKey = (value) => String(value || '').trim().toLowerCase();
 const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
@@ -376,16 +377,16 @@ const updateSettings = async (req, res) => {
         let signatureUrl = req.body.signatureUrl;
 
         if (req.files) {
-            if (req.files.logo && req.files.logo[0]?.buffer) {
+            if (req.files.logo && req.files.logo[0]) {
                 const uploadedLogo = await uploadBufferToCloudinary(
-                    req.files.logo[0].buffer,
+                    req.files.logo[0],
                     { folder: 'ecom_uploads/settings' }
                 );
                 logoUrl = uploadedLogo.secure_url;
             }
-            if (req.files.signature && req.files.signature[0]?.buffer) {
+            if (req.files.signature && req.files.signature[0]) {
                 const uploadedSignature = await uploadBufferToCloudinary(
-                    req.files.signature[0].buffer,
+                    req.files.signature[0],
                     { folder: 'ecom_uploads/settings' }
                 );
                 signatureUrl = uploadedSignature.secure_url;
@@ -543,6 +544,8 @@ const updateSettings = async (req, res) => {
         }
     } catch (error) {
         res.status(500).json({ message: error.message });
+    } finally {
+        await cleanupUploadedFiles(req.files);
     }
 };
 
@@ -551,11 +554,11 @@ const updateSettings = async (req, res) => {
 // @access  Private/Admin
 const uploadCategoryPageImage = async (req, res) => {
     try {
-        if (!req.file?.buffer) {
+        if (!req.file) {
             return res.status(400).json({ message: 'Image file is required' });
         }
 
-        const uploaded = await uploadBufferToCloudinary(req.file.buffer, {
+        const uploaded = await uploadBufferToCloudinary(req.file, {
             folder: 'ecom_uploads/category-page'
         });
 
@@ -564,6 +567,8 @@ const uploadCategoryPageImage = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: error.message || 'Image upload failed' });
+    } finally {
+        await cleanupUploadedFiles(req.file);
     }
 };
 

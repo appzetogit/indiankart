@@ -4,6 +4,12 @@ import Admin from '../models/Admin.js';
 import { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS } from '../controllers/authController.js';
 import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
 
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+    throw new Error('JWT_SECRET is required');
+}
+
 const resolveAuthenticatedUser = async (req) => {
     let token;
 
@@ -27,7 +33,7 @@ const resolveAuthenticatedUser = async (req) => {
     }
 
     if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+        const decoded = jwt.verify(token, jwtSecret);
         console.log('Decoded Token:', decoded);
 
         if (LEGACY_HARDCODED_USER_IDS[decoded.id]) {
