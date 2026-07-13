@@ -313,9 +313,8 @@ export const getProducts = async (req, res) => {
             const count = await Product.countDocuments(filter);
             let productQuery = Product.find(filter);
             if (projection) productQuery = productQuery.select(projection);
-            if (!isLite) {
-                productQuery = productQuery.populate('subCategories', 'name isActive');
-            } else {
+            productQuery = productQuery.populate('subCategories', 'name isActive');
+            if (isLite) {
                 productQuery = productQuery.lean();
             }
 
@@ -335,9 +334,8 @@ export const getProducts = async (req, res) => {
         // Default behavior (No pagination) - Backward Compatibility
         let productQuery = Product.find(filter);
         if (projection) productQuery = productQuery.select(projection);
-        if (!isLite) {
-            productQuery = productQuery.populate('subCategories', 'name isActive');
-        } else {
+        productQuery = productQuery.populate('subCategories', 'name isActive');
+        if (isLite) {
             productQuery = productQuery.lean();
         }
 

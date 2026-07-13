@@ -47,6 +47,7 @@ const ORDER_LIST_SELECT = [
     'taxPrice',
     'totalPrice',
     'shippingAddress',
+    'retailerDetails',
     'orderItems',
     'referral',
     'fulfillment',
@@ -1482,6 +1483,152 @@ export const getOrders = async (req, res) => {
     } catch (error) {
         console.error('Get all orders error:', error);
         res.status(500).json({ message: error.message });
+    }
+};
+
+const escapeCsvCell = (value) => {
+    if (value === null || value === undefined) return '';
+
+    const stringValue = String(value).replace(/\r?\n/g, ' ');
+    return /[",]/.test(stringValue)
+        ? `"${stringValue.replace(/"/g, '""')}"`
+        : stringValue;
+};
+
+const formatOrderExportRow = (order) => {
+    const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
+    const itemSummary = items.map((item) => {
+        const variant = item?.variant && typeof item.variant === 'object' && !Array.isArray(item.variant)
+            ? item.variant
+            : {};
+        const variantEntries = Object.entries(variant).filter(([key, value]) => key && value);
+        const variantText = variantEntries.length
+            ? ` (${variantEntries.map(([key, value]) => `${key}: ${value}`).join(', ')})`
+            : '';
+        const serialText = item?.serialNumber
+            ? ` [${item.serialType || 'Serial Number'}: ${item.serialNumber}]`
+            : '';
+
+        return `${item?.name || ''} x${Number(item?.qty) || 0}${variantText}${serialText}`;
+    }).join(' | ');
+
+    const serialsSummary = items
+        .filter((item) => item?.serialNumber)
+        .map((item) => `${item?.name || 'Item'}: ${item.serialNumber} (${item.serialType || 'Serial Number'})`)
+        .join(' | ');
+
+    const totalQuantity = items.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0);
+    const fulfillmentMode = getFulfillmentMode(order);
+    const trackingNumber = order?.delhivery?.waybill || order?.ekart?.trackingNumber || '';
+    const isPaid = order?.paymentResult?.status === 'paid' || Boolean(order?.paidAt);
+    const retailerDetails = order?.shippingAddress?.retailerDetails || order?.retailerDetails || {};
+    const isRetailer = Boolean(retailerDetails?.isRetailer);
+    const retailerShopName = isRetailer ? String(retailerDetails?.shopName || '').trim() : '';
+    const retailerGstNumber = isRetailer
+        ? String(retailerDetails?.gstNumber || '').replace(/\s+/g, '').toUpperCase()
+        : '';
+
+    return [
+        order?._id || '',
+        order?.displayId || '',
+        order?.invoiceNumber || '',
+        order?.createdAt ? new Date(order.createdAt).toISOString() : '',
+        order?.user?.name || order?.shippingAddress?.name || '',
+        order?.user?.email || order?.shippingAddress?.email || '',
+        order?.user?.phone || order?.shippingAddress?.phone || '',
+        order?.status || '',
+        order?.paymentMethod || '',
+        order?.paymentResult?.status || '',
+        isPaid ? 'Yes' : 'No',
+        order?.paidAt ? new Date(order.paidAt).toISOString() : '',
+        order?.deliveredAt ? new Date(order.deliveredAt).toISOString() : '',
+        itemSummary,
+        serialsSummary,
+        totalQuantity,
+        Number(order?.itemsPrice || 0),
+        Number(order?.shippingPrice || 0),
+        Number(order?.taxPrice || 0),
+        order?.referral?.code || '',
+        Number(order?.referral?.discountAmount || 0),
+        Number(order?.totalPrice || 0),
+        fulfillmentMode,
+        trackingNumber,
+        isRetailer ? 'Yes' : 'No',
+        retailerShopName,
+        retailerGstNumber,
+        order?.shippingAddress?.name || '',
+        order?.shippingAddress?.street || '',
+        order?.shippingAddress?.city || '',
+        order?.shippingAddress?.state || '',
+        order?.shippingAddress?.postalCode || '',
+        order?.shippingAddress?.country || '',
+        order?.transactionId || order?.paymentResult?.id || ''
+    ];
+};
+
+// @desc    Export orders as CSV
+// @route   GET /api/orders/export
+// @access  Private/Admin
+export const exportOrdersCsv = async (req, res) => {
+    try {
+        const { search, status, user, userId } = req.query;
+        const filter = buildOrderListFilter({ search, status, user, userId });
+
+        const headers = [
+            'Order ID',
+            'Display ID',
+            'Invoice Number',
+            'Order Date',
+            'Customer Name',
+            'Customer Email',
+            'Customer Phone',
+            'Status',
+            'Payment Method',
+            'Payment Status',
+            'Is Paid',
+            'Paid At',
+            'Delivered At',
+            'Items',
+            'Product IMEIs/Serials',
+            'Total Quantity',
+            'Items Price',
+            'Shipping Price',
+            'Tax Price',
+            'Coupon Code',
+            'Coupon Discount',
+            'Total Amount',
+            'Fulfillment Mode',
+            'Tracking/Waybill Number',
+            'Is Retailer',
+            'Shop Name',
+            'GST Number',
+            'Shipping Name',
+            'Shipping Street',
+            'Shipping City',
+            'Shipping State',
+            'Shipping Pincode',
+            'Shipping Country',
+            'Transaction ID'
+        ];
+
+        const fileDate = new Date().toISOString().split('T')[0];
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="orders_export_${fileDate}.csv"`);
+
+        res.write(`\uFEFF${headers.map(escapeCsvCell).join(',')}\n`);
+        const orderCursor = Order.find(filter)
+            .select(ORDER_LIST_SELECT)
+            .sort({ createdAt: -1 })
+            .lean()
+            .cursor();
+
+        for await (const order of orderCursor) {
+            res.write(`${formatOrderExportRow(order).map(escapeCsvCell).join(',')}\n`);
+        }
+        res.end();
+    } catch (error) {
+        console.error('Export orders CSV error:', error);
+        res.status(500).json({ message: error.message || 'Failed to export orders' });
     }
 };
 
