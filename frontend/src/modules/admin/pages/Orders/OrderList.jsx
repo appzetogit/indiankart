@@ -23,14 +23,6 @@ const normalizeOrderStatus = (status = '') => {
     return value;
 };
 
-const escapeCsvCell = (value) => {
-    const text = String(value ?? '');
-    if (/[",\n]/.test(text)) {
-        return `"${text.replace(/"/g, '""')}"`;
-    }
-    return text;
-};
-
 const transformOrder = (order) => {
     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
 
@@ -619,138 +611,18 @@ const OrderList = () => {
     const handleExportOrders = async () => {
         setIsExporting(true);
         try {
-            const params = {
-                syncPayments: false,
-                syncFulfillment: false,
-                includePaymentAudit: false
-            };
+            const params = {};
             if (searchTerm) params.search = searchTerm;
             if (statusFilter !== 'All') params.status = statusFilter;
             if (userEmailFilter) params.user = userEmailFilter;
 
-            const { data } = await API.get('/orders', { params });
-            const exportOrders = Array.isArray(data)
-                ? data.map((order) => transformOrder(order))
-                : Array.isArray(data?.orders)
-                    ? data.orders.map((order) => transformOrder(order))
-                    : [];
-
-            if (!exportOrders.length) {
-                toast.error('No orders available to export');
-                return;
-            }
-
-            const headers = [
-                'Order ID',
-                'Display ID',
-                'Invoice Number',
-                'Order Date',
-                'Customer Name',
-                'Customer Email',
-                'Customer Phone',
-                'Status',
-                'Payment Method',
-                'Payment Status',
-                'Is Paid',
-                'Paid At',
-                'Delivered At',
-                'Items',
-                'Product IMEIs/Serials',
-                'Total Quantity',
-                'Items Price',
-                'Shipping Price',
-                'Tax Price',
-                'Coupon Code',
-                'Coupon Discount',
-                'Total Amount',
-                'Fulfillment Mode',
-                'Tracking/Waybill Number',
-                'Is Retailer',
-                'Shop Name',
-                'GST Number',
-                'Shipping Name',
-                'Shipping Street',
-                'Shipping City',
-                'Shipping State',
-                'Shipping Pincode',
-                'Shipping Country',
-                'Transaction ID'
-            ];
-
-            const rows = exportOrders.map((order) => {
-                const items = Array.isArray(order.items) ? order.items : [];
-                const itemSummary = items.map((item) => {
-                    const variantText = item?.variant && Object.keys(item.variant).length > 0
-                        ? ` (${Object.entries(item.variant).map(([key, value]) => `${key}: ${value}`).join(', ')})`
-                        : '';
-                    const serialText = item.serialNumber
-                        ? ` [${item.serialType || 'Serial Number'}: ${item.serialNumber}]`
-                        : '';
-                    return `${item.name} x${item.quantity}${variantText}${serialText}`;
-                }).join(' | ');
-
-                const serialsSummary = items
-                    .filter((item) => item.serialNumber)
-                    .map((item) => `${item.name}: ${item.serialNumber} (${item.serialType || 'Serial Number'})`)
-                    .join(' | ');
-
-                const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-
-                const trackingNumber = order.delhivery?.waybill || order.ekart?.trackingNumber || '';
-                const fulfillmentMode = order.fulfillment?.mode || 'unassigned';
-                const invoiceNumber = order.invoiceNumber || '';
-                const isPaid = order.isPaid ? 'Yes' : 'No';
-                const paidAt = order.paidAt ? new Date(order.paidAt).toLocaleString('en-IN') : '';
-                const deliveredAt = order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('en-IN') : '';
-                const isRetailer = order.retailerDetails?.isRetailer ? 'Yes' : 'No';
-                const shopName = order.retailerDetails?.shopName || '';
-                const gstNumber = order.retailerDetails?.gstNumber || '';
-                const couponCode = order.coupon?.code || '';
-                const couponDiscount = Number(order.coupon?.discount || 0);
-
-                return [
-                    order.id,
-                    order.displayId || '',
-                    invoiceNumber,
-                    order.date ? new Date(order.date).toLocaleString('en-IN') : '',
-                    order.user?.name || order.shippingAddress?.name || '',
-                    order.user?.email || order.shippingAddress?.email || '',
-                    order.user?.phone || order.shippingAddress?.phone || '',
-                    order.status || '',
-                    order.payment?.method || '',
-                    order.payment?.status || '',
-                    isPaid,
-                    paidAt,
-                    deliveredAt,
-                    itemSummary,
-                    serialsSummary,
-                    totalQuantity,
-                    Number(order.itemsPrice || 0),
-                    Number(order.shippingPrice || 0),
-                    Number(order.taxPrice || 0),
-                    couponCode,
-                    couponDiscount,
-                    Number(order.total || 0),
-                    fulfillmentMode,
-                    trackingNumber,
-                    isRetailer,
-                    shopName,
-                    gstNumber,
-                    order.shippingAddress?.name || '',
-                    order.shippingAddress?.street || '',
-                    order.shippingAddress?.city || '',
-                    order.shippingAddress?.state || '',
-                    order.shippingAddress?.postalCode || '',
-                    order.shippingAddress?.country || '',
-                    order.transactionId || order.payment?.transactionId || ''
-                ];
+            const { data } = await API.get('/orders/export', {
+                params,
+                responseType: 'blob',
+                timeout: 0
             });
 
-            const csvContent = [headers, ...rows]
-                .map((row) => row.map((cell) => escapeCsvCell(cell)).join(','))
-                .join('\n');
-
-            const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -760,9 +632,12 @@ const OrderList = () => {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
-            toast.success(`Exported ${exportOrders.length} orders`);
+            toast.success('Orders export downloaded');
         } catch (error) {
-            toast.error(error.response?.data?.message || 'Failed to export orders');
+            const errorMessage = error.code === 'ECONNABORTED'
+                ? 'Orders export timed out'
+                : 'Failed to export orders';
+            toast.error(error.response?.data?.message || errorMessage);
         } finally {
             setIsExporting(false);
         }

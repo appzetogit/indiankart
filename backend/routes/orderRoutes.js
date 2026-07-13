@@ -2,6 +2,7 @@ import express from 'express';
 const router = express.Router();
 import { 
     addOrderItems, 
+    exportOrdersCsv,
     getOrders,
     getMyOrders,
     getOrderById,
@@ -16,6 +17,8 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 router.route('/')
     .post(protect, addOrderItems) // Protected for creating
     .get(protect, admin, getOrders); // Admin for listing all orders
+
+router.route('/export').get(protect, admin, exportOrdersCsv);
 
 router.route('/myorders').get(protect, getMyOrders); // User's own orders
 
