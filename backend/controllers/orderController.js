@@ -1570,9 +1570,13 @@ const formatOrderExportRow = (order) => {
 // @route   GET /api/orders/export
 // @access  Private/Admin
 export const exportOrdersCsv = async (req, res) => {
+    let orderCursor = null;
     try {
-        const { search, status, user, userId } = req.query;
+        const { pageNumber, limit, search, status, user, userId } = req.query;
         const filter = buildOrderListFilter({ search, status, user, userId });
+        const hasPagination = pageNumber !== undefined || limit !== undefined;
+        const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
+        const page = Math.max(1, Number(pageNumber) || 1);
 
         const headers = [
             'Order ID',
@@ -1615,20 +1619,46 @@ export const exportOrdersCsv = async (req, res) => {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="orders_export_${fileDate}.csv"`);
 
+        res.flushHeaders?.();
         res.write(`\uFEFF${headers.map(escapeCsvCell).join(',')}\n`);
-        const orderCursor = Order.find(filter)
+
+        let exportQuery = Order.find(filter)
             .select(ORDER_LIST_SELECT)
             .sort({ createdAt: -1 })
-            .lean()
-            .cursor();
+            .lean();
+
+        if (hasPagination) {
+            exportQuery = exportQuery.limit(pageSize).skip(pageSize * (page - 1));
+        }
+
+        orderCursor = exportQuery.cursor();
 
         for await (const order of orderCursor) {
+            if (res.destroyed || req.destroyed) {
+                break;
+            }
             res.write(`${formatOrderExportRow(order).map(escapeCsvCell).join(',')}\n`);
         }
+
         res.end();
     } catch (error) {
         console.error('Export orders CSV error:', error);
-        res.status(500).json({ message: error.message || 'Failed to export orders' });
+        if (orderCursor) {
+            try {
+                await orderCursor.close();
+            } catch {
+                // Ignore cursor close errors after primary failure.
+            }
+        }
+
+        if (!res.headersSent) {
+            res.status(500).json({ message: error.message || 'Failed to export orders' });
+            return;
+        }
+
+        if (!res.destroyed) {
+            res.end();
+        }
     }
 };
 

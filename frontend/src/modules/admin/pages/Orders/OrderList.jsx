@@ -23,6 +23,22 @@ const normalizeOrderStatus = (status = '') => {
     return value;
 };
 
+const readBlobErrorMessage = async (error) => {
+    const responseData = error?.response?.data;
+    if (!(responseData instanceof Blob)) {
+        return error?.response?.data?.message || '';
+    }
+
+    try {
+        const text = await responseData.text();
+        if (!text) return '';
+        const parsed = JSON.parse(text);
+        return parsed?.message || text;
+    } catch {
+        return '';
+    }
+};
+
 const transformOrder = (order) => {
     const normalizedOrderStatus = normalizeOrderStatus(order?.status);
 
@@ -615,6 +631,8 @@ const OrderList = () => {
             if (searchTerm) params.search = searchTerm;
             if (statusFilter !== 'All') params.status = statusFilter;
             if (userEmailFilter) params.user = userEmailFilter;
+            params.pageNumber = currentPage;
+            params.limit = itemsPerPage;
 
             const { data } = await API.get('/orders/export', {
                 params,
@@ -632,12 +650,13 @@ const OrderList = () => {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
-            toast.success('Orders export downloaded');
+            toast.success(`Exported page ${currentPage} orders`);
         } catch (error) {
+            const serverMessage = await readBlobErrorMessage(error);
             const errorMessage = error.code === 'ECONNABORTED'
                 ? 'Orders export timed out'
                 : 'Failed to export orders';
-            toast.error(error.response?.data?.message || errorMessage);
+            toast.error(serverMessage || errorMessage);
         } finally {
             setIsExporting(false);
         }
@@ -657,7 +676,7 @@ const OrderList = () => {
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
                 >
                     <MdDownload size={18} />
-                    {isExporting ? 'Exporting...' : 'Download Excel'}
+                    {isExporting ? 'Exporting...' : 'Download Current Page'}
                 </button>
             </div>
 
