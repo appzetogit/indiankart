@@ -26,6 +26,10 @@ const LEGACY_HARDCODED_USER_IDS = {
     '000000000000000000000002': '7223077890'
 };
 
+const isHardcodedOtpLoginEnabled = () =>
+    process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true' &&
+    process.env.NODE_ENV !== 'production';
+
 const normalizeForHardcodedLogin = (mobile) => {
     const digits = String(mobile || '').replace(/\D/g, '');
     return digits.length > 10 ? digits.slice(-10) : digits;
@@ -126,7 +130,7 @@ export const verifyLoginOtp = async (req, res) => {
         const normalizedOtp = normalizeHardcodedOtp(otp);
         const hardcodedUser = HARDCODED_LOGIN_USERS[normalizedMobile];
 
-        if (hardcodedUser) {
+        if (hardcodedUser && isHardcodedOtpLoginEnabled()) {
             if (normalizedOtp !== HARDCODED_LOGIN_OTP) {
                 return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
             }

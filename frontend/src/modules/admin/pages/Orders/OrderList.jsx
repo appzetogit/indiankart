@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import API from '../../../../services/api';
 import { getAdminPaymentStatus } from '../../utils/paymentStatus';
 import OrderListFilters from '../../components/orders/OrderListFilters';
+import { DATE_RANGE_PRESETS, resolveDateRange } from '../../components/orders/orderDateRange';
 import OrderListTable from '../../components/orders/OrderListTable';
 
 const BULK_STATUS_OPTIONS = [
@@ -118,13 +119,15 @@ const ORDER_LIST_CACHE_TTL_MS = 2 * 60 * 1000;
 const ORDER_LIST_LIVE_SYNC_COOLDOWN_MS = 60 * 1000;
 let orderListCache = new Map();
 
-const buildOrderListCacheKey = ({ currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter }) => (
+const buildOrderListCacheKey = ({ currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter, startDate, endDate }) => (
     JSON.stringify({
         page: currentPage,
         limit: itemsPerPage,
         search: String(searchTerm || '').trim(),
         status: String(statusFilter || 'All').trim(),
-        user: String(userEmailFilter || '').trim()
+        user: String(userEmailFilter || '').trim(),
+        startDate: String(startDate || ''),
+        endDate: String(endDate || '')
     })
 );
 
@@ -145,6 +148,10 @@ const OrderList = () => {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
+    const [dateRange, setDateRange] = useState('all');
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
+    const { startDate, endDate } = resolveDateRange(dateRange, customStart, customEnd);
     const itemsPerPage = 20;
     const initialCacheKey = buildOrderListCacheKey({
         currentPage: 1,
@@ -174,6 +181,11 @@ const OrderList = () => {
     const [hasLoadedOnce, setHasLoadedOnce] = useState(() => Boolean(initialCachedOrders));
     const [fetchError, setFetchError] = useState('');
     const [isExporting, setIsExporting] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportRange, setExportRange] = useState('30');
+    const [exportStart, setExportStart] = useState('');
+    const [exportEnd, setExportEnd] = useState('');
+    const [exportCurrentPageOnly, setExportCurrentPageOnly] = useState(false);
     const latestRequestRef = useRef(0);
     const liveSyncRunRef = useRef(0);
     const liveSyncCooldownRef = useRef(new Map());
@@ -185,7 +197,9 @@ const OrderList = () => {
             itemsPerPage,
             searchTerm,
             statusFilter,
-            userEmailFilter
+            userEmailFilter,
+            startDate,
+            endDate
         });
         const cachedOrders = getCachedOrderList(cacheKey);
 
@@ -216,6 +230,8 @@ const OrderList = () => {
                 if (searchTerm) params.search = searchTerm;
                 if (statusFilter !== 'All') params.status = statusFilter;
                 if (userEmailFilter) params.user = userEmailFilter;
+                if (startDate) params.startDate = startDate;
+                if (endDate) params.endDate = endDate;
 
                 const { data } = await API.get('/orders', { params });
                 if (requestId !== latestRequestRef.current) return;
@@ -260,14 +276,14 @@ const OrderList = () => {
 
         const timer = setTimeout(fetchPaginatedOrders, cachedOrders ? 0 : 300);
         return () => clearTimeout(timer);
-    }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
+    }, [currentPage, searchTerm, statusFilter, userEmailFilter, startDate, endDate]);
 
     useEffect(() => {
         setSelectedOrderIds(new Set());
         setSerialEditorOrderId('');
         setSerialInputs({});
         setSerialTypes({});
-    }, [currentPage, searchTerm, statusFilter, userEmailFilter]);
+    }, [currentPage, searchTerm, statusFilter, userEmailFilter, startDate, endDate]);
 
     useEffect(() => {
         if (!localOrders.length || isLoading || fetchError) {
@@ -280,7 +296,9 @@ const OrderList = () => {
             itemsPerPage,
             searchTerm,
             statusFilter,
-            userEmailFilter
+            userEmailFilter,
+            startDate,
+            endDate
         });
         const lastSyncedAt = liveSyncCooldownRef.current.get(cacheKey);
         if (lastSyncedAt && (Date.now() - lastSyncedAt) < ORDER_LIST_LIVE_SYNC_COOLDOWN_MS) {
@@ -365,7 +383,7 @@ const OrderList = () => {
                 liveSyncRunRef.current += 1;
             }
         };
-    }, [localOrders, isLoading, fetchError, currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter]);
+    }, [localOrders, isLoading, fetchError, currentPage, itemsPerPage, searchTerm, statusFilter, userEmailFilter, startDate, endDate]);
 
     const filteredOrders = localOrders;
     const selectedCount = selectedOrderIds.size;
@@ -625,14 +643,24 @@ const OrderList = () => {
     };
 
     const handleExportOrders = async () => {
+        const range = resolveDateRange(exportRange, exportStart, exportEnd);
+        if (exportRange === 'custom' && (!range.startDate || !range.endDate)) {
+            toast.error('Pick both a start and end date');
+            return;
+        }
+
         setIsExporting(true);
         try {
             const params = {};
             if (searchTerm) params.search = searchTerm;
             if (statusFilter !== 'All') params.status = statusFilter;
             if (userEmailFilter) params.user = userEmailFilter;
-            params.pageNumber = currentPage;
-            params.limit = itemsPerPage;
+            if (range.startDate) params.startDate = range.startDate;
+            if (range.endDate) params.endDate = range.endDate;
+            if (exportCurrentPageOnly) {
+                params.pageNumber = currentPage;
+                params.limit = itemsPerPage;
+            }
 
             const { data } = await API.get('/orders/export', {
                 params,
@@ -650,7 +678,8 @@ const OrderList = () => {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
 
-            toast.success(`Exported page ${currentPage} orders`);
+            setShowExportModal(false);
+            toast.success('Orders exported');
         } catch (error) {
             const serverMessage = await readBlobErrorMessage(error);
             const errorMessage = error.code === 'ECONNABORTED'
@@ -671,12 +700,12 @@ const OrderList = () => {
                 </div>
                 <button
                     type="button"
-                    onClick={handleExportOrders}
+                    onClick={() => setShowExportModal(true)}
                     disabled={isExporting}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
                 >
                     <MdDownload size={18} />
-                    {isExporting ? 'Exporting...' : 'Download Current Page'}
+                    {isExporting ? 'Exporting...' : 'Export Orders'}
                 </button>
             </div>
 
@@ -689,6 +718,18 @@ const OrderList = () => {
                 }}
                 onStatusChange={(value) => {
                     setStatusFilter(value);
+                    setCurrentPage(1);
+                }}
+                dateRange={dateRange}
+                customStart={customStart}
+                customEnd={customEnd}
+                onDateRangeChange={(value) => {
+                    setDateRange(value);
+                    setCurrentPage(1);
+                }}
+                onCustomRangeChange={(start, end) => {
+                    setCustomStart(start);
+                    setCustomEnd(end);
                     setCurrentPage(1);
                 }}
             />
@@ -793,6 +834,84 @@ const OrderList = () => {
                 />
             )}
                 </>
+            )}
+
+            {showExportModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/60 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-3xl bg-white border border-gray-100 shadow-2xl p-6 space-y-4">
+                        <div>
+                            <h2 className="text-lg font-black text-gray-900 uppercase tracking-wide">Export Orders</h2>
+                            <p className="text-xs font-bold text-gray-500 mt-1">Choose the date range to include. One row per product, with variant, serial and IMEI columns.</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Date Range</label>
+                            <select
+                                value={exportRange}
+                                onChange={(e) => setExportRange(e.target.value)}
+                                disabled={isExporting}
+                                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:bg-white"
+                            >
+                                {DATE_RANGE_PRESETS.map((preset) => (
+                                    <option key={preset.value} value={preset.value}>{preset.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {exportRange === 'custom' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">From</label>
+                                    <input
+                                        type="date"
+                                        value={exportStart}
+                                        max={exportEnd || undefined}
+                                        onChange={(e) => setExportStart(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">To</label>
+                                    <input
+                                        type="date"
+                                        value={exportEnd}
+                                        min={exportStart || undefined}
+                                        onChange={(e) => setExportEnd(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:bg-white"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600">
+                            <input
+                                type="checkbox"
+                                checked={exportCurrentPageOnly}
+                                onChange={(e) => setExportCurrentPageOnly(e.target.checked)}
+                            />
+                            Only export the current page ({itemsPerPage} orders)
+                        </label>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowExportModal(false)}
+                                disabled={isExporting}
+                                className="px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-600 text-xs font-black uppercase hover:bg-gray-50 disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleExportOrders}
+                                disabled={isExporting}
+                                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-black uppercase hover:bg-emerald-700 disabled:bg-emerald-300"
+                            >
+                                {isExporting ? 'Exporting...' : 'Download CSV'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {showBulkFulfillmentModal && (

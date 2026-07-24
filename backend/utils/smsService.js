@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { randomInt } from 'crypto';
 import Otp from '../models/Otp.js';
 import Order from '../models/Order.js';
 
@@ -7,6 +8,37 @@ import Order from '../models/Order.js';
 const API_TIMEOUT = 30000; // 30 seconds
 const HARDCODED_LOGIN_OTP = '0000';
 const HARDCODED_LOGIN_MOBILES = new Set(['7610416911', '7223077890']);
+const MAX_OTP_ATTEMPTS = 5;
+
+function getSmsConfig() {
+    const apiKey = process.env.SMSINDIAHUB_API_KEY || process.env.SMS_INDIA_HUB_API_KEY;
+    const senderId = process.env.SMSINDIAHUB_SENDER_ID || process.env.SMS_INDIA_HUB_SENDER_ID;
+    const templateId =
+        process.env.SMSINDIAHUB_TEMPLATE_ID ||
+        process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID ||
+        process.env.SMS_INDIA_HUB_TEMPLATE_ID;
+    const entityId = process.env.SMSINDIAHUB_ENTITY_ID || process.env.SMS_INDIA_HUB_ENTITY_ID;
+    const messageTemplate =
+        process.env.SMSINDIAHUB_MESSAGE_TEMPLATE || process.env.SMS_INDIA_HUB_MESSAGE_TEMPLATE;
+    const apiUrl =
+        process.env.SMSINDIAHUB_API_URL ||
+        process.env.SMS_INDIA_HUB_API_URL ||
+        'https://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
+    const gwid =
+        process.env.SMSINDIAHUB_GWID ||
+        process.env.SMS_INDIA_HUB_GWID ||
+        '2';
+
+    return {
+        apiKey,
+        senderId,
+        templateId,
+        entityId,
+        messageTemplate,
+        apiUrl: apiUrl.replace(/^http:\/\//i, 'https://'),
+        gwid,
+    };
+}
 
 function normalizeForHardcodedLogin(mobile) {
     const digits = String(mobile || '').replace(/\D/g, '');
@@ -23,10 +55,10 @@ function normalizeHardcodedOtp(otp) {
  * Generate numeric OTP
  */
 function generateOTP(length = 4) {
-    const digits = '0123456789';
+    // crypto, not Math.random: predictable OTPs are guessable OTPs.
     let otp = '';
     for (let i = 0; i < length; i++) {
-        otp += digits[Math.floor(Math.random() * 10)];
+        otp += String(randomInt(0, 10));
     }
     return otp;
 }
@@ -53,6 +85,12 @@ function normalizeMobileNumber(mobile) {
  */
 function buildOtpMessage(otp) {
     const appName = process.env.APP_NAME || 'Indian Kart';
+    const template = getSmsConfig().messageTemplate;
+    if (template) {
+        return template
+            .replaceAll('{companyName}', appName)
+            .replaceAll('{otp}', otp);
+    }
     return `Welcome to the ${appName} powered by SMSINDIAHUB. Your OTP for registration is ${otp}`;
 }
 
@@ -60,6 +98,19 @@ function buildOtpMessage(otp) {
  * Parse and handle SMS India HUB API response
  */
 function handleSmsResponse(responseData) {
+    const responseText = typeof responseData === 'string'
+        ? responseData
+        : JSON.stringify(responseData || {});
+    const responseTextLower = responseText.toLowerCase();
+
+    if (
+        responseTextLower.includes('success') ||
+        responseTextLower.includes('sent') ||
+        responseTextLower.includes('accepted')
+    ) {
+        return;
+    }
+
     const errorCode = responseData.ErrorCode || '';
     const errorMsg = responseData.ErrorMessage || '';
 
@@ -83,17 +134,29 @@ function handleSmsResponse(responseData) {
                 throw new Error(`SMS India HUB API Error (Code: ${errorCode}): ${errorMsg}`);
         }
     }
+
+    if (
+        responseTextLower.includes('error') ||
+        responseTextLower.includes('failed') ||
+        responseTextLower.includes('invalid') ||
+        responseTextLower.includes('not valid')
+    ) {
+        throw new Error(`SMS India HUB API Error: ${responseText}`);
+    }
 }
 
 /**
  * Send SMS via SMS India HUB API
  */
 async function sendSmsViaApi(mobile, message) {
-    const API_KEY = process.env.SMS_INDIA_HUB_API_KEY;
-    const SENDER_ID = process.env.SMS_INDIA_HUB_SENDER_ID;
-    const TEMPLATE_ID = process.env.SMS_INDIA_HUB_DLT_TEMPLATE_ID;
-    const API_URL = process.env.SMS_INDIA_HUB_API_URL || 'http://cloud.smsindiahub.in/vendorsms/pushsms.aspx';
-    const GWID = process.env.SMS_INDIA_HUB_GWID || '2';
+    const {
+        apiKey: API_KEY,
+        senderId: SENDER_ID,
+        templateId: TEMPLATE_ID,
+        entityId: ENTITY_ID,
+        apiUrl: API_URL,
+        gwid: GWID,
+    } = getSmsConfig();
 
     if (!API_KEY || !SENDER_ID) {
         throw new Error('SMS India HUB credentials are missing. Please check environment variables.');
@@ -107,15 +170,27 @@ async function sendSmsViaApi(mobile, message) {
         sid: SENDER_ID.trim(),
         msg: message,
         fl: '0',
+        dc: '0',
         gwid: GWID,
     };
 
     if (TEMPLATE_ID && TEMPLATE_ID.trim()) {
-        params.DLT_TE_ID = TEMPLATE_ID.trim();
+        params.templateid = TEMPLATE_ID.trim();
+    }
+
+    if (ENTITY_ID && ENTITY_ID.trim()) {
+        params.entityid = ENTITY_ID.trim();
     }
 
     // DEBUG LOG
-    console.log('[SMS] Sending via API:', { mobile: cleanMobile, sender: SENDER_ID, url: API_URL });
+    console.log('[SMS] Sending via API:', {
+        mobile: cleanMobile,
+        sender: SENDER_ID,
+        url: API_URL,
+        gwid: GWID,
+        templateid: params.templateid,
+        entityid: params.entityid
+    });
 
     const response = await axios.get(API_URL, {
         params,
@@ -155,24 +230,30 @@ async function verifyOtpFromDb(mobile, otp, userType) {
     // Normalize mobile number (remove any non-digits, ensure consistent format)
     const normalizedMobile = mobile.replace(/\D/g, '');
 
-    const record = await Otp.findOne({
-        mobile: normalizedMobile,
-        userType,
-        otp: otp.trim()
-    });
+    // Look up by mobile only: a 4-digit OTP is brute-forceable, so wrong guesses must burn attempts.
+    const record = await Otp.findOne({ mobile: normalizedMobile, userType });
 
     if (!record) {
-        console.error('OTP verification failed - record not found:', {
-            mobile: normalizedMobile,
-            userType,
-            otpVerify: otp.trim()
-        });
+        console.error('OTP verification failed - no active OTP for', normalizedMobile, userType);
         return false;
     }
 
     if (record.expiresAt < new Date()) {
         await Otp.deleteOne({ _id: record._id });
         console.error('OTP verification failed - expired');
+        return false;
+    }
+
+    if (record.otp !== otp.trim()) {
+        const updated = await Otp.findOneAndUpdate(
+            { _id: record._id },
+            { $inc: { attempts: 1 } },
+            { new: true }
+        );
+        if ((updated?.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+            await Otp.deleteOne({ _id: record._id });
+            console.error('OTP verification failed - too many attempts, code invalidated');
+        }
         return false;
     }
 
@@ -184,15 +265,15 @@ async function verifyOtpFromDb(mobile, otp, userType) {
  * Check if special bypass should be used
  */
 function isSpecialBypass(mobile) {
-    return mobile === '9111966732';
+    // Fixed-OTP test number; never active in production.
+    return process.env.NODE_ENV !== 'production' && mobile === '9111966732';
 }
 
 /**
  * Check if mock mode should be used
  */
 function isMockMode() {
-    const API_KEY = process.env.SMS_INDIA_HUB_API_KEY;
-    const SENDER_ID = process.env.SMS_INDIA_HUB_SENDER_ID;
+    const { apiKey: API_KEY, senderId: SENDER_ID } = getSmsConfig();
     // Log status for clarity
     // console.log('[DEBUG] Mock Check:', { useMock: process.env.USE_MOCK_OTP, hasKey: !!API_KEY, hasSender: !!SENDER_ID });
     return process.env.USE_MOCK_OTP === 'true' || !API_KEY || !SENDER_ID;
@@ -206,7 +287,10 @@ function isDeveloperBypass(otp) {
 }
 
 function isHardcodedLoginMobile(mobile) {
-    return HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
+    const allowHardcodedLogin =
+        process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true' &&
+        process.env.NODE_ENV !== 'production';
+    return allowHardcodedLogin && HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
 }
 
 // ==========================================
@@ -335,7 +419,8 @@ export async function verifyOTP(mobile, otpInput, userType) {
     const normalizedOtp = normalizeHardcodedOtp(otpInput);
     const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
-    if (HARDCODED_LOGIN_MOBILES.has(normalizedMobile) && normalizedOtp === HARDCODED_LOGIN_OTP) {
+    // Must stay env-gated: without this check these numbers log in with 0000 in production.
+    if (isHardcodedLoginMobile(normalizedMobile) && normalizedOtp === HARDCODED_LOGIN_OTP) {
         return true;
     }
 
@@ -357,7 +442,7 @@ export async function generateDeliveryOtp(orderId, customerPhone) {
         if (!order) throw new Error('Order not found');
         if (order.status === 'Delivered') throw new Error('Order is already delivered');
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otp = String(randomInt(100000, 1000000));
 
         order.deliveryOtp = otp;
         order.deliveryOtpExpiresAt = new Date(Date.now() + 15 * 60 * 1000);

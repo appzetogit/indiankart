@@ -152,8 +152,13 @@ const RAW_TO_USER_TRACKING_STEP = {
 };
 
 const getMappedTrackingStep = (rawStatus = '') => {
-    const normalized = sanitizeText(rawStatus).toLowerCase();
-    return RAW_TO_USER_TRACKING_STEP[normalized] || '';
+    const normalized = sanitizeText(rawStatus).toLowerCase().replace(/[_-]+/g, ' ').trim();
+    if (RAW_TO_USER_TRACKING_STEP[normalized]) return RAW_TO_USER_TRACKING_STEP[normalized];
+    // Couriers send free text ("shipment delivered", "delivery success"). Match the longest key contained in it.
+    const key = Object.keys(RAW_TO_USER_TRACKING_STEP)
+        .filter((candidate) => normalized.includes(candidate))
+        .sort((a, b) => b.length - a.length)[0];
+    return key ? RAW_TO_USER_TRACKING_STEP[key] : '';
 };
 
 const buildMappedStepTimes = (scans = []) => {

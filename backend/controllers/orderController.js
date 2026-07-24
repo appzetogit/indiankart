@@ -185,7 +185,7 @@ const isOrderAccessibleByUser = (order, user) => {
     };
 };
 
-const buildOrderListFilter = ({ search, status, user, userId }) => {
+const buildOrderListFilter = ({ search, status, user, userId, startDate, endDate }) => {
     const filter = {};
 
     const normalizedSearch = String(search || '').trim();
@@ -229,6 +229,17 @@ const buildOrderListFilter = ({ search, status, user, userId }) => {
     if (normalizedUserId && mongoose.Types.ObjectId.isValid(normalizedUserId)) {
         filter.user = normalizedUserId;
     }
+
+    // Date range (inclusive). Accepts ISO date or datetime; endDate covers the whole day.
+    const from = startDate ? new Date(startDate) : null;
+    const to = endDate ? new Date(endDate) : null;
+    const createdAt = {};
+    if (from && !Number.isNaN(from.getTime())) createdAt.$gte = from;
+    if (to && !Number.isNaN(to.getTime())) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(endDate).trim())) to.setHours(23, 59, 59, 999);
+        createdAt.$lte = to;
+    }
+    if (Object.keys(createdAt).length) filter.createdAt = createdAt;
 
     return filter;
 };
@@ -1032,7 +1043,9 @@ export const addOrderItems = async (req, res) => {
             const product = productsById.get(Number(item.product));
             if (product) {
                 const update = { $inc: { stock: -item.qty } };
-                
+                // Guard so a concurrent order can never push stock below zero.
+                const filter = { _id: product._id, stock: { $gte: item.qty } };
+
                 // If variant exists, find its index for atomic array update
                 if (item.variant && Object.keys(item.variant).length > 0) {
                     const skuIndex = product.skus.findIndex(s => {
@@ -1042,21 +1055,26 @@ export const addOrderItems = async (req, res) => {
                         if (itemKeys.length !== combKeys.length) return false;
                         return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
                     });
-                    
+
                     if (skuIndex !== -1) {
                         update.$inc[`skus.${skuIndex}.stock`] = -item.qty;
+                        filter[`skus.${skuIndex}.stock`] = { $gte: item.qty };
                     }
                 }
 
-                // Atomic update to avoid VersionError
+                // Atomic conditional update: null means someone else took the stock first.
                 const updatedProduct = await Product.findOneAndUpdate(
-                    { _id: product._id },
+                    filter,
                     update,
                     { new: true }
                 );
 
+                if (!updatedProduct) {
+                    return { ok: false, item, alerts: [] };
+                }
+
                 const alerts = [];
-                if (updatedProduct) {
+                {
                     if (updatedProduct.stock <= 5) {
                         alerts.push({
                             type: 'stock',
@@ -1083,12 +1101,25 @@ export const addOrderItems = async (req, res) => {
                         }
                     }
                 }
-                return alerts;
+                return { ok: true, item, alerts };
             }
-            return [];
+            return { ok: true, item, alerts: [] };
         }));
 
-        const notifications = stockResults.flat();
+        const failed = stockResults.filter((r) => !r.ok);
+        if (failed.length) {
+            // Roll back the items that did succeed, then drop the order.
+            await restoreOrderStock({ orderItems: stockResults.filter((r) => r.ok).map((r) => r.item) });
+            await Order.findByIdAndDelete(createdOrder._id).catch(() => {});
+            if (claimedPayment?._id) {
+                await PaymentClaim.findByIdAndUpdate(claimedPayment._id, { $unset: { order: 1 } }).catch(() => {});
+            }
+            return res.status(409).json({
+                message: `Insufficient stock for ${failed.map((r) => r.item.name).join(', ')}. Please try again.`
+            });
+        }
+
+        const notifications = stockResults.flatMap((r) => r.alerts);
         notifications.push({
             type: 'order',
             title: 'New Order Received',
@@ -1157,12 +1188,12 @@ const syncOrderFulfillmentStatus = async (order) => {
             const step = tracking.mappedCurrentStep;
             let statusChanged = false;
 
-            if (step === 'Delivered') {
+            if (step === 'Delivered' && order.status !== 'Delivered') {
                 order.isDelivered = true;
                 order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
                 order.status = 'Delivered';
                 statusChanged = true;
-            } else if (step === 'Cancelled') {
+            } else if (step === 'Cancelled' && order.status !== 'Cancelled') {
                 order.status = 'Cancelled';
                 statusChanged = true;
                 try {
@@ -1321,7 +1352,7 @@ export const getOrderShippingTracking = async (req, res) => {
             const step = tracking.mappedCurrentStep;
             let statusChanged = false;
 
-            if (step === 'Delivered' && !order.isDelivered) {
+            if (step === 'Delivered' && order.status !== 'Delivered') {
                 order.isDelivered = true;
                 order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
                 order.status = 'Delivered';
@@ -1432,11 +1463,11 @@ export const assignOrderFulfillment = async (req, res) => {
 // @access  Private/Admin
 export const getOrders = async (req, res) => {
     try {
-        const { pageNumber, limit, search, status, user, userId } = req.query;
+        const { pageNumber, limit, search, status, user, userId, startDate, endDate } = req.query;
         const shouldSyncPayments = String(req.query.syncPayments || 'false') !== 'false';
         const shouldSyncFulfillment = String(req.query.syncFulfillment || 'false') === 'true';
         const shouldAuditPayments = String(req.query.includePaymentAudit || 'false') === 'true';
-        const filter = buildOrderListFilter({ search, status, user, userId });
+        const filter = buildOrderListFilter({ search, status, user, userId, startDate, endDate });
         const hasPagination = pageNumber !== undefined || limit !== undefined;
         const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
         const page = Math.max(1, Number(pageNumber) || 1);
@@ -1495,32 +1526,12 @@ const escapeCsvCell = (value) => {
         : stringValue;
 };
 
-const formatOrderExportRow = (order) => {
+// One row per order item so Variant / Serial / IMEI get real columns.
+const formatOrderExportRows = (order) => {
     const items = Array.isArray(order?.orderItems) ? order.orderItems : [];
-    const itemSummary = items.map((item) => {
-        const variant = item?.variant && typeof item.variant === 'object' && !Array.isArray(item.variant)
-            ? item.variant
-            : {};
-        const variantEntries = Object.entries(variant).filter(([key, value]) => key && value);
-        const variantText = variantEntries.length
-            ? ` (${variantEntries.map(([key, value]) => `${key}: ${value}`).join(', ')})`
-            : '';
-        const serialText = item?.serialNumber
-            ? ` [${item.serialType || 'Serial Number'}: ${item.serialNumber}]`
-            : '';
-
-        return `${item?.name || ''} x${Number(item?.qty) || 0}${variantText}${serialText}`;
-    }).join(' | ');
-
-    const serialsSummary = items
-        .filter((item) => item?.serialNumber)
-        .map((item) => `${item?.name || 'Item'}: ${item.serialNumber} (${item.serialType || 'Serial Number'})`)
-        .join(' | ');
-
-    const totalQuantity = items.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0);
     const fulfillmentMode = getFulfillmentMode(order);
     const trackingNumber = order?.delhivery?.waybill || order?.ekart?.trackingNumber || '';
-    const isPaid = order?.paymentResult?.status === 'paid' || Boolean(order?.paidAt);
+    const isPaid = Boolean(order?.isPaid) || order?.paymentResult?.status === 'paid' || Boolean(order?.paidAt);
     const retailerDetails = order?.shippingAddress?.retailerDetails || order?.retailerDetails || {};
     const isRetailer = Boolean(retailerDetails?.isRetailer);
     const retailerShopName = isRetailer ? String(retailerDetails?.shopName || '').trim() : '';
@@ -1528,7 +1539,7 @@ const formatOrderExportRow = (order) => {
         ? String(retailerDetails?.gstNumber || '').replace(/\s+/g, '').toUpperCase()
         : '';
 
-    return [
+    const orderColumns = [
         order?._id || '',
         order?.displayId || '',
         order?.invoiceNumber || '',
@@ -1541,15 +1552,18 @@ const formatOrderExportRow = (order) => {
         order?.paymentResult?.status || '',
         isPaid ? 'Yes' : 'No',
         order?.paidAt ? new Date(order.paidAt).toISOString() : '',
-        order?.deliveredAt ? new Date(order.deliveredAt).toISOString() : '',
-        itemSummary,
-        serialsSummary,
-        totalQuantity,
+        order?.deliveredAt ? new Date(order.deliveredAt).toISOString() : ''
+    ];
+
+    const orderTotals = [
         Number(order?.itemsPrice || 0),
         Number(order?.shippingPrice || 0),
         Number(order?.taxPrice || 0),
+        order?.coupon?.code || '',
+        Number(order?.coupon?.discount || 0),
         order?.referral?.code || '',
-        Number(order?.referral?.discountAmount || 0),
+        order?.referral?.agentName || '',
+        Number(order?.referral?.commissionAmount || 0),
         Number(order?.totalPrice || 0),
         fulfillmentMode,
         trackingNumber,
@@ -1564,6 +1578,31 @@ const formatOrderExportRow = (order) => {
         order?.shippingAddress?.country || '',
         order?.transactionId || order?.paymentResult?.id || ''
     ];
+
+    const rowsForItems = (items.length ? items : [null]).map((item) => {
+        const variant = item?.variant && typeof item.variant === 'object' && !Array.isArray(item.variant)
+            ? item.variant
+            : {};
+        const variantText = Object.entries(variant)
+            .filter(([key, value]) => key && value)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join(', ');
+        const serialType = String(item?.serialType || '').trim();
+
+        return [
+            ...orderColumns,
+            item?.name || '',
+            item?.product ?? '',
+            variantText,
+            Number(item?.qty) || 0,
+            Number(item?.price) || 0,
+            serialType === 'IMEI' ? '' : (item?.serialNumber || ''),
+            serialType === 'IMEI' ? (item?.serialNumber || '') : '',
+            ...orderTotals
+        ];
+    });
+
+    return rowsForItems;
 };
 
 // @desc    Export orders as CSV
@@ -1572,8 +1611,8 @@ const formatOrderExportRow = (order) => {
 export const exportOrdersCsv = async (req, res) => {
     let orderCursor = null;
     try {
-        const { pageNumber, limit, search, status, user, userId } = req.query;
-        const filter = buildOrderListFilter({ search, status, user, userId });
+        const { pageNumber, limit, search, status, user, userId, startDate, endDate } = req.query;
+        const filter = buildOrderListFilter({ search, status, user, userId, startDate, endDate });
         const hasPagination = pageNumber !== undefined || limit !== undefined;
         const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
         const page = Math.max(1, Number(pageNumber) || 1);
@@ -1592,14 +1631,21 @@ export const exportOrdersCsv = async (req, res) => {
             'Is Paid',
             'Paid At',
             'Delivered At',
-            'Items',
-            'Product IMEIs/Serials',
-            'Total Quantity',
+            'Product Name',
+            'Product ID',
+            'Variant',
+            'Quantity',
+            'Unit Price',
+            'Serial Number',
+            'IMEI Number',
             'Items Price',
             'Shipping Price',
             'Tax Price',
             'Coupon Code',
             'Coupon Discount',
+            'Referral Code',
+            'Referral Agent',
+            'Referral Commission',
             'Total Amount',
             'Fulfillment Mode',
             'Tracking/Waybill Number',
@@ -1623,7 +1669,9 @@ export const exportOrdersCsv = async (req, res) => {
         res.write(`\uFEFF${headers.map(escapeCsvCell).join(',')}\n`);
 
         let exportQuery = Order.find(filter)
-            .select(ORDER_LIST_SELECT)
+            // Export needs payment/delivery/coupon fields the list view does not select.
+            .select(`${ORDER_LIST_SELECT} isPaid paidAt isDelivered deliveredAt coupon`)
+            .populate('user', 'name email phone')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -1637,7 +1685,9 @@ export const exportOrdersCsv = async (req, res) => {
             if (res.destroyed || req.destroyed) {
                 break;
             }
-            res.write(`${formatOrderExportRow(order).map(escapeCsvCell).join(',')}\n`);
+            for (const row of formatOrderExportRows(order)) {
+                res.write(`${row.map(escapeCsvCell).join(',')}\n`);
+            }
         }
 
         res.end();
