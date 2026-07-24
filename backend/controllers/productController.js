@@ -1029,14 +1029,43 @@ let portalInsightsCache = { fetchedAt: 0, data: null };
 // @desc    Get the lightweight product list used by the product views dashboard
 // @route   GET /api/products/view-insights/products
 // @access  Private/Admin
-export const getProductViewProducts = async (_req, res) => {
+export const getProductViewProducts = async (req, res) => {
     try {
+        const startDate = String(req.query.startDate || '').trim();
+        const endDate = String(req.query.endDate || '').trim();
+        const hasRange = Boolean(startDate || endDate);
+
         const products = await Product.find({})
-            .select('id name image brand category viewCount viewStatsByState')
+            .select(`id name image brand category viewCount viewStatsByState${hasRange ? ' dailyViewStats' : ''}`)
             .sort({ viewCount: -1, id: 1 })
             .lean();
 
-        return res.json(products);
+        if (!hasRange) {
+            return res.json(products);
+        }
+
+        // dailyViewStats keys are yyyy-mm-dd (IST), so plain string compare is enough.
+        const scoped = products
+            .map(({ dailyViewStats, ...product }) => {
+                const days = (Array.isArray(dailyViewStats) ? dailyViewStats : [])
+                    .filter((entry) => {
+                        const date = String(entry?.date || '');
+                        if (!date) return false;
+                        if (startDate && date < startDate) return false;
+                        if (endDate && date > endDate) return false;
+                        return true;
+                    });
+
+                return {
+                    ...product,
+                    totalViewCount: Number(product.viewCount || 0),
+                    viewCount: days.reduce((sum, entry) => sum + (Number(entry?.views) || 0), 0),
+                    rangeVisitors: days.reduce((sum, entry) => sum + (Number(entry?.visitors) || 0), 0)
+                };
+            })
+            .sort((a, b) => b.viewCount - a.viewCount);
+
+        return res.json(scoped);
     } catch (error) {
         console.error('Error fetching product view products:', error);
         return res.status(500).json({ message: error.message });

@@ -17,6 +17,7 @@ import { motion } from 'framer-motion';
 import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 import Pagination from '../../components/common/Pagination';
+import { DATE_RANGE_PRESETS, resolveDateRange } from '../../components/orders/orderDateRange';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
@@ -81,7 +82,15 @@ const ProductViews = () => {
     const [portalInsights, setPortalInsights] = useState(null);
     const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
     const [portalInsightsError, setPortalInsightsError] = useState(false);
+    const [dateRange, setDateRange] = useState('all');
+    const [customStart, setCustomStart] = useState('');
+    const [customEnd, setCustomEnd] = useState('');
     const isFetchingRef = useRef(false);
+    // Auto-refresh timers are set up once, so they read the range from a ref.
+    const rangeRef = useRef({ startDate: '', endDate: '' });
+    rangeRef.current = resolveDateRange(dateRange, customStart, customEnd);
+    const { startDate, endDate } = rangeRef.current;
+    const isRangeScoped = Boolean(startDate || endDate);
 
     const fetchProducts = async (showToast = false) => {
         if (isFetchingRef.current) {
@@ -91,8 +100,11 @@ const ProductViews = () => {
         try {
             isFetchingRef.current = true;
             setLoading(true);
+            const params = {};
+            if (rangeRef.current.startDate) params.startDate = rangeRef.current.startDate;
+            if (rangeRef.current.endDate) params.endDate = rangeRef.current.endDate;
             const [productsResult, portalResult] = await Promise.allSettled([
-                API.get('/products/view-insights/products'),
+                API.get('/products/view-insights/products', { params }),
                 API.get('/products/view-insights/portal')
             ]);
 
@@ -132,7 +144,8 @@ const ProductViews = () => {
 
     useEffect(() => {
         fetchProducts();
-    }, []);
+        setCurrentPage(1);
+    }, [startDate, endDate]);
 
     useEffect(() => {
         const intervalId = window.setInterval(() => {
@@ -250,15 +263,45 @@ const ProductViews = () => {
                         Track product traffic and live logged-in user activity
                     </p>
                 </div>
-                <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => fetchProducts(true)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-70 transition-opacity"
-                >
-                    <MdRefresh size={18} className={loading ? 'animate-spin' : ''} />
-                    {loading ? 'Calculating...' : 'Refresh'}
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
+                        value={dateRange}
+                        onChange={(e) => setDateRange(e.target.value)}
+                        className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-blue-400 focus:bg-white"
+                    >
+                        {DATE_RANGE_PRESETS.map((preset) => (
+                            <option key={preset.value} value={preset.value}>{preset.label}</option>
+                        ))}
+                    </select>
+                    {dateRange === 'custom' && (
+                        <>
+                            <input
+                                type="date"
+                                value={customStart}
+                                max={customEnd || undefined}
+                                onChange={(e) => setCustomStart(e.target.value)}
+                                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-blue-400 focus:bg-white"
+                            />
+                            <span className="text-xs font-black text-gray-400">to</span>
+                            <input
+                                type="date"
+                                value={customEnd}
+                                min={customStart || undefined}
+                                onChange={(e) => setCustomEnd(e.target.value)}
+                                className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-blue-400 focus:bg-white"
+                            />
+                        </>
+                    )}
+                    <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => fetchProducts(true)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-70 transition-opacity"
+                    >
+                        <MdRefresh size={18} className={loading ? 'animate-spin' : ''} />
+                        {loading ? 'Calculating...' : 'Refresh'}
+                    </button>
+                </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -267,8 +310,13 @@ const ProductViews = () => {
                     <p className="mt-2 text-3xl font-black text-gray-900">{filteredProducts.length}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Total Views</p>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">
+                        {isRangeScoped ? 'Views In Range' : 'Total Views'}
+                    </p>
                     <p className="mt-2 text-3xl font-black text-gray-900">{totalViews.toLocaleString()}</p>
+                    {isRangeScoped && (
+                        <p className="mt-1 text-xs font-semibold text-gray-500">{startDate || 'start'} → {endDate || 'today'}</p>
+                    )}
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Top Product</p>
@@ -843,7 +891,7 @@ const ProductViews = () => {
                                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Product</th>
                                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Brand</th>
                                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">Category</th>
-                                <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">States</th>
+                                <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest">States (all time)</th>
                                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest">Details</th>
                                 <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-widest">Views</th>
                             </tr>
