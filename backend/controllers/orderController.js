@@ -1519,13 +1519,33 @@ export const getOrders = async (req, res) => {
     }
 };
 
+const CSV_TEXT_MARKER = /^="[A-Za-z0-9-]+"$/;
+
 const escapeCsvCell = (value) => {
     if (value === null || value === undefined) return '';
 
-    const stringValue = String(value).replace(/\r?\n/g, ' ');
+    let stringValue = String(value).replace(/\r?\n/g, ' ');
+
+    // Neutralise CSV formula injection: a cell opening with one of these is
+    // executed by Excel/Sheets, and product names and addresses are user input.
+    // The ="..." form emitted by asCsvText below is ours and stays as-is.
+    if (typeof value === 'string' && /^[=+\-@\t\r]/.test(stringValue) && !CSV_TEXT_MARKER.test(stringValue)) {
+        stringValue = `'${stringValue}`;
+    }
+
     return /[",]/.test(stringValue)
         ? `"${stringValue.replace(/"/g, '""')}"`
         : stringValue;
+};
+
+// Long digit strings (IMEI, serials, waybills, phone, account numbers) are
+// parsed as numbers by Excel and rendered as 8.61234E+14. Marking them as
+// text keeps every digit. Only applied to safe [A-Za-z0-9-] values so this
+// never becomes a formula-injection vector.
+const asCsvText = (value) => {
+    const stringValue = String(value ?? '').trim();
+    if (!stringValue || !/^[A-Za-z0-9-]+$/.test(stringValue)) return stringValue;
+    return `="${stringValue}"`;
 };
 
 // One row per order item so Variant / Serial / IMEI get real columns.
@@ -1548,7 +1568,7 @@ const formatOrderExportRows = (order) => {
         order?.createdAt ? new Date(order.createdAt).toISOString() : '',
         order?.user?.name || order?.shippingAddress?.name || '',
         order?.user?.email || order?.shippingAddress?.email || '',
-        order?.user?.phone || order?.shippingAddress?.phone || '',
+        asCsvText(order?.user?.phone || order?.shippingAddress?.phone || ''),
         order?.status || '',
         order?.paymentMethod || '',
         order?.paymentResult?.status || '',
@@ -1568,17 +1588,17 @@ const formatOrderExportRows = (order) => {
         Number(order?.referral?.commissionAmount || 0),
         Number(order?.totalPrice || 0),
         fulfillmentMode,
-        trackingNumber,
+        asCsvText(trackingNumber),
         isRetailer ? 'Yes' : 'No',
         retailerShopName,
-        retailerGstNumber,
+        asCsvText(retailerGstNumber),
         order?.shippingAddress?.name || '',
         order?.shippingAddress?.street || '',
         order?.shippingAddress?.city || '',
         order?.shippingAddress?.state || '',
-        order?.shippingAddress?.postalCode || '',
+        asCsvText(order?.shippingAddress?.postalCode || ''),
         order?.shippingAddress?.country || '',
-        order?.transactionId || order?.paymentResult?.id || ''
+        asCsvText(order?.transactionId || order?.paymentResult?.id || '')
     ];
 
     const rowsForItems = (items.length ? items : [null]).map((item) => {
@@ -1598,8 +1618,8 @@ const formatOrderExportRows = (order) => {
             variantText,
             Number(item?.qty) || 0,
             Number(item?.price) || 0,
-            serialType === 'IMEI' ? '' : (item?.serialNumber || ''),
-            serialType === 'IMEI' ? (item?.serialNumber || '') : '',
+            serialType === 'IMEI' ? '' : asCsvText(item?.serialNumber || ''),
+            serialType === 'IMEI' ? asCsvText(item?.serialNumber || '') : '',
             ...orderTotals
         ];
     });
@@ -1900,3 +1920,5 @@ export const updateBulkOrderStatus = async (req, res) => {
     }
 };
 
+
+export const __testables = { escapeCsvCell, asCsvText };
