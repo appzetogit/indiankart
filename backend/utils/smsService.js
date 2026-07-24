@@ -10,6 +10,11 @@ const HARDCODED_LOGIN_OTP = '0000';
 const HARDCODED_LOGIN_MOBILES = new Set(['7610416911', '7223077890']);
 const MAX_OTP_ATTEMPTS = 5;
 
+// Every fixed-OTP shortcut hangs off this one flag. Deliberately NOT keyed on
+// NODE_ENV: production servers frequently run with NODE_ENV=development, which
+// would silently re-open 999999/0000/1234 as universal logins.
+const isTestOtpBypassEnabled = () => process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true';
+
 function getSmsConfig() {
     const apiKey = process.env.SMSINDIAHUB_API_KEY || process.env.SMS_INDIA_HUB_API_KEY;
     const senderId = process.env.SMSINDIAHUB_SENDER_ID || process.env.SMS_INDIA_HUB_SENDER_ID;
@@ -265,8 +270,7 @@ async function verifyOtpFromDb(mobile, otp, userType) {
  * Check if special bypass should be used
  */
 function isSpecialBypass(mobile) {
-    // Fixed-OTP test number; never active in production.
-    return process.env.NODE_ENV !== 'production' && mobile === '9111966732';
+    return isTestOtpBypassEnabled() && mobile === '9111966732';
 }
 
 /**
@@ -283,14 +287,11 @@ function isMockMode() {
  * Check if developer bypass OTP
  */
 function isDeveloperBypass(otp) {
-    return (process.env.NODE_ENV !== 'production' || process.env.USE_MOCK_OTP === 'true') && otp === '999999';
+    return isTestOtpBypassEnabled() && otp === '999999';
 }
 
 function isHardcodedLoginMobile(mobile) {
-    const allowHardcodedLogin =
-        process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true' &&
-        process.env.NODE_ENV !== 'production';
-    return allowHardcodedLogin && HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
+    return isTestOtpBypassEnabled() && HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
 }
 
 // ==========================================

@@ -1,19 +1,23 @@
 import express from 'express';
 import FcmToken from '../models/FcmToken.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 const isDuplicateKeyError = (error) => error?.code === 11000;
 
 // Save or update token
 // POST /api/fcm/token
-router.post('/token', async (req, res) => {
+router.post('/token', protect, async (req, res) => {
     try {
-        const { userId, token, platform, deviceId } = req.body;
+        const { token, platform, deviceId } = req.body;
+        // Owner comes from the session, never the body: a caller-supplied userId
+        // let anyone point their device at another account's push stream.
+        const userId = String(req.user._id);
 
-        if (!userId || !token) {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                message: 'userId and token are required'
+                message: 'token is required'
             });
         }
 
@@ -52,19 +56,19 @@ router.post('/token', async (req, res) => {
 
 // Delete token (logout/uninstall)
 // DELETE /api/fcm/token
-router.delete('/token', async (req, res) => {
+router.delete('/token', protect, async (req, res) => {
     try {
-        const { userId, token } = req.body;
+        const { token } = req.body;
 
-        if (!userId || !token) {
+        if (!token) {
             return res.status(400).json({
                 success: false,
-                message: 'userId and token are required'
+                message: 'token is required'
             });
         }
 
         await FcmToken.deleteOne({
-            userId: String(userId),
+            userId: String(req.user._id),
             token: String(token)
         });
 

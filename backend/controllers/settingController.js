@@ -192,6 +192,25 @@ const loadSectionProducts = async (items = []) => {
 // @desc    Get settings
 // @route   GET /api/settings
 // @access  Private/Admin
+const PUBLIC_SETTING_FIELDS = [
+    'sellerName',
+    'sellerAddress',
+    'logoUrl',
+    'contactEmail',
+    'contactPhone',
+    'gstNumber',
+    'fssai',
+    'shippingCharge',
+    'freeShippingThreshold',
+    'minShippingOrderAmount',
+    'maxShippingOrderAmount',
+    'razorpayKeyId',
+    'codAdvancedPaymentEnabled',
+    'codAdvancedPaymentAmount',
+    'categoryPageCatalog',
+    'subCategoryPageCatalog'
+].join(' ');
+
 const getSettings = async (req, res) => {
     try {
         const checkoutFields = [
@@ -206,6 +225,15 @@ const getSettings = async (req, res) => {
         ].join(' ');
         const query = Setting.findOne();
         if (req.query.view === 'checkout') query.select(checkoutFields);
+        // Anonymous callers get a storefront whitelist. The full document holds
+        // panNumber, ekartUsername/clientId and courier endpoints — admin-only.
+        const isAdminViewer = Boolean(
+            req.user && (req.user.isAdmin || ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(req.user.role))
+        );
+        if (!isAdminViewer && req.query.view !== 'checkout') {
+            query.select(PUBLIC_SETTING_FIELDS);
+        }
+
         let settings = await query.lean();
         if (!settings) {
             // Create default settings if not exists

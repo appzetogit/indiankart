@@ -26,9 +26,8 @@ const LEGACY_HARDCODED_USER_IDS = {
     '000000000000000000000002': '7223077890'
 };
 
-const isHardcodedOtpLoginEnabled = () =>
-    process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true' &&
-    process.env.NODE_ENV !== 'production';
+// Single explicit opt-in; see the matching note in utils/smsService.js.
+const isHardcodedOtpLoginEnabled = () => process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true';
 
 const normalizeForHardcodedLogin = (mobile) => {
     const digits = String(mobile || '').replace(/\D/g, '');

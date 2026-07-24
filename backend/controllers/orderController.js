@@ -175,7 +175,9 @@ const validateAndResolveOrderItemVariant = (product, item) => {
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
-    const isAdmin = Boolean(user && (user.isAdmin || ['admin', 'superadmin', 'editor', 'moderator'].includes(user.role)));
+    // Keep this list in sync with the `admin` middleware, or subadmins get 401
+    // on order detail while passing the route guard.
+    const isAdmin = Boolean(user && (user.isAdmin || ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(user.role)));
 
     return {
         orderUserId,

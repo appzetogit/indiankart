@@ -10,7 +10,7 @@ import {
     updateSettings,
     uploadCategoryPageImage
 } from '../controllers/settingController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, protectOptional, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 const router = express.Router();
@@ -26,7 +26,9 @@ const uploadMiddleware = (req, res, next) => {
 };
 
 router.route('/')
-    .get(getSettings)
+    // protectOptional so admins get the full document and anonymous callers
+    // get the storefront whitelist from the same endpoint.
+    .get(protectOptional, getSettings)
     .put(protect, admin, uploadMiddleware, updateSettings);
 
 router.get('/category-page-config/:categoryName', getCategoryPageConfig);

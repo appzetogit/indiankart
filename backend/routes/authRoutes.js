@@ -149,37 +149,8 @@ router.post('/verify-otp', verifyLoginOtp);
 // Debug route to verify routes are working
 router.get('/test', (req, res) => res.json({ message: 'Auth routes are working!' }));
 
-// Debug route to check FCM tokens
-router.get('/debug-tokens', async (req, res) => {
-    try {
-        const User = (await import('../models/User.js')).default;
-        const Admin = (await import('../models/Admin.js')).default;
-
-        const users = await User.find({
-            $or: [
-                { fcmTokenWeb: { $ne: null, $exists: true } },
-                { fcmTokenMobile: { $ne: null, $exists: true } },
-                { fcmToken: { $ne: null, $exists: true } }
-            ]
-        }).select('name email fcmToken fcmTokenWeb fcmTokenMobile');
-        const admins = await Admin.find({ fcmToken: { $ne: null, $exists: true } }).select('name email fcmToken');
-
-        res.json({
-            totalUsers: users.length,
-            totalAdmins: admins.length,
-            users: users.map((u) => ({
-                name: u.name,
-                email: u.email,
-                hasTokenWeb: !!u.fcmTokenWeb,
-                hasTokenMobile: !!u.fcmTokenMobile,
-                hasLegacyToken: !!u.fcmToken
-            })),
-            admins: admins.map((a) => ({ name: a.name, email: a.email, hasToken: !!a.fcmToken }))
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// Removed: GET /debug-tokens dumped every user's and admin's name + email
+// with no authentication at all. Use the admin users list instead.
 
 // Generic FCM route
 router.post('/fcm-token', protect, async (req, res) => saveFcmToken(req, res));
