@@ -363,6 +363,55 @@ const Header = () => {
         fetchProducts();
     }, [hoveredSubcategory, hoveredCategory]);
 
+    // Auto-scroll for categories strip
+    const categoryScrollRef = useRef(null);
+    useEffect(() => {
+        const container = categoryScrollRef.current;
+        if (!container || location.pathname !== '/') return;
+        
+        let animationId;
+        let isHovered = false;
+        let offset = 0;
+
+        const scroll = () => {
+            if (!isHovered && container) {
+                if (window.innerWidth < 768) {
+                    const scrollParent = container.parentElement;
+                    container.style.transform = '';
+                    scrollParent.scrollLeft += 1;
+                    if (scrollParent.scrollLeft >= container.scrollWidth / 2) {
+                        scrollParent.scrollLeft = 0;
+                    }
+                } else {
+                    offset -= 1;
+                    if (Math.abs(offset) >= container.scrollWidth / 2) {
+                        offset = 0;
+                    }
+                    container.style.transform = `translateX(${offset}px)`;
+                }
+            }
+            animationId = requestAnimationFrame(scroll);
+        };
+
+        const onEnter = () => isHovered = true;
+        const onLeave = () => isHovered = false;
+
+        container.addEventListener('mouseenter', onEnter);
+        container.addEventListener('mouseleave', onLeave);
+        container.addEventListener('touchstart', onEnter, { passive: true });
+        container.addEventListener('touchend', onLeave);
+
+        animationId = requestAnimationFrame(scroll);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            container.removeEventListener('mouseenter', onEnter);
+            container.removeEventListener('mouseleave', onLeave);
+            container.removeEventListener('touchstart', onEnter);
+            container.removeEventListener('touchend', onLeave);
+        };
+    }, [location.pathname, displayCategories.length]);
+
     // Helper to check active state
     const isActiveCategory = (catName) => {
         if (catName === "For You" && location.pathname === "/") return true;
@@ -672,190 +721,221 @@ const Header = () => {
                 <>
                     {headerLoading && displayCategories.length === 0 && <CategoryNavSkeleton />}
                     {displayCategories.length > 0 && (
-                        <div className="max-w-[1200px] mx-auto relative px-2">
-                            <div className={`flex overflow-x-auto md:overflow-visible no-scrollbar gap-6 md:gap-10 pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 touch-pan-x overscroll-x-contain snap-x snap-mandatory scroll-smooth [scrollbar-gutter:stable] ${shouldSpreadCategories ? 'md:justify-between' : 'md:justify-start'}`}>
-                                {displayCategories.map((cat, index) => {
-                            const active = isActiveCategory(cat.name);
-                            const IconComponent = iconMap[cat.icon] || MdGridView;
-                            const categoryImage = cat.icon || cat.image || '';
-                            const hasCategoryImage =
-                                typeof categoryImage === 'string' &&
-                                (categoryImage.startsWith('http') ||
-                                    categoryImage.startsWith('/') ||
-                                    categoryImage.startsWith('data:') ||
-                                    categoryImage.startsWith('blob:'));
-                            const isHovered = false;
-                            const isRightSide = index > displayCategories.length / 2;
+                        <div className="max-w-[1200px] mx-auto relative px-2" style={{ clipPath: 'inset(-1000px 0 -1000px 0)' }}>
+                            <div className="overflow-x-auto md:overflow-visible no-scrollbar pt-2 pb-2 md:pt-2 md:pb-2 mt-0 md:-mt-2 border-t border-gray-100 touch-pan-x overscroll-x-contain [scrollbar-gutter:stable]">
+                                <div ref={categoryScrollRef} className={`flex gap-6 pr-6 ${shouldSpreadCategories ? 'md:w-[200%] md:justify-around md:pr-0' : 'w-max md:w-max md:justify-start md:gap-10 md:pr-10'}`}>
+                                {[...displayCategories, ...displayCategories].map((cat, originalIndex) => {
+                                    const active = isActiveCategory(cat.name);
+                                    const IconComponent = iconMap[cat.icon] || MdGridView;
+                                    const categoryImage = cat.icon || cat.image || '';
+                                    const hasCategoryImage =
+                                        typeof categoryImage === 'string' &&
+                                        (categoryImage.startsWith('http') ||
+                                            categoryImage.startsWith('/') ||
+                                            categoryImage.startsWith('data:') ||
+                                            categoryImage.startsWith('blob:'));
+                                    const isHovered = false;
+                                    const index = originalIndex % displayCategories.length;
+                                    const isRightSide = index > displayCategories.length / 2;
 
-                            return (
-                                <div
-                                    key={cat.id || cat._id || cat.name}
-                                    onClick={() => cat.name === "For You" ? navigate('/') : navigate(buildCategoryRoute(cat.name))}
-                                    onMouseEnter={() => {
-                                        if (window.innerWidth >= 768) { // Desktop only
-                                            if (hoverTimeoutRef.current) {
-                                                clearTimeout(hoverTimeoutRef.current);
-                                                hoverTimeoutRef.current = null;
-                                            }
-                                            setHoveredCategory(cat.name);
-                                            const subcats = cat.children || cat.subCategories || [];
-                                            if (subcats.length > 0) {
-                                                setHoveredSubcategory(subcats[0].name);
-                                            }
-                                        }
-                                    }}
-                                    onMouseLeave={() => {
-                                        if (window.innerWidth >= 768) {
-                                            hoverTimeoutRef.current = setTimeout(() => {
-                                                setHoveredCategory(null);
-                                                setHoveredSubcategory(null);
-                                            }, 150); // Small delay to prevent accidental closure
-                                        }
-                                    }}
-                                    className="relative flex shrink-0 flex-col items-center gap-1 min-w-[60px] cursor-pointer group snap-start"
-                                >
-                                    <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
-                                        {hasCategoryImage ? (
-                                            <img
-                                                src={categoryImage}
-                                                alt={cat.name}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => {
-                                                    e.currentTarget.style.display = 'none';
-                                                    const fallback = e.currentTarget.nextElementSibling;
-                                                    if (fallback) fallback.style.display = 'block';
-                                                }}
-                                            />
-                                        ) : null}
-                                        <IconComponent
-                                            className={cat.name === 'For You' ? 'text-[24px] md:text-[30px]' : 'text-[20px] md:text-2xl'}
-                                            style={{ display: hasCategoryImage ? 'none' : 'block' }}
-                                        />
-                                    </div>
-                                    <span className={`text-[10px] md:text-sm font-bold transition-colors ${active ? 'text-blue-600' : 'text-gray-700 group-hover:text-blue-600'}`}>
-                                        <TranslatedText text={cleanNavLabel(cat.name)} />
-                                    </span>
-
-                                    {/* Mega Menu - Positioned under specific item */}
-                                    {isHovered && (cat.children?.length > 0 || cat.subCategories?.length > 0) && (
+                                    return (
                                         <div
-                                            className={`absolute top-full ${isRightSide ? 'right-0' : 'left-0'} pt-2 bg-transparent hidden md:block z-[100] animate-in fade-in slide-in-from-top-2`}
-                                            style={{ minWidth: '700px' }} // Ensure enough width for columns
+                                            key={`orig-${cat.id || cat._id || cat.name}-${originalIndex}`}
+                                            onClick={() => cat.name === "For You" ? navigate('/') : navigate(buildCategoryRoute(cat.name))}
+                                            onMouseEnter={() => {
+                                                if (window.innerWidth >= 768) { // Desktop only
+                                                    if (hoverTimeoutRef.current) {
+                                                        clearTimeout(hoverTimeoutRef.current);
+                                                        hoverTimeoutRef.current = null;
+                                                    }
+                                                    setHoveredCategory(cat.name);
+                                                    const subcats = cat.children || cat.subCategories || [];
+                                                    if (subcats.length > 0) {
+                                                        setHoveredSubcategory(subcats[0].name);
+                                                    }
+                                                }
+                                            }}
+                                            onMouseLeave={() => {
+                                                if (window.innerWidth >= 768) {
+                                                    hoverTimeoutRef.current = setTimeout(() => {
+                                                        setHoveredCategory(null);
+                                                        setHoveredSubcategory(null);
+                                                    }, 150); // Small delay to prevent accidental closure
+                                                }
+                                            }}
+                                            className="relative flex shrink-0 flex-col items-center gap-1 min-w-[60px] cursor-pointer group snap-start"
                                         >
-                                            <div className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden flex relative w-full">
-                                                {/* Subcategories Column */}
-                                                <div className="w-64 py-2 border-r border-gray-100 bg-gray-50/30">
-                                                    <h3 className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">
-                                                        {categoriesText}
-                                                    </h3>
-                                                    {(cat.children || cat.subCategories).map((sub) => (
-                                                        <div
-                                                            key={sub.id || sub._id}
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                navigate(buildCategoryRoute(cat.name, sub.name));
-                                                            }}
-                                                            onMouseEnter={() => setHoveredSubcategory(sub.name)}
-                                                            className={`px-4 py-2.5 text-sm font-medium transition-all cursor-pointer flex items-center justify-between group/sub ${hoveredSubcategory === sub.name
-                                                                ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
-                                                                : 'text-gray-700 hover:bg-gray-50'
-                                                                }`}
-                                                        >
-                                                            <span><TranslatedText text={cleanNavLabel(sub.name)} /></span>
+                                            <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
+                                                {hasCategoryImage ? (
+                                                    <img
+                                                        src={categoryImage}
+                                                        alt={cat.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                            const fallback = e.currentTarget.nextElementSibling;
+                                                            if (fallback) fallback.style.display = 'block';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <IconComponent
+                                                    className={cat.name === 'For You' ? 'text-[24px] md:text-[30px]' : 'text-[20px] md:text-2xl'}
+                                                    style={{ display: hasCategoryImage ? 'none' : 'block' }}
+                                                />
+                                            </div>
+                                            <span className={`text-[10px] md:text-sm font-bold transition-colors ${active ? 'text-blue-600' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                                                <TranslatedText text={cleanNavLabel(cat.name)} />
+                                            </span>
 
-                                                            <MdKeyboardArrowRight className={`text-lg transition-transform ${hoveredSubcategory === sub.name ? 'translate-x-1' : ''}`} />
-                                                        </div>
-                                                    ))}
-                                                </div>
-
-                                                {/* Products Panel */}
-                                                <div className="flex-1 p-6 bg-white overflow-y-auto max-h-[500px]">
-                                                    <div className="flex items-center justify-between mb-5 border-b border-gray-100 pb-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
-                                                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">
-                                                                <TranslatedText text={cleanNavLabel(hoveredSubcategory || cat.name)} />
+                                            {/* Mega Menu - Positioned under specific item */}
+                                            {isHovered && (cat.children?.length > 0 || cat.subCategories?.length > 0) && (
+                                                <div
+                                                    className={`absolute top-full ${isRightSide ? 'right-0' : 'left-0'} pt-2 bg-transparent hidden md:block z-[100] animate-in fade-in slide-in-from-top-2`}
+                                                    style={{ minWidth: '700px' }} // Ensure enough width for columns
+                                                >
+                                                    <div className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden flex relative w-full">
+                                                        {/* Subcategories Column */}
+                                                        <div className="w-64 py-2 border-r border-gray-100 bg-gray-50/30">
+                                                            <h3 className="px-4 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 mb-1">
+                                                                {categoriesText}
                                                             </h3>
-                                                        </div>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                navigate(buildCategoryRoute(cat.name, hoveredSubcategory));
-                                                            }}
-                                                            className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-full transition-colors uppercase tracking-wide"
-                                                        >
-                                                            Explore All →
-                                                        </button>
-                                                    </div>
-
-                                                    {loadingProducts ? (
-                                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {[1, 2, 3, 4, 5, 6].map((i) => (
-                                                                <div key={i} className="bg-gray-50 rounded-xl p-4 animate-pulse">
-                                                                    <div className="bg-gray-200 h-32 rounded-lg mb-3"></div>
-                                                                    <div className="bg-gray-200 h-4 rounded w-3/4 mb-2"></div>
-                                                                    <div className="bg-gray-200 h-4 rounded w-1/2"></div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : subcategoryProducts.length > 0 ? (
-                                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {subcategoryProducts.map((product) => (
+                                                            {(cat.children || cat.subCategories).map((sub) => (
                                                                 <div
-                                                                    key={product.id || product._id}
+                                                                    key={sub.id || sub._id}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        navigate(`/product/${product.id || product._id}`);
-                                                                        setHoveredCategory(null);
+                                                                        navigate(buildCategoryRoute(cat.name, sub.name));
                                                                     }}
-                                                                    className="bg-white rounded-xl p-3 hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group/product border border-gray-100 hover:border-blue-100"
+                                                                    onMouseEnter={() => setHoveredSubcategory(sub.name)}
+                                                                    className={`px-4 py-2.5 text-sm font-medium transition-all cursor-pointer flex items-center justify-between group/sub ${hoveredSubcategory === sub.name
+                                                                        ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
+                                                                        : 'text-gray-700 hover:bg-gray-50'
+                                                                        }`}
                                                                 >
-                                                                    <div className="aspect-square bg-gray-50 rounded-lg mb-3 overflow-hidden relative">
-                                                                        <img
-                                                                            src={product.images?.[0]?.url || product.image}
-                                                                            alt={product.name}
-                                                                            className="w-full h-full object-contain p-2 group-hover/product:scale-110 transition-transform duration-500"
-                                                                        />
-                                                                        {product.discount && (
-                                                                            <div className="absolute top-2 left-2 bg-red-600 text-white text-[9px] font-black px-2 py-0.5 rounded shadow-sm">
-                                                                                {product.discount}% OFF
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                    <h4 className="text-xs font-bold text-gray-800 line-clamp-2 mb-2 group-hover/product:text-blue-600 transition-colors min-h-[32px]">
-                                                                        {product.name}
-                                                                    </h4>
-                                                                    <div className="flex items-center justify-between mt-auto">
-                                                                        <div className="flex flex-col">
-                                                                            <span className="text-sm font-black text-gray-900">
-                                                                                ₹{(product.skus?.[0]?.price ?? product.price)?.toLocaleString()}
-                                                                            </span>
-                                                                            {(product.skus?.[0]?.originalPrice ?? product.originalPrice) > (product.skus?.[0]?.price ?? product.price) && (
-                                                                                <span className="text-[10px] text-gray-400 line-through">
-                                                                                    ₹{(product.skus?.[0]?.originalPrice ?? product.originalPrice)?.toLocaleString()}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="w-7 h-7 bg-blue-50 group-hover/product:bg-blue-600 text-blue-600 group-hover/product:text-white rounded-full flex items-center justify-center transition-colors">
-                                                                            <MdShoppingCart size={14} />
-                                                                        </div>
-                                                                    </div>
+                                                                    <span><TranslatedText text={cleanNavLabel(sub.name)} /></span>
+
+                                                                    <MdKeyboardArrowRight className={`text-lg transition-transform ${hoveredSubcategory === sub.name ? 'translate-x-1' : ''}`} />
                                                                 </div>
                                                             ))}
                                                         </div>
-                                                    ) : (
-                                                        <div className="text-center py-12 bg-gray-50 rounded-2xl">
-                                                            <MdShoppingBasket className="mx-auto text-5xl text-gray-200 mb-3" />
-                                                            <p className="text-gray-400 font-medium italic">Discover amazing deals soon!</p>
+
+                                                        {/* Products Panel */}
+                                                        <div className="flex-1 p-6 bg-white overflow-y-auto max-h-[500px]">
+                                                            <div className="flex items-center justify-between mb-5 border-b border-gray-100 pb-3">
+                                                                <div>
+                                                                    <h3 className="text-xl font-bold text-gray-900">
+                                                                        <TranslatedText text={cleanNavLabel(hoveredSubcategory || 'Products')} />
+                                                                    </h3>
+                                                                    <p className="text-sm text-gray-500 mt-1">Discover latest collections</p>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => navigate(buildCategoryRoute(cat.name, hoveredSubcategory))}
+                                                                    className="flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+                                                                >
+                                                                    Explore All →
+                                                                </button>
+                                                            </div>
+
+                                                            {loadingProducts ? (
+                                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                                                                        <div key={i} className="bg-gray-50 rounded-xl p-4 animate-pulse">
+                                                                            <div className="bg-gray-200 h-32 rounded-lg mb-3"></div>
+                                                                            <div className="bg-gray-200 h-4 rounded w-3/4 mb-2"></div>
+                                                                            <div className="bg-gray-200 h-4 rounded w-1/2"></div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : subcategoryProducts.length > 0 ? (
+                                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                    {subcategoryProducts.map((product) => (
+                                                                        <div
+                                                                            key={product.id || product._id}
+                                                                            onClick={() => navigate(`/product/${product.id || product._id}`)}
+                                                                            className="group cursor-pointer bg-white rounded-xl p-3 border border-gray-100 hover:border-blue-200 hover:shadow-lg transition-all"
+                                                                        >
+                                                                            <div className="w-full h-32 bg-gray-50 rounded-lg overflow-hidden mb-3 relative group-hover:bg-blue-50/50 transition-colors">
+                                                                                <img
+                                                                                    src={product.image}
+                                                                                    alt={product.name}
+                                                                                    className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-300"
+                                                                                />
+                                                                                {product.discount > 0 && (
+                                                                                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                                                                                        {product.discount}% OFF
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="space-y-1">
+                                                                                <h4 className="text-sm font-medium text-gray-900 line-clamp-1 group-hover:text-blue-600 transition-colors">{product.name}</h4>
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <div className="font-bold text-gray-900">₹{(product.skus?.[0]?.price ?? product.price)?.toLocaleString()}</div>
+                                                                                    {product.rating > 0 && (
+                                                                                        <div className="flex items-center gap-0.5 text-[10px] font-bold text-white bg-green-600 px-1.5 py-0.5 rounded">
+                                                                                            {product.rating} <MdStars size={10} />
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+                                                                    <MdShoppingBasket size={48} className="mb-2 opacity-20" />
+                                                                    <p>No products available yet</p>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
-                                    )}
-                                </div>
                                     );
                                 })}
+                                {[...displayCategories, ...displayCategories, ...displayCategories].map((cat, originalIndex) => {
+                                    const index = originalIndex % displayCategories.length;
+                                    const active = isActiveCategory(cat.name);
+                                    const IconComponent = iconMap[cat.icon] || MdGridView;
+                                    const categoryImage = cat.icon || cat.image || '';
+                                    const hasCategoryImage =
+                                        typeof categoryImage === 'string' &&
+                                        (categoryImage.startsWith('http') ||
+                                            categoryImage.startsWith('/') ||
+                                            categoryImage.startsWith('data:') ||
+                                            categoryImage.startsWith('blob:'));
+
+                                    return (
+                                        <div
+                                            key={`dup-${cat.id || cat._id || cat.name}-${originalIndex}`}
+                                            onClick={() => cat.name === "For You" ? navigate('/') : navigate(buildCategoryRoute(cat.name))}
+                                            className="relative flex shrink-0 flex-col items-center gap-1 min-w-[60px] cursor-pointer group snap-start md:hidden"
+                                        >
+                                            <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all overflow-hidden ${active ? 'bg-white ring-2 ring-blue-600 scale-105 shadow-md' : 'bg-white text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600 border border-gray-100 shadow-sm'}`}>
+                                                {hasCategoryImage ? (
+                                                    <img
+                                                        src={categoryImage}
+                                                        alt={cat.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none';
+                                                            const fallback = e.currentTarget.nextElementSibling;
+                                                            if (fallback) fallback.style.display = 'block';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <IconComponent
+                                                    className={cat.name === 'For You' ? 'text-[24px] md:text-[30px]' : 'text-[20px] md:text-2xl'}
+                                                    style={{ display: hasCategoryImage ? 'none' : 'block' }}
+                                                />
+                                            </div>
+                                            <span className={`text-[10px] md:text-sm font-bold transition-colors ${active ? 'text-blue-600' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                                                <TranslatedText text={cleanNavLabel(cat.name)} />
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                             </div>
                         </div>
                     )}

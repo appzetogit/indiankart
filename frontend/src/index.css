@@ -143,6 +143,21 @@
   background-size: 200% 100%;
 }
 
+@keyframes scroll-marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll-marquee {
+  display: flex;
+  width: max-content;
+  animation: scroll-marquee 25s linear infinite;
+}
+
+.animate-scroll-marquee:hover {
+  animation-play-state: paused;
+}
+
 .shimmer::after {
   content: "";
   position: absolute;
