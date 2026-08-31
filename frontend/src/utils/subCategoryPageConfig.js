@@ -486,17 +486,38 @@ export const writeCategoryPageCatalog = async (catalog) => {
 };
 
 export const mergeCategoryPageCatalogWithCategories = (catalog, categories = []) => {
-    const existingEntries = new Map(
-        toArray(catalog).map((entry) => [normalizeKey(entry?.name), entry])
+    const catalogEntries = toArray(catalog);
+
+    // Match on id/dbId before name. A category keeps its id when it is renamed,
+    // so name-only matching stranded the old entry - sections and all - and built
+    // an empty one beside it, leaving the public page (which resolves entries by
+    // name) with nothing to render.
+    const entriesById = new Map();
+    catalogEntries.forEach((entry) => {
+        [entry?.id, entry?.dbId].forEach((value) => {
+            const key = String(value || '').trim();
+            if (key && !entriesById.has(key)) entriesById.set(key, entry);
+        });
+    });
+    const entriesByName = new Map(
+        catalogEntries.map((entry) => [normalizeKey(entry?.name), entry])
     );
 
     if (!Array.isArray(categories) || categories.length === 0) {
-        return toArray(catalog);
+        return catalogEntries;
     }
+
+    const claimed = new Set();
 
     const merged = categories.map((category) => {
         const categoryName = normalizeText(category?.name);
-        const existing = existingEntries.get(normalizeKey(categoryName)) || {};
+        const matched = entriesById.get(String(getCategoryDbId(category)).trim())
+            || entriesById.get(String(getCategoryId(category)).trim())
+            || entriesByName.get(normalizeKey(categoryName))
+            || null;
+        const existing = matched && !claimed.has(matched) ? matched : {};
+        if (matched) claimed.add(matched);
+
         const existingSubCategoryMap = new Map(
             toArray(existing?.subCategories).map((item) => [normalizeKey(item?.name), item])
         );
@@ -521,8 +542,7 @@ export const mergeCategoryPageCatalogWithCategories = (catalog, categories = [])
         };
     });
 
-    const knownKeys = new Set(categories.map((category) => normalizeKey(category?.name)));
-    const extras = toArray(catalog).filter((entry) => !knownKeys.has(normalizeKey(entry?.name)));
+    const extras = catalogEntries.filter((entry) => !claimed.has(entry));
 
     return [...merged, ...extras];
 };
