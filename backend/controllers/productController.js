@@ -119,12 +119,23 @@ const getKnownStateBreakdown = (entries = []) => (
     getSortedStateBreakdown(entries).filter((entry) => !isUnknownViewState(entry?.state))
 );
 
-const formatIndiaDateKey = (date = new Date()) => new Intl.DateTimeFormat('en-CA', {
+// Built once and reused. Constructing an Intl.DateTimeFormat forces V8 to load
+// ICU timezone data and costs ~0.14ms; these helpers run per session and per
+// page view, so building one per call blocked the event loop for minutes on
+// /api/products/view-insights/* and took the whole API down with it.
+const indiaDateKeyFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: INDIA_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
-}).format(date);
+});
+
+const indiaWeekdayFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: INDIA_TIME_ZONE,
+    weekday: 'short'
+});
+
+const formatIndiaDateKey = (date = new Date()) => indiaDateKeyFormatter.format(date);
 
 const parseDateKey = (dateKey = '') => {
     const normalized = String(dateKey || '').trim();
@@ -136,10 +147,7 @@ const parseDateKey = (dateKey = '') => {
 const getWeekdayLabelFromDateKey = (dateKey = '') => {
     const parsed = parseDateKey(dateKey);
     if (!parsed) return null;
-    const label = new Intl.DateTimeFormat('en-US', {
-        timeZone: INDIA_TIME_ZONE,
-        weekday: 'short'
-    }).format(parsed);
+    const label = indiaWeekdayFormatter.format(parsed);
     return String(label || '').replace(/[^a-zA-Z]/g, '');
 };
 
