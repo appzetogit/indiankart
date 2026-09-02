@@ -1,0 +1,30 @@
+name: Security scan
+
+# An obfuscated payload has been committed to frontend/vite.config.js at least
+# four times (cleaned in cf87b76 and a0c12ff, and twice more in Aug/Sep 2026).
+# Vite executes its config on every build, so an infected commit runs code in
+# CI and on every developer machine. This job fails the build instead.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  scan-injection:
+    name: Scan for injected code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # No npm install on purpose: installing dependencies would run lifecycle
+      # scripts, which is exactly what we are trying to stay ahead of. The
+      # scanner has no dependencies.
+      - name: Scan tracked files
+        run: node scripts/scan-injection.mjs
