@@ -504,9 +504,20 @@ export const cancelDelhiveryShipment = async (order) => {
         }
     );
 
-    const hasSuccessFlag = data?.success === true || data?.Success === true;
+    // Delhivery answers a cancellation with:
+    //   { status: true, waybill, order_id, remark: "Shipment has been cancelled." }
+    // `status` is a boolean here, so it is a success flag, not a message. Letting
+    // it fall through into statusText made it short-circuit the real remark and
+    // reported every successful cancellation as the error "true".
+    const hasSuccessFlag = data?.success === true || data?.Success === true || data?.status === true;
     const acknowledged = data?.acknowledged === true || data?.Acknowledged === true;
-    const statusText = sanitizeText(data?.status || data?.message || data?.rmk || data?.remark || '');
+    const statusText = sanitizeText(
+        (typeof data?.status === 'string' ? data.status : '')
+        || data?.message
+        || data?.rmk
+        || data?.remark
+        || ''
+    );
     const looksSuccessful = hasSuccessFlag || acknowledged || /cancel/i.test(statusText);
 
     if (!looksSuccessful) {
