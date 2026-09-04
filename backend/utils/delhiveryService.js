@@ -28,7 +28,10 @@ const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUp
     ? 'COD'
     : 'Pre-paid';
 
-const buildShipmentPayload = (order, settings) => {
+// `pickupLocationOverride` lets the admin pick which registered warehouse a
+// shipment is collected from, instead of always using the single default in
+// settings. Falls back to that default when nothing is chosen.
+const buildShipmentPayload = (order, settings, pickupLocationOverride = '') => {
     const shippingAddress = order?.shippingAddress || {};
     const orderItems = Array.isArray(order?.orderItems) ? order.orderItems : [];
     const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || 1;
@@ -45,7 +48,8 @@ const buildShipmentPayload = (order, settings) => {
     const sellerAddress = sanitizeText(settings?.sellerAddress || 'Store Address');
     const totalAmount = Number(order?.totalPrice || 0);
     const paymentMode = getPaymentMode(order);
-    const pickupLocationName = sanitizeText(settings?.delhiveryPickupLocation || '');
+    const pickupLocationName = sanitizeText(pickupLocationOverride)
+        || sanitizeText(settings?.delhiveryPickupLocation || '');
     const clientName = sanitizeText(settings?.delhiveryClientName || '');
 
     return {
@@ -379,7 +383,7 @@ export const createDelhiveryReversePickup = async (returnRequest, order) => {
     return { waybill, remark, raw: data };
 };
 
-export const createDelhiveryShipment = async (order) => {
+export const createDelhiveryShipment = async (order, { pickupLocationName = '' } = {}) => {
     const {
         settings,
         baseUrl,
@@ -388,11 +392,22 @@ export const createDelhiveryShipment = async (order) => {
         pickupLocation
     } = await getDelhiverySettings();
 
-    if (!token || !clientName || !pickupLocation) {
+    const requestedPickup = String(pickupLocationName || '').trim();
+    const effectivePickup = requestedPickup || pickupLocation;
+
+    if (!token || !clientName || !effectivePickup) {
         throw new Error('Delhivery credentials are incomplete. Please save token, client name, and pickup location in Admin > API Credentials.');
     }
 
-    const payload = buildShipmentPayload(order, settings);
+    // A chosen warehouse must be one we have on record. Delhivery only reports a
+    // bad name as "ClientWarehouse matching query does not exist" at ship time,
+    // which is opaque, so fail earlier with something actionable.
+    const known = Array.isArray(settings?.delhiveryWarehouses) ? settings.delhiveryWarehouses : [];
+    if (requestedPickup && known.length > 0 && !known.some((w) => String(w?.name || '').trim() === requestedPickup)) {
+        throw new Error(`"${requestedPickup}" is not one of the saved Delhivery warehouses. Add it in Admin > API Credentials first.`);
+    }
+
+    const payload = buildShipmentPayload(order, settings, effectivePickup);
     const encodedBody = `format=json&data=${encodeURIComponent(JSON.stringify(payload))}`;
 
     const { data } = await axios.post(
@@ -420,7 +435,7 @@ export const createDelhiveryShipment = async (order) => {
         responsePayload: data,
         waybill,
         providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
-        pickupLocation
+        pickupLocation: effectivePickup
     };
 };
 

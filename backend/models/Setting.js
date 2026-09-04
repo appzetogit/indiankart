@@ -19,6 +19,23 @@ const settingSchema = mongoose.Schema({
     deliveryApi: { type: String, default: '' },
     delhiveryClientName: { type: String, default: '' },
     delhiveryPickupLocation: { type: String, default: '' },
+    // Registered Delhivery pickup warehouses. Delhivery exposes no API to list
+    // these, so they are maintained here and offered when assigning a shipment.
+    // `name` must match the warehouse name in Delhivery exactly.
+    delhiveryWarehouses: {
+        type: [
+            {
+                _id: false,
+                name: { type: String, default: '' },
+                address: { type: String, default: '' },
+                city: { type: String, default: '' },
+                state: { type: String, default: '' },
+                pin: { type: String, default: '' },
+                phone: { type: String, default: '' },
+            },
+        ],
+        default: [],
+    },
     delhiveryToken: { type: String, default: '', select: false },
     ekartBaseUrl: { type: String, default: '' },
     ekartTrackingBaseUrl: { type: String, default: '' },

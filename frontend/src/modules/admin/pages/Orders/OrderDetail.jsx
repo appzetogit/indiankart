@@ -54,11 +54,26 @@ const OrderDetail = () => {
 
     // Initialize selected status when modal opens
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    // Delhivery collects from a specific registered warehouse, so the admin picks
+    // one before the shipment is created rather than silently using a default.
+    const [pendingCourierMode, setPendingCourierMode] = useState('');
+    const [selectedWarehouse, setSelectedWarehouse] = useState('');
     const [trackingData, setTrackingData] = useState(null);
     const [trackingLoading, setTrackingLoading] = useState(false);
     const [trackingError, setTrackingError] = useState('');
     const settings = useSettingsStore((state) => state.settings);
     const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+    const delhiveryWarehouses = React.useMemo(() => (
+        Array.isArray(settings?.delhiveryWarehouses)
+            ? settings.delhiveryWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
+            : []
+    ), [settings]);
+    const formatWarehouseAddress = (warehouse) => [
+        warehouse?.address,
+        warehouse?.city,
+        warehouse?.state,
+        warehouse?.pin
+    ].map((part) => String(part || '').trim()).filter(Boolean).join(', ');
     const normalizeFulfillmentStatus = (status = '') => {
         const value = String(status || '').trim();
         if (value === 'Shipped') return 'Dispatched';
@@ -202,17 +217,42 @@ const OrderDetail = () => {
         handleStatusUpdate(selectedStatus);
     };
 
-    const handleAssignFulfillment = async (mode) => {
+    const handleAssignFulfillment = async (mode, pickupLocation = '') => {
         try {
-            await assignOrderFulfillment(id, mode);
+            await assignOrderFulfillment(id, mode, pickupLocation);
             toast.success(
                 mode === 'manual'
                     ? 'Order assigned to manual fulfillment'
-                    : `Order assigned to ${getShippingProviderLabel(mode)}`
+                    : `Order assigned to ${getShippingProviderLabel(mode)}${pickupLocation ? ` — pickup from ${pickupLocation}` : ''}`
             );
         } catch (error) {
             toast.error(error.response?.data?.message || 'Failed to assign fulfillment mode');
         }
+    };
+
+    // Delhivery is the only provider with warehouses configured here. If none are
+    // saved yet, fall through to the old behaviour so shipping is never blocked.
+    const handleFulfillmentChoice = (mode) => {
+        if (mode === 'delhivery' && delhiveryWarehouses.length > 0) {
+            setSelectedWarehouse(
+                getShippingPickupLocation(order, 'delhivery')
+                || settings?.delhiveryPickupLocation
+                || delhiveryWarehouses[0].name
+            );
+            setPendingCourierMode(mode);
+            return;
+        }
+        handleAssignFulfillment(mode);
+    };
+
+    const confirmWarehouseAndAssign = async () => {
+        if (!selectedWarehouse) {
+            toast.error('Please choose a pickup warehouse');
+            return;
+        }
+        const mode = pendingCourierMode;
+        setPendingCourierMode('');
+        await handleAssignFulfillment(mode, selectedWarehouse);
     };
 
     const handleStatusUpdate = async (newStatus) => {
@@ -401,7 +441,7 @@ const OrderDetail = () => {
                                 value={isFulfillmentAssigned ? fulfillmentMode : ''}
                                 onChange={(e) => {
                                     if (!e.target.value) return;
-                                    handleAssignFulfillment(e.target.value);
+                                    handleFulfillmentChoice(e.target.value);
                                 }}
                                 disabled={effectiveAdminStatus === 'Delivered'}
                                 className="w-full bg-white border border-gray-200 focus:border-blue-500 rounded-xl md:rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-[10px] md:text-xs font-black outline-none transition-all text-gray-900 shadow-sm uppercase tracking-widest"
@@ -699,9 +739,21 @@ const OrderDetail = () => {
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">{getTrackingIdentifierLabel(fulfillmentMode)}</span>
                                 <span className="font-black text-gray-900">{hasCourierFulfillment ? (getTrackingIdentifier(order, fulfillmentMode) || 'Not created yet') : 'Not applicable'}</span>
                             </div>
-                            <div className="flex justify-between items-center text-xs">
-                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Pickup Location</span>
-                                <span className="font-black text-gray-900">{hasCourierFulfillment ? (getShippingPickupLocation(order, fulfillmentMode) || 'N/A') : 'Not applicable'}</span>
+                            <div className="flex justify-between items-start gap-3 text-xs">
+                                <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px] shrink-0 pt-0.5">Pickup Location</span>
+                                <span className="font-black text-gray-900 text-right break-words min-w-0">
+                                    {hasCourierFulfillment ? (getShippingPickupLocation(order, fulfillmentMode) || 'N/A') : 'Not applicable'}
+                                    {(() => {
+                                        if (!hasCourierFulfillment) return null;
+                                        const name = getShippingPickupLocation(order, fulfillmentMode);
+                                        const matched = delhiveryWarehouses.find((warehouse) => warehouse.name === name);
+                                        const address = matched ? formatWarehouseAddress(matched) : '';
+                                        if (!address) return null;
+                                        return (
+                                            <span className="mt-1 block font-medium text-[11px] text-gray-500">{address}</span>
+                                        );
+                                    })()}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Synced At</span>
@@ -755,6 +807,82 @@ const OrderDetail = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Pickup warehouse chooser - shown before a courier shipment is created */}
+            {pendingCourierMode && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white w-full max-w-lg rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8">
+                        <div className="p-4 md:p-8 space-y-4 md:space-y-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900">Choose pickup warehouse</h3>
+                                    <p className="mt-1 text-xs text-gray-500 font-semibold">
+                                        {getShippingProviderLabel(pendingCourierMode)} will collect this order from the warehouse you select.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setPendingCourierMode('')}
+                                    className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
+                                >
+                                    <MdCancel size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3 max-h-[45vh] overflow-y-auto">
+                                {delhiveryWarehouses.map((warehouse) => {
+                                    const isActive = selectedWarehouse === warehouse.name;
+                                    const address = formatWarehouseAddress(warehouse);
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={warehouse.name}
+                                            onClick={() => setSelectedWarehouse(warehouse.name)}
+                                            className={`w-full text-left rounded-2xl border p-4 transition-all ${isActive
+                                                ? 'border-blue-500 bg-blue-50 shadow-sm'
+                                                : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <span className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 ${isActive ? 'border-blue-600 bg-blue-600' : 'border-gray-300'}`} />
+                                                <div className="min-w-0">
+                                                    <p className="font-black text-gray-900 text-sm break-words">{warehouse.name}</p>
+                                                    {address ? (
+                                                        <p className="mt-1 text-xs text-gray-600 font-medium break-words">{address}</p>
+                                                    ) : (
+                                                        <p className="mt-1 text-xs text-amber-600 font-semibold">No address saved for this warehouse</p>
+                                                    )}
+                                                    {warehouse.phone ? (
+                                                        <p className="mt-1 text-xs text-gray-500 font-medium">Phone: {warehouse.phone}</p>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <p className="text-[11px] text-gray-500 font-medium">
+                                Names must match your registered Delhivery warehouses exactly. Manage them in Settings &gt; API Credentials.
+                            </p>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setPendingCourierMode('')}
+                                    className="flex-1 px-4 py-3 rounded-2xl border border-gray-200 text-gray-700 font-black text-xs uppercase tracking-widest hover:bg-gray-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmWarehouseAndAssign}
+                                    disabled={!selectedWarehouse || isLoading}
+                                    className="flex-1 px-4 py-3 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-100"
+                                >
+                                    {isLoading ? 'Creating...' : 'Create shipment'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Status Update Modal/Pop-up */}
             {updating && (

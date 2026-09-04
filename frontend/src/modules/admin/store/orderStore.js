@@ -127,10 +127,10 @@ const useOrderStore = create((set) => ({
         }
     },
 
-    assignOrderFulfillment: async (id, mode) => {
+    assignOrderFulfillment: async (id, mode, pickupLocation = '') => {
         set({ isLoading: true });
         try {
-            const { data } = await API.put(`/orders/${id}/fulfillment`, { mode });
+            const { data } = await API.put(`/orders/${id}/fulfillment`, { mode, pickupLocation });
             const transformedOrder = transformOrder(data);
             set((state) => ({
                 orders: state.orders.some((order) => order.id === id)

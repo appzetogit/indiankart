@@ -367,9 +367,11 @@ const clearInactiveProviderErrors = (order, activeProvider) => {
     };
 };
 
-const createShipmentForProvider = async (order, provider) => {
+const createShipmentForProvider = async (order, provider, options = {}) => {
     if (provider === 'delhivery') {
-        const shipment = await createDelhiveryShipment(order);
+        const shipment = await createDelhiveryShipment(order, {
+            pickupLocationName: options?.pickupLocationName || ''
+        });
         order.delhivery = {
             ...order.delhivery,
             waybill: shipment.waybill || '',
@@ -1423,6 +1425,7 @@ export const assignOrderFulfillment = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         const requestedMode = String(req.body?.mode || '').trim().toLowerCase();
+        const requestedPickupLocation = String(req.body?.pickupLocation || '').trim();
 
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
@@ -1432,8 +1435,15 @@ export const assignOrderFulfillment = async (req, res) => {
             return res.status(400).json({ message: 'Invalid fulfillment mode' });
         }
 
+        // Re-selecting the same courier is a retry, not a no-op: the first
+        // attempt may have failed before a waybill existed (a wrong pickup
+        // warehouse, for instance). Only short-circuit once a shipment actually
+        // exists, otherwise the order is stuck on a mode it can never fulfil.
         const currentMode = getFulfillmentMode(order);
-        if (currentMode === requestedMode) {
+        const alreadyShipped = ['delhivery', 'ekart'].includes(requestedMode)
+            ? Boolean(getProviderTrackingIdentifier(order, requestedMode))
+            : true;
+        if (currentMode === requestedMode && alreadyShipped) {
             await order.populate('user', 'name email phone');
             return res.json(order);
         }
@@ -1448,7 +1458,9 @@ export const assignOrderFulfillment = async (req, res) => {
         if (['delhivery', 'ekart'].includes(requestedMode)) {
             if (!getProviderTrackingIdentifier(order, requestedMode)) {
                 try {
-                    await createShipmentForProvider(order, requestedMode);
+                    await createShipmentForProvider(order, requestedMode, {
+                        pickupLocationName: requestedPickupLocation
+                    });
                 } catch (error) {
                     setProviderCreationError(order, requestedMode, error.message || `Failed to create ${requestedMode} shipment`);
                     await order.save();

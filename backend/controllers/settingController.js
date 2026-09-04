@@ -4,6 +4,20 @@ import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 
 const normalizeSettingKey = (value) => String(value || '').trim().toLowerCase();
+
+// Delhivery matches the pickup warehouse on an exact name, so trim but never
+// otherwise rewrite `name`. Entries without a name are dropped - they would only
+// ever produce "ClientWarehouse matching query does not exist" at ship time.
+const sanitizeWarehouses = (list = []) => (Array.isArray(list) ? list : [])
+    .map((entry) => ({
+        name: String(entry?.name || '').trim(),
+        address: String(entry?.address || '').trim(),
+        city: String(entry?.city || '').trim(),
+        state: String(entry?.state || '').trim(),
+        pin: String(entry?.pin || '').trim(),
+        phone: String(entry?.phone || '').trim(),
+    }))
+    .filter((entry) => entry.name);
 const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
 
 const buildCatalogEntryPipeline = (field, normalizedName) => ([
@@ -375,6 +389,7 @@ const updateSettings = async (req, res) => {
             deliveryApi,
             delhiveryClientName,
             delhiveryPickupLocation,
+            delhiveryWarehouses,
             delhiveryToken,
             ekartBaseUrl,
             ekartTrackingBaseUrl,
@@ -442,6 +457,14 @@ const updateSettings = async (req, res) => {
             }
             if (delhiveryPickupLocation !== undefined) {
                 settings.delhiveryPickupLocation = String(delhiveryPickupLocation || '').trim();
+            }
+            if (delhiveryWarehouses !== undefined) {
+                const parsedWarehouses = typeof delhiveryWarehouses === 'string'
+                    ? JSON.parse(delhiveryWarehouses)
+                    : delhiveryWarehouses;
+                if (Array.isArray(parsedWarehouses)) {
+                    settings.delhiveryWarehouses = sanitizeWarehouses(parsedWarehouses);
+                }
             }
             if (typeof delhiveryToken === 'string' && delhiveryToken.trim()) {
                 settings.delhiveryToken = delhiveryToken.trim();
@@ -538,6 +561,11 @@ const updateSettings = async (req, res) => {
                 deliveryApi: typeof deliveryApi === 'string' ? deliveryApi.trim() : '',
                 delhiveryClientName: typeof delhiveryClientName === 'string' ? delhiveryClientName.trim() : '',
                 delhiveryPickupLocation: typeof delhiveryPickupLocation === 'string' ? delhiveryPickupLocation.trim() : '',
+                delhiveryWarehouses: sanitizeWarehouses(
+                    typeof delhiveryWarehouses === 'string'
+                        ? (JSON.parse(delhiveryWarehouses) || [])
+                        : delhiveryWarehouses
+                ),
                 delhiveryToken: (typeof delhiveryToken === 'string' ? delhiveryToken.trim() : '') || '',
                 ekartBaseUrl: typeof ekartBaseUrl === 'string' ? ekartBaseUrl.trim() : '',
                 ekartTrackingBaseUrl: typeof ekartTrackingBaseUrl === 'string' ? ekartTrackingBaseUrl.trim() : '',

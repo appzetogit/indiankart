@@ -101,6 +101,9 @@ const RazorpayCredentials = () => {
     const [saving, setSaving] = useState(false);
     const [activeSection, setActiveSection] = useState('razorpay');
     const [form, setForm] = useState(DEFAULT_FORM);
+    // Delhivery has no API to list registered warehouses, so they are kept here
+    // and offered when a shipment is assigned. `name` must match Delhivery exactly.
+    const [warehouses, setWarehouses] = useState([]);
     const settings = useSettingsStore((state) => state.settings);
     const loading = useSettingsStore((state) => state.isLoading);
     const fetchSettings = useSettingsStore((state) => state.fetchSettings);
@@ -134,11 +137,37 @@ const RazorpayCredentials = () => {
             ekartTrackingPath: settings?.ekartTrackingPath || '/api/v1/track/{id}',
             ekartCancelPath: settings?.ekartCancelPath || '/api/v1/package/cancel'
         });
+        setWarehouses(
+            Array.isArray(settings?.delhiveryWarehouses)
+                ? settings.delhiveryWarehouses.map((warehouse) => ({
+                    name: warehouse?.name || '',
+                    address: warehouse?.address || '',
+                    city: warehouse?.city || '',
+                    state: warehouse?.state || '',
+                    pin: warehouse?.pin || '',
+                    phone: warehouse?.phone || ''
+                }))
+                : []
+        );
     }, [settings]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const updateWarehouse = (index, field, value) => {
+        setWarehouses((prev) => prev.map((warehouse, i) => (
+            i === index ? { ...warehouse, [field]: value } : warehouse
+        )));
+    };
+
+    const addWarehouse = () => {
+        setWarehouses((prev) => [...prev, { name: '', address: '', city: '', state: '', pin: '', phone: '' }]);
+    };
+
+    const removeWarehouse = (index) => {
+        setWarehouses((prev) => prev.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e) => {
@@ -153,6 +182,18 @@ const RazorpayCredentials = () => {
             data.append('delhiveryClientName', form.delhiveryClientName.trim());
             data.append('delhiveryPickupLocation', form.delhiveryPickupLocation.trim());
             data.append('delhiveryToken', form.delhiveryToken);
+            data.append('delhiveryWarehouses', JSON.stringify(
+                warehouses
+                    .map((warehouse) => ({
+                        name: String(warehouse.name || '').trim(),
+                        address: String(warehouse.address || '').trim(),
+                        city: String(warehouse.city || '').trim(),
+                        state: String(warehouse.state || '').trim(),
+                        pin: String(warehouse.pin || '').trim(),
+                        phone: String(warehouse.phone || '').trim()
+                    }))
+                    .filter((warehouse) => warehouse.name)
+            ));
             data.append('ekartBaseUrl', form.ekartBaseUrl.trim());
             data.append('ekartTrackingBaseUrl', form.ekartTrackingBaseUrl.trim());
             data.append('ekartClientId', form.ekartClientId.trim());
@@ -188,6 +229,16 @@ const RazorpayCredentials = () => {
                 ekartTrackingPath: res?.ekartTrackingPath || '/api/v1/track/{id}',
                 ekartCancelPath: res?.ekartCancelPath || '/api/v1/package/cancel'
             });
+            if (Array.isArray(res?.delhiveryWarehouses)) {
+                setWarehouses(res.delhiveryWarehouses.map((warehouse) => ({
+                    name: warehouse?.name || '',
+                    address: warehouse?.address || '',
+                    city: warehouse?.city || '',
+                    state: warehouse?.state || '',
+                    pin: warehouse?.pin || '',
+                    phone: warehouse?.phone || ''
+                })));
+            }
             toast.success('API credentials updated');
         } catch (error) {
             console.error('Failed to update API credentials:', error);
@@ -349,6 +400,73 @@ const RazorpayCredentials = () => {
                                 placeholder="Leave blank to keep existing token"
                                 hint="Only enter this when you want to replace the current token."
                             />
+                        </div>
+
+                        <div className="mt-8 border-t border-blue-100 pt-6">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h4 className="text-sm font-black text-gray-900">Pickup Warehouses</h4>
+                                    <p className="mt-1 text-xs text-gray-500 font-medium max-w-xl">
+                                        Added here so they can be chosen per order when assigning Delhivery. The name must match
+                                        your warehouse in Delhivery exactly - copy it from Settings &gt; Pickup Locations rather
+                                        than retyping, or shipments fail with &quot;ClientWarehouse matching query does not exist&quot;.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={addWarehouse}
+                                    className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700"
+                                >
+                                    Add warehouse
+                                </button>
+                            </div>
+
+                            {warehouses.length === 0 ? (
+                                <p className="mt-4 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-4 text-xs font-semibold text-gray-500">
+                                    No warehouses saved. Without these, every shipment uses the single Pickup Location above.
+                                </p>
+                            ) : (
+                                <div className="mt-4 space-y-4">
+                                    {warehouses.map((warehouse, index) => (
+                                        <div key={index} className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                                                    Warehouse {index + 1}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeWarehouse(index)}
+                                                    className="rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-50"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                                {[
+                                                    { field: 'name', label: 'Warehouse Name (must match Delhivery)', span: true },
+                                                    { field: 'address', label: 'Address', span: true },
+                                                    { field: 'city', label: 'City' },
+                                                    { field: 'state', label: 'State' },
+                                                    { field: 'pin', label: 'PIN Code' },
+                                                    { field: 'phone', label: 'Phone' }
+                                                ].map(({ field, label, span }) => (
+                                                    <label key={field} className={span ? 'md:col-span-2' : ''}>
+                                                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-600">
+                                                            {label}
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            value={warehouse[field]}
+                                                            onChange={(e) => updateWarehouse(index, field, e.target.value)}
+                                                            className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </SectionCard>
 
