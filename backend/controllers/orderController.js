@@ -377,6 +377,9 @@ const createShipmentForProvider = async (order, provider, options = {}) => {
             waybill: shipment.waybill || '',
             providerOrderId: shipment.providerOrderId,
             pickupLocation: shipment.pickupLocation,
+            // Persisted so a re-book after cancellation uses a fresh reference;
+            // Delhivery never releases one it has already issued against.
+            shipmentAttempts: shipment.shipmentAttempts,
             syncedAt: new Date(),
             requestPayload: shipment.requestPayload,
             responsePayload: shipment.responsePayload,

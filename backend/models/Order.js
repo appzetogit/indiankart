@@ -138,6 +138,10 @@ const orderSchema = mongoose.Schema({
         waybill: { type: String, default: '' },
         providerOrderId: { type: String, default: '' },
         pickupLocation: { type: String, default: '' },
+        // How many shipments Delhivery has issued for this order. Delhivery
+        // consumes an order reference permanently - cancelling does not release
+        // it - so re-booking appends "-R<n>" derived from this count.
+        shipmentAttempts: { type: Number, default: 0 },
         syncedAt: { type: Date },
         cancelledAt: { type: Date },
         requestPayload: { type: mongoose.Schema.Types.Mixed, default: null },

@@ -31,14 +31,15 @@ const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUp
 // `pickupLocationOverride` lets the admin pick which registered warehouse a
 // shipment is collected from, instead of always using the single default in
 // settings. Falls back to that default when nothing is chosen.
-const buildShipmentPayload = (order, settings, pickupLocationOverride = '') => {
+const buildShipmentPayload = (order, settings, pickupLocationOverride = '', orderReferenceOverride = '') => {
     const shippingAddress = order?.shippingAddress || {};
     const orderItems = Array.isArray(order?.orderItems) ? order.orderItems : [];
     const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || 1;
     const productsDescription = sanitizeText(
         orderItems.map((item) => item?.name).filter(Boolean).join(', ')
     ).slice(0, 250);
-    const orderReference = sanitizeText(order?.displayId || order?._id || '');
+    const orderReference = sanitizeText(orderReferenceOverride)
+        || sanitizeText(order?.displayId || order?._id || '');
     const deliveryAddress = sanitizeText([
         shippingAddress?.street,
         shippingAddress?.city,
@@ -407,7 +408,17 @@ export const createDelhiveryShipment = async (order, { pickupLocationName = '' }
         throw new Error(`"${requestedPickup}" is not one of the saved Delhivery warehouses. Add it in Admin > API Credentials first.`);
     }
 
-    const payload = buildShipmentPayload(order, settings, effectivePickup);
+    // Delhivery permanently consumes an order reference once a shipment is
+    // created against it - cancelling the shipment does not release it, and a
+    // reuse fails with the opaque "An internal Error has occurred". So every
+    // shipment after the first gets a retry suffix, otherwise an order that was
+    // booked and cancelled could never be re-booked.
+    const baseReference = sanitizeText(order?.displayId || order?._id || '');
+    const priorShipments = Number(order?.delhivery?.shipmentAttempts) || 0;
+    const attemptNumber = priorShipments + 1;
+    const orderReference = attemptNumber > 1 ? `${baseReference}-R${attemptNumber}` : baseReference;
+
+    const payload = buildShipmentPayload(order, settings, effectivePickup, orderReference);
     const encodedBody = `format=json&data=${encodeURIComponent(JSON.stringify(payload))}`;
 
     const { data } = await axios.post(
@@ -434,8 +445,11 @@ export const createDelhiveryShipment = async (order, { pickupLocationName = '' }
         requestPayload: payload,
         responsePayload: data,
         waybill,
-        providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
-        pickupLocation: effectivePickup
+        providerOrderId: orderReference,
+        pickupLocation: effectivePickup,
+        // Only counted on success: a failed create never reaches here, and
+        // Delhivery only consumes the reference when a shipment is issued.
+        shipmentAttempts: attemptNumber
     };
 };
 
