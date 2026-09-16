@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/verify-build-config.mjs && vite",
+    "build": "node scripts/verify-build-config.mjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
