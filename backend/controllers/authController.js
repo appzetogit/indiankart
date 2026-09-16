@@ -34,6 +34,15 @@ const normalizeForHardcodedLogin = (mobile) => {
     return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+// Names written by earlier signup code rather than typed by a customer. They
+// must not count as real, or the profile step pre-fills "New User" as if the
+// customer had chosen it.
+const PLACEHOLDER_NAMES = new Set(['new user', 'test user']);
+const isRealCustomerName = (value) => {
+    const text = String(value || '').trim();
+    return Boolean(text) && !PLACEHOLDER_NAMES.has(text.toLowerCase());
+};
+
 const normalizeHardcodedOtp = (otp) => {
     const digits = String(otp ?? '').replace(/\D/g, '');
     if (!digits) return '';
@@ -192,14 +201,27 @@ export const verifyLoginOtp = async (req, res) => {
             isNewUser = false;
         }
 
-        const hasRealName = Boolean(user.name && user.name.trim());
+        const hasRealName = isRealCustomerName(user.name);
         const hasRealEmail = Boolean(
             user.email &&
             user.email.includes('@') &&
             !user.email.endsWith('@otp.local') &&
             user.email !== normalizedMobile
         );
-        const requiresProfile = !hasRealName || !hasRealEmail;
+
+        // Returning customers must never be gated at login. Older OTP signups
+        // stored the phone number in `email` and a placeholder name, so the
+        // previous rule (!hasRealName || !hasRealEmail) flagged ~88% of accounts
+        // - including customers with order history - and the client then told
+        // them "You are new here" on every login.
+        //
+        // Only ask for details from a genuine new signup, or from an account that
+        // never finished signing up: no real name AND no orders. Anyone who has
+        // ordered is demonstrably not new. Email is required only for new
+        // signups, which is what the profile step was originally built for.
+        const hasOrders = isNewUser ? false : Boolean(await Order.exists({ user: user._id }));
+        const requiresProfile = isNewUser || (!hasRealName && !hasOrders);
+        const requiresEmail = isNewUser && !hasRealEmail;
 
         const token = generateToken(res, user._id, 'user_jwt');
         const sessionId = resolvePortalSessionId(req);
@@ -218,6 +240,7 @@ export const verifyLoginOtp = async (req, res) => {
             addresses: mapUserAddresses(user.addresses),
             isNewUser,
             requiresProfile,
+            requiresEmail,
             token,
             sessionId
         });

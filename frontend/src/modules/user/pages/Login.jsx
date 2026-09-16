@@ -28,14 +28,20 @@ const Login = () => {
     // OTP signup stores a stand-in name rather than leaving it blank, which must
     // not be prefilled as though the customer had typed it. Email has its own
     // check in isRealEmail above.
+    // "New User" and "Test User" were written by earlier signup code, not typed by
+    // a customer, so they must not be pre-filled as though they were real.
     const isRealName = (value = '') => {
-        const text = String(value || '').trim();
-        return Boolean(text) && text.toLowerCase() !== 'test user';
+        const text = String(value || '').trim().toLowerCase();
+        return Boolean(text) && text !== 'test user' && text !== 'new user';
     };
 
     const [mobile, setMobile] = useState(location.state?.mobile || '');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
+    // From the verify-OTP response. The profile step used to assume everyone
+    // reaching it was new, which told returning customers "You are new here".
+    const [isNewSignup, setIsNewSignup] = useState(false);
+    const [emailRequired, setEmailRequired] = useState(true);
     const [otp, setOtp] = useState('');
     const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP, 3: Profile
     const [resendCooldown, setResendCooldown] = useState(0);
@@ -88,6 +94,10 @@ const Login = () => {
             if (data?.requiresProfile) {
                 setName(isRealName(data?.name) ? String(data.name) : '');
                 setEmail(isRealEmail(data?.email) ? String(data.email) : '');
+                setIsNewSignup(Boolean(data?.isNewUser));
+                // Older servers did not send requiresEmail and always wanted one,
+                // so default to required unless told otherwise.
+                setEmailRequired(data?.requiresEmail !== false);
                 setStep(3);
                 return;
             }
@@ -107,13 +117,20 @@ const Login = () => {
         }
 
         const trimmedEmail = email.trim().toLowerCase();
-        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+        if (emailRequired && (!trimmedEmail || !trimmedEmail.includes('@'))) {
             toast.error('Please enter a valid email');
+            return;
+        }
+        if (!emailRequired && trimmedEmail && !trimmedEmail.includes('@')) {
+            toast.error('Please enter a valid email, or leave it blank');
             return;
         }
 
         try {
-            await updateProfile({ name: name.trim(), email: trimmedEmail });
+            // Omit email when left blank so the account keeps what it already has.
+            await updateProfile(trimmedEmail
+                ? { name: name.trim(), email: trimmedEmail }
+                : { name: name.trim() });
             toast.success('Profile saved successfully!');
             navigate('/', { replace: true });
         } catch (err) {
@@ -132,7 +149,9 @@ const Login = () => {
             ? 'Enter your phone number to continue'
             : step === 2
                 ? `Enter OTP sent to +91 ${mobile}`
-                : 'You are new here. Add your name and email to continue';
+                : isNewSignup
+                    ? 'You are new here. Add your name and email to continue'
+                    : 'Welcome back! Please add your name to continue';
 
     return (
         <div className="md:min-h-screen md:bg-gray-50 md:flex md:items-center md:justify-center">
@@ -271,14 +290,16 @@ const Login = () => {
                                 </div>
 
                                 <div className="relative">
-                                    <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">Email Address</label>
+                                    <label className="text-[10px] uppercase text-blue-600 font-bold absolute -top-1.5 left-3 bg-white px-1">
+                                        {emailRequired ? 'Email Address' : 'Email Address (optional)'}
+                                    </label>
                                     <div className="flex items-center border border-blue-600 rounded-lg overflow-hidden h-12">
                                         <input
                                             type="email"
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             className="flex-1 h-full px-4 outline-none text-gray-900 font-medium"
-                                            placeholder="Enter your email"
+                                            placeholder={emailRequired ? 'Enter your email' : 'Enter your email (optional)'}
                                         />
                                     </div>
                                 </div>
