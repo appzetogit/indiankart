@@ -70,13 +70,20 @@ const findOrCreateHardcodedLoginUser = async (phone, overrides = {}) => {
     });
 
     if (!user) {
-        user = await User.create({
-            name: overrides.name || 'Test User',
-            email: fallbackEmail,
-            phone: normalizedPhone,
-            gender: 'Male',
-            password: Math.random().toString(36)
-        });
+        try {
+            user = await User.create({
+                name: overrides.name || 'Test User',
+                email: fallbackEmail,
+                phone: normalizedPhone,
+                gender: 'Male',
+                password: Math.random().toString(36)
+            });
+        } catch (createError) {
+            // See verifyLoginOtp: a concurrent login may have created it first.
+            if (createError?.code !== 11000) throw createError;
+            user = await User.findOne({ $or: [{ phone: normalizedPhone }, { email: fallbackEmail }] });
+            if (!user) throw createError;
+        }
     }
 
     return user;
@@ -185,12 +192,21 @@ export const verifyLoginOtp = async (req, res) => {
         let isNewUser = false;
         if (!user) {
             isNewUser = true;
-            user = await User.create({
-                name: (name || '').trim(),
-                email: (email || `${normalizedMobile}@otp.local`).trim().toLowerCase(),
-                phone: normalizedMobile,
-                password: await bcrypt.hash(Math.random().toString(36), 10),
-            });
+            try {
+                user = await User.create({
+                    name: (name || '').trim(),
+                    email: (email || `${normalizedMobile}@otp.local`).trim().toLowerCase(),
+                    phone: normalizedMobile,
+                    password: await bcrypt.hash(Math.random().toString(36), 10),
+                });
+            } catch (createError) {
+                // phone and email are unique. Two OTP verifications racing for the
+                // same new number would both reach create; the loser lands here and
+                // must use the account the winner made, not fail the login.
+                if (createError?.code !== 11000) throw createError;
+                user = await User.findOne({ $or: [{ email: normalizedMobile }, { phone: normalizedMobile }] });
+                if (!user) throw createError;
+            }
         }
 
         if (name && String(name).trim()) user.name = String(name).trim();
@@ -371,6 +387,17 @@ export const deleteCurrentUserProfile = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
 
+        // Orders reference their user by id and are not deleted with the account,
+        // so deleting a user who has ordered leaves those orders pointing at a
+        // missing account: they vanish from the customer's history while still
+        // existing. That is how 15 orders were orphaned between Feb and Aug 2026.
+        const orderCount = await Order.countDocuments({ user: user._id });
+        if (orderCount > 0) {
+            return res.status(409).json({
+                message: `Your account has ${orderCount} order${orderCount === 1 ? '' : 's'}, so it can't be deleted here - that would remove your order history. Please contact support.`
+            });
+        }
+
         await user.deleteOne();
 
         const cookieOptions = {
@@ -406,9 +433,30 @@ export const updateUserProfile = async (req, res) => {
                 }
             }
 
+            // A phone number identifies the customer at OTP login, so it must
+            // belong to exactly one account. This used to be assigned raw with no
+            // check, which let a second account take a number already in use -
+            // how ******0457 ended up with two accounts and orphaned orders.
+            // Stored as the same last-10-digits form login looks up by.
+            // `||` rather than `??`: an empty or null value has always meant "keep
+            // the current number", and must not be rejected as invalid.
+            const rawPhone = req.body.mobile || req.body.phone;
+            if (rawPhone && String(rawPhone).trim() !== '') {
+                const nextPhone = normalizeForHardcodedLogin(rawPhone);
+                if (!/^\d{10}$/.test(nextPhone)) {
+                    return res.status(400).json({ message: 'Please enter a valid 10-digit mobile number' });
+                }
+                if (nextPhone !== user.phone) {
+                    const takenBy = await User.exists({ phone: nextPhone, _id: { $ne: user._id } });
+                    if (takenBy) {
+                        return res.status(409).json({ message: 'This mobile number is already linked to another account' });
+                    }
+                }
+                user.phone = nextPhone;
+            }
+
             user.name = req.body.name || user.name;
             user.email = nextEmail || user.email;
-            user.phone = req.body.mobile || req.body.phone || user.phone; // Use mobile or phone
             const normalizedGender = normalizeGender(req.body.gender);
             if (req.body.gender !== undefined) {
                 if (normalizedGender === null) {
@@ -563,12 +611,25 @@ export const getUsers = async (req, res) => {
 // @route   DELETE /api/users/:id
 // @access  Private/Admin
 export const deleteUser = async (req, res) => {
-    const user = await User.findById(req.params.id);
-    if (user) {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Same reason as deleteCurrentUserProfile: deleting a customer who has
+        // ordered orphans their orders rather than removing them.
+        const orderCount = await Order.countDocuments({ user: user._id });
+        if (orderCount > 0) {
+            return res.status(409).json({
+                message: `This customer has ${orderCount} order${orderCount === 1 ? '' : 's'}. Deleting the account would hide them from the customer's order history, so it has been blocked.`
+            });
+        }
+
         await user.deleteOne();
-        res.json({ message: 'User removed' });
-    } else {
-        res.status(404).json({ message: 'User not found' });
+        return res.json({ message: 'User removed' });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
 

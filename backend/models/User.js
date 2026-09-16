@@ -59,6 +59,14 @@ const userSchema = mongoose.Schema({
 
 userSchema.index({ createdAt: -1 });
 userSchema.index({ status: 1, createdAt: -1 });
+// One account per phone number. The number is the login identity for OTP, and
+// nothing enforced this before, so two accounts could share one and a delete
+// of either orphaned its orders. Partial so email-only accounts, which have no
+// phone at all, are not treated as duplicates of each other.
+userSchema.index(
+    { phone: 1 },
+    { unique: true, partialFilterExpression: { phone: { $type: 'string', $gt: '' } } }
+);
 
 userSchema.methods.matchPassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);

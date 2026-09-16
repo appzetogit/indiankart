@@ -58,7 +58,11 @@ const useUserStore = create((set) => ({
                 isLoading: false
             }));
         } catch (error) {
-            set({ isLoading: false, error: error.message });
+            // Surface the server's reason (e.g. the customer still has orders)
+            // rather than axios's generic "Request failed with status code 409".
+            const message = error.response?.data?.message || error.message;
+            set({ isLoading: false, error: message });
+            throw new Error(message);
         }
     },
 
