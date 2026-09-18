@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
+import { trackPurchase } from '../../../utils/analytics';
 
 const parseDateOnly = (dateStr) => {
     if (!dateStr || typeof dateStr !== 'string') return null;
@@ -677,6 +678,7 @@ const Checkout = () => {
                                     };
                                     const { data } = await API.post('/orders', paidOrderData);
                                     placeOrder(data, !buyNowItem);
+                                    trackPurchase(data);
                                     if (appliedCoupon) removeCoupon();
                                     if (appliedReferral) handleRemoveReferral();
                                     setIsOrderSuccess(true);
@@ -729,6 +731,7 @@ const Checkout = () => {
                 // If buying now, do NOT clear the main cart. Pass false.
                 // If purchasing from cart, clear it. Pass true.
                 placeOrder(data, !buyNowItem);
+                trackPurchase(data);
                 if (appliedCoupon) removeCoupon();
                 if (appliedReferral) handleRemoveReferral();
                 setIsOrderSuccess(true);
@@ -783,6 +786,7 @@ const Checkout = () => {
                                 };
                                 const { data } = await API.post('/orders', paidOrderData);
                                 placeOrder(data, !buyNowItem);
+                                trackPurchase(data);
                                 if (appliedCoupon) removeCoupon();
                                 if (appliedReferral) handleRemoveReferral();
                                 setIsOrderSuccess(true);
