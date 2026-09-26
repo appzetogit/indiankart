@@ -4,8 +4,15 @@ import toast from 'react-hot-toast';
 import API from '../../../../services/api';
 import AdminTable, { AdminTableHead, AdminTableHeaderCell, AdminTableHeaderRow } from '../../components/common/AdminTable';
 import { matchesNormalizedSearch } from '../../utils/search';
+import StoreReviewsPanel from './StoreReviewsPanel';
+
+const TABS = [
+    { key: 'product', label: 'Product reviews' },
+    { key: 'store', label: 'Store reviews' }
+];
 
 const ReviewList = () => {
+    const [tab, setTab] = useState('product');
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -67,10 +74,31 @@ const ReviewList = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Customer Reviews</h1>
-                    <p className="text-sm text-gray-500 font-medium italic">Latest customer reviews across the store ({filteredReviews.length} shown)</p>
+                    <p className="text-sm text-gray-500 font-medium italic">
+                        {tab === 'store'
+                            ? 'How customers rate their overall IndianKart experience'
+                            : `Latest customer reviews across the store (${filteredReviews.length} shown)`}
+                    </p>
                 </div>
             </div>
 
+            <div className="inline-flex rounded-2xl bg-gray-100 p-1" role="tablist">
+                {TABS.map((t) => (
+                    <button
+                        key={t.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === t.key}
+                        onClick={() => setTab(t.key)}
+                        className={`px-4 py-2 rounded-xl text-sm font-black transition-all ${tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {tab === 'store' ? <StoreReviewsPanel /> : (
+            <>
             {/* Filters */}
             <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
                 <div className="relative flex-1 w-full">
@@ -194,6 +222,8 @@ const ReviewList = () => {
                             )}
                         </tbody>
             </AdminTable>
+            </>
+            )}
         </div>
     );
 };
