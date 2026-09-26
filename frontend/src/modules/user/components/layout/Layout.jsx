@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Header from './Header';
 import BottomNav from './BottomNav';
+import StoreReviewPrompt from './StoreReviewPrompt';
 import { useAuthStore } from '../../store/authStore';
 import API from '../../../../services/api';
 
@@ -107,6 +108,7 @@ const Layout = () => {
                 </AnimatePresence>
             </main>
             {showBottomNav && <BottomNav />}
+            <StoreReviewPrompt />
         </div >
     );
 };
