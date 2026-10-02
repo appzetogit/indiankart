@@ -14,6 +14,7 @@ const CategoryPage = lazy(() => import('../pages/CategoryPage'));
 const Wishlist = lazy(() => import('../pages/Wishlist'));
 const Checkout = lazy(() => import('../pages/Checkout'));
 const OrderSuccess = lazy(() => import('../pages/OrderSuccess'));
+const PaymentStatus = lazy(() => import('../pages/PaymentStatus'));
 const MyOrders = lazy(() => import('../pages/MyOrders'));
 const OrderDetails = lazy(() => import('../pages/OrderDetails'));
 const TrackOrder = lazy(() => import('../pages/TrackOrder'));
@@ -55,6 +56,7 @@ const UserRoutes = () => {
                 <Route path="cart" element={<Cart />} />
                 <Route path="wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
                 <Route path="checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                <Route path="payment-status" element={<ProtectedRoute><PaymentStatus /></ProtectedRoute>} />
                 <Route path="order-success" element={<ProtectedRoute><OrderSuccess /></ProtectedRoute>} />
                 <Route path="my-orders" element={<ProtectedRoute><MyOrders /></ProtectedRoute>} />
                 <Route path="my-orders/:orderId" element={<ProtectedRoute><OrderDetails /></ProtectedRoute>} />

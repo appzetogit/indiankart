@@ -10,6 +10,7 @@ import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
 import { trackPurchase } from '../../../utils/analytics';
+import { shouldUseRedirectPayment, paymentCallbackUrl, rememberPendingRedirectPayment } from '../utils/redirectPayment';
 
 
 // Shown when payment went through Razorpay but this page could not confirm the
@@ -707,7 +708,8 @@ const Checkout = () => {
                             color: "#f59e0b"
                         },
                         retry: {
-                            enabled: false
+                            enabled: true,
+                            max_count: 3
                         },
                         modal: {
                             ondismiss: () => {
@@ -715,6 +717,13 @@ const Checkout = () => {
                             }
                         }
                     };
+                    // Phones: open the bank's page as a full page and come back to
+                    // /payment-status, instead of a popup that often stays blank.
+                    if (shouldUseRedirectPayment()) {
+                        options.redirect = true;
+                        options.callback_url = paymentCallbackUrl();
+                        rememberPendingRedirectPayment({ razorpayOrderId: order.id, clearCart: !buyNowItem, hadCoupon: Boolean(appliedCoupon) });
+                    }
                     const rzp = new window.Razorpay(options);
                     rzp.on('payment.failed', (response) => {
                         const reason = response?.error?.description || response?.error?.reason || response?.error?.code || 'Payment failed';
@@ -817,7 +826,8 @@ const Checkout = () => {
                     },
                     offers: bankOffers.map(o => o.razorpayOfferId),
                     retry: {
-                        enabled: false
+                        enabled: true,
+                        max_count: 3
                     },
                     modal: {
                         ondismiss: () => {
@@ -825,6 +835,13 @@ const Checkout = () => {
                         }
                     }
                 };
+                // Phones: open the bank's page as a full page and come back to
+                // /payment-status, instead of a popup that often stays blank.
+                if (shouldUseRedirectPayment()) {
+                    options.redirect = true;
+                    options.callback_url = paymentCallbackUrl();
+                    rememberPendingRedirectPayment({ razorpayOrderId: order.id, clearCart: !buyNowItem, hadCoupon: Boolean(appliedCoupon) });
+                }
                 const rzp = new window.Razorpay(options);
                 rzp.on('payment.failed', (response) => {
                     const reason = response?.error?.description || response?.error?.reason || response?.error?.code || 'Payment failed';

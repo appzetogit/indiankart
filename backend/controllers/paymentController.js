@@ -2,6 +2,27 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import Setting from '../models/Setting.js';
 import PendingCheckout from '../models/PendingCheckout.js';
+import Order from '../models/Order.js';
+import { processPendingCheckout } from '../utils/paymentRecovery.js';
+
+const DEFAULT_STORE_ORIGIN = 'https://www.indiankart.in';
+const STORE_ORIGINS = new Set(
+    (process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim().replace(/^["']|["']$/g, ''))
+        : ['http://localhost:5173', 'http://127.0.0.1:5173', 'https://indiankart.in', DEFAULT_STORE_ORIGIN])
+        .map((o) => { try { return new URL(o).origin; } catch { return ''; } })
+        .filter(Boolean)
+);
+
+// Only ever send customers back to our own site.
+const safeStoreOrigin = (origin) => {
+    try {
+        const normalized = new URL(String(origin || '')).origin;
+        return STORE_ORIGINS.has(normalized) ? normalized : '';
+    } catch {
+        return '';
+    }
+};
 
 const getRazorpayCredentials = async () => {
     const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
@@ -63,6 +84,7 @@ export const createRazorpayOrder = async (req, res) => {
                     user: req.user._id,
                     orderPayload,
                     amount: order.amount,
+                    returnOrigin: safeStoreOrigin(req.headers.origin),
                 });
             } catch (saveError) {
                 // The browser path still works without it; do not block payment.
@@ -209,6 +231,111 @@ export const handleRazorpayWebhook = async (req, res) => {
         console.error('Razorpay webhook error:', error);
         // 5xx makes Razorpay retry, which is what we want for a transient fault.
         return res.status(500).json({ message: 'Webhook processing failed' });
+    }
+};
+
+const parseCallbackError = (body = {}) => {
+    const error = body.error || {};
+    let metadata = error.metadata || body['error[metadata]'] || {};
+    if (typeof metadata === 'string') {
+        try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
+    }
+    return {
+        description: String(error.description || body['error[description]'] || '').slice(0, 200),
+        orderId: String(metadata.order_id || ''),
+    };
+};
+
+// @desc    Where Razorpay sends the customer after paying in redirect mode
+//          (used on phones, where the bank's 3-D Secure page often fails to
+//          load inside the payment popup)
+// @route   POST /api/payments/callback  (GET tolerated)
+// @access  Public, authenticated by razorpay_signature
+export const handleRazorpayCallback = async (req, res) => {
+    const body = { ...(req.query || {}), ...(req.body || {}) };
+    const paymentId = String(body.razorpay_payment_id || '');
+    const signature = String(body.razorpay_signature || '');
+    const failure = parseCallbackError(body);
+    const razorpayOrderId = String(body.razorpay_order_id || failure.orderId || '').trim();
+
+    let checkout = null;
+    try {
+        if (razorpayOrderId) {
+            checkout = await PendingCheckout.findOne({ razorpayOrderId });
+        }
+    } catch (error) {
+        console.error('Razorpay callback lookup failed:', error.message);
+    }
+    const origin = safeStoreOrigin(checkout?.returnOrigin) || DEFAULT_STORE_ORIGIN;
+    const statusUrl = (params) => `${origin}/payment-status?${new URLSearchParams(params).toString()}`;
+
+    if (!razorpayOrderId) {
+        return res.redirect(303, statusUrl({ failed: '1', reason: failure.description || 'Payment was not completed' }));
+    }
+
+    if (!paymentId || !signature) {
+        if (checkout?.status === 'pending' && failure.description) {
+            await PendingCheckout.updateOne({ _id: checkout._id }, { lastError: failure.description }).catch(() => {});
+        }
+        return res.redirect(303, statusUrl({ rzp: razorpayOrderId, failed: '1', reason: failure.description || 'Payment was not completed' }));
+    }
+
+    try {
+        const { keySecret } = await getRazorpayCredentials();
+        const expected = crypto.createHmac('sha256', keySecret).update(`${razorpayOrderId}|${paymentId}`).digest('hex');
+        const valid = expected.length === signature.length
+            && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+        if (!valid) {
+            console.error(`Razorpay callback with bad signature for ${razorpayOrderId}`);
+            return res.redirect(303, statusUrl({ rzp: razorpayOrderId }));
+        }
+
+        if (checkout?.status === 'pending') {
+            await PendingCheckout.updateOne(
+                { _id: checkout._id },
+                { browserGone: true, paymentId, capturedAt: checkout.capturedAt || new Date() }
+            );
+            // Build the order now so it is usually ready when the page loads; the
+            // reconciler keeps trying if this does not finish it.
+            const outcome = await processPendingCheckout(checkout._id, { source: 'callback' });
+            console.log(`Razorpay callback for ${razorpayOrderId}: ${outcome}`);
+        }
+    } catch (error) {
+        console.error(`Razorpay callback processing failed for ${razorpayOrderId}:`, error.message);
+    }
+    return res.redirect(303, statusUrl({ rzp: razorpayOrderId }));
+};
+
+// @desc    State of a checkout paid in redirect mode
+// @route   GET /api/payments/checkout-status/:razorpayOrderId
+// @access  Private (the customer who opened it)
+export const getCheckoutStatus = async (req, res) => {
+    try {
+        const razorpayOrderId = String(req.params.razorpayOrderId || '');
+        const checkout = await PendingCheckout.findOne({ razorpayOrderId, user: req.user._id }).lean();
+        if (!checkout) {
+            return res.status(404).json({ message: 'Checkout not found' });
+        }
+        let order = null;
+        if (checkout.order) {
+            order = await Order.findOne({ _id: checkout.order, user: req.user._id }).lean();
+        } else {
+            order = await Order.findOne({ 'paymentResult.razorpay_order_id': razorpayOrderId, user: req.user._id }).lean();
+        }
+        if (!order && checkout.status === 'pending' && checkout.browserGone && checkout.capturedAt
+            && (!checkout.lockedUntil || new Date(checkout.lockedUntil) < new Date())
+            && (!checkout.lastCheckedAt || Date.now() - new Date(checkout.lastCheckedAt).getTime() > 10 * 1000)) {
+            // Paid but not built yet (e.g. capture was still pending at callback).
+            processPendingCheckout(checkout._id, { source: 'callback' }).catch(() => {});
+        }
+        return res.json({
+            status: order ? 'completed' : checkout.status,
+            paid: Boolean(order || checkout.capturedAt),
+            lastError: checkout.lastError || '',
+            order,
+        });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
     }
 };
 

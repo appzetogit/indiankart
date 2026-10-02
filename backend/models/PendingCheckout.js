@@ -21,7 +21,12 @@ const pendingCheckoutSchema = new mongoose.Schema({
     capturedAt: { type: Date, default: null },
     order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
     // How the order came to exist: the customer's browser, or recovered here.
-    completedBy: { type: String, enum: ['', 'browser', 'webhook', 'reconciler'], default: '' },
+    completedBy: { type: String, enum: ['', 'browser', 'webhook', 'reconciler', 'callback'], default: '' },
+    // Set when the customer paid in redirect mode: their page has navigated
+    // away and will never call POST /orders, so there is nothing to wait for.
+    browserGone: { type: Boolean, default: false },
+    // Site the customer checked out on, to send them back to after paying.
+    returnOrigin: { type: String, default: '' },
     attempts: { type: Number, default: 0 },
     createAttempts: { type: Number, default: 0 },
     lastError: { type: String, default: '' },

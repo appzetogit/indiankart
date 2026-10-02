@@ -109,7 +109,7 @@ export const processPendingCheckout = async (checkoutId, { source = 'reconciler'
         // Razorpay's payment entity has no capture time, so the grace period runs
         // from when the capture was first seen (by webhook or by this check).
         const capturedAt = checkout.capturedAt || now;
-        if (now.getTime() - capturedAt.getTime() < BROWSER_GRACE_MS) {
+        if (!checkout.browserGone && now.getTime() - capturedAt.getTime() < BROWSER_GRACE_MS) {
             await release(checkout, { paymentId: captured.id, capturedAt, attempts: Math.max(0, checkout.attempts - 1) });
             return 'grace';
         }
