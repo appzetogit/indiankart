@@ -179,6 +179,9 @@ const Addresses = () => {
         });
     }, [addresses]);
 
+    // Keyed on the user's id, not the user object: syncAddresses replaces the
+    // user object, so depending on `user` refetched forever, many times a second.
+    const userId = user?._id || user?.id || null;
     useEffect(() => {
         const fetchAddresses = async () => {
             try {
@@ -190,10 +193,10 @@ const Addresses = () => {
             }
         };
 
-        if (user) {
+        if (userId) {
             fetchAddresses();
         }
-    }, [user, setAddresses, syncAddresses]);
+    }, [userId, setAddresses, syncAddresses]);
 
     return (
         <div className="bg-[#f1f3f6] min-h-screen pb-10 md:py-6">
