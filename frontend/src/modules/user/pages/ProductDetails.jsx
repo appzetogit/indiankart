@@ -9,6 +9,7 @@ import API from '../../../services/api';
 import toast from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import './ProductDetails.css';
+import { safeSetItem } from '../../../utils/safeStorage';
 
 const normalizeKnownState = (value) => {
     const trimmed = String(value || '').trim();
@@ -570,7 +571,7 @@ const ProductDetails = () => {
 
     useEffect(() => {
         if (bestKnownState && bestKnownState !== 'Unknown') {
-            localStorage.setItem('ik-last-known-state', bestKnownState);
+            safeSetItem('ik-last-known-state', bestKnownState);
         }
     }, [bestKnownState]);
 

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
 import { useCartStore } from './cartStore';
 import { requestForToken } from '../../../services/firebase';
+import { safePersistStorage, safeRemoveItem, safeSetItem } from '../../../utils/safeStorage';
 
 const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
 
@@ -12,9 +13,9 @@ const setUserTokenCache = (token) => {
     }
 
     if (token) {
-        localStorage.setItem('user-auth-token', token);
+        safeSetItem('user-auth-token', token);
     } else {
-        localStorage.removeItem('user-auth-token');
+        safeRemoveItem('user-auth-token');
     }
 };
 
@@ -34,9 +35,9 @@ const syncPortalSessionCache = (sessionId) => {
     }
 
     if (sessionId) {
-        localStorage.setItem(PORTAL_SESSION_STORAGE_KEY, sessionId);
+        safeSetItem(PORTAL_SESSION_STORAGE_KEY, sessionId);
     } else {
-        localStorage.removeItem(PORTAL_SESSION_STORAGE_KEY);
+        safeRemoveItem(PORTAL_SESSION_STORAGE_KEY);
     }
 };
 
@@ -231,7 +232,7 @@ export const useAuthStore = create(
         }
     }), {
         name: 'user-auth-storage',
-        getStorage: () => localStorage,
+        storage: safePersistStorage,
         partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }), // Token is inside user object
     }
 ));

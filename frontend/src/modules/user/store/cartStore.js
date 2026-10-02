@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
+import { safePersistStorage } from '../../../utils/safeStorage';
 
 const isSameItem = (item, product, variant = product?.variant || {}) => (
     item.id === product.id &&
@@ -445,6 +446,7 @@ export const useCartStore = create()(
         }),
         {
             name: 'cart-storage',
+            storage: safePersistStorage,
             version: 3,
             partialize: (state) => ({
                 cart: state.cart,

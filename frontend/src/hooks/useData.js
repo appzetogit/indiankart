@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import API from '../services/api';
+import { DISPOSABLE_CACHE_PREFIX, purgeDisposableCache } from '../utils/safeStorage';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const PERSISTED_CACHE_PREFIX = 'ik-cache-v1:';
+const PERSISTED_CACHE_PREFIX = DISPOSABLE_CACHE_PREFIX;
+// Every product seen used to be written to localStorage, twice, and never
+// evicted: one visit to Home stored ~1,800 entries (~3.7M chars). On phones
+// that filled the quota, and the login's own writes then threw after the
+// server had accepted the OTP. Single products now stay in memory only, and
+// any entry too large to be worth persisting is skipped.
+const MAX_PERSISTED_ENTRY_CHARS = 200 * 1024;
+const isMemoryOnlyKey = (key) => String(key).startsWith('product:');
+
+// Clear what earlier versions left behind on customers' devices.
+purgeDisposableCache(`${PERSISTED_CACHE_PREFIX}product:`);
 const cacheStore = new Map();
 const inflightStore = new Map();
 
@@ -41,8 +52,11 @@ const readCache = (key) => {
 const writeCache = (key, data) => {
     const payload = { data, timestamp: Date.now() };
     cacheStore.set(key, payload);
+    if (isMemoryOnlyKey(key)) return data;
     try {
-        localStorage.setItem(`${PERSISTED_CACHE_PREFIX}${key}`, JSON.stringify(payload));
+        const serialized = JSON.stringify(payload);
+        if (serialized.length > MAX_PERSISTED_ENTRY_CHARS) return data;
+        localStorage.setItem(`${PERSISTED_CACHE_PREFIX}${key}`, serialized);
     } catch {
         // Ignore quota issues; in-memory cache is still available.
     }

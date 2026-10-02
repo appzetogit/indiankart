@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safePersistStorage } from '../utils/safeStorage';
 
 export const useLanguageStore = create(
     persist(
@@ -9,6 +10,7 @@ export const useLanguageStore = create(
         }),
         {
             name: 'language-storage', // name of the item in the storage (must be unique)
+            storage: safePersistStorage,
         }
     )
 );

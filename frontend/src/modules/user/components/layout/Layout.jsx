@@ -6,20 +6,21 @@ import BottomNav from './BottomNav';
 import StoreReviewPrompt from './StoreReviewPrompt';
 import { useAuthStore } from '../../store/authStore';
 import API from '../../../../services/api';
+import { safeGetItem, safeSetItem } from '../../../../utils/safeStorage';
 
 const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
 
 const ensurePortalSessionId = () => {
     if (typeof window === 'undefined') return '';
 
-    const existing = localStorage.getItem(PORTAL_SESSION_STORAGE_KEY);
+    const existing = safeGetItem(PORTAL_SESSION_STORAGE_KEY);
     if (existing) return existing;
 
     const nextId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    localStorage.setItem(PORTAL_SESSION_STORAGE_KEY, nextId);
+    safeSetItem(PORTAL_SESSION_STORAGE_KEY, nextId);
     return nextId;
 };
 
@@ -31,7 +32,7 @@ const Layout = () => {
         const sessionId = ensurePortalSessionId();
         if (!sessionId) return;
 
-        const lastState = localStorage.getItem('ik-last-known-state') || 'Unknown';
+        const lastState = safeGetItem('ik-last-known-state') || 'Unknown';
         const referrer = typeof document !== 'undefined' ? document.referrer : '';
         API.post('/auth/session/touch', {
             path: location.pathname,
