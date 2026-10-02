@@ -80,18 +80,26 @@ function generateOTP(length = 4) {
 /**
  * Normalize mobile number to include country code (91)
  */
+// Builds the 91XXXXXXXXXX form the SMS gateway expects. Decided by LENGTH, not
+// by leading digits: this used to add 91 only when the number did not already
+// start with "91", so every 10-digit mobile that itself begins 91 (9123456789)
+// was left at 10 digits, rejected, and never sent an OTP - login and delivery
+// OTPs alike.
 function normalizeMobileNumber(mobile) {
-    let cleanMobile = mobile.replace(/^\+/, '').replace(/\D/g, '');
+    let digits = String(mobile || '').replace(/\D/g, '');
 
-    if (!cleanMobile.startsWith('91')) {
-        cleanMobile = '91' + cleanMobile;
+    if (digits.length === 11 && digits.startsWith('0')) {
+        digits = digits.slice(1);              // 0XXXXXXXXXX trunk prefix
+    }
+    if (digits.length === 10) {
+        digits = `91${digits}`;                // national number
     }
 
-    if (cleanMobile.length < 12 || cleanMobile.length > 13) {
-        throw new Error(`Invalid mobile number: ${cleanMobile}. Must be 12-13 digits with country code.`);
+    if (digits.length !== 12 || !digits.startsWith('91') || !/^91[6-9]/.test(digits)) {
+        throw new Error(`Invalid mobile number ending ${digits.slice(-4)}. Expected a 10-digit Indian mobile number.`);
     }
 
-    return cleanMobile;
+    return digits;
 }
 
 /**
@@ -221,39 +229,67 @@ async function sendSmsViaApi(mobile, message) {
     handleSmsResponse(response.data);
 }
 
+// A code is accepted for OTP_VALID_MS. Its record is kept until OTP_RETAIN_MS
+// (the TTL index on expiresAt) so that a late or repeated submission can be
+// told apart - expired, already used, wrong - instead of every failure
+// reading as "no active OTP" and being shown as "Invalid or expired OTP".
+// Ten minutes rather than five: DLT-routed SMS in India can take minutes to
+// arrive, and a code that expires before it lands is reported as wrong.
+const OTP_VALID_MS = 10 * 60 * 1000;
+const OTP_RETAIN_MS = 60 * 60 * 1000;
+
+const maskMobile = (mobile = '') => `******${String(mobile).slice(-4)}`;
+
 /**
  * Save OTP to database
  */
 async function saveOtpToDb(mobile, otp, userType) {
     const normalizedMobile = normalizeOtpMobile(mobile);
+    const now = Date.now();
 
     await Otp.deleteMany({ mobile: normalizedMobile, userType });
     await Otp.create({
         mobile: normalizedMobile,
         otp: otp.trim(),
         userType,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes expiry
+        validUntil: new Date(now + OTP_VALID_MS),
+        expiresAt: new Date(now + OTP_RETAIN_MS),
     });
 }
 
 /**
- * Verify OTP from database
+ * Check an OTP and say why it failed.
+ * Resolves to { ok: true } or { ok: false, reason, attemptsLeft? } where reason
+ * is 'not_found' | 'expired' | 'used' | 'incorrect' | 'locked'.
  */
-async function verifyOtpFromDb(mobile, otp, userType) {
+async function checkOtpFromDb(mobile, otp, userType) {
     const normalizedMobile = normalizeOtpMobile(mobile);
+    const tag = `${maskMobile(normalizedMobile)} ${userType}`;
 
     // Look up by mobile only: a 4-digit OTP is brute-forceable, so wrong guesses must burn attempts.
-    const record = await Otp.findOne({ mobile: normalizedMobile, userType });
+    const record = await Otp.findOne({ mobile: normalizedMobile, userType }).sort({ createdAt: -1 });
 
     if (!record) {
-        console.error('OTP verification failed - no active OTP for', normalizedMobile, userType);
-        return false;
+        console.error(`OTP check failed [not_found] ${tag} - no code sent in the last hour`);
+        return { ok: false, reason: 'not_found' };
     }
 
-    if (record.expiresAt < new Date()) {
-        await Otp.deleteOne({ _id: record._id });
-        console.error('OTP verification failed - expired');
-        return false;
+    const ageSeconds = Math.round((Date.now() - new Date(record.createdAt).getTime()) / 1000);
+
+    if (record.usedAt) {
+        console.error(`OTP check failed [used] ${tag} - code already accepted, sent ${ageSeconds}s ago`);
+        return { ok: false, reason: 'used' };
+    }
+
+    const validUntil = record.validUntil || record.expiresAt;
+    if (validUntil < new Date()) {
+        console.error(`OTP check failed [expired] ${tag} - sent ${ageSeconds}s ago`);
+        return { ok: false, reason: 'expired' };
+    }
+
+    if ((record.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+        console.error(`OTP check failed [locked] ${tag} - ${record.attempts} wrong attempts`);
+        return { ok: false, reason: 'locked' };
     }
 
     if (record.otp !== otp.trim()) {
@@ -262,15 +298,38 @@ async function verifyOtpFromDb(mobile, otp, userType) {
             { $inc: { attempts: 1 } },
             { new: true }
         );
-        if ((updated?.attempts || 0) >= MAX_OTP_ATTEMPTS) {
-            await Otp.deleteOne({ _id: record._id });
-            console.error('OTP verification failed - too many attempts, code invalidated');
-        }
-        return false;
+        const attempts = updated?.attempts || 0;
+        console.error(`OTP check failed [incorrect] ${tag} - attempt ${attempts}/${MAX_OTP_ATTEMPTS}, sent ${ageSeconds}s ago`);
+        return attempts >= MAX_OTP_ATTEMPTS
+            ? { ok: false, reason: 'locked' }
+            : { ok: false, reason: 'incorrect', attemptsLeft: MAX_OTP_ATTEMPTS - attempts };
     }
 
-    await Otp.deleteOne({ _id: record._id });
-    return true;
+    // Claim atomically: of two simultaneous submissions of the right code only
+    // one may succeed. The record is marked, not deleted, so a repeat
+    // submission is recognised as already used rather than "not found".
+    const claimed = await Otp.findOneAndUpdate(
+        { _id: record._id, usedAt: null },
+        { $set: { usedAt: new Date() } },
+        { new: true }
+    );
+    if (!claimed) {
+        console.error(`OTP check failed [used] ${tag} - claimed by a simultaneous request`);
+        return { ok: false, reason: 'used' };
+    }
+
+    // Time from send to accepted entry: the SMS delivery delay customers see.
+    console.log(`OTP accepted ${tag} after ${ageSeconds}s`);
+    return { ok: true };
+}
+
+/**
+ * Verify OTP from database. Strictly boolean: callers return this value as-is
+ * (verifySmsOtp, verifyOTP), so it must never resolve to a truthy object.
+ */
+async function verifyOtpFromDb(mobile, otp, userType) {
+    const result = await checkOtpFromDb(mobile, otp, userType);
+    return result.ok === true;
 }
 
 /**
@@ -421,22 +480,31 @@ export async function sendOTP(mobile, userType) {
     }
 }
 
-export async function verifyOTP(mobile, otpInput, userType) {
-    if (isDeveloperBypass(otpInput)) return true;
+/**
+ * Like verifyOTP, but resolves to { ok, reason, attemptsLeft? } so the caller
+ * can tell the customer why a code was refused.
+ */
+export async function verifyOTPDetailed(mobile, otpInput, userType) {
+    if (isDeveloperBypass(otpInput)) return { ok: true };
 
     const normalizedOtp = normalizeHardcodedOtp(otpInput);
     const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
     // Must stay env-gated: without this check these numbers log in with 0000 in production.
     if (isHardcodedLoginMobile(normalizedMobile) && normalizedOtp === HARDCODED_LOGIN_OTP) {
-        return true;
+        return { ok: true };
     }
 
-    if (!normalizedOtp || normalizedOtp.length !== 4) return false;
+    if (!normalizedOtp || normalizedOtp.length !== 4) return { ok: false, reason: 'incorrect' };
 
-    if (normalizedMobile.length !== 10) return false;
+    if (normalizedMobile.length !== 10) return { ok: false, reason: 'not_found' };
 
-    return verifyOtpFromDb(normalizedMobile, normalizedOtp, userType);
+    return checkOtpFromDb(normalizedMobile, normalizedOtp, userType);
+}
+
+export async function verifyOTP(mobile, otpInput, userType) {
+    const result = await verifyOTPDetailed(mobile, otpInput, userType);
+    return result.ok === true;
 }
 
 // ==========================================

@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import Order from '../models/Order.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { sendOTP, verifyOTP } from '../utils/smsService.js';
+import { sendOTP, verifyOTPDetailed } from '../utils/smsService.js';
 import generateToken from '../utils/generateToken.js';
 import {
     createPortalSessionId,
@@ -186,8 +186,27 @@ export const verifyLoginOtp = async (req, res) => {
         const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
         if (!hasMobile || !hasOtp) return res.status(400).json({ message: 'Mobile and OTP are required' });
 
-        const isValid = await verifyOTP(mobile, otp, userType || 'Customer');
-        if (!isValid) return res.status(400).json({ message: 'Invalid or expired OTP' });
+        // Say WHY a code was refused. A single "Invalid or expired OTP" for every
+        // case left customers whose code had expired or was already used
+        // retyping it as if they had mistyped, never reaching for Resend.
+        const check = await verifyOTPDetailed(mobile, otp, userType || 'Customer');
+        if (!check.ok) {
+            const RESEND = 'Please tap Resend OTP to get a new one.';
+            const messages = {
+                expired: `This OTP has expired. ${RESEND}`,
+                used: `This OTP has already been used. ${RESEND}`,
+                not_found: `No active OTP for this number. ${RESEND}`,
+                locked: `Too many incorrect attempts. ${RESEND}`,
+                incorrect: check.attemptsLeft
+                    ? `Incorrect OTP. ${check.attemptsLeft} attempt${check.attemptsLeft === 1 ? '' : 's'} left.`
+                    : 'Incorrect OTP. Please check the code and try again.'
+            };
+            return res.status(400).json({
+                message: messages[check.reason] || 'Invalid or expired OTP',
+                code: `OTP_${String(check.reason || 'invalid').toUpperCase()}`,
+                ...(check.attemptsLeft !== undefined ? { attemptsLeft: check.attemptsLeft } : {})
+            });
+        }
         let user = await User.findOne({ $or: [{ email: normalizedMobile }, { phone: normalizedMobile }] });
         let isNewUser = false;
         if (!user) {

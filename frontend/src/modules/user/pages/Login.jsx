@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import logo from '../../../assets/indiankart-logo.png';
@@ -45,6 +45,7 @@ const Login = () => {
     const [otp, setOtp] = useState('');
     const [step, setStep] = useState(location.state?.mobile ? 2 : 1); // 1: Mobile, 2: OTP, 3: Profile
     const [resendCooldown, setResendCooldown] = useState(0);
+    const verifyInFlight = useRef(false);
 
     useEffect(() => {
         if (step !== 2 || resendCooldown <= 0) return undefined;
@@ -83,6 +84,11 @@ const Login = () => {
             toast.error('Please enter a valid 4-digit OTP');
             return;
         }
+        // `disabled={loading}` only takes effect after a re-render, so a quick
+        // double tap could submit twice. The second submission finds the code
+        // already used and showed "wrong OTP" even though the first logged in.
+        if (verifyInFlight.current) return;
+        verifyInFlight.current = true;
 
         try {
             const data = await verifyOtp(normalizeForHardcodedLogin(mobile), otp, 'Customer');
@@ -106,7 +112,29 @@ const Login = () => {
             navigate('/', { replace: true });
             return;
         } catch (err) {
-            toast.error(err?.response?.data?.message || error || 'Invalid OTP');
+            // The server accepted the code but something after it failed in the
+            // browser: the customer IS logged in. Never call that a wrong OTP.
+            if (useAuthStore.getState().isAuthenticated) {
+                navigate('/', { replace: true });
+                return;
+            }
+
+            if (!err?.response) {
+                // No server reply: a connection problem, not a wrong code.
+                toast.error('Could not reach the server. Please check your connection and try again.');
+                return;
+            }
+
+            const code = err.response.data?.code;
+            toast.error(err.response.data?.message || 'Incorrect OTP. Please try again.');
+            setOtp('');
+            // These codes are dead - typing them again cannot work - so let the
+            // customer resend straight away instead of waiting out the cooldown.
+            if (['OTP_EXPIRED', 'OTP_USED', 'OTP_NOT_FOUND', 'OTP_LOCKED'].includes(code)) {
+                setResendCooldown(0);
+            }
+        } finally {
+            verifyInFlight.current = false;
         }
     };
 
