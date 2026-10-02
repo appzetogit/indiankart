@@ -386,6 +386,7 @@ const updateSettings = async (req, res) => {
             fssai,
             razorpayKeyId,
             razorpayKeySecret,
+            razorpayWebhookSecret,
             deliveryApi,
             delhiveryClientName,
             delhiveryPickupLocation,
@@ -448,6 +449,9 @@ const updateSettings = async (req, res) => {
             settings.razorpayKeyId = razorpayKeyId || settings.razorpayKeyId;
             if (typeof razorpayKeySecret === 'string' && razorpayKeySecret.trim()) {
                 settings.razorpayKeySecret = razorpayKeySecret.trim();
+            }
+            if (typeof razorpayWebhookSecret === 'string' && razorpayWebhookSecret.trim()) {
+                settings.razorpayWebhookSecret = razorpayWebhookSecret.trim();
             }
             if (deliveryApi !== undefined) {
                 settings.deliveryApi = String(deliveryApi || '').trim();
@@ -558,6 +562,7 @@ const updateSettings = async (req, res) => {
                 fssai,
                 razorpayKeyId: razorpayKeyId || '',
                 razorpayKeySecret: (typeof razorpayKeySecret === 'string' ? razorpayKeySecret.trim() : '') || '',
+                razorpayWebhookSecret: (typeof razorpayWebhookSecret === 'string' ? razorpayWebhookSecret.trim() : '') || '',
                 deliveryApi: typeof deliveryApi === 'string' ? deliveryApi.trim() : '',
                 delhiveryClientName: typeof delhiveryClientName === 'string' ? delhiveryClientName.trim() : '',
                 delhiveryPickupLocation: typeof delhiveryPickupLocation === 'string' ? delhiveryPickupLocation.trim() : '',

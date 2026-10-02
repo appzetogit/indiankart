@@ -16,6 +16,8 @@ const settingSchema = mongoose.Schema({
     maxShippingOrderAmount: { type: Number, default: 499 },
     razorpayKeyId: { type: String, default: '' },
     razorpayKeySecret: { type: String, default: '', select: false },
+    // Signs Razorpay webhook calls; set in Razorpay Dashboard > Webhooks.
+    razorpayWebhookSecret: { type: String, default: '', select: false },
     deliveryApi: { type: String, default: '' },
     delhiveryClientName: { type: String, default: '' },
     delhiveryPickupLocation: { type: String, default: '' },

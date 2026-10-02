@@ -1,8 +1,9 @@
 import express from 'express';
 const router = express.Router();
-import { createRazorpayOrder, verifyPayment, testRazorpayCredentials, getRazorpayConfig, getRazorpayStatus } from '../controllers/paymentController.js';
+import { createRazorpayOrder, verifyPayment, testRazorpayCredentials, getRazorpayConfig, getRazorpayStatus, handleRazorpayWebhook } from '../controllers/paymentController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
+router.post('/webhook', handleRazorpayWebhook);
 router.post('/order', protect, createRazorpayOrder);
 router.post('/verify', protect, verifyPayment);
 router.get('/status', getRazorpayStatus);

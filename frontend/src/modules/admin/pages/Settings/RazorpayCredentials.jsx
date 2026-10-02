@@ -5,6 +5,7 @@ import useSettingsStore from '../../store/settingsStore';
 const DEFAULT_FORM = {
     razorpayKeyId: '',
     razorpayKeySecret: '',
+    razorpayWebhookSecret: '',
     deliveryApi: '',
     delhiveryClientName: '',
     delhiveryPickupLocation: '',
@@ -121,6 +122,7 @@ const RazorpayCredentials = () => {
         setForm({
             razorpayKeyId: settings?.razorpayKeyId || '',
             razorpayKeySecret: '',
+            razorpayWebhookSecret: '',
             deliveryApi: settings?.deliveryApi || 'https://track.delhivery.com',
             delhiveryClientName: settings?.delhiveryClientName || '',
             delhiveryPickupLocation: settings?.delhiveryPickupLocation || '',
@@ -178,6 +180,7 @@ const RazorpayCredentials = () => {
             const data = new FormData();
             data.append('razorpayKeyId', form.razorpayKeyId.trim());
             data.append('razorpayKeySecret', form.razorpayKeySecret);
+            data.append('razorpayWebhookSecret', form.razorpayWebhookSecret);
             data.append('deliveryApi', form.deliveryApi.trim());
             data.append('delhiveryClientName', form.delhiveryClientName.trim());
             data.append('delhiveryPickupLocation', form.delhiveryPickupLocation.trim());
@@ -213,6 +216,7 @@ const RazorpayCredentials = () => {
             setForm({
                 razorpayKeyId: res?.razorpayKeyId || '',
                 razorpayKeySecret: '',
+                razorpayWebhookSecret: '',
                 deliveryApi: res?.deliveryApi || 'https://track.delhivery.com',
                 delhiveryClientName: res?.delhiveryClientName || '',
                 delhiveryPickupLocation: res?.delhiveryPickupLocation || '',
@@ -353,6 +357,16 @@ const RazorpayCredentials = () => {
                                 onChange={handleChange}
                                 placeholder="Leave blank to keep existing secret"
                                 hint="For security, the stored secret is never returned by the API."
+                            />
+                            <InputField
+                                section="razorpay"
+                                label="Razorpay Webhook Secret"
+                                type="password"
+                                name="razorpayWebhookSecret"
+                                value={form.razorpayWebhookSecret}
+                                onChange={handleChange}
+                                placeholder="Leave blank to keep existing secret"
+                                hint="The secret you set on the webhook in Razorpay Dashboard > Webhooks (URL: https://backend.indiankart.in/api/payments/webhook)."
                             />
                         </div>
                     </SectionCard>

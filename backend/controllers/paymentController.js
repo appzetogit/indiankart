@@ -1,6 +1,7 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import Setting from '../models/Setting.js';
+import PendingCheckout from '../models/PendingCheckout.js';
 
 const getRazorpayCredentials = async () => {
     const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
@@ -13,7 +14,7 @@ const getRazorpayCredentials = async () => {
 // @route   POST /api/payments/order
 // @access  Private
 export const createRazorpayOrder = async (req, res) => {
-    const { amount, offer_id } = req.body;
+    const { amount, offer_id, orderData } = req.body;
     console.log(`Processing Razorpay order request - Amount: Rs ${amount}, Offer ID: ${offer_id || 'none'}`);
 
     try {
@@ -50,6 +51,23 @@ export const createRazorpayOrder = async (req, res) => {
 
         if (!order) {
             return res.status(500).send('Some error occured');
+        }
+
+        // Keep what the customer is buying, so the order can still be created if
+        // they pay but never make it back from the payment page.
+        if (orderData && typeof orderData === 'object' && Array.isArray(orderData.orderItems) && orderData.orderItems.length) {
+            const { paymentResult, isPaid, paidAt, ...orderPayload } = orderData;
+            try {
+                await PendingCheckout.create({
+                    razorpayOrderId: order.id,
+                    user: req.user._id,
+                    orderPayload,
+                    amount: order.amount,
+                });
+            } catch (saveError) {
+                // The browser path still works without it; do not block payment.
+                console.error(`Pending checkout save failed for ${order.id}:`, saveError.message);
+            }
         }
 
         return res.json(order);
@@ -127,6 +145,70 @@ export const verifyPayment = async (req, res) => {
         });
     } catch (error) {
         return res.status(500).json({ message: error.message });
+    }
+};
+
+const getWebhookSecret = async () => {
+    const settings = await Setting.findOne().select('+razorpayWebhookSecret').lean();
+    return settings?.razorpayWebhookSecret?.trim() || process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '';
+};
+
+const signatureMatches = (rawBody, signature, secret) => {
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const given = String(signature || '');
+    return given.length === expected.length
+        && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+};
+
+// @desc    Razorpay webhook (payment.captured, order.paid, payment.failed)
+// @route   POST /api/payments/webhook
+// @access  Public, authenticated by X-Razorpay-Signature
+//
+// Only records what Razorpay reported and answers at once; the order itself is
+// built by the payment reconciler, which re-reads the payment from Razorpay
+// before trusting it. So a forged or replayed event cannot create a paid order.
+export const handleRazorpayWebhook = async (req, res) => {
+    try {
+        const secret = await getWebhookSecret();
+        if (!secret) {
+            console.error('Razorpay webhook received but no webhook secret is configured');
+            return res.status(503).json({ message: 'Webhook not configured' });
+        }
+        if (!req.rawBody || !signatureMatches(req.rawBody, req.headers['x-razorpay-signature'], secret)) {
+            return res.status(400).json({ message: 'Invalid signature' });
+        }
+
+        const event = String(req.body?.event || '');
+        const payment = req.body?.payload?.payment?.entity || null;
+        const razorpayOrderId = String(payment?.order_id || req.body?.payload?.order?.entity?.id || '');
+
+        if (!razorpayOrderId) {
+            return res.json({ ok: true, ignored: 'no order id' });
+        }
+
+        if (event === 'payment.captured' || event === 'order.paid') {
+            const result = await PendingCheckout.updateOne(
+                { razorpayOrderId, status: 'pending' },
+                {
+                    paymentId: payment?.id || '',
+                    capturedAt: new Date(),
+                    lastCheckedAt: null,
+                }
+            );
+            console.log(`Razorpay webhook ${event} for ${razorpayOrderId}: ${result.matchedCount ? 'queued for order check' : 'no pending checkout'}`);
+        } else if (event === 'payment.failed') {
+            await PendingCheckout.updateOne(
+                { razorpayOrderId, status: 'pending' },
+                { lastError: String(payment?.error_description || payment?.error_reason || 'payment failed').slice(0, 300) }
+            );
+            console.log(`Razorpay webhook payment.failed for ${razorpayOrderId}: ${payment?.error_reason || 'unknown reason'}`);
+        }
+
+        return res.json({ ok: true });
+    } catch (error) {
+        console.error('Razorpay webhook error:', error);
+        // 5xx makes Razorpay retry, which is what we want for a transient fault.
+        return res.status(500).json({ message: 'Webhook processing failed' });
     }
 };
 

@@ -32,6 +32,7 @@ import subCategoryRoutes from './routes/subCategoryRoutes.js';
 import brandRoutes from './routes/brandRoutes.js';
 import homeLayoutRoutes from './routes/homeLayoutRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import { startPaymentReconciler } from './utils/paymentRecovery.js';
 import searchRoutes from './routes/searchRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import storeReviewRoutes from './routes/storeReviewRoutes.js';
@@ -118,7 +119,15 @@ app.use(cors({
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+    limit: '10mb',
+    // Razorpay signs the exact bytes it sent, so the webhook needs them unparsed.
+    verify: (req, res, buf) => {
+        if (req.originalUrl.startsWith('/api/payments/webhook')) {
+            req.rawBody = Buffer.from(buf);
+        }
+    }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
@@ -192,6 +201,10 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
     });
+    // Creates orders for payments the customer's browser never reported back.
+    if (process.env.DISABLE_PAYMENT_RECONCILER !== 'true') {
+        startPaymentReconciler();
+    }
 }
 
 export default app;

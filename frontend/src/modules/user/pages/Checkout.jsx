@@ -11,6 +11,10 @@ import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
 import { trackPurchase } from '../../../utils/analytics';
 
+
+// Shown when payment went through Razorpay but this page could not confirm the
+// order. The server finishes such orders on its own once the money is captured.
+const PAYMENT_PENDING_MESSAGE = "We couldn't confirm your order on this page. If money was debited, your order will be confirmed automatically within a few minutes - check My Orders. Please don't pay again.";
 const parseDateOnly = (dateStr) => {
     if (!dateStr || typeof dateStr !== 'string') return null;
     const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -649,7 +653,7 @@ const Checkout = () => {
                 try {
                     const codAdvancedAmountToPay = Math.min(finalAmount, codAdvancedConfig.amount);
                     const { data: config } = await API.get('/payments/config');
-                    const { data: order } = await API.post('/payments/order', { amount: codAdvancedAmountToPay });
+                    const { data: order } = await API.post('/payments/order', { amount: codAdvancedAmountToPay, orderData });
                     
                     const options = {
                         key: config.keyId,
@@ -687,11 +691,11 @@ const Checkout = () => {
                                     }, 2000);
                                     return;
                                 }
-                                toast.error("Pre-payment was not captured. COD order not created.");
+                                toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
                                 setIsPlacingOrder(false);
                             } catch (error) {
                                 console.error(error);
-                                toast.error(error.response?.data?.message || "Pre-payment verification failed!");
+                                toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
                                 setIsPlacingOrder(false);
                             }
                         },
@@ -750,7 +754,8 @@ const Checkout = () => {
                 
                 // Find the best applicable bank offer with a Razorpay ID to pass to order creation
                 const activeRazorpayOffer = bankOffers.find(o => o.razorpayOfferId);
-                const orderPayload = { amount: finalAmount };
+                // orderData lets the server finish the order if this page never hears back.
+                const orderPayload = { amount: finalAmount, orderData };
                 if (activeRazorpayOffer) {
                     orderPayload.offer_id = activeRazorpayOffer.razorpayOfferId;
                 }
@@ -795,11 +800,11 @@ const Checkout = () => {
                                 }, 2000);
                                 return;
                             }
-                            toast.error("Payment was not captured. No order was created.");
+                            toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
                             setIsPlacingOrder(false);
                         } catch (error) {
                             console.error(error);
-                            toast.error(error.response?.data?.message || "Payment verification failed!");
+                            toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
                             setIsPlacingOrder(false);
                         }
                     },
