@@ -66,6 +66,12 @@ const productSchema = mongoose.Schema({
 
     // Inventory & Variants
     stock: { type: Number, default: 0, min: 0 },
+    // Off = the product is hidden from customers everywhere (listings, search,
+    // product page, home sections, banners, offers) and cannot be ordered.
+    // Missing on older documents, which count as visible.
+    isVisible: { type: Boolean, default: true },
+    visibilityUpdatedAt: { type: Date },
+    visibilityUpdatedBy: { type: String },
     maxOrderQuantity: { type: Number, default: 1, min: 1 },
     variantLabel: { type: String }, // 'Size', 'Color' etc.
     variantHeadings: [{

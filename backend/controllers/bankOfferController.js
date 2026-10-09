@@ -1,3 +1,4 @@
+import { isProductVisible } from '../utils/productVisibility.js';
 import BankOffer from '../models/BankOffer.js';
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
@@ -175,7 +176,7 @@ const getBankOffersForProduct = async (req, res) => {
 
         // 1. Fetch Product
         const product = await Product.findOne({ id: productId });
-        if (!product) {
+        if (!product || (!isProductVisible(product) && !req.isAdminViewer)) {
             return res.status(404).json({ message: 'Product not found' });
         }
 

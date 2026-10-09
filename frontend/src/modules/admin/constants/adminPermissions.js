@@ -42,6 +42,7 @@ export const ADMIN_MENU_GROUPS = [
         items: [
             { key: 'products', name: 'Products', icon: MdInventory, path: '/admin/products' },
             { key: 'maxSellingQty', name: 'Max Selling Qty', icon: MdInventory, path: '/admin/products/max-selling-quantity' },
+            { key: 'productVisibility', name: 'Product Visibility', icon: MdVisibility, path: '/admin/products/visibility' },
             { key: 'productViews', name: 'Product Views', icon: MdVisibility, path: '/admin/product-views' },
             { key: 'stockManagement', name: 'Stock Management', icon: MdInventory, path: '/admin/stock' },
             { key: 'categories', name: 'Categories', icon: MdCategory, path: '/admin/categories' },

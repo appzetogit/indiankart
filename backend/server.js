@@ -33,6 +33,7 @@ import brandRoutes from './routes/brandRoutes.js';
 import homeLayoutRoutes from './routes/homeLayoutRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { startPaymentReconciler } from './utils/paymentRecovery.js';
+import { detectAdminViewer } from './middleware/authMiddleware.js';
 import searchRoutes from './routes/searchRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
 import storeReviewRoutes from './routes/storeReviewRoutes.js';
@@ -130,6 +131,8 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+// Marks verified admin requests so they can see hidden products.
+app.use(detectAdminViewer);
 
 // One hop: nginx. Without this req.ip is nginx's loopback address, so the
 // geo-IP state fallback would never resolve a real visitor location. Set to 1

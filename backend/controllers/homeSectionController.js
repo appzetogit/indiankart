@@ -1,3 +1,4 @@
+import { isProductVisible } from '../utils/productVisibility.js';
 import HomeSection from '../models/HomeSection.js';
 import HomeLayout from '../models/HomeLayout.js';
 
@@ -7,13 +8,23 @@ import HomeLayout from '../models/HomeLayout.js';
 export const getHomeSections = async (req, res) => {
     try {
         const { all } = req.query;
-        const sections = await HomeSection.find({}).populate({
+        let sections = await HomeSection.find({}).populate({
             path: 'products',
             populate: {
                 path: 'subCategories',
                 select: 'isActive'
             }
         });
+
+        // Hidden products are dropped for customers whatever the query says;
+        // only a verified admin request sees them.
+        if (!req.isAdminViewer) {
+            sections = sections.map((section) => {
+                const sectionObj = section.toObject();
+                sectionObj.products = (sectionObj.products || []).filter(isProductVisible);
+                return sectionObj;
+            });
+        }
 
         if (all === 'true') {
             return res.json(sections);
@@ -29,7 +40,7 @@ export const getHomeSections = async (req, res) => {
         const activeSubCategoryIds = new Set(activeSubCategories.map(s => s._id.toString()));
 
         const filteredSections = sections.map(section => {
-            const sectionObj = section.toObject();
+            const sectionObj = typeof section.toObject === 'function' ? section.toObject() : section;
             sectionObj.products = (sectionObj.products || []).filter(p => {
                 if (!p) return false;
                 

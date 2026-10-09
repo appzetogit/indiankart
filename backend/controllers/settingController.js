@@ -1,4 +1,5 @@
 import Setting from '../models/Setting.js';
+import { scrubForCustomer, scrubHiddenProductItems, getHiddenProductIds } from '../utils/productVisibility.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
@@ -265,6 +266,11 @@ const getSettings = async (req, res) => {
                 ? await Setting.findById(createdSettings._id).select(checkoutFields).lean()
                 : createdSettings.toObject();
         }
+        // Page-builder catalogs keep product copies; drop hidden products for
+        // customers. Admins (who edit and save these catalogs) get them intact.
+        if (!isAdminViewer && !req.isAdminViewer) {
+            settings = scrubHiddenProductItems(settings, await getHiddenProductIds());
+        }
         res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=120');
         res.json(settings);
     } catch (error) {
@@ -279,7 +285,7 @@ const getCategoryPageConfig = async (req, res) => {
     try {
         const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
         const config = await loadMatchingCatalogEntry('categoryPageCatalog', categoryName);
-        res.json({ config });
+        res.json({ config: await scrubForCustomer(req, config) });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -295,7 +301,7 @@ const getSubCategoryPageConfig = async (req, res) => {
         const targetName = `${categoryName} / ${subCategoryName}`;
 
         const config = await loadMatchingCatalogEntry('subCategoryPageCatalog', targetName);
-        res.json({ config });
+        res.json({ config: await scrubForCustomer(req, config) });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -308,7 +314,7 @@ const getCategoryPageLayout = async (req, res) => {
     try {
         const categoryName = normalizeSettingKey(decodeURIComponent(req.params.categoryName || ''));
         const config = await loadMatchingCatalogLayout('categoryPageCatalog', categoryName);
-        res.json({ config: config || null });
+        res.json({ config: (await scrubForCustomer(req, config)) || null });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -327,8 +333,9 @@ const getCategoryPageSection = async (req, res) => {
             return res.status(404).json({ message: 'Section not found' });
         }
 
-        const products = await loadSectionProducts(section.items);
-        return res.json({ section, products });
+        const visibleSection = await scrubForCustomer(req, section);
+        const products = await loadSectionProducts(visibleSection.items);
+        return res.json({ section: visibleSection, products });
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }
@@ -343,7 +350,7 @@ const getSubCategoryPageLayout = async (req, res) => {
         const subCategoryName = normalizeSettingKey(decodeURIComponent(req.params.subCategoryName || ''));
         const targetName = `${categoryName} / ${subCategoryName}`;
         const config = await loadMatchingCatalogLayout('subCategoryPageCatalog', targetName);
-        res.json({ config: config || null });
+        res.json({ config: (await scrubForCustomer(req, config)) || null });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -364,8 +371,9 @@ const getSubCategoryPageSection = async (req, res) => {
             return res.status(404).json({ message: 'Section not found' });
         }
 
-        const products = await loadSectionProducts(section.items);
-        return res.json({ section, products });
+        const visibleSection = await scrubForCustomer(req, section);
+        const products = await loadSectionProducts(visibleSection.items);
+        return res.json({ section: visibleSection, products });
     } catch (error) {
         return res.status(500).json({ message: error.message });
     }

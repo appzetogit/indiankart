@@ -83,8 +83,8 @@ export const createDemoBooking = async (req, res) => {
             const query = mongoose.Types.ObjectId.isValid(String(requestedProduct))
                 ? { _id: String(requestedProduct) }
                 : { id: Number(requestedProduct) };
-            const found = await Product.findOne(query).select('_id name').lean();
-            if (found) {
+            const found = await Product.findOne(query).select('_id name isVisible').lean();
+            if (found && found.isVisible !== false) {
                 product = found._id;
                 productName = productName || found.name || '';
             }

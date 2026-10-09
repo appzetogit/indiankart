@@ -106,7 +106,7 @@ const ProductDetails = () => {
     const { addToCart, wishlist, toggleWishlist, addresses } = useCartStore();
 
     // Fetch individual product
-    const { product, loading } = useProduct(id);
+    const { product, loading, unavailable } = useProduct(id);
 
     // Translation Hooks
     const translatedName = useGoogleTranslation(product?.name);
@@ -769,6 +769,24 @@ const ProductDetails = () => {
             .filter((p) => p.category === product.category && p.rating >= 4.0 && p.id !== product.id)
             .slice(0, 6);
     }, [product, products]);
+
+    if (unavailable && !loading) {
+        return (
+            <div className="min-h-[70vh] bg-[#f1f3f6] flex items-center justify-center px-4">
+                <div className="bg-white rounded-lg shadow-sm max-w-md w-full p-6 text-center">
+                    <h1 className="text-lg font-semibold text-gray-900 mb-2">This product is currently unavailable</h1>
+                    <p className="text-sm text-gray-600 mb-6">It may be back soon. Meanwhile, take a look at our other products.</p>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/', { replace: true })}
+                        className="w-full bg-[#2874f0] text-white font-semibold py-3 rounded"
+                    >
+                        Continue shopping
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (loading || !product) return <ProductSkeleton />;
 

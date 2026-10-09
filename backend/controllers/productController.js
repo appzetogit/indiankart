@@ -1,4 +1,5 @@
 import Product from '../models/Product.js';
+import { withVisibility, isProductVisible, VISIBLE_PRODUCT_FILTER, HIDDEN_PRODUCT_MESSAGE, clearHiddenProductIdsCache } from '../utils/productVisibility.js';
 import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
 import { resolveStateFromIp, getClientIp } from '../utils/geoState.js';
@@ -51,7 +52,7 @@ const getListProjection = (lite = false) => {
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
     // b2bEnabled must stay here: the B2B admin screen reads this projection, so
     // omitting it made every toggle read back as off however it was saved.
-    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity b2bEnabled createdAt subCategories subCategory';
+    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity b2bEnabled isVisible createdAt subCategories subCategory';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -326,6 +327,19 @@ export const getProducts = async (req, res) => {
                 : searchFilter;
         }
 
+        // Hidden products never reach customers. Admins see all, and can narrow
+        // to one state for the Product Visibility page.
+        if (req.isAdminViewer) {
+            const visibility = String(req.query.visibility || '').toLowerCase();
+            if (visibility === 'hidden') {
+                filter = Object.keys(filter).length ? { $and: [filter, { isVisible: false }] } : { isVisible: false };
+            } else if (visibility === 'visible') {
+                filter = Object.keys(filter).length ? { $and: [filter, VISIBLE_PRODUCT_FILTER] } : { ...VISIBLE_PRODUCT_FILTER };
+            }
+        } else {
+            filter = withVisibility(req, filter);
+        }
+
         // Pagination Logic
         if (pageNumber || limit) {
             const pageSize = Number(limit) || 12;
@@ -368,6 +382,50 @@ export const getProducts = async (req, res) => {
     }
 };
 
+// @desc    Show or hide products on the website
+// @route   PATCH /api/products/visibility
+// @access  Private/Admin with the productVisibility permission
+export const setProductVisibility = async (req, res) => {
+    try {
+        const ids = [...new Set((Array.isArray(req.body?.ids) ? req.body.ids : [req.body?.id])
+            .map(Number)
+            .filter(Number.isFinite))];
+        if (!ids.length || typeof req.body?.isVisible !== 'boolean') {
+            return res.status(400).json({ message: 'Send product ids and isVisible (true or false)' });
+        }
+        if (ids.length > 1000) {
+            return res.status(400).json({ message: 'Too many products in one change (max 1000)' });
+        }
+        const result = await Product.updateMany(
+            { id: { $in: ids } },
+            {
+                isVisible: req.body.isVisible,
+                visibilityUpdatedAt: new Date(),
+                visibilityUpdatedBy: String(req.user?.email || req.user?.name || req.user?._id || ''),
+            }
+        );
+        clearHiddenProductIdsCache();
+        return res.json({ matched: result.matchedCount, updated: result.modifiedCount, isVisible: req.body.isVisible });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Counts for the Product Visibility page
+// @route   GET /api/products/visibility/summary
+// @access  Private/Admin with the productVisibility permission
+export const getProductVisibilitySummary = async (req, res) => {
+    try {
+        const [total, hidden] = await Promise.all([
+            Product.countDocuments({}),
+            Product.countDocuments({ isVisible: false }),
+        ]);
+        return res.json({ total, hidden, visible: total - hidden });
+    } catch (error) {
+        return res.status(500).json({ message: error.message });
+    }
+};
+
 // @desc    Fetch single product
 // @route   GET /api/products/:id
 // @access  Public
@@ -375,7 +433,11 @@ export const getProductById = async (req, res) => {
     try {
         const { all } = req.query;
         const product = await Product.findOne({ id: req.params.id }).populate('subCategories', 'name isActive');
-        
+
+        if (product && !isProductVisible(product) && !req.isAdminViewer) {
+            return res.status(404).json({ message: HIDDEN_PRODUCT_MESSAGE, code: 'PRODUCT_UNAVAILABLE' });
+        }
+
         if (product) {
             if (all !== 'true') {
                 const Category = (await import('../models/Category.js')).default;

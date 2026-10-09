@@ -95,13 +95,43 @@ export const protectOptional = async (req, _res, next) => {
     next();
 };
 
+const isAdminUser = (user) => Boolean(
+    user && (user.isAdmin || (user.role && ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(user.role)))
+);
+
+// Lets a verified admin see products hidden from customers. The admin panel
+// sends X-Admin-View: 1; the header alone grants nothing, and customer
+// requests (no header) skip the token lookup entirely.
+export const detectAdminViewer = async (req, _res, next) => {
+    req.isAdminViewer = false;
+    if (req.headers['x-admin-view'] === '1') {
+        try {
+            const user = await resolveAuthenticatedUser(req);
+            req.isAdminViewer = isAdminUser(user);
+        } catch {
+            req.isAdminViewer = false;
+        }
+    }
+    next();
+};
+
 export const admin = (req, res, next) => {
-    if (req.user && (req.user.isAdmin || (req.user.role && ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(req.user.role)))) {
+    if (isAdminUser(req.user)) {
         next();
     } else {
         console.log('Access denied. Not an admin. User:', req.user._id);
         res.status(401).json({ message: 'Not authorized as an admin' });
     }
+};
+
+// Page-level permission (the admin sidebar keys). Superadmins hold all keys.
+export const requireAdminPermission = (key) => (req, res, next) => {
+    const role = normalizeAdminRole(req.user?.role);
+    const permissions = normalizeSidebarPermissions(role, req.user?.permissions);
+    if (permissions.includes(key)) {
+        return next();
+    }
+    return res.status(403).json({ message: 'You do not have permission for this page' });
 };
 
 export const requireSuperAdmin = (req, res, next) => {

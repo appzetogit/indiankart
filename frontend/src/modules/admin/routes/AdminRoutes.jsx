@@ -27,6 +27,7 @@ const ProductForm = lazy(() => import('../pages/Products/ProductForm'));
 const ProductViews = lazy(() => import('../pages/Products/ProductViews'));
 const ProductAnalytics = lazy(() => import('../pages/Products/ProductAnalytics'));
 const MaxSellingQuantityManager = lazy(() => import('../pages/Products/MaxSellingQuantityManager'));
+const ProductVisibilityManager = lazy(() => import('../pages/Products/ProductVisibilityManager'));
 const UserList = lazy(() => import('../pages/Users/UserList'));
 const UserDetail = lazy(() => import('../pages/Users/UserDetail'));
 const SellerRequests = lazy(() => import('../pages/Users/SellerRequests'));
@@ -85,6 +86,7 @@ const AdminRoutes = () => {
                     <Route path="products">
                         <Route index element={withPermission('products', <ProductManager />)} />
                         <Route path="max-selling-quantity" element={withPermission('maxSellingQty', <MaxSellingQuantityManager />)} />
+                        <Route path="visibility" element={withPermission('productVisibility', <ProductVisibilityManager />)} />
                         <Route path="new" element={withPermission('products', <ProductForm />)} />
                         <Route path="edit/:id" element={withPermission('products', <ProductForm />)} />
                     </Route>

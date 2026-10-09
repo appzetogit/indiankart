@@ -1,3 +1,4 @@
+import { isProductVisible } from '../utils/productVisibility.js';
 import Review from '../models/Review.js';
 import Product from '../models/Product.js';
 
@@ -29,7 +30,7 @@ export const createReview = async (req, res) => {
 
         // Check if product exists - using the custom 'id' field as per Product schema
         const product = await Product.findOne({ id: productId });
-        if (!product) {
+        if (!product || !isProductVisible(product)) {
             return res.status(404).json({ message: 'Product not found' });
         }
 
@@ -56,7 +57,7 @@ export const createReview = async (req, res) => {
 export const getProductReviews = async (req, res) => {
     try {
         const product = await Product.findOne({ id: req.params.productId });
-        if (!product) {
+        if (!product || (!isProductVisible(product) && !req.isAdminViewer)) {
             return res.status(404).json({ message: 'Product not found' });
         }
 

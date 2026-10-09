@@ -570,6 +570,9 @@ const ProductManager = () => {
                                                     <div className="min-w-0">
                                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest truncate">{product.brand || 'No Brand'}</p>
                                                         <h3 className="text-xs font-bold text-gray-800 truncate max-w-[150px] md:max-w-[200px]" title={product.name}>{product.name}</h3>
+                                                        {product.isVisible === false && (
+                                                            <span className="inline-flex mt-0.5 text-[10px] font-bold uppercase text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded" title="Hidden from the website (Product Visibility)">Hidden</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>

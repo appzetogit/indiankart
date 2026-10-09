@@ -65,6 +65,9 @@ API.interceptors.request.use((config) => {
         // admin pages -> admin token, user pages -> user token.
         if ((isAdminContext || isAdminApiCall) && adminToken) {
             config.headers.Authorization = `Bearer ${adminToken}`;
+            // Ask to see products hidden from customers; the server only
+            // honours it for a verified admin token.
+            config.headers['X-Admin-View'] = '1';
         } else if (userToken) {
             config.headers.Authorization = `Bearer ${userToken}`;
         } else {

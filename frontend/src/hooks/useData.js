@@ -17,7 +17,11 @@ purgeDisposableCache(`${PERSISTED_CACHE_PREFIX}product:`);
 const cacheStore = new Map();
 const inflightStore = new Map();
 
-const isCacheFresh = (entry) => entry && (Date.now() - entry.timestamp) < CACHE_TTL_MS;
+// Anything that lists products is kept briefly, so a product hidden in admin
+// drops off customers' screens within about a minute.
+const PRODUCT_LIST_CACHE_TTL_MS = 60 * 1000;
+const ttlFor = (key) => (/^(products|home-sections|banners)/.test(String(key || '')) ? PRODUCT_LIST_CACHE_TTL_MS : CACHE_TTL_MS);
+const isCacheFresh = (entry, key) => entry && (Date.now() - entry.timestamp) < ttlFor(key);
 
 const readPersistedCache = (key) => {
     try {
@@ -25,7 +29,7 @@ const readPersistedCache = (key) => {
         if (!raw) return null;
 
         const parsed = JSON.parse(raw);
-        if (!isCacheFresh(parsed)) {
+        if (!isCacheFresh(parsed, key)) {
             localStorage.removeItem(`${PERSISTED_CACHE_PREFIX}${key}`);
             return null;
         }
@@ -38,7 +42,7 @@ const readPersistedCache = (key) => {
 
 const readCache = (key) => {
     const entry = cacheStore.get(key);
-    if (isCacheFresh(entry)) return entry.data;
+    if (isCacheFresh(entry, key)) return entry.data;
 
     const persisted = readPersistedCache(key);
     if (persisted !== null) {
@@ -181,9 +185,11 @@ export const useProduct = (id) => {
     const [product, setProduct] = useState(cachedProduct);
     const [loading, setLoading] = useState(!cachedProduct);
     const [error, setError] = useState(null);
+    const [unavailable, setUnavailable] = useState(false);
 
     useEffect(() => {
         let active = true;
+        setUnavailable(false);
 
         const fetchProduct = async () => {
             if (!id) {
@@ -204,6 +210,12 @@ export const useProduct = (id) => {
                 setError(null);
             } catch (err) {
                 if (!active) return;
+                if (err?.response?.status === 404) {
+                    // Hidden or removed: never keep showing a cached copy.
+                    cacheStore.delete(key);
+                    setProduct(null);
+                    setUnavailable(true);
+                }
                 setError(err.message);
             } finally {
                 if (active) setLoading(false);
@@ -217,7 +229,7 @@ export const useProduct = (id) => {
         };
     }, [id]);
 
-    return { product, loading, error };
+    return { product, loading, error, unavailable };
 };
 
 export const useCategories = (options = {}) => {

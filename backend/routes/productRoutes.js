@@ -16,9 +16,11 @@ import {
     exportProductTemplate,
     importProductsExcel,
     importB2BExcel,
-    importStockExcel
+    importStockExcel,
+    setProductVisibility,
+    getProductVisibilitySummary,
 } from '../controllers/productController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, requireAdminPermission } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 const uploadMiddleware = (req, res, next) => {
@@ -35,6 +37,10 @@ router.route('/')
     .get(getProducts)
     .post(protect, admin, uploadMiddleware, createProduct);
 
+router.route('/visibility')
+    .patch(protect, admin, requireAdminPermission('productVisibility'), setProductVisibility);
+router.route('/visibility/summary')
+    .get(protect, admin, requireAdminPermission('productVisibility'), getProductVisibilitySummary);
 router.route('/bulk/template')
     .get(protect, admin, exportProductTemplate);
 

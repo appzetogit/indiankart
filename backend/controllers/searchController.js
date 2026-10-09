@@ -1,3 +1,4 @@
+import { withVisibility } from '../utils/productVisibility.js';
 import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
@@ -18,13 +19,13 @@ export const globalSearch = async (req, res) => {
 
         // Parallel execution for better performance
         const [products, categories, subCategories] = await Promise.all([
-            Product.find({
+            Product.find(withVisibility(req, {
                 $or: [
                     { name: regex },
                     { brand: regex },
                     { shortDescription: regex }
                 ]
-            })
+            }))
             .populate('subCategories', 'isActive')
             .select('id name image price brand category categoryId subCategories discount')
             .limit(5),

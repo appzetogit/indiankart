@@ -9,6 +9,7 @@ export const ADMIN_SIDEBAR_OPTIONS = [
     { key: 'demoBookings', label: 'Demo Bookings', path: '/admin/demo-bookings' },
     { key: 'products', label: 'Products', path: '/admin/products' },
     { key: 'maxSellingQty', label: 'Max Selling Qty', path: '/admin/products/max-selling-quantity' },
+    { key: 'productVisibility', label: 'Product Visibility', path: '/admin/products/visibility' },
     { key: 'productViews', label: 'Product Views', path: '/admin/product-views' },
     { key: 'stockManagement', label: 'Stock Management', path: '/admin/stock' },
     { key: 'categories', label: 'Categories', path: '/admin/categories' },

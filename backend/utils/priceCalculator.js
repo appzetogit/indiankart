@@ -48,6 +48,12 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
         if (!product) {
             throw new Error(`Product not found: ${item.name}`);
         }
+        // Hidden products cannot be bought, even from an old cart or wishlist.
+        if (product.isVisible === false) {
+            const error = new Error(`${item.name || 'This product'} is no longer available. Please remove it from your cart.`);
+            error.statusCode = 400;
+            throw error;
+        }
 
         let price = product.price;
         if (item.variant && Object.keys(item.variant).length > 0) {

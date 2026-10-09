@@ -1,3 +1,4 @@
+import { isProductVisible } from '../utils/productVisibility.js';
 import Banner from '../models/Banner.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 
@@ -11,7 +12,17 @@ export const getBanners = async (req, res) => {
         const banners = await Banner.find(query)
             .populate('slides.linkedOffer')
             .populate('content.linkedOffer')
-            .populate('content.featuredProducts.productId');
+            .populate('content.featuredProducts.productId')
+            .lean();
+        if (!req.isAdminViewer) {
+            banners.forEach((banner) => {
+                if (Array.isArray(banner?.content?.featuredProducts)) {
+                    banner.content.featuredProducts = banner.content.featuredProducts.filter(
+                        (entry) => !entry?.productId || typeof entry.productId !== 'object' || isProductVisible(entry.productId)
+                    );
+                }
+            });
+        }
         res.json(banners);
     } catch (error) {
         res.status(500).json({ message: error.message });
