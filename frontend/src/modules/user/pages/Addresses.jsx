@@ -147,15 +147,20 @@ const Addresses = () => {
         
         try {
             const { data } = await API.get(`/pincodes/check/${pincode}`);
+            // The API calls it deliveryUnit; "unit" was never sent, which showed
+            // "Delivery in 3 undefined".
+            const unit = data.deliveryUnit || data.unit || 'days';
+            const time = Number(data.deliveryTime);
+            const estimate = time > 0 ? `${time} ${time === 1 ? unit.replace(/s$/, '') : unit}` : '';
             setPincodeStatus(prev => ({
                 ...prev,
                 [addressId]: {
                     isServiceable: data.isServiceable,
-                    message: data.isServiceable 
-                        ? `Delivery in ${data.deliveryTime} ${data.unit}` 
+                    message: data.isServiceable
+                        ? (estimate ? `Delivery in ${estimate}` : 'Deliverable to your area')
                         : 'Not deliverable in your area',
                     deliveryTime: data.deliveryTime,
-                    unit: data.unit
+                    unit
                 }
             }));
         } catch (error) {
