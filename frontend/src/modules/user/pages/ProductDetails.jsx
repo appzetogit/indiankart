@@ -876,7 +876,7 @@ const ProductDetails = () => {
                                         disabled={maxAllowedQuantity <= 0}
                                         className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${maxAllowedQuantity > 0
                                             ? 'bg-[#ff9f00] text-white hover:bg-[#f39801]'
-                                            : 'bg-gray-200 text-gray-500 cursor-not-allowed shadow-none'
+                                            : 'bg-red-50 text-red-600 border border-red-300 cursor-not-allowed shadow-none'
                                             }`}
                                     >
                                         <span className="material-icons text-[20px]">{maxAllowedQuantity > 0 ? 'shopping_cart' : 'info'}</span>
@@ -887,7 +887,7 @@ const ProductDetails = () => {
                                         disabled={maxAllowedQuantity <= 0}
                                         className={`flex-1 font-bold py-4 rounded-sm shadow-sm active:scale-[0.98] transition-all text-base uppercase tracking-wide flex items-center justify-center gap-2 ${maxAllowedQuantity > 0
                                             ? 'bg-[#fb641b] text-white hover:bg-[#e85d19]'
-                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                                            : 'bg-red-50 text-red-600 border border-red-300 cursor-not-allowed shadow-none'
                                             }`}
                                     >
                                         <span className="material-icons text-[20px]">{maxAllowedQuantity > 0 ? 'flash_on' : 'remove_shopping_cart'}</span>
@@ -1821,7 +1821,7 @@ const ProductDetails = () => {
                             disabled={maxAllowedQuantity <= 0}
                             className={`flex-1 font-bold py-3.5 rounded-xl text-sm active:scale-[0.98] transition-all ${maxAllowedQuantity > 0
                                 ? 'bg-white border border-gray-300 text-gray-900 hover:bg-gray-50'
-                                : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'bg-red-50 text-red-600 border border-red-300 cursor-not-allowed shadow-none'
                                 }`}
                         >
                             {maxAllowedQuantity > 0 ? addToCartText : outOfStockText}
@@ -1831,7 +1831,7 @@ const ProductDetails = () => {
                             disabled={maxAllowedQuantity <= 0}
                             className={`flex-1 font-bold py-3.5 rounded-xl text-sm shadow-sm active:scale-[0.98] transition-all ${maxAllowedQuantity > 0
                                 ? 'bg-[#ffc200] text-black hover:bg-[#ffb300]'
-                                : 'bg-gray-100 text-gray-300 shadow-none cursor-not-allowed'
+                                : 'bg-red-50 text-red-600 border border-red-300 cursor-not-allowed shadow-none'
                                 }`}
                         >
                             {maxAllowedQuantity > 0 ? buyNowText : outOfStockText}
