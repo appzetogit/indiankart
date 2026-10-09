@@ -292,6 +292,18 @@ const ProductDetails = () => {
         ) || null;
     }, [product, selectedVariants, displayVariantHeadings]);
 
+    // An option is out of stock when the combination it would select (this
+    // option + the other current choices) has no stock. Shown in red.
+    const isOptionOutOfStock = React.useCallback((headingName, optionName) => {
+        if (!product?.skus?.length || displayVariantHeadings.length === 0) return false;
+        const sku = product.skus.find((candidate) =>
+            displayVariantHeadings.every((vh) =>
+                candidate.combination?.[vh.name] === (vh.name === headingName ? optionName : selectedVariants[vh.name])
+            )
+        );
+        return !sku || (Number(sku.stock) || 0) <= 0;
+    }, [product, displayVariantHeadings, selectedVariants]);
+
     const isVariantSelectionComplete = React.useMemo(() => {
         if (displayVariantHeadings.length === 0) return true;
         return displayVariantHeadings.every((vh) => {
@@ -916,9 +928,15 @@ const ProductDetails = () => {
                             )}
                         </div>
 
-                        <p className="text-sm font-semibold text-amber-700 mb-4">
-                            Max purchase quantity: {maxAllowedQuantity}
-                        </p>
+                        {maxAllowedQuantity > 0 ? (
+                            <p className="text-sm font-semibold text-amber-700 mb-4">
+                                Max purchase quantity: {maxAllowedQuantity}
+                            </p>
+                        ) : (
+                            <p className="text-sm font-bold text-red-600 mb-4">
+                                {outOfStockText}
+                            </p>
+                        )}
 
                         {/* Dynamic Variants Desktop */}
                         {displayVariantHeadings.length > 0 && (
@@ -932,7 +950,10 @@ const ProductDetails = () => {
                                                     <div
                                                         key={idx}
                                                         onClick={() => handleVariantSelect(vh.name, opt.name)}
-                                                        className={`w-14 h-16 rounded border-2 p-0.5 cursor-pointer transition-all hover:scale-105 ${selectedVariants[vh.name] === opt.name ? 'border-blue-600' : 'border-transparent'}`}
+                                                        title={isOptionOutOfStock(vh.name, opt.name) ? 'Out of stock' : undefined}
+                                                        className={`w-14 h-16 rounded border-2 p-0.5 cursor-pointer transition-all hover:scale-105 ${isOptionOutOfStock(vh.name, opt.name)
+                                                            ? `border-red-500 bg-red-50 ${selectedVariants[vh.name] === opt.name ? 'ring-2 ring-red-300' : 'opacity-70'}`
+                                                            : selectedVariants[vh.name] === opt.name ? 'border-blue-600' : 'border-transparent'}`}
                                                     >
                                                         <img
                                                             src={opt.image || (opt.images && opt.images[0])}
@@ -944,7 +965,10 @@ const ProductDetails = () => {
                                                     <button
                                                         key={idx}
                                                         onClick={() => handleVariantSelect(vh.name, opt.name)}
-                                                        className={`min-w-[50px] h-10 px-4 rounded-sm border-2 font-bold text-sm transition-all ${selectedVariants[vh.name] === opt.name
+                                                        title={isOptionOutOfStock(vh.name, opt.name) ? 'Out of stock' : undefined}
+                                                        className={`min-w-[50px] h-10 px-4 rounded-sm border-2 font-bold text-sm transition-all ${isOptionOutOfStock(vh.name, opt.name)
+                                                            ? `border-red-500 text-red-600 bg-red-50 ${selectedVariants[vh.name] === opt.name ? 'ring-2 ring-red-300' : ''}`
+                                                            : selectedVariants[vh.name] === opt.name
                                                             ? 'border-blue-600 text-blue-600 bg-blue-50/20'
                                                             : 'border-gray-200 text-gray-900 hover:border-blue-400'
                                                             }`}
@@ -1374,7 +1398,10 @@ const ProductDetails = () => {
                                                 <button
                                                     key={idx}
                                                     onClick={() => handleVariantSelect(vh.name, opt.name)}
-                                                    className={`w-14 h-16 rounded-xl border-2 p-0.5 transition-all shadow-sm ${selectedVariants[vh.name] === opt.name
+                                                    title={isOptionOutOfStock(vh.name, opt.name) ? 'Out of stock' : undefined}
+                                                    className={`w-14 h-16 rounded-xl border-2 p-0.5 transition-all shadow-sm ${isOptionOutOfStock(vh.name, opt.name)
+                                                        ? `border-red-500 bg-red-50 ${selectedVariants[vh.name] === opt.name ? 'scale-105 shadow-md ring-2 ring-red-300' : 'opacity-70'}`
+                                                        : selectedVariants[vh.name] === opt.name
                                                         ? 'border-blue-600 bg-blue-50/50 scale-105 shadow-md'
                                                         : 'border-gray-100 bg-white hover:border-gray-200'
                                                         }`}
@@ -1385,7 +1412,10 @@ const ProductDetails = () => {
                                                 <button
                                                     key={idx}
                                                     onClick={() => handleVariantSelect(vh.name, opt.name)}
-                                                    className={`h-11 px-5 rounded-xl border-2 font-bold text-xs transition-all shadow-sm ${selectedVariants[vh.name] === opt.name
+                                                    title={isOptionOutOfStock(vh.name, opt.name) ? 'Out of stock' : undefined}
+                                                    className={`h-11 px-5 rounded-xl border-2 font-bold text-xs transition-all shadow-sm ${isOptionOutOfStock(vh.name, opt.name)
+                                                        ? `border-red-500 text-red-600 bg-red-50 ${selectedVariants[vh.name] === opt.name ? 'scale-105 shadow-md ring-2 ring-red-300' : ''}`
+                                                        : selectedVariants[vh.name] === opt.name
                                                         ? 'border-blue-600 text-blue-600 bg-blue-50/50 scale-105 shadow-md'
                                                         : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200'
                                                         }`}
