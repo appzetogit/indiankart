@@ -196,6 +196,13 @@ app.use('/api/seller-requests', sellerRequestRoutes);
 app.use('/api/footer', footerRoutes);
 app.use('/api/header', headerRoutes);
 
+// For nginx / uptime monitoring: which instance answered and whether it can
+// reach the database.
+app.get('/api/health', (req, res) => {
+    const dbUp = mongoose.connection.readyState === 1;
+    res.status(dbUp ? 200 : 503).json({ ok: dbUp, instance: process.env.PORT || 5000, uptimeSec: Math.round(process.uptime()) });
+});
+
 app.get('/', (req, res) => {
     res.send('API is running...');
 });
@@ -203,9 +210,25 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
     });
+
+    // On restart (pm2 sends SIGINT), stop taking new connections and let
+    // in-flight requests finish; nginx sends new ones to the other instance.
+    let shuttingDown = false;
+    const shutdown = (signal) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.log(`${signal} received: finishing in-flight requests on port ${PORT}`);
+        server.close(() => {
+            mongoose.connection.close(false).finally(() => process.exit(0));
+        });
+        server.closeIdleConnections?.();
+        setTimeout(() => process.exit(0), 12000).unref();
+    };
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
     // Creates orders for payments the customer's browser never reported back.
     if (process.env.DISABLE_PAYMENT_RECONCILER !== 'true') {
         startPaymentReconciler();
