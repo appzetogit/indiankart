@@ -2,6 +2,15 @@ import API from '../../../services/api';
 
 const STORAGE_KEY = 'ik_redirect_payment';
 
+// Server codes for a payment that will never become an order (see
+// backend/utils/paymentRejection.js). Shown as "Payment not confirmed".
+export const REJECTED_PAYMENT_CODES = [
+    'PAYMENT_AMOUNT_MISMATCH',
+    'PAYMENT_ORDER_MISMATCH',
+    'PAYMENT_ALREADY_USED',
+    'PAYMENT_SIGNATURE_INVALID',
+];
+
 // On phones the bank's 3-D Secure page often stays blank inside Razorpay's
 // popup (especially in WhatsApp / Instagram in-app browsers). Redirect mode
 // opens it as a normal full page instead and brings the customer back to

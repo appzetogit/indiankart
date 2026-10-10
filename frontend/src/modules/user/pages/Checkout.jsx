@@ -10,7 +10,7 @@ import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
 import { trackPurchase } from '../../../utils/analytics';
-import { shouldUseRedirectPayment, paymentCallbackUrl, rememberPendingRedirectPayment } from '../utils/redirectPayment';
+import { shouldUseRedirectPayment, paymentCallbackUrl, rememberPendingRedirectPayment, REJECTED_PAYMENT_CODES } from '../utils/redirectPayment';
 
 
 // Shown when payment went through Razorpay but this page could not confirm the
@@ -453,6 +453,21 @@ const Checkout = () => {
         }
     };
 
+    // Money arrived that does not match this order (wrong amount, another
+    // checkout's payment, reused or unverifiable). The order will never be
+    // confirmed by waiting, so say so plainly instead of "please wait".
+    const showRejectedPayment = (error, razorpayOrderId) => {
+        const data = error?.response?.data || {};
+        if (!REJECTED_PAYMENT_CODES.includes(data.code)) return false;
+        const params = new URLSearchParams({ rejected: data.code });
+        if (razorpayOrderId) params.set('rzp', razorpayOrderId);
+        if (data.details?.paymentId) params.set('pay', data.details.paymentId);
+        if (data.details?.paidAmount !== undefined) params.set('paid', String(data.details.paidAmount));
+        if (data.details?.expectedAmount !== undefined) params.set('expected', String(data.details.expectedAmount));
+        navigate(`/payment-status?${params.toString()}`, { replace: true });
+        return true;
+    };
+
     const handleRemoveReferral = () => {
         setAppliedReferral(null);
         setReferralInput('');
@@ -696,7 +711,9 @@ const Checkout = () => {
                                 setIsPlacingOrder(false);
                             } catch (error) {
                                 console.error(error);
-                                toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
+                                if (!showRejectedPayment(error, response?.razorpay_order_id)) {
+                                    toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
+                                }
                                 setIsPlacingOrder(false);
                             }
                         },
@@ -813,7 +830,9 @@ const Checkout = () => {
                             setIsPlacingOrder(false);
                         } catch (error) {
                             console.error(error);
-                            toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
+                            if (!showRejectedPayment(error, response?.razorpay_order_id)) {
+                                toast.error(PAYMENT_PENDING_MESSAGE, { duration: 8000 });
+                            }
                             setIsPlacingOrder(false);
                         }
                     },

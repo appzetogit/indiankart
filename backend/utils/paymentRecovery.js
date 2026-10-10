@@ -6,6 +6,7 @@ import Order from '../models/Order.js';
 import Notification from '../models/Notification.js';
 import PendingCheckout from '../models/PendingCheckout.js';
 import { addOrderItems } from '../controllers/orderController.js';
+import { REJECTED_PAYMENT_CODES } from './paymentRejection.js';
 
 // A captured payment is left alone this long so the customer's own browser,
 // which is normally a few seconds behind Razorpay, gets to create the order
@@ -154,6 +155,21 @@ export const processPendingCheckout = async (checkoutId, { source = 'reconciler'
         }
 
         const message = String(payload?.message || `HTTP ${statusCode}`);
+        // The money does not match this order: addOrderItems has already logged
+        // it and told admins. Never retry; never turn it into an order.
+        if (REJECTED_PAYMENT_CODES.has(payload?.code)) {
+            await release(checkout, {
+                status: 'rejected',
+                rejectionCode: payload.code,
+                paymentId: captured.id,
+                capturedAt,
+                paidAmount: payload.details?.paidAmount,
+                expectedAmount: payload.details?.expectedAmount,
+                lastError: message,
+                createAttempts,
+            });
+            return 'rejected';
+        }
         // 409 "already being processed" means the browser holds the payment claim
         // right now; try again shortly. Anything else 4xx will not fix itself.
         const transient = statusCode >= 500 || (statusCode === 409 && !/insufficient stock/i.test(message));

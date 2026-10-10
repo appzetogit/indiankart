@@ -13,6 +13,7 @@ import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTrackin
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
 import { calculateOrderPrices } from '../utils/priceCalculator.js';
 import { mapWithConcurrency } from '../utils/asyncUtils.js';
+import { paymentError, recordRejectedPayment, REJECTED_PAYMENT_CODES } from '../utils/paymentRejection.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Confirmed',
@@ -488,7 +489,7 @@ const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}, ex
     const orderId = String(paymentResult?.razorpay_order_id || '').trim();
 
     if (!paymentId || !orderId) {
-        throw new Error('Online payment confirmation is incomplete. Please try again.');
+        throw paymentError('PAYMENT_INCOMPLETE', 'Online payment confirmation is incomplete. Please try again.');
     }
 
     const { keyId, keySecret } = await getRazorpayCredentials();
@@ -506,19 +507,23 @@ const verifyCapturedOnlinePayment = async (paymentMethod, paymentResult = {}, ex
     const fetchedOrderId = String(payment?.order_id || '').trim();
     const isCaptured = payment?.captured === true || gatewayStatus === 'captured';
 
+    const paidAmount = Number(payment?.amount) / 100;
+    const details = { paymentId, razorpayOrderId: orderId, paidAmount, expectedAmount };
+
     if (fetchedOrderId && fetchedOrderId !== orderId) {
-        throw new Error('Payment verification mismatch. Please do not retry this order blindly.');
+        throw paymentError('PAYMENT_ORDER_MISMATCH', 'Payment not confirmed: this payment belongs to a different checkout. Order was not created.', details);
     }
 
     if (!isCaptured) {
-        throw new Error('Payment is not captured. Order was not created.');
+        // The bank may still confirm it; the reconciler keeps checking.
+        throw paymentError('PAYMENT_NOT_CAPTURED', 'Payment is not captured. Order was not created.', details);
     }
 
     if (expectedAmount !== undefined) {
         // Razorpay payment.amount is in paise (e.g. 100 paise = 1 INR)
         const expectedAmountInPaise = Math.round(expectedAmount * 100);
         if (Math.abs(Number(payment.amount) - expectedAmountInPaise) > 1) {
-            throw new Error('Payment amount mismatch. Order was not created.');
+            throw paymentError('PAYMENT_AMOUNT_MISMATCH', `Payment amount mismatch: Rs ${paidAmount} was paid but the order total is Rs ${expectedAmount}. Order was not created.`, details);
         }
     }
 
@@ -869,6 +874,14 @@ export const addOrderItems = async (req, res) => {
         );
 
         if (existingOnlineOrder) {
+            // Same customer retrying: hand back their order. Anyone else is
+            // trying to reuse a payment that already bought something.
+            if (String(existingOnlineOrder.user) !== String(req.user._id)) {
+                throw paymentError('PAYMENT_ALREADY_USED', 'Payment not confirmed: this payment was already used for another order.', {
+                    paymentId: verifiedPayment.paymentResult?.razorpay_payment_id,
+                    razorpayOrderId: verifiedPayment.paymentResult?.razorpay_order_id,
+                }, 409);
+            }
             return res.status(200).json(existingOnlineOrder);
         }
 
@@ -972,6 +985,12 @@ export const addOrderItems = async (req, res) => {
             if (!paymentClaimResult.claimed) {
                 const claimedExistingOrder = await findExistingOnlineOrder(claimMethod, verifiedPayment.paymentResult);
                 if (claimedExistingOrder) {
+                    if (String(claimedExistingOrder.user) !== String(req.user._id)) {
+                        throw paymentError('PAYMENT_ALREADY_USED', 'Payment not confirmed: this payment was already used for another order.', {
+                            paymentId: verifiedPayment.paymentResult?.razorpay_payment_id,
+                            razorpayOrderId: verifiedPayment.paymentResult?.razorpay_order_id,
+                        }, 409);
+                    }
                     return res.status(200).json(claimedExistingOrder);
                 }
 
@@ -1145,7 +1164,20 @@ export const addOrderItems = async (req, res) => {
             await PaymentClaim.findByIdAndDelete(claimedPayment._id).catch(() => {});
         }
         console.error('Order creation error:', error);
-        res.status(error.statusCode || 500).json({ message: error.message || 'Order creation failed' });
+        if (REJECTED_PAYMENT_CODES.has(error.code)) {
+            await recordRejectedPayment({ code: error.code, details: error.details, user: req.user, orderItems: req.body?.orderItems });
+        }
+        res.status(error.statusCode || 500).json({
+            message: error.message || 'Order creation failed',
+            ...(error.code ? { code: error.code } : {}),
+            ...(error.details ? {
+                details: {
+                    paymentId: error.details.paymentId,
+                    paidAmount: error.details.paidAmount,
+                    expectedAmount: error.details.expectedAmount,
+                },
+            } : {}),
+        });
     }
 };
 

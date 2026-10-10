@@ -5,6 +5,7 @@ import PendingCheckout from '../models/PendingCheckout.js';
 import Order from '../models/Order.js';
 import { processPendingCheckout } from '../utils/paymentRecovery.js';
 import { calculateOrderPrices } from '../utils/priceCalculator.js';
+import { recordRejectedPayment } from '../utils/paymentRejection.js';
 
 const DEFAULT_STORE_ORIGIN = 'https://www.indiankart.in';
 const STORE_ORIGINS = new Set(
@@ -158,7 +159,17 @@ export const verifyPayment = async (req, res) => {
         const isAuthentic = expectedSignature === razorpay_signature;
 
         if (!isAuthentic) {
-            return res.status(400).json({ message: 'Invalid signature' });
+            // A real Razorpay response is always correctly signed.
+            await recordRejectedPayment({
+                code: 'PAYMENT_SIGNATURE_INVALID',
+                details: { paymentId: razorpay_payment_id, razorpayOrderId: razorpay_order_id },
+                user: req.user,
+            });
+            return res.status(400).json({
+                message: 'Payment not confirmed: the payment details could not be verified.',
+                code: 'PAYMENT_SIGNATURE_INVALID',
+                details: { paymentId: razorpay_payment_id },
+            });
         }
 
         const instance = new Razorpay({
@@ -172,12 +183,19 @@ export const verifyPayment = async (req, res) => {
         const isCaptured = payment?.captured === true || normalizedGatewayStatus === 'captured';
 
         if (fetchedOrderId && fetchedOrderId !== String(razorpay_order_id || '').trim()) {
-            return res.status(400).json({ message: 'Payment order mismatch' });
+            const details = { paymentId: razorpay_payment_id, razorpayOrderId: razorpay_order_id, paidAmount: Number(payment?.amount) / 100 };
+            await recordRejectedPayment({ code: 'PAYMENT_ORDER_MISMATCH', details, user: req.user });
+            return res.status(400).json({
+                message: 'Payment not confirmed: this payment belongs to a different checkout.',
+                code: 'PAYMENT_ORDER_MISMATCH',
+                details: { paymentId: razorpay_payment_id, paidAmount: details.paidAmount },
+            });
         }
 
         if (!isCaptured) {
             return res.status(400).json({
                 message: 'Payment was not captured successfully',
+                code: 'PAYMENT_NOT_CAPTURED',
                 gatewayStatus: normalizedGatewayStatus || 'unknown'
             });
         }
@@ -366,6 +384,14 @@ export const getCheckoutStatus = async (req, res) => {
             paid: Boolean(order || checkout.capturedAt),
             lastError: checkout.lastError || '',
             order,
+            ...(checkout.status === 'rejected' && !order ? {
+                rejection: {
+                    code: checkout.rejectionCode || '',
+                    paymentId: checkout.paymentId || '',
+                    paidAmount: checkout.paidAmount,
+                    expectedAmount: checkout.expectedAmount,
+                },
+            } : {}),
         });
     } catch (error) {
         return res.status(500).json({ message: error.message });

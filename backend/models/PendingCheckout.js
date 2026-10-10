@@ -14,7 +14,9 @@ const pendingCheckoutSchema = new mongoose.Schema({
     amount: { type: Number, required: true },
     status: {
         type: String,
-        enum: ['pending', 'completed', 'failed', 'abandoned', 'needs_review'],
+        // rejected: money arrived but does not match this order (amount,
+        // checkout or already used). Held for an admin; never retried.
+        enum: ['pending', 'completed', 'failed', 'abandoned', 'needs_review', 'rejected'],
         default: 'pending'
     },
     paymentId: { type: String, default: '' },
@@ -30,6 +32,9 @@ const pendingCheckoutSchema = new mongoose.Schema({
     attempts: { type: Number, default: 0 },
     createAttempts: { type: Number, default: 0 },
     lastError: { type: String, default: '' },
+    rejectionCode: { type: String, default: '' },
+    paidAmount: { type: Number },
+    expectedAmount: { type: Number },
     lastCheckedAt: { type: Date, default: null },
     // Lease so two workers never build the same order at once.
     lockedUntil: { type: Date, default: null },
