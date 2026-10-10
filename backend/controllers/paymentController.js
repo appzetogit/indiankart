@@ -4,6 +4,7 @@ import Setting from '../models/Setting.js';
 import PendingCheckout from '../models/PendingCheckout.js';
 import Order from '../models/Order.js';
 import { processPendingCheckout } from '../utils/paymentRecovery.js';
+import { calculateOrderPrices } from '../utils/priceCalculator.js';
 
 const DEFAULT_STORE_ORIGIN = 'https://www.indiankart.in';
 const STORE_ORIGINS = new Set(
@@ -36,7 +37,39 @@ const getRazorpayCredentials = async () => {
 // @access  Private
 export const createRazorpayOrder = async (req, res) => {
     const { amount, offer_id, orderData } = req.body;
-    console.log(`Processing Razorpay order request - Amount: Rs ${amount}, Offer ID: ${offer_id || 'none'}`);
+
+    // The amount to charge is worked out here from database prices, exactly as
+    // POST /orders will. The browser's figure is never used: a checkout page
+    // edited to say ₹1 now opens Razorpay at the real price.
+    if (!orderData || typeof orderData !== 'object' || !Array.isArray(orderData.orderItems) || !orderData.orderItems.length) {
+        return res.status(400).json({ message: 'Your checkout page is out of date. Please refresh the page and try again.' });
+    }
+    let payableAmount;
+    try {
+        const prices = await calculateOrderPrices({
+            orderItems: orderData.orderItems,
+            shippingAddress: orderData.shippingAddress,
+            coupon: orderData.coupon,
+        });
+        if (String(orderData.paymentMethod || '').trim().toUpperCase() === 'COD') {
+            const settings = prices.settings;
+            if (!(settings?.codAdvancedPaymentEnabled && settings?.codAdvancedPaymentAmount > 0)) {
+                return res.status(400).json({ message: 'Cash on Delivery orders do not need an online payment.' });
+            }
+            payableAmount = Math.min(prices.totalPrice, settings.codAdvancedPaymentAmount);
+        } else {
+            payableAmount = prices.totalPrice;
+        }
+    } catch (error) {
+        return res.status(error.statusCode || 400).json({ message: error.message || 'Could not price this order' });
+    }
+    if (!(payableAmount > 0)) {
+        return res.status(400).json({ message: 'Nothing to pay for this order.' });
+    }
+    if (Math.abs((Number(amount) || 0) - payableAmount) > 1) {
+        console.warn(`[price-check] user ${req.user?._id} checkout asked to pay Rs ${amount}; charging the real Rs ${payableAmount}`);
+    }
+    console.log(`Processing Razorpay order request - Amount: Rs ${payableAmount}, Offer ID: ${offer_id || 'none'}`);
 
     try {
         const { keyId, keySecret } = await getRazorpayCredentials();
@@ -57,7 +90,7 @@ export const createRazorpayOrder = async (req, res) => {
         });
 
         const options = {
-            amount: Math.round(amount * 100),
+            amount: Math.round(payableAmount * 100),
             currency: 'INR',
             receipt: `receipt_${Date.now()}`,
         };
