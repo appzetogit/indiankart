@@ -34,6 +34,7 @@ import homeLayoutRoutes from './routes/homeLayoutRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import cartRoutes from './routes/cartRoutes.js';
 import { startPaymentReconciler } from './utils/paymentRecovery.js';
+import { startOrderStatusSync } from './utils/orderStatusSync.js';
 import { detectAdminViewer } from './middleware/authMiddleware.js';
 import searchRoutes from './routes/searchRoutes.js';
 import reviewRoutes from './routes/reviewRoutes.js';
@@ -230,8 +231,10 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     // Creates orders for payments the customer's browser never reported back.
+    // Background jobs run on one instance only (see ecosystem.config.cjs).
     if (process.env.DISABLE_PAYMENT_RECONCILER !== 'true') {
         startPaymentReconciler();
+        startOrderStatusSync();
     }
 }
 

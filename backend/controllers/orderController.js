@@ -1184,11 +1184,69 @@ export const addOrderItems = async (req, res) => {
 // @desc    Get logged in user orders
 // @route   GET /api/orders/myorders
 // @access  Private
+// Razorpay / courier lookups used to run while the customer waited, with
+// courier timeouts of 20-45 s, so order pages took up to 13 s. Now a page waits
+// at most this long for them, then answers with what is stored; the lookups
+// carry on in the background and save, and refreshActiveOrderStatuses keeps
+// open orders current on a timer.
+const ORDER_SYNC_WAIT_MS = 1500;
+
+const syncOrdersWithDeadline = async (orders, { payment = true, fulfillment = true } = {}) => {
+    const work = (async () => {
+        const paid = payment
+            ? await mapWithConcurrency(orders, (order) => syncOrderPaymentFromGateway(order), ORDER_SYNC_CONCURRENCY)
+            : orders;
+        return fulfillment
+            ? await mapWithConcurrency(paid, (order) => syncOrderFulfillmentStatus(order), ORDER_SYNC_CONCURRENCY)
+            : paid;
+    })().catch((error) => {
+        console.error('Order status sync failed:', error.message);
+        return orders;
+    });
+    let timer;
+    const deadline = new Promise((resolve) => { timer = setTimeout(() => resolve(orders), ORDER_SYNC_WAIT_MS); });
+    const result = await Promise.race([work, deadline]);
+    clearTimeout(timer);
+    return result;
+};
+
+/**
+ * Background refresh of orders still in progress: courier status for shipped
+ * orders and gateway status for unpaid online orders. Runs on one instance.
+ */
+export const refreshActiveOrderStatuses = async ({ limit = 40 } = {}) => {
+    const staleBefore = new Date(Date.now() - 20 * 60 * 1000);
+    const active = await Order.find({
+        status: { $nin: ['Delivered', 'Cancelled'] },
+        isDelivered: { $ne: true },
+        createdAt: { $gte: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) },
+        $or: [
+            { 'delhivery.waybill': { $exists: true, $ne: '' }, $or: [{ 'delhivery.syncedAt': { $exists: false } }, { 'delhivery.syncedAt': { $lt: staleBefore } }] },
+            { 'ekart.trackingNumber': { $exists: true, $ne: '' }, $or: [{ 'ekart.syncedAt': { $exists: false } }, { 'ekart.syncedAt': { $lt: staleBefore } }] },
+            { isPaid: false, paymentMethod: { $nin: ['COD', 'cod'] }, 'paymentResult.razorpay_payment_id': { $exists: true, $ne: '' } },
+        ],
+    }).sort({ updatedAt: 1 }).limit(limit);
+
+    let updated = 0;
+    for (const order of active) {
+        try {
+            const synced = await syncOrderPaymentFromGateway(order);
+            if (typeof synced?.isModified === 'function' && synced.isModified()) {
+                await synced.save();
+                updated += 1;
+            }
+            await syncOrderFulfillmentStatus(synced);
+        } catch (error) {
+            console.error(`[order-sync] ${order.displayId || order._id}:`, error.message);
+        }
+    }
+    return { checked: active.length, paymentUpdates: updated };
+};
+
 export const getMyOrders = async (req, res) => {
     try {
         const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
-        const syncedOrders = await mapWithConcurrency(orders, (order) => syncOrderPaymentFromGateway(order), ORDER_SYNC_CONCURRENCY);
-        const fulfillmentReadyOrders = await mapWithConcurrency(syncedOrders, (order) => syncOrderFulfillmentStatus(order), ORDER_SYNC_CONCURRENCY);
+        const fulfillmentReadyOrders = await syncOrdersWithDeadline(orders);
         const auditedOrders = await annotateDuplicatePayments(fulfillmentReadyOrders);
         res.json(auditedOrders);
     } catch (error) {
@@ -1301,12 +1359,10 @@ export const getOrderById = async (req, res) => {
                     await ensureOrderInvoiceNumber(order);
                 }
 
-                const syncedOrder = shouldSyncPayment
-                    ? await syncOrderPaymentFromGateway(order)
-                    : order;
-                const fulfillmentReadyOrder = shouldSyncFulfillment
-                    ? await syncOrderFulfillmentStatus(syncedOrder)
-                    : syncedOrder;
+                const [fulfillmentReadyOrder] = await syncOrdersWithDeadline([order], {
+                    payment: shouldSyncPayment,
+                    fulfillment: shouldSyncFulfillment,
+                });
                 const [finalOrder] = shouldIncludePaymentAudit
                     ? await annotateDuplicatePayments([fulfillmentReadyOrder])
                     : [fulfillmentReadyOrder];
@@ -1588,12 +1644,9 @@ export const getOrders = async (req, res) => {
             query
         ]);
 
-        const syncedOrders = shouldSyncPayments
-            ? await mapWithConcurrency(rawOrders, (order) => syncOrderPaymentFromGateway(order), ORDER_SYNC_CONCURRENCY)
+        const fulfillmentReadyOrders = (shouldSyncPayments || shouldSyncFulfillment)
+            ? await syncOrdersWithDeadline(rawOrders, { payment: shouldSyncPayments, fulfillment: shouldSyncFulfillment })
             : rawOrders;
-        const fulfillmentReadyOrders = shouldSyncFulfillment
-            ? await mapWithConcurrency(syncedOrders, (order) => syncOrderFulfillmentStatus(order), ORDER_SYNC_CONCURRENCY)
-            : syncedOrders;
         const finalOrders = shouldAuditPayments
             ? await annotateDuplicatePayments(fulfillmentReadyOrders)
             : fulfillmentReadyOrders;
