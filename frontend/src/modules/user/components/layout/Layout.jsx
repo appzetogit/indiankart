@@ -7,6 +7,7 @@ import StoreReviewPrompt from './StoreReviewPrompt';
 import { useAuthStore } from '../../store/authStore';
 import API from '../../../../services/api';
 import { safeGetItem, safeSetItem } from '../../../../utils/safeStorage';
+import { startCartSync } from '../../utils/cartSync';
 
 const PORTAL_SESSION_STORAGE_KEY = 'ik-portal-session-id';
 
@@ -27,6 +28,14 @@ const ensurePortalSessionId = () => {
 const Layout = () => {
     const location = useLocation();
     const { isAuthenticated } = useAuthStore();
+    const userId = useAuthStore((state) => state.user?._id);
+
+    // Cart, wishlist and saved-for-later follow the account across devices.
+    useEffect(() => {
+        if (isAuthenticated && userId) {
+            startCartSync(userId);
+        }
+    }, [isAuthenticated, userId]);
 
     useEffect(() => {
         const sessionId = ensurePortalSessionId();

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
 import { useCartStore } from './cartStore';
+import { flushCartSync, endCartSyncForSignOut } from '../utils/cartSync';
 import { requestForToken } from '../../../services/firebase';
 import { safePersistStorage, safeRemoveItem, safeSetItem } from '../../../utils/safeStorage';
 
@@ -169,6 +170,10 @@ export const useAuthStore = create(
 
     // Logout
     logout: async () => {
+        // The cart is saved on the account; send any last change, stop syncing,
+        // then clear this browser's copy so the next person starts empty.
+        await flushCartSync().catch(() => {});
+        endCartSyncForSignOut();
         try {
             await API.post('/auth/logout');
             setUserTokenCache(null);
@@ -183,6 +188,7 @@ export const useAuthStore = create(
             syncPortalSessionCache(createPortalSessionId());
             set({ user: null, isAuthenticated: false });
             localStorage.removeItem('user-auth-storage');
+            useCartStore.getState().clearStore();
         }
     },
 
@@ -190,6 +196,7 @@ export const useAuthStore = create(
         set({ error: null });
         try {
             await API.delete('/auth/profile');
+            endCartSyncForSignOut();
             setUserTokenCache(null);
             syncPortalSessionCache(createPortalSessionId());
             set({ user: null, isAuthenticated: false });

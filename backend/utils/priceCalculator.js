@@ -15,7 +15,7 @@ const normalizeVariantObject = (variant) => {
     }, {});
 };
 
-const findMatchingSkuForVariant = (product, variant) => {
+export const findMatchingSkuForVariant = (product, variant) => {
     const normalizedVariant = normalizeVariantObject(variant);
     const itemKeys = Object.keys(normalizedVariant);
     if (!itemKeys.length) return null;
