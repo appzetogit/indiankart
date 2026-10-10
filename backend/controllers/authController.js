@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { sendOTP, verifyOTPDetailed } from '../utils/smsService.js';
+import { checkAndRecordOtpSend } from '../utils/otpRateLimit.js';
 import generateToken from '../utils/generateToken.js';
 import {
     createPortalSessionId,
@@ -131,6 +132,12 @@ export const sendLoginOtp = async (req, res) => {
     const { mobile, userType } = req.body;
     if (!mobile) return res.status(400).json({ message: 'Mobile number is required' });
     try {
+        const limit = await checkAndRecordOtpSend(mobile, req.ip);
+        if (!limit.allowed) {
+            console.warn(`[otp-limit] blocked send to ••••${String(mobile).slice(-2)} from ${req.ip}: ${limit.message}`);
+            res.set('Retry-After', String(limit.retryAfterSec));
+            return res.status(429).json({ message: limit.message, code: 'OTP_RATE_LIMITED', retryAfterSec: limit.retryAfterSec });
+        }
         const response = await sendOTP(mobile, userType || 'Customer');
         res.json(response);
     } catch (error) {
