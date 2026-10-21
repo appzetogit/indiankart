@@ -18,6 +18,12 @@ import {
     normalizeVariantObject
 } from '../utils/priceCalculator.js';
 import { mapWithConcurrency } from '../utils/asyncUtils.js';
+import {
+    applyCurrentProductNames,
+    applyCurrentProductNamesSync,
+    findProductIdsByName,
+    getProductNameMap
+} from '../utils/orderProductNames.js';
 import { paymentError, recordRejectedPayment, REJECTED_PAYMENT_CODES } from '../utils/paymentRejection.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
@@ -162,7 +168,7 @@ const isOrderAccessibleByUser = (order, user) => {
     };
 };
 
-const buildOrderListFilter = ({ search, status, user, userId, startDate, endDate }) => {
+const buildOrderListFilter = async ({ search, status, user, userId, startDate, endDate }) => {
     const filter = {};
 
     const normalizedSearch = String(search || '').trim();
@@ -181,6 +187,11 @@ const buildOrderListFilter = ({ search, status, user, userId, startDate, endDate
             { 'shippingAddress.phone': searchRegex },
             { 'orderItems.name': searchRegex }
         ];
+
+        const renamedProductIds = await findProductIdsByName(searchRegex);
+        if (renamedProductIds.length) {
+            searchConditions.push({ 'orderItems.product': { $in: renamedProductIds } });
+        }
 
         if (mongoose.Types.ObjectId.isValid(normalizedSearch)) {
             searchConditions.push({ _id: normalizedSearch });
@@ -1212,7 +1223,7 @@ export const getMyOrders = async (req, res) => {
         const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
         const fulfillmentReadyOrders = await syncOrdersWithDeadline(orders);
         const auditedOrders = await annotateDuplicatePayments(fulfillmentReadyOrders);
-        res.json(auditedOrders);
+        res.json(await applyCurrentProductNames(auditedOrders));
     } catch (error) {
         console.error('Get my orders error:', error);
         res.status(500).json({ message: error.message });
@@ -1331,6 +1342,7 @@ export const getOrderById = async (req, res) => {
                     ? await annotateDuplicatePayments([fulfillmentReadyOrder])
                     : [fulfillmentReadyOrder];
                 await finalOrder.populate('user', 'name email phone');
+                await applyCurrentProductNames([finalOrder]);
                 res.json(finalOrder);
             } else {
                 res.status(401).json({ 
@@ -1585,7 +1597,7 @@ export const getOrders = async (req, res) => {
         const shouldSyncPayments = String(req.query.syncPayments || 'false') !== 'false';
         const shouldSyncFulfillment = String(req.query.syncFulfillment || 'false') === 'true';
         const shouldAuditPayments = String(req.query.includePaymentAudit || 'false') === 'true';
-        const filter = buildOrderListFilter({ search, status, user, userId, startDate, endDate });
+        const filter = await buildOrderListFilter({ search, status, user, userId, startDate, endDate });
         const hasPagination = pageNumber !== undefined || limit !== undefined;
         const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
         const page = Math.max(1, Number(pageNumber) || 1);
@@ -1614,6 +1626,7 @@ export const getOrders = async (req, res) => {
         const finalOrders = shouldAuditPayments
             ? await annotateDuplicatePayments(fulfillmentReadyOrders)
             : fulfillmentReadyOrders;
+        await applyCurrentProductNames(finalOrders);
 
         if (hasPagination) {
             return res.json({
@@ -1747,7 +1760,7 @@ export const exportOrdersCsv = async (req, res) => {
     let orderCursor = null;
     try {
         const { pageNumber, limit, search, status, user, userId, startDate, endDate } = req.query;
-        const filter = buildOrderListFilter({ search, status, user, userId, startDate, endDate });
+        const filter = await buildOrderListFilter({ search, status, user, userId, startDate, endDate });
         const hasPagination = pageNumber !== undefined || limit !== undefined;
         const pageSize = Math.min(100, Math.max(1, Number(limit) || 20));
         const page = Math.max(1, Number(pageNumber) || 1);
@@ -1814,12 +1827,14 @@ export const exportOrdersCsv = async (req, res) => {
             exportQuery = exportQuery.limit(pageSize).skip(pageSize * (page - 1));
         }
 
+        const productNameMap = await getProductNameMap();
         orderCursor = exportQuery.cursor();
 
         for await (const order of orderCursor) {
             if (res.destroyed || req.destroyed) {
                 break;
             }
+            applyCurrentProductNamesSync([order], productNameMap);
             for (const row of formatOrderExportRows(order)) {
                 res.write(`${row.map(escapeCsvCell).join(',')}\n`);
             }
