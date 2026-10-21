@@ -13,6 +13,7 @@ const orderSchema = mongoose.Schema({
             image: { type: String, required: true },
             price: { type: Number, required: true },
             variant: { type: Object }, // To store dynamic variants like { Weight: "1kg" }
+            gstRate: { type: Number }, // Product GST % at order time; missing on older orders (treated as 18)
             serialNumber: { type: String }, // For Admin to add Serial/IMEI when packing
             serialType: { type: String, default: 'Serial Number' }, // 'Serial Number' or 'IMEI'
             product: {

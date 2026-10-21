@@ -7,6 +7,7 @@ import useSubCategoryStore from '../../store/subCategoryStore';
 import useBrandStore from '../../store/brandStore';
 import RichTextEditor from '../../components/RichTextEditor';
 import toast from 'react-hot-toast';
+import { GST_RATES, DEFAULT_GST_RATE } from '../../../../utils/gst';
 
 const PRODUCTION_UPLOAD_LIMIT_BYTES = 1024 * 1024;
 
@@ -57,6 +58,7 @@ const ProductForm = () => {
         originalPrice: '',
         deliveryDays: 5,
         maxOrderQuantity: 1,
+        gstRate: DEFAULT_GST_RATE,
         // Dynamic Variant System
         variantHeadings: [], // { name: 'Color', hasImage: true, options: [{ name: 'Red', image: '' }] }
         skus: [], // { combination: { Color: 'Red', Size: 'M' }, price: 999, originalPrice: 1299, stock: 10 }
@@ -140,6 +142,7 @@ const ProductForm = () => {
                 price: product.price || '',
                 originalPrice: product.originalPrice || '',
                 maxOrderQuantity: product.maxOrderQuantity || 1,
+                gstRate: GST_RATES.includes(Number(product.gstRate)) ? Number(product.gstRate) : DEFAULT_GST_RATE,
                 variantHeadings: (product.variantHeadings || []).map(vh => ({
                     ...vh,
                     options: (vh.options || []).map(opt => ({
@@ -627,6 +630,7 @@ const ProductForm = () => {
 
         data.append('deliveryDays', String(Number(formData.deliveryDays) > 0 ? Number(formData.deliveryDays) : 5));
         data.append('maxOrderQuantity', String(Math.max(1, Number(formData.maxOrderQuantity) || 1)));
+        data.append('gstRate', String(formData.gstRate));
 
         // Complex objects
         data.append('categoryPath', JSON.stringify(formData.categoryPath));
@@ -958,6 +962,22 @@ const ProductForm = () => {
                                     />
                                     <p className="text-[11px] text-gray-500 font-medium">
                                         Every product starts at `1`. Increase it here if users should be able to buy more.
+                                    </p>
+                                </div>
+                                <div className="space-y-1 md:space-y-1.5">
+                                    <label className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider">GST Rate</label>
+                                    <select
+                                        name="gstRate"
+                                        value={formData.gstRate}
+                                        onChange={handleChange}
+                                        className="w-full px-3 py-2 md:px-4 md:py-3 rounded-xl bg-gray-50 border border-gray-200 focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-gray-900 text-sm md:text-base"
+                                    >
+                                        {GST_RATES.map((rate) => (
+                                            <option key={rate} value={rate}>{rate}%</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        GST included in the price. Used on invoices for new orders.
                                     </p>
                                 </div>
                             </div>

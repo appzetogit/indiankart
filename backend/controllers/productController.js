@@ -9,6 +9,7 @@ import PortalSession from '../models/PortalSession.js';
 import ExcelJS from 'exceljs';
 import { promises as fs } from 'node:fs';
 import { normalizeVariantObject } from '../utils/priceCalculator.js';
+import { GST_RATES, DEFAULT_GST_RATE } from '../models/Product.js';
 
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -75,6 +76,13 @@ const normalizeMaxOrderQuantity = (value) => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return 1;
     return Math.floor(parsed);
+};
+
+// Returns null for anything that is not a real GST slab so callers can reject it.
+const normalizeGstRate = (value) => {
+    if (value === undefined || value === null || value === '') return DEFAULT_GST_RATE;
+    const parsed = Number(value);
+    return GST_RATES.includes(parsed) ? parsed : null;
 };
 
 const normalizeViewState = (value = '') => {
@@ -624,6 +632,11 @@ export const createProduct = async (req, res) => {
             return res.status(400).json({ message: 'Selected subcategory does not belong to selected category.' });
         }
 
+        const gstRate = normalizeGstRate(body.gstRate);
+        if (gstRate === null) {
+            return res.status(400).json({ message: `GST rate must be one of ${GST_RATES.join(', ')}%` });
+        }
+
         const product = new Product({
             id: body.id || Date.now(),
             name: body.name,
@@ -642,6 +655,7 @@ export const createProduct = async (req, res) => {
             description,
             stock: derivedSkuValues ? derivedSkuValues.stock : Number(body.stock),
             maxOrderQuantity: normalizeMaxOrderQuantity(body.maxOrderQuantity),
+            gstRate,
             variantHeadings,
             skus: parsedSkus,
             deliveryDays: Number(body.deliveryDays),
@@ -844,6 +858,13 @@ export const updateProduct = async (req, res) => {
             if (updateData.deliveryDays !== undefined) updateData.deliveryDays = safeNum(updateData.deliveryDays, product.deliveryDays);
             if (updateData.maxOrderQuantity !== undefined) {
                 updateData.maxOrderQuantity = normalizeMaxOrderQuantity(updateData.maxOrderQuantity);
+            }
+            if (updateData.gstRate !== undefined) {
+                const gstRate = normalizeGstRate(updateData.gstRate);
+                if (gstRate === null) {
+                    return res.status(400).json({ message: `GST rate must be one of ${GST_RATES.join(', ')}%` });
+                }
+                updateData.gstRate = gstRate;
             }
             if (updateData.b2bEnabled !== undefined) {
                 updateData.b2bEnabled = String(updateData.b2bEnabled).toLowerCase() === 'true';

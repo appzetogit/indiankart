@@ -3,7 +3,7 @@ import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
 import Counter from '../models/Counter.js';
 import PaymentClaim from '../models/PaymentClaim.js';
-import Product from '../models/Product.js';
+import Product, { DEFAULT_GST_RATE } from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
@@ -946,6 +946,8 @@ export const addOrderItems = async (req, res) => {
             resolvedOrderItems.push({
                 ...item,
                 variant: Object.keys(normalizedVariant).length > 0 ? normalizedVariant : undefined,
+                // Snapshot from the DB, never the client, so invoices stay fixed if the rate changes later.
+                gstRate: Number.isFinite(Number(product.gstRate)) ? Number(product.gstRate) : DEFAULT_GST_RATE,
                 product: item.product || item._id
             });
         }

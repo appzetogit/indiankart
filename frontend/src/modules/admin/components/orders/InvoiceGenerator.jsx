@@ -4,6 +4,7 @@ import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { getFulfillmentMode, getShippingProviderLabel, getTrackingIdentifier } from "../../../../utils/shippingProvider";
 import { getOrderedItemDisplayName } from "../../../../utils/orderItemDisplay";
+import { getItemGstRate } from "../../../../utils/gst";
 
 const getInvoiceNumber = (order) => {
   const savedInvoiceNumber = String(order?.invoiceNumber || "").trim();
@@ -615,7 +616,8 @@ export const InvoiceDisplay = React.forwardRef(
             <tbody>
               {list.map((i, idx) => {
                 const gross = i.safePrice * i.safeQty;
-                const taxable = gross / 1.18;
+                const gstRate = getItemGstRate(i);
+                const taxable = gross / (1 + gstRate / 100);
                 const tax = gross - taxable;
 
                 return (
@@ -624,7 +626,7 @@ export const InvoiceDisplay = React.forwardRef(
                       <div><b>{i.safeName}</b></div>
                       {i.serialNumber && <div style={{ fontSize: "7px", color: "#666" }}>IMEI/SN: {i.serialNumber}</div>}
                     </td>
-                    <td>HSN: 90029000 | 18.00% | 0%</td>
+                    <td>HSN: 90029000 | {gstRate.toFixed(2)}% | 0%</td>
                     <td className="text-center">{i.safeQty}</td>
                     <td className="text-right">{format(gross)}</td>
                     <td className="text-right">0.00</td>

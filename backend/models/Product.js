@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 
+export const GST_RATES = [0, 5, 12, 18, 28];
+export const DEFAULT_GST_RATE = 18;
+
 const productSchema = mongoose.Schema({
     id: { type: Number, required: true, unique: true }, // Keeping manual ID for sync with frontend data logic (Date.now())
     name: { type: String, required: true },
@@ -73,6 +76,8 @@ const productSchema = mongoose.Schema({
     visibilityUpdatedAt: { type: Date },
     visibilityUpdatedBy: { type: String },
     maxOrderQuantity: { type: Number, default: 1, min: 1 },
+    // GST % included in the selling price; used to split taxable value on invoices.
+    gstRate: { type: Number, default: DEFAULT_GST_RATE, enum: GST_RATES },
     variantLabel: { type: String }, // 'Size', 'Color' etc.
     variantHeadings: [{
         id: { type: Number },
