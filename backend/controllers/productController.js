@@ -8,6 +8,7 @@ import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import PortalSession from '../models/PortalSession.js';
 import ExcelJS from 'exceljs';
 import { promises as fs } from 'node:fs';
+import { normalizeVariantObject } from '../utils/priceCalculator.js';
 
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
@@ -473,6 +474,7 @@ export const createProduct = async (req, res) => {
             if (!Array.isArray(rawSkus)) return [];
             return rawSkus.map(sku => ({
                 ...sku,
+                combination: normalizeVariantObject(sku?.combination),
                 stock: Math.max(0, Number(sku?.stock) || 0),
                 price: Math.max(0, Number(sku?.price) || 0),
                 originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)
@@ -666,6 +668,7 @@ export const updateProduct = async (req, res) => {
             if (!Array.isArray(rawSkus)) return [];
             return rawSkus.map(sku => ({
                 ...sku,
+                combination: normalizeVariantObject(sku?.combination),
                 stock: Math.max(0, Number(sku?.stock) || 0),
                 price: Math.max(0, Number(sku?.price) || 0),
                 originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)
@@ -959,6 +962,7 @@ export const updateProductStock = async (req, res) => {
             if (skus !== undefined && Array.isArray(skus)) {
                 const normalizedSkus = skus.map((sku) => ({
                     ...sku,
+                    combination: normalizeVariantObject(sku?.combination),
                     stock: Math.max(0, Number(sku?.stock) || 0),
                     price: Math.max(0, Number(sku?.price) || 0),
                     originalPrice: Math.max(0, Number(sku?.originalPrice) || 0)

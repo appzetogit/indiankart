@@ -2,11 +2,12 @@ import Product from '../models/Product.js';
 import Setting from '../models/Setting.js';
 import Coupon from '../models/Coupon.js';
 
-const normalizeVariantObject = (variant) => {
+export const normalizeVariantObject = (variant) => {
     if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
         return {};
     }
-    return Object.entries(variant).reduce((acc, [key, value]) => {
+    const source = variant instanceof Map ? Object.fromEntries(variant) : variant;
+    return Object.entries(source).reduce((acc, [key, value]) => {
         const normalizedKey = String(key || '').trim();
         const normalizedValue = String(value || '').trim();
         if (!normalizedKey || !normalizedValue) return acc;
@@ -15,21 +16,26 @@ const normalizeVariantObject = (variant) => {
     }, {});
 };
 
-export const findMatchingSkuForVariant = (product, variant) => {
+// Single source of truth for variant -> SKU matching. Stock validation, stock
+// decrement and stock restore must all agree, or an order can pass the check
+// but miss the SKU when its stock is reduced.
+export const findMatchingSkuIndexForVariant = (product, variant) => {
     const normalizedVariant = normalizeVariantObject(variant);
     const itemKeys = Object.keys(normalizedVariant);
-    if (!itemKeys.length) return null;
+    if (!itemKeys.length) return -1;
 
-    return (Array.isArray(product?.skus) ? product.skus : []).find((sku) => {
-        const combinationSource = sku?.combination instanceof Map
-            ? Object.fromEntries(sku.combination)
-            : sku?.combination;
-        const combination = normalizeVariantObject(combinationSource);
+    return (Array.isArray(product?.skus) ? product.skus : []).findIndex((sku) => {
+        const combination = normalizeVariantObject(sku?.combination);
         const combinationKeys = Object.keys(combination);
 
         if (itemKeys.length !== combinationKeys.length) return false;
-        return itemKeys.every((key) => String(normalizedVariant[key]) === String(combination[key]));
-    }) || null;
+        return itemKeys.every((key) => normalizedVariant[key] === combination[key]);
+    });
+};
+
+export const findMatchingSkuForVariant = (product, variant) => {
+    const index = findMatchingSkuIndexForVariant(product, variant);
+    return index === -1 ? null : product.skus[index];
 };
 
 export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon }) => {

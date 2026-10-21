@@ -11,7 +11,12 @@ import Agent from '../models/Agent.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
 import { cancelEkartShipment, createEkartShipment, fetchEkartTracking } from '../utils/ekartService.js';
-import { calculateOrderPrices } from '../utils/priceCalculator.js';
+import {
+    calculateOrderPrices,
+    findMatchingSkuForVariant,
+    findMatchingSkuIndexForVariant,
+    normalizeVariantObject
+} from '../utils/priceCalculator.js';
 import { mapWithConcurrency } from '../utils/asyncUtils.js';
 import { paymentError, recordRejectedPayment, REJECTED_PAYMENT_CODES } from '../utils/paymentRejection.js';
 
@@ -90,37 +95,6 @@ const getProductVariantHeadings = (product) => (
         ? product.variantHeadings.filter((heading) => String(heading?.name || '').trim())
         : []
 );
-
-const normalizeVariantObject = (variant) => {
-    if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
-        return {};
-    }
-
-    return Object.entries(variant).reduce((acc, [key, value]) => {
-        const normalizedKey = String(key || '').trim();
-        const normalizedValue = String(value || '').trim();
-        if (!normalizedKey || !normalizedValue) return acc;
-        acc[normalizedKey] = normalizedValue;
-        return acc;
-    }, {});
-};
-
-const findMatchingSkuForVariant = (product, variant) => {
-    const normalizedVariant = normalizeVariantObject(variant);
-    const itemKeys = Object.keys(normalizedVariant);
-    if (!itemKeys.length) return null;
-
-    return (Array.isArray(product?.skus) ? product.skus : []).find((sku) => {
-        const combinationSource = sku?.combination instanceof Map
-            ? Object.fromEntries(sku.combination)
-            : sku?.combination;
-        const combination = normalizeVariantObject(combinationSource);
-        const combinationKeys = Object.keys(combination);
-
-        if (itemKeys.length !== combinationKeys.length) return false;
-        return itemKeys.every((key) => String(normalizedVariant[key]) === String(combination[key]));
-    }) || null;
-};
 
 const validateAndResolveOrderItemVariant = (product, item) => {
     const productVariantHeadings = getProductVariantHeadings(product);
@@ -1072,20 +1046,12 @@ export const addOrderItems = async (req, res) => {
                 // Guard so a concurrent order can never push stock below zero.
                 const filter = { _id: product._id, stock: { $gte: item.qty } };
 
-                // If variant exists, find its index for atomic array update
-                if (item.variant && Object.keys(item.variant).length > 0) {
-                    const skuIndex = product.skus.findIndex(s => {
-                        const comb = s.combination instanceof Map ? Object.fromEntries(s.combination) : s.combination;
-                        const itemKeys = Object.keys(item.variant);
-                        const combKeys = Object.keys(comb);
-                        if (itemKeys.length !== combKeys.length) return false;
-                        return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
-                    });
-
-                    if (skuIndex !== -1) {
-                        update.$inc[`skus.${skuIndex}.stock`] = -item.qty;
-                        filter[`skus.${skuIndex}.stock`] = { $gte: item.qty };
-                    }
+                // If variant exists, find its index for atomic array update.
+                // Must use the same matcher as the pre-creation validation.
+                const skuIndex = findMatchingSkuIndexForVariant(product, item.variant);
+                if (skuIndex !== -1) {
+                    update.$inc[`skus.${skuIndex}.stock`] = -item.qty;
+                    filter[`skus.${skuIndex}.stock`] = { $gte: item.qty };
                 }
 
                 // Atomic conditional update: null means someone else took the stock first.
@@ -1111,12 +1077,8 @@ export const addOrderItems = async (req, res) => {
                     }
 
                     // Variant Low Stock Alert (Check updated SKU stock)
-                    if (item.variant && Object.keys(item.variant).length > 0) {
-                         const updatedSku = updatedProduct.skus.find(s => {
-                            const comb = s.combination instanceof Map ? Object.fromEntries(s.combination) : s.combination;
-                            const itemKeys = Object.keys(item.variant);
-                            return itemKeys.every(key => String(item.variant[key]) === String(comb[key]));
-                        });
+                    if (skuIndex !== -1) {
+                        const updatedSku = updatedProduct.skus[skuIndex];
                         if (updatedSku && updatedSku.stock <= 5) {
                             alerts.push({
                                 type: 'stock',

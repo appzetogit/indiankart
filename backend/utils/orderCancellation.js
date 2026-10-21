@@ -1,6 +1,7 @@
 import Razorpay from 'razorpay';
 import Setting from '../models/Setting.js';
 import Product from '../models/Product.js';
+import { findMatchingSkuIndexForVariant } from './priceCalculator.js';
 
 const getRazorpayCredentials = async () => {
     const settings = await Setting.findOne().select('+razorpayKeySecret razorpayKeyId').lean();
@@ -19,18 +20,9 @@ export const restoreOrderStock = async (order) => {
 
         const update = { $inc: { stock: item.qty } };
 
-        if (item.variant && Object.keys(item.variant).length > 0) {
-            const skuIndex = product.skus.findIndex((sku) => {
-                const combination = sku.combination instanceof Map ? Object.fromEntries(sku.combination) : sku.combination;
-                const itemKeys = Object.keys(item.variant);
-                const combinationKeys = Object.keys(combination || {});
-                if (itemKeys.length !== combinationKeys.length) return false;
-                return itemKeys.every((key) => String(item.variant[key]) === String(combination[key]));
-            });
-
-            if (skuIndex !== -1) {
-                update.$inc[`skus.${skuIndex}.stock`] = item.qty;
-            }
+        const skuIndex = findMatchingSkuIndexForVariant(product, item.variant);
+        if (skuIndex !== -1) {
+            update.$inc[`skus.${skuIndex}.stock`] = item.qty;
         }
 
         await Product.findOneAndUpdate({ _id: product._id }, update);
