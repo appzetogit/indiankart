@@ -39,13 +39,10 @@ export const ADMIN_SIDEBAR_OPTIONS = [
 export const ALL_ADMIN_SIDEBAR_KEYS = ADMIN_SIDEBAR_OPTIONS.map((option) => option.key);
 export const SUBADMIN_BLOCKED_KEYS = ['adminManagement'];
 
-export const normalizeAdminRole = (role) => {
-    if (role === 'subadmin') {
-        return 'subadmin';
-    }
-
-    return 'superadmin';
-};
+// Fail closed: only an exact 'superadmin' is a superadmin. Anything else
+// (missing, misspelled, legacy 'admin') is a subadmin limited to the pages
+// it was explicitly given. This used to default everything to superadmin.
+export const normalizeAdminRole = (role) => (role === 'superadmin' ? 'superadmin' : 'subadmin');
 
 export const normalizeSidebarPermissions = (role, permissions = []) => {
     const normalizedRole = normalizeAdminRole(role);

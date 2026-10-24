@@ -5,7 +5,7 @@ import {
     getDemoBookings,
     updateDemoBooking
 } from '../controllers/demoBookingController.js';
-import { protect, protectOptional, admin } from '../middleware/authMiddleware.js';
+import { protect, protectOptional, admin, can } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -14,9 +14,9 @@ router.get('/check/:code', checkDemoPincode);
 router.route('/')
     // protectOptional so guests can book while logged-in users get linked.
     .post(protectOptional, createDemoBooking)
-    .get(protect, admin, getDemoBookings);
+    .get(protect, admin, can('demoBookings'), getDemoBookings);
 
 router.route('/:id')
-    .put(protect, admin, updateDemoBooking);
+    .put(protect, admin, can('demoBookings'), updateDemoBooking);
 
 export default router;

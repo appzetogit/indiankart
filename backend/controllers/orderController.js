@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Razorpay from 'razorpay';
 import Order from '../models/Order.js';
+import { isAdminUser } from '../middleware/authMiddleware.js';
 import Counter from '../models/Counter.js';
 import PaymentClaim from '../models/PaymentClaim.js';
 import Product, { DEFAULT_GST_RATE } from '../models/Product.js';
@@ -184,9 +185,8 @@ const validateAndResolveOrderItemVariant = (product, item) => {
 const isOrderAccessibleByUser = (order, user) => {
     const orderUserId = order?.user?.toString();
     const currentUserId = user?._id?.toString();
-    // Keep this list in sync with the `admin` middleware, or subadmins get 401
-    // on order detail while passing the route guard.
-    const isAdmin = Boolean(user && (user.isAdmin || ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(user.role)));
+    // Same rule as the `admin` middleware: only an Admin account.
+    const isAdmin = isAdminUser(user);
 
     return {
         orderUserId,

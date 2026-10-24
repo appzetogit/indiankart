@@ -18,7 +18,7 @@ import {
     updateUserAddress,
     deleteUserAddress
 } from '../controllers/authController.js';
-import { protect, admin, protectOptional } from '../middleware/authMiddleware.js';
+import { protect, admin, protectOptional, can } from '../middleware/authMiddleware.js';
 import { touchPortalSession } from '../utils/portalSessionTracking.js';
 
 const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
@@ -197,12 +197,12 @@ console.log('Auth routes registered: /test, /fcm-token, /fcm-token/web, /fcm-tok
 
 // Admin Routes
 router.route('/users')
-    .get(protect, admin, getUsers);
+    .get(protect, admin, can('users', 'dashboard'), getUsers);
 
 router.route('/users/:id')
-    .delete(protect, admin, deleteUser)
-    .put(protect, admin, updateUser);
+    .delete(protect, admin, can('users'), deleteUser)
+    .put(protect, admin, can('users'), updateUser);
 
-router.patch('/users/:id/toggle-status', protect, admin, toggleUserStatus);
+router.patch('/users/:id/toggle-status', protect, admin, can('users'), toggleUserStatus);
 
 export default router;

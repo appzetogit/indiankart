@@ -13,7 +13,9 @@ const HEADER_ALIASES = {
 
 const normalizeKey = (value = '') => String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-const normalizePinCode = (value = '') => String(value).trim();
+// Digits only: imported sheets carried invisible characters (zero-width and
+// non-breaking spaces) that trim() keeps, creating duplicate junk codes.
+const normalizePinCode = (value = '') => String(value ?? '').replace(/\D/g, '');
 
 const normalizeBoolean = (value, defaultValue = true) => {
     if (value === null || value === undefined || String(value).trim() === '') {
@@ -95,11 +97,12 @@ const buildImportPayload = (row) => {
 // @route   POST /api/pincodes
 // @access  Private/Admin
 const addPinCode = async (req, res) => {
-    const { code, isCOD, deliveryTime, deliveryUnit, demoEnabled } = req.body;
+    const { isCOD, deliveryTime, deliveryUnit, demoEnabled } = req.body;
+    const code = normalizePinCode(req.body.code);
 
     // Validate inputs
-    if (!code) {
-        return res.status(400).json({ message: 'Please provide pincode' });
+    if (!/^\d{6}$/.test(code)) {
+        return res.status(400).json({ message: 'Please provide a valid 6-digit pincode' });
     }
 
     const pinCodeExists = await PinCode.findOne({ code });
@@ -176,7 +179,7 @@ const deletePinCode = async (req, res) => {
 const checkPinCode = async (req, res) => {
     const { code } = req.params;
     try {
-        const pinCode = await PinCode.findOne({ code: code.trim() });
+        const pinCode = await PinCode.findOne({ code: normalizePinCode(code) });
 
         if (pinCode && pinCode.isActive) {
             res.json({
@@ -202,7 +205,11 @@ const checkPinCode = async (req, res) => {
 // @route   PUT /api/pincodes/:id
 // @access  Private/Admin
 const updatePinCode = async (req, res) => {
-    const { code, isCOD, deliveryTime, deliveryUnit, demoEnabled } = req.body;
+    const { isCOD, deliveryTime, deliveryUnit, demoEnabled } = req.body;
+    const code = req.body.code !== undefined ? normalizePinCode(req.body.code) : '';
+    if (req.body.code !== undefined && !/^\d{6}$/.test(code)) {
+        return res.status(400).json({ message: 'Please provide a valid 6-digit pincode' });
+    }
     const pinCode = await PinCode.findById(req.params.id);
 
     if (pinCode) {
@@ -349,6 +356,12 @@ const bulkImportPinCodes = async (req, res) => {
 
             if (!payload.code) {
                 results.errors.push(`Row ${rowNumber}: Missing pincode`);
+                continue;
+            }
+
+            if (!/^\d{6}$/.test(payload.code)) {
+                results.skipped++;
+                results.errors.push(`Row ${rowNumber}: ${payload.code} is not a 6-digit pincode`);
                 continue;
             }
 

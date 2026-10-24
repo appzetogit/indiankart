@@ -6,6 +6,7 @@ import Category from '../models/Category.js';
 import Coupon from '../models/Coupon.js';
 import Return from '../models/Return.js';
 import generateToken from '../utils/generateToken.js';
+import { getAdminPasswordProblem } from '../utils/adminSecurity.js';
 import {
     ADMIN_SIDEBAR_OPTIONS,
     normalizeAdminRole,
@@ -107,6 +108,10 @@ export const updateAdminProfile = async (req, res) => {
             admin.email = req.body.email || admin.email;
 
             if (req.body.password) {
+                const passwordProblem = getAdminPasswordProblem(req.body.password, admin);
+                if (passwordProblem) {
+                    return res.status(400).json({ message: passwordProblem });
+                }
                 admin.password = req.body.password;
             }
 
@@ -161,8 +166,17 @@ export const createAdmin = async (req, res) => {
             sidebarPermissions
         } = req.body;
 
-        if (!name?.trim() || !email?.trim() || !password?.trim()) {
+        if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string'
+            || !name.trim() || !email.trim() || !password.trim()) {
             return res.status(400).json({ message: 'Name, email and password are required' });
+        }
+        // The role must be chosen explicitly; a missing role used to mean superadmin.
+        if (!['superadmin', 'subadmin'].includes(role)) {
+            return res.status(400).json({ message: 'Choose a role: superadmin or subadmin' });
+        }
+        const passwordProblem = getAdminPasswordProblem(password, { name, email, username });
+        if (passwordProblem) {
+            return res.status(400).json({ message: passwordProblem });
         }
 
         const normalizedRole = normalizeAdminRole(role);
@@ -212,6 +226,9 @@ export const updateAdminAccess = async (req, res) => {
             return res.status(404).json({ message: 'Admin not found' });
         }
  
+        if (req.body.role !== undefined && !['superadmin', 'subadmin'].includes(req.body.role)) {
+            return res.status(400).json({ message: 'Choose a role: superadmin or subadmin' });
+        }
         const nextRole = normalizeAdminRole(req.body.role || adminDoc.role);
         const nextPermissions = normalizeSidebarPermissions(
             nextRole,
@@ -249,7 +266,11 @@ export const updateAdminAccess = async (req, res) => {
         adminDoc.role = nextRole;
         adminDoc.permissions = nextPermissions;
 
-        if (req.body.password?.trim()) {
+        if (typeof req.body.password === 'string' && req.body.password.trim()) {
+            const passwordProblem = getAdminPasswordProblem(req.body.password, adminDoc);
+            if (passwordProblem) {
+                return res.status(400).json({ message: passwordProblem });
+            }
             adminDoc.password = req.body.password.trim();
         }
 

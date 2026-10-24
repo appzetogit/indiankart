@@ -7,14 +7,14 @@ import {
     updateCategory, 
     deleteCategory 
 } from '../controllers/categoryController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, can } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 router.route('/')
     .get(getCategories)
     .post(
         protect,
-        admin,
+        admin, can('categories'),
         upload.fields([
             { name: 'icon', maxCount: 1 }
         ]),
@@ -25,12 +25,12 @@ router.route('/:id')
     .get(getCategoryById)
     .put(
         protect,
-        admin,
+        admin, can('categories', 'b2b'),
         upload.fields([
             { name: 'icon', maxCount: 1 }
         ]),
         updateCategory
     )
-    .delete(protect, admin, deleteCategory);
+    .delete(protect, admin, can('categories'), deleteCategory);
 
 export default router;

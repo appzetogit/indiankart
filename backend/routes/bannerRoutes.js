@@ -1,14 +1,14 @@
 import express from 'express';
 const router = express.Router();
 import { getBanners, createBanner, updateBanner, deleteBanner } from '../controllers/bannerController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, can } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 router.route('/')
     .get(getBanners)
     .post(
         protect,
-        admin,
+        admin, can('categoryPageBuilder'),
         upload.fields([
             { name: 'slide_images', maxCount: 20 },
             { name: 'slide_mobile_images', maxCount: 20 },
@@ -22,7 +22,7 @@ router.route('/')
 router.route('/:id')
     .put(
         protect,
-        admin,
+        admin, can('categoryPageBuilder'),
         upload.fields([
             { name: 'slide_images', maxCount: 20 },
             { name: 'slide_mobile_images', maxCount: 20 },
@@ -32,6 +32,6 @@ router.route('/:id')
         ]),
         updateBanner
     )
-    .delete(protect, admin, deleteBanner);
+    .delete(protect, admin, can('categoryPageBuilder'), deleteBanner);
 
 export default router;

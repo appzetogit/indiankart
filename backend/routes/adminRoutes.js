@@ -11,7 +11,7 @@ import {
     updateAdminAccess,
     deleteAdmin
 } from '../controllers/adminController.js';
-import { protect, admin, requireSuperAdmin } from '../middleware/authMiddleware.js';
+import { protect, admin, requireSuperAdmin, can } from '../middleware/authMiddleware.js';
 
 const 
 router = express.Router();
@@ -19,10 +19,10 @@ router = express.Router();
 router.post('/login', authAdmin);
 router.post('/logout', logoutAdmin);
 router.route('/profile')
-    .get(protect, admin, getAdminProfile)
-    .put(protect, admin, updateAdminProfile);
-router.get('/dashboard-summary', protect, admin, getDashboardSummary);
-router.get('/sidebar-options', protect, admin, getAdminSidebarOptions);
+    .get(protect, admin, can(), getAdminProfile)
+    .put(protect, admin, can(), updateAdminProfile);
+router.get('/dashboard-summary', protect, admin, can('dashboard'), getDashboardSummary);
+router.get('/sidebar-options', protect, admin, can(), getAdminSidebarOptions);
 router.route('/manage-admins')
     .get(protect, admin, requireSuperAdmin, listAdmins)
     .post(protect, admin, requireSuperAdmin, createAdmin);

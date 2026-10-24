@@ -10,7 +10,8 @@ import {
     updateSettings,
     uploadCategoryPageImage
 } from '../controllers/settingController.js';
-import { protect, protectOptional, admin } from '../middleware/authMiddleware.js';
+import { protect, protectOptional, admin, can } from '../middleware/authMiddleware.js';
+import { requireSettingsPermission } from '../middleware/settingsPermission.js';
 import upload from '../middleware/upload.js';
 
 const router = express.Router();
@@ -29,7 +30,7 @@ router.route('/')
     // protectOptional so admins get the full document and anonymous callers
     // get the storefront whitelist from the same endpoint.
     .get(protectOptional, getSettings)
-    .put(protect, admin, uploadMiddleware, updateSettings);
+    .put(protect, admin, uploadMiddleware, requireSettingsPermission, updateSettings);
 
 router.get('/category-page-config/:categoryName', getCategoryPageConfig);
 router.get('/category-page-layout/:categoryName', getCategoryPageLayout);
@@ -38,6 +39,6 @@ router.get('/subcategory-page-config/:categoryName/:subCategoryName', getSubCate
 router.get('/subcategory-page-layout/:categoryName/:subCategoryName', getSubCategoryPageLayout);
 router.get('/subcategory-page-section/:categoryName/:subCategoryName/:sectionId', getSubCategoryPageSection);
 
-router.post('/category-page-image', protect, admin, upload.single('image'), uploadCategoryPageImage);
+router.post('/category-page-image', protect, admin, can('categoryPageBuilder', 'subCategoryPageBuilder'), upload.single('image'), uploadCategoryPageImage);
 
 export default router;

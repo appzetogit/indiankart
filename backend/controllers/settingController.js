@@ -1,4 +1,5 @@
 import Setting from '../models/Setting.js';
+import { isAdminUser } from '../middleware/authMiddleware.js';
 import { scrubForCustomer, scrubHiddenProductItems, getHiddenProductIds } from '../utils/productVisibility.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import Product from '../models/Product.js';
@@ -242,9 +243,7 @@ const getSettings = async (req, res) => {
         if (req.query.view === 'checkout') query.select(checkoutFields);
         // Anonymous callers get a storefront whitelist. The full document holds
         // panNumber, ekartUsername/clientId and courier endpoints — admin-only.
-        const isAdminViewer = Boolean(
-            req.user && (req.user.isAdmin || ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(req.user.role))
-        );
+        const isAdminViewer = isAdminUser(req.user);
         if (!isAdminViewer && req.query.view !== 'checkout') {
             query.select(PUBLIC_SETTING_FIELDS);
         }

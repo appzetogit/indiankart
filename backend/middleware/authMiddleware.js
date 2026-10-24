@@ -100,9 +100,9 @@ export const protectOptional = async (req, _res, next) => {
     next();
 };
 
-const isAdminUser = (user) => Boolean(
-    user && (user.isAdmin || (user.role && ['admin', 'superadmin', 'subadmin', 'editor', 'moderator'].includes(user.role)))
-);
+// An admin is a document from the Admin collection, nothing else. Role names
+// or an isAdmin flag on some other document never grant admin access.
+export const isAdminUser = (user) => Boolean(user && user.constructor?.modelName === 'Admin');
 
 // Lets a verified admin see products hidden from customers. The admin panel
 // sends X-Admin-View: 1; the header alone grants nothing, and customer
@@ -130,17 +130,27 @@ export const admin = (req, res, next) => {
 };
 
 // Page-level permission (the admin sidebar keys). Superadmins hold all keys.
-export const requireAdminPermission = (key) => (req, res, next) => {
-    const role = normalizeAdminRole(req.user?.role);
-    const permissions = normalizeSidebarPermissions(role, req.user?.permissions);
-    if (permissions.includes(key)) {
+// Server-side page permissions. Pass the admin-panel page keys that use this
+// API; the admin needs at least one of them (superadmins hold every key).
+// With no keys, any admin passes (profile, header badges).
+export const requireAdminPermission = (...keys) => (req, res, next) => {
+    if (!isAdminUser(req.user)) {
+        return res.status(403).json({ message: 'You do not have permission for this page' });
+    }
+    if (!keys.length) return next();
+    const role = normalizeAdminRole(req.user.role);
+    const permissions = normalizeSidebarPermissions(role, req.user.permissions);
+    if (keys.some((key) => permissions.includes(key))) {
         return next();
     }
     return res.status(403).json({ message: 'You do not have permission for this page' });
 };
 
+// Short alias used in route files.
+export const can = requireAdminPermission;
+
 export const requireSuperAdmin = (req, res, next) => {
-    if (req.user && normalizeAdminRole(req.user.role) === 'superadmin') {
+    if (isAdminUser(req.user) && normalizeAdminRole(req.user.role) === 'superadmin') {
         return next();
     }
 

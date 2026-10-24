@@ -9,7 +9,7 @@ import {
     bulkImportPinCodes,
     updatePinCode
 } from '../controllers/pinCodeController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, can } from '../middleware/authMiddleware.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -50,11 +50,11 @@ const upload = multer({
     }
 });
 
-router.route('/').post(protect, admin, addPinCode).get(protect, admin, getPinCodes);
-router.route('/export').get(protect, admin, exportPinCodes);
+router.route('/').post(protect, admin, can('pinCodes'), addPinCode).get(protect, admin, can('pinCodes'), getPinCodes);
+router.route('/export').get(protect, admin, can('pinCodes'), exportPinCodes);
 router.route('/bulk-import').post(
     protect,
-    admin,
+    admin, can('pinCodes'),
     (req, res, next) => {
         upload.single('file')(req, res, (err) => {
             if (!err) return next();
@@ -72,6 +72,6 @@ router.route('/bulk-import').post(
     bulkImportPinCodes
 );
 router.route('/check/:code').get(checkPinCode);
-router.route('/:id').delete(protect, admin, deletePinCode).put(protect, admin, updatePinCode);
+router.route('/:id').delete(protect, admin, can('pinCodes'), deletePinCode).put(protect, admin, can('pinCodes'), updatePinCode);
 
 export default router;

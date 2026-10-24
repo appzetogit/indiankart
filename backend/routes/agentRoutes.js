@@ -6,18 +6,18 @@ import {
     updateAgent,
     validateReferralCode
 } from '../controllers/agentController.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect, admin, can } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.get('/referral/:code', validateReferralCode);
 
 router.route('/')
-    .get(protect, admin, getAgents)
-    .post(protect, admin, createAgent);
+    .get(protect, admin, can('agentManagement', 'orders'), getAgents)
+    .post(protect, admin, can('agentManagement'), createAgent);
 
 router.route('/:id')
-    .get(protect, admin, getAgentById)
-    .put(protect, admin, updateAgent);
+    .get(protect, admin, can('agentManagement'), getAgentById)
+    .put(protect, admin, can('agentManagement'), updateAgent);
 
 export default router;
