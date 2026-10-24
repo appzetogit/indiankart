@@ -9,7 +9,11 @@ import {
     listAdmins,
     createAdmin,
     updateAdminAccess,
-    deleteAdmin
+    deleteAdmin,
+    verifyAdminLoginMfa,
+    startAdminMfaSetup,
+    enableAdminMfa,
+    logoutAllAdminSessions
 } from '../controllers/adminController.js';
 import { protect, admin, requireSuperAdmin, can } from '../middleware/authMiddleware.js';
 
@@ -17,7 +21,11 @@ const
 router = express.Router();
 
 router.post('/login', authAdmin);
+router.post('/login/mfa', verifyAdminLoginMfa);
 router.post('/logout', logoutAdmin);
+router.post('/logout-all', protect, admin, can(), logoutAllAdminSessions);
+router.post('/mfa/setup', protect, admin, can(), startAdminMfaSetup);
+router.post('/mfa/enable', protect, admin, can(), enableAdminMfa);
 router.route('/profile')
     .get(protect, admin, can(), getAdminProfile)
     .put(protect, admin, can(), updateAdminProfile);

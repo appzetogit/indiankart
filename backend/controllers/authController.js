@@ -12,23 +12,6 @@ import {
     touchPortalSession
 } from '../utils/portalSessionTracking.js';
 
-const HARDCODED_LOGIN_OTP = '0000';
-const HARDCODED_LOGIN_USERS = {
-    '7610416911': {
-        phone: '7610416911'
-    },
-    '7223077890': {
-        phone: '7223077890'
-    }
-};
-
-const LEGACY_HARDCODED_USER_IDS = {
-    '000000000000000000000001': '7610416911',
-    '000000000000000000000002': '7223077890'
-};
-
-// Single explicit opt-in; see the matching note in utils/smsService.js.
-const isHardcodedOtpLoginEnabled = () => process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true';
 
 const normalizeForHardcodedLogin = (mobile) => {
     const digits = String(mobile || '').replace(/\D/g, '');
@@ -59,36 +42,6 @@ const normalizeGender = (value) => {
     return null;
 };
 
-const findOrCreateHardcodedLoginUser = async (phone, overrides = {}) => {
-    const normalizedPhone = normalizeForHardcodedLogin(phone);
-    const fallbackEmail = `${normalizedPhone}@temp.local`;
-
-    let user = await User.findOne({
-        $or: [
-            { phone: normalizedPhone },
-            { email: fallbackEmail }
-        ]
-    });
-
-    if (!user) {
-        try {
-            user = await User.create({
-                name: overrides.name || 'Test User',
-                email: fallbackEmail,
-                phone: normalizedPhone,
-                gender: 'Male',
-                password: Math.random().toString(36)
-            });
-        } catch (createError) {
-            // See verifyLoginOtp: a concurrent login may have created it first.
-            if (createError?.code !== 11000) throw createError;
-            user = await User.findOne({ $or: [{ phone: normalizedPhone }, { email: fallbackEmail }] });
-            if (!user) throw createError;
-        }
-    }
-
-    return user;
-};
 
 const mapUserAddresses = (addresses = []) =>
     (Array.isArray(addresses) ? addresses : []).map((address) => ({
@@ -150,44 +103,6 @@ export const verifyLoginOtp = async (req, res) => {
     try {
         const normalizedMobile = normalizeForHardcodedLogin(mobile);
         const normalizedOtp = normalizeHardcodedOtp(otp);
-        const hardcodedUser = HARDCODED_LOGIN_USERS[normalizedMobile];
-
-        if (hardcodedUser && isHardcodedOtpLoginEnabled()) {
-            if (normalizedOtp !== HARDCODED_LOGIN_OTP) {
-                return res.status(400).json({ message: `Use OTP ${HARDCODED_LOGIN_OTP}` });
-            }
-
-            const user = await findOrCreateHardcodedLoginUser(hardcodedUser.phone, {
-                name,
-                email
-            });
-            const hasRealName = Boolean(user.name && user.name.trim() && user.name.trim() !== 'Test User');
-            const hasRealEmail = Boolean(
-                user.email &&
-                user.email.includes('@') &&
-                !user.email.endsWith('@temp.local')
-            );
-            const token = generateToken(res, user._id, 'user_jwt');
-            const sessionId = resolvePortalSessionId(req);
-            await recordPortalLogin({
-                sessionId,
-                userId: user._id,
-                userRole: 'user',
-                authMethod: 'otp'
-            });
-            return res.json({
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                gender: user.gender,
-                addresses: mapUserAddresses(user.addresses),
-                isNewUser: false,
-                requiresProfile: !hasRealName || !hasRealEmail,
-                token,
-                sessionId
-            });
-        }
 
         const hasMobile = mobile !== undefined && mobile !== null && String(mobile).trim() !== '';
         const hasOtp = otp !== undefined && otp !== null && String(otp).trim() !== '';
@@ -408,7 +323,6 @@ export const getUserProfile = async (req, res) => {
     res.status(200).json(user);
 };
 
-export { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS };
 
 // @desc    Delete current user profile
 // @route   DELETE /api/auth/profile

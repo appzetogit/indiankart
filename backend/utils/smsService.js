@@ -6,14 +6,11 @@ import Order from '../models/Order.js';
 // SMS India HUB Configuration
 // SMS India HUB Configuration accessed dynamically to handle ESM loading order
 const API_TIMEOUT = 30000; // 30 seconds
-const HARDCODED_LOGIN_OTP = '0000';
-const HARDCODED_LOGIN_MOBILES = new Set(['7610416911', '7223077890']);
 const MAX_OTP_ATTEMPTS = 5;
 
-// Every fixed-OTP shortcut hangs off this one flag. Deliberately NOT keyed on
-// NODE_ENV: production servers frequently run with NODE_ENV=development, which
-// would silently re-open 999999/0000/1234 as universal logins.
-const isTestOtpBypassEnabled = () => process.env.ALLOW_HARDCODED_LOGIN_OTP === 'true';
+// There are no fixed or "developer" OTPs: the 999999 / 0000 / 1234 shortcuts
+// that used to sit behind an environment flag were removed, since one wrong
+// setting would have let anyone log in to any account.
 
 // One normaliser for both storing and looking up an OTP. These used to differ:
 // saving kept every digit while verification searched on the last ten, so a
@@ -332,12 +329,6 @@ async function verifyOtpFromDb(mobile, otp, userType) {
     return result.ok === true;
 }
 
-/**
- * Check if special bypass should be used
- */
-function isSpecialBypass(mobile) {
-    return isTestOtpBypassEnabled() && mobile === '9111966732';
-}
 
 /**
  * Check if mock mode should be used
@@ -346,19 +337,15 @@ function isMockMode() {
     const { apiKey: API_KEY, senderId: SENDER_ID } = getSmsConfig();
     // Log status for clarity
     // console.log('[DEBUG] Mock Check:', { useMock: process.env.USE_MOCK_OTP, hasKey: !!API_KEY, hasSender: !!SENDER_ID });
-    return process.env.USE_MOCK_OTP === 'true' || !API_KEY || !SENDER_ID;
+    // Only when explicitly asked for. Missing SMS settings used to switch this on
+    // silently, writing every customer's OTP into the logs instead of sending it.
+    if (process.env.USE_MOCK_OTP === 'true') return true;
+    if (!API_KEY || !SENDER_ID) {
+        throw new Error('SMS is not configured');
+    }
+    return false;
 }
 
-/**
- * Check if developer bypass OTP
- */
-function isDeveloperBypass(otp) {
-    return isTestOtpBypassEnabled() && otp === '999999';
-}
-
-function isHardcodedLoginMobile(mobile) {
-    return isTestOtpBypassEnabled() && HARDCODED_LOGIN_MOBILES.has(normalizeForHardcodedLogin(mobile));
-}
 
 // ==========================================
 // SMS OTP (Customer / Delivery)
@@ -367,17 +354,6 @@ function isHardcodedLoginMobile(mobile) {
 export async function sendSmsOtp(mobile, userType = 'Delivery') {
     try {
         const otp = generateOTP(4);
-
-        // Special number bypass
-        if (isSpecialBypass(mobile)) {
-            const specialOtp = '1234';
-            await saveOtpToDb(mobile, specialOtp, userType);
-            return {
-                success: true,
-                sessionId: 'DB_VERIFIED_' + mobile,
-                message: 'OTP sent successfully',
-            };
-        }
 
         // Mock mode
         if (isMockMode()) {
@@ -412,9 +388,6 @@ export async function sendSmsOtp(mobile, userType = 'Delivery') {
 }
 
 export async function verifySmsOtp(sessionId, otpInput, mobile, userType = 'Delivery') {
-    if (isDeveloperBypass(otpInput)) {
-        return true;
-    }
 
     const normalizedOtp = String(otpInput).trim().replace(/\s/g, '');
 
@@ -456,12 +429,6 @@ export async function sendOTP(mobile, userType) {
 
         const otp = generateOTP(4);
 
-        if (isSpecialBypass(mobile)) {
-            const specialOtp = '1234';
-            await saveOtpToDb(mobile, specialOtp, userType);
-            return { success: true, message: 'OTP sent successfully' };
-        }
-
         if (isMockMode()) {
             await saveOtpToDb(mobile, otp, userType);
             console.log(`[MOCK MODE] OTP for ${mobile} (${userType}): ${otp}`);
@@ -485,15 +452,10 @@ export async function sendOTP(mobile, userType) {
  * can tell the customer why a code was refused.
  */
 export async function verifyOTPDetailed(mobile, otpInput, userType) {
-    if (isDeveloperBypass(otpInput)) return { ok: true };
 
     const normalizedOtp = normalizeHardcodedOtp(otpInput);
     const normalizedMobile = normalizeForHardcodedLogin(mobile);
 
-    // Must stay env-gated: without this check these numbers log in with 0000 in production.
-    if (isHardcodedLoginMobile(normalizedMobile) && normalizedOtp === HARDCODED_LOGIN_OTP) {
-        return { ok: true };
-    }
 
     if (!normalizedOtp || normalizedOtp.length !== 4) return { ok: false, reason: 'incorrect' };
 
@@ -561,16 +523,6 @@ export async function verifyDeliveryOtp(orderId, otp) {
         
         if (order.deliveryOtpExpiresAt && order.deliveryOtpExpiresAt < new Date()) {
              throw new Error('Delivery OTP has expired. Please request a new OTP.');
-        }
-
-        if (isDeveloperBypass(otp)) {
-             order.deliveryOtpVerified = true;
-             order.isDelivered = true;
-             order.status = 'Delivered';
-             order.deliveredAt = new Date();
-             order.invoiceEnabled = true;
-             await order.save();
-             return { success: true, message: 'OTP verified successfully (Dev Bypass). Order marked as delivered.' };
         }
 
         if (order.deliveryOtp !== otp) {

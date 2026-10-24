@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MdAdd, MdDelete, MdEdit, MdRefresh, MdSecurity } from 'react-icons/md';
+import { MdAdd, MdDelete, MdEdit, MdLockReset, MdRefresh, MdSecurity } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import API from '../../../services/api';
 import useAdminAuthStore from '../store/adminAuthStore';
@@ -26,6 +26,7 @@ const AdminManagement = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
+    const [resettingId, setResettingId] = useState(null);
     const [form, setForm] = useState(createInitialForm());
 
     const isEditing = Boolean(form.id);
@@ -134,6 +135,30 @@ const AdminManagement = () => {
             toast.error(error.response?.data?.message || 'Failed to save admin');
         } finally {
             setSaving(false);
+        }
+    };
+
+    // Lost phone: turn two-step login off so the admin can set it up again.
+    const handleResetMfa = async (adminRecord) => {
+        if (!window.confirm(`Reset two-step login for ${adminRecord.name}? They will be signed out and must set it up again at their next login.`)) {
+            return;
+        }
+        setResettingId(adminRecord._id);
+        try {
+            const { data } = await API.put(`/admin/manage-admins/${adminRecord._id}`, {
+                name: adminRecord.name,
+                username: adminRecord.username || '',
+                email: adminRecord.email,
+                role: adminRecord.role,
+                sidebarPermissions: adminRecord.role === 'superadmin' ? [] : (adminRecord.sidebarPermissions || []),
+                resetMfa: true
+            });
+            setAdmins((current) => current.map((item) => (item._id === data._id ? data : item)));
+            toast.success('Two-step login reset');
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to reset two-step login');
+        } finally {
+            setResettingId(null);
         }
     };
 
@@ -407,6 +432,9 @@ const AdminManagement = () => {
                                         <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${item.role === 'superadmin' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>
                                             {item.role}
                                         </span>
+                                        <p className={`mt-1 text-[11px] font-bold ${item.mfaEnabled ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            {item.mfaEnabled ? 'Two-step login on' : 'Two-step login not set up'}
+                                        </p>
                                     </td>
                                     <td className="px-5 py-4 text-sm font-semibold text-gray-700">
                                         {item.role === 'superadmin'
@@ -434,6 +462,17 @@ const AdminManagement = () => {
                                             >
                                                 <MdEdit size={18} />
                                             </button>
+                                            {item.mfaEnabled && item._id !== adminUser?._id && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleResetMfa(item)}
+                                                    disabled={resettingId === item._id}
+                                                    className="rounded-xl border border-gray-200 p-2 text-gray-500 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    title="Reset two-step login (lost phone)"
+                                                >
+                                                    <MdLockReset size={18} />
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={() => handleDelete(item._id)}

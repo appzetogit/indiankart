@@ -5,8 +5,13 @@ import User from '../models/User.js';
 import Category from '../models/Category.js';
 import Coupon from '../models/Coupon.js';
 import Return from '../models/Return.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import generateToken from '../utils/generateToken.js';
-import { getAdminPasswordProblem } from '../utils/adminSecurity.js';
+import { getAdminPasswordProblem, isAdminLocked, ADMIN_MAX_FAILED_LOGINS, ADMIN_LOCK_MS } from '../utils/adminSecurity.js';
+import {
+    generateTotpSecret, verifyTotp, totpUri, encryptSecret, decryptSecret, generateRecoveryCodes, hashRecoveryCode,
+} from '../utils/totp.js';
 import {
     ADMIN_SIDEBAR_OPTIONS,
     normalizeAdminRole,
@@ -25,6 +30,7 @@ const serializeAdmin = (adminDoc, includeMeta = false) => {
         role,
         sidebarPermissions,
         isAdmin: true,
+        mfaEnabled: Boolean(adminDoc.mfaEnabled),
         ...(includeMeta
             ? {
                 createdAt: adminDoc.createdAt,
@@ -44,32 +50,195 @@ let dashboardSummaryCache = {
 // @desc    Auth admin & get token
 // @route   POST /api/admin/login
 // @access  Public
+const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
+const MFA_PENDING_MS = 5 * 60 * 1000;
+const LOCKED_MESSAGE = 'Too many failed attempts. This account is locked for 15 minutes.';
+// Compared against when no admin matches, so a wrong username takes as long as a wrong password.
+const DUMMY_HASH = bcrypt.hashSync('no-such-admin-account', 12);
+
+const issueAdminSession = (res, adminDoc, { mfa }) => generateToken(res, adminDoc._id, 'admin_jwt', {
+    expiresMs: ADMIN_SESSION_MS,
+    claims: { typ: 'admin', tv: adminDoc.tokenVersion || 1, mfa: Boolean(mfa) },
+});
+
+const recordFailedAdminLogin = async (adminDoc) => {
+    const failed = (adminDoc.failedLoginCount || 0) + 1;
+    const update = { failedLoginCount: failed };
+    if (failed >= ADMIN_MAX_FAILED_LOGINS) {
+        update.lockedUntil = new Date(Date.now() + ADMIN_LOCK_MS);
+        update.failedLoginCount = 0;
+        console.warn(`[admin-login] account ${adminDoc._id} locked after ${ADMIN_MAX_FAILED_LOGINS} failed attempts`);
+    }
+    await Admin.updateOne({ _id: adminDoc._id }, { $set: update });
+    return Boolean(update.lockedUntil);
+};
+
+const loginSucceeded = async (res, adminDoc, { mfa }) => {
+    await Admin.updateOne({ _id: adminDoc._id }, { $set: { failedLoginCount: 0, lockedUntil: null, lastLogin: new Date() } });
+    const token = issueAdminSession(res, adminDoc, { mfa });
+    return res.json({
+        ...serializeAdmin(adminDoc),
+        token,
+        ...(adminDoc.mfaEnabled ? {} : { mfaSetupRequired: true }),
+    });
+};
+
+// @desc    Admin login, step 1: password. With two-step login on, answers with
+//          a short-lived token for step 2 instead of a session.
+// @route   POST /api/admin/login
+// @access  Public
 export const authAdmin = async (req, res) => {
     const { password } = req.body;
-    const email = req.body.email?.toLowerCase().trim();
-    const username = req.body.username?.toLowerCase().trim();
+    const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    const username = typeof req.body.username === 'string' ? req.body.username.toLowerCase().trim() : '';
     const loginId = username || email;
 
-    if (!loginId || !password) {
+    if (!loginId || typeof password !== 'string' || !password) {
         return res.status(400).json({ message: 'Username/email and password are required' });
     }
 
-    const adminQuery = await Admin.findOne({
-        $or: [{ username: loginId }, { email: loginId }]
-    });
-
-    if (adminQuery && (await adminQuery.matchPassword(password))) {
-        adminQuery.lastLogin = new Date();
-        await adminQuery.save();
-
-        const token = generateToken(res, adminQuery._id, 'admin_jwt');
-        res.json({
-            ...serializeAdmin(adminQuery),
-            token
-        });
-    } else {
-        res.status(401).json({ message: 'Invalid username/email or password' });
+    const adminDoc = await Admin.findOne({ $or: [{ username: loginId }, { email: loginId }] });
+    if (!adminDoc) {
+        await bcrypt.compare(password, DUMMY_HASH);
+        return res.status(401).json({ message: 'Invalid username/email or password' });
     }
+    if (isAdminLocked(adminDoc)) {
+        return res.status(429).json({ message: LOCKED_MESSAGE, code: 'ACCOUNT_LOCKED' });
+    }
+    if (!(await adminDoc.matchPassword(password))) {
+        const locked = await recordFailedAdminLogin(adminDoc);
+        return res.status(locked ? 429 : 401).json(locked
+            ? { message: LOCKED_MESSAGE, code: 'ACCOUNT_LOCKED' }
+            : { message: 'Invalid username/email or password' });
+    }
+
+    if (adminDoc.mfaEnabled) {
+        const mfaToken = jwt.sign(
+            { id: String(adminDoc._id), typ: 'admin_mfa_pending', tv: adminDoc.tokenVersion || 1 },
+            process.env.JWT_SECRET,
+            { algorithm: 'HS256', expiresIn: Math.floor(MFA_PENDING_MS / 1000) }
+        );
+        return res.json({ mfaRequired: true, mfaToken });
+    }
+
+    return loginSucceeded(res, adminDoc, { mfa: false });
+};
+
+// @desc    Admin login, step 2: 6-digit authenticator code or a recovery code
+// @route   POST /api/admin/login/mfa
+// @access  Public (needs the step-1 token)
+export const verifyAdminLoginMfa = async (req, res) => {
+    const { mfaToken, code } = req.body || {};
+    let pending;
+    try {
+        pending = jwt.verify(String(mfaToken || ''), process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    } catch {
+        return res.status(401).json({ message: 'This login has expired. Please enter your password again.', code: 'MFA_LOGIN_EXPIRED' });
+    }
+    if (pending.typ !== 'admin_mfa_pending') {
+        return res.status(401).json({ message: 'This login has expired. Please enter your password again.', code: 'MFA_LOGIN_EXPIRED' });
+    }
+
+    const adminDoc = await Admin.findById(pending.id).select('+mfaSecret +mfaRecoveryCodes +mfaLastCounter');
+    if (!adminDoc || !adminDoc.mfaEnabled || pending.tv !== (adminDoc.tokenVersion || 1)) {
+        return res.status(401).json({ message: 'This login has expired. Please enter your password again.', code: 'MFA_LOGIN_EXPIRED' });
+    }
+    if (isAdminLocked(adminDoc)) {
+        return res.status(429).json({ message: LOCKED_MESSAGE, code: 'ACCOUNT_LOCKED' });
+    }
+
+    const cleanCode = String(code || '').trim();
+    const secret = decryptSecret(adminDoc.mfaSecret);
+    const counter = /^\d{6}$/.test(cleanCode.replace(/\s/g, ''))
+        ? verifyTotp(secret, cleanCode, { lastUsedCounter: adminDoc.mfaLastCounter ?? -1 })
+        : null;
+
+    // Claim the code atomically so two requests can't both use it.
+    if (counter !== null) {
+        const claimed = await Admin.updateOne(
+            { _id: adminDoc._id, $or: [{ mfaLastCounter: { $lt: counter } }, { mfaLastCounter: { $exists: false } }] },
+            { $set: { mfaLastCounter: counter } }
+        );
+        if (claimed.modifiedCount === 1) {
+            return loginSucceeded(res, adminDoc, { mfa: true });
+        }
+    }
+
+    // Recovery code: single use.
+    const hashed = hashRecoveryCode(cleanCode);
+    const usedRecovery = cleanCode.length >= 10 && adminDoc.mfaRecoveryCodes?.includes(hashed)
+        && (await Admin.updateOne({ _id: adminDoc._id, mfaRecoveryCodes: hashed }, { $pull: { mfaRecoveryCodes: hashed } })).modifiedCount === 1;
+    if (usedRecovery) {
+        const left = adminDoc.mfaRecoveryCodes.length - 1;
+        console.warn(`[admin-login] recovery code used for ${adminDoc._id}; ${left} left`);
+        res.set('X-Recovery-Codes-Left', String(left));
+        return loginSucceeded(res, adminDoc, { mfa: true });
+    }
+
+    const locked = await recordFailedAdminLogin(adminDoc);
+    return res.status(locked ? 429 : 401).json(locked
+        ? { message: LOCKED_MESSAGE, code: 'ACCOUNT_LOCKED' }
+        : { message: 'That code is not correct. Check the time on your phone and try again.', code: 'MFA_CODE_INVALID' });
+};
+
+// @desc    Start two-step login setup: confirm password, get a new secret
+// @route   POST /api/admin/mfa/setup
+// @access  Private/Admin
+export const startAdminMfaSetup = async (req, res) => {
+    const adminDoc = await Admin.findById(req.user._id);
+    if (!adminDoc) return res.status(404).json({ message: 'Admin not found' });
+    if (adminDoc.mfaEnabled) {
+        return res.status(400).json({ message: 'Two-step login is already on for this account.' });
+    }
+    // Password again, so a stolen session can't attach the thief's phone.
+    if (typeof req.body?.password !== 'string' || !(await adminDoc.matchPassword(req.body.password))) {
+        return res.status(401).json({ message: 'Password is not correct.' });
+    }
+    const secret = generateTotpSecret();
+    await Admin.updateOne({ _id: adminDoc._id }, { $set: { mfaPendingSecret: encryptSecret(secret) } });
+    return res.json({
+        secret,
+        otpauthUrl: totpUri({ secret, account: adminDoc.email || adminDoc.username }),
+    });
+};
+
+// @desc    Finish setup with the first code from the app; returns recovery codes once
+// @route   POST /api/admin/mfa/enable
+// @access  Private/Admin
+export const enableAdminMfa = async (req, res) => {
+    const adminDoc = await Admin.findById(req.user._id).select('+mfaPendingSecret');
+    if (!adminDoc) return res.status(404).json({ message: 'Admin not found' });
+    if (adminDoc.mfaEnabled) {
+        return res.status(400).json({ message: 'Two-step login is already on for this account.' });
+    }
+    const secret = decryptSecret(adminDoc.mfaPendingSecret);
+    if (!secret) {
+        return res.status(400).json({ message: 'Start the setup again.' });
+    }
+    const counter = verifyTotp(secret, req.body?.code);
+    if (counter === null) {
+        return res.status(400).json({ message: 'That code is not correct. Check the time on your phone and try again.', code: 'MFA_CODE_INVALID' });
+    }
+    const recoveryCodes = generateRecoveryCodes();
+    adminDoc.mfaEnabled = true;
+    adminDoc.mfaEnabledAt = new Date();
+    adminDoc.mfaSecret = encryptSecret(secret);
+    adminDoc.mfaPendingSecret = null;
+    adminDoc.mfaRecoveryCodes = recoveryCodes.map(hashRecoveryCode);
+    adminDoc.mfaLastCounter = counter;
+    await adminDoc.save();
+    console.log(`[admin-mfa] two-step login enabled for ${adminDoc._id}`);
+    // The current session predates the code step; replace it with one that counts as verified.
+    const token = issueAdminSession(res, adminDoc, { mfa: true });
+    return res.json({ ...serializeAdmin(adminDoc), token, recoveryCodes });
+};
+
+// @desc    Sign this admin out on every device
+// @route   POST /api/admin/logout-all
+// @access  Private/Admin
+export const logoutAllAdminSessions = async (req, res) => {
+    await Admin.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+    return logoutAdmin(req, res);
 };
 
 // @desc    Logout admin / clear cookie
@@ -117,7 +286,8 @@ export const updateAdminProfile = async (req, res) => {
 
             const updatedAdmin = await admin.save();
 
-            const token = generateToken(res, updatedAdmin._id, 'admin_jwt');
+            // A password change ends other sessions (tokenVersion moved on); keep this one.
+            const token = issueAdminSession(res, updatedAdmin, { mfa: updatedAdmin.mfaEnabled });
 
             res.json({
                 ...serializeAdmin(updatedAdmin),
@@ -272,6 +442,24 @@ export const updateAdminAccess = async (req, res) => {
                 return res.status(400).json({ message: passwordProblem });
             }
             adminDoc.password = req.body.password.trim();
+        }
+
+        // Lost phone: a superadmin turns two-step login off for this admin.
+        // They must set it up again at next login; their sessions end now.
+        if (req.body.resetMfa === true || req.body.resetMfa === 'true') {
+            if (String(adminDoc._id) === String(req.user._id)) {
+                return res.status(400).json({ message: 'Ask another superadmin to reset your own two-step login.' });
+            }
+            adminDoc.mfaEnabled = false;
+            adminDoc.mfaEnabledAt = null;
+            adminDoc.mfaSecret = null;
+            adminDoc.mfaPendingSecret = null;
+            adminDoc.mfaRecoveryCodes = [];
+            adminDoc.mfaLastCounter = -1;
+            adminDoc.lockedUntil = null;
+            adminDoc.failedLoginCount = 0;
+            adminDoc.tokenVersion = (adminDoc.tokenVersion || 1) + 1;
+            console.warn(`[admin-mfa] two-step login reset for ${adminDoc._id} by ${req.user._id}`);
         }
 
         const updatedAdmin = await adminDoc.save();

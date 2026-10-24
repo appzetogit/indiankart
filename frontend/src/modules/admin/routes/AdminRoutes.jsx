@@ -9,6 +9,7 @@ import { getDefaultAdminRoute } from '../constants/adminPermissions';
 const HOME_PAGE_BUILDER_REDIRECT = '/admin/categories/page-builder?categoryName=For%20You';
 
 const AdminLogin = lazy(() => import('../pages/AdminLogin'));
+const AdminMfaSetup = lazy(() => import('../pages/AdminMfaSetup'));
 const AdminLayout = lazy(() => import('../components/layout/AdminLayout'));
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const CategoryList = lazy(() => import('../pages/Categories/CategoryList'));
@@ -69,6 +70,8 @@ const AdminRoutes = () => {
         <Suspense fallback={<AdminRouteFallback />}>
             <Routes>
                 <Route path="login" element={<AdminLogin />} />
+
+                <Route path="mfa-setup" element={<ProtectedAdminRoute><AdminMfaSetup /></ProtectedAdminRoute>} />
 
                 <Route
                     path="/"

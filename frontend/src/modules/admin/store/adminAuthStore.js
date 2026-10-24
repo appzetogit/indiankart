@@ -25,9 +25,12 @@ const useAdminAuthStore = create(
             loading: false,
             authChecked: false,
 
-            // Real login
+            // Two-step login: step 1 is the password. Resolves to
+            // 'ok' (signed in), 'mfa' (code needed), 'setup' (signed in, must set
+            // up two-step login first) or false (failed; see `error`).
+            mfaToken: null,
             login: async (usernameOrEmail, password) => {
-                set({ loading: true, error: null });
+                set({ loading: true, error: null, mfaToken: null });
                 try {
                     const loginId = usernameOrEmail.trim();
                     const payload = {
@@ -35,21 +38,11 @@ const useAdminAuthStore = create(
                         ...(loginId.includes('@') ? { email: loginId } : { username: loginId })
                     };
                     const { data } = await API.post('/admin/login', payload);
-                    if (data.isAdmin || data.role === 'superadmin' || data.role === 'subadmin' || data.role === 'admin') {
-                        setAdminTokenCache(data.token);
-                        set({
-                            isAuthenticated: true,
-                            adminUser: data,
-                            error: null,
-                            loading: false,
-                            authChecked: true
-                        });
-                        await requestForToken();
-                        return true;
-                    } else {
-                        set({ error: 'Not authorized as admin', loading: false, authChecked: true });
-                        return false;
+                    if (data.mfaRequired) {
+                        set({ mfaToken: data.mfaToken, loading: false });
+                        return 'mfa';
                     }
+                    return get().finishLogin(data);
                 } catch (error) {
                     set({
                         error: error.response?.data?.message || 'Login failed',
@@ -57,8 +50,51 @@ const useAdminAuthStore = create(
                         loading: false,
                         authChecked: true
                     });
-                     return false;
+                    return false;
                 }
+            },
+
+            // Step 2: the 6-digit code from the authenticator app, or a recovery code.
+            verifyMfa: async (code) => {
+                set({ loading: true, error: null });
+                try {
+                    const { data } = await API.post('/admin/login/mfa', { mfaToken: get().mfaToken, code });
+                    set({ mfaToken: null });
+                    return get().finishLogin(data);
+                } catch (error) {
+                    const expired = error.response?.data?.code === 'MFA_LOGIN_EXPIRED';
+                    set({
+                        error: error.response?.data?.message || 'Could not verify the code',
+                        loading: false,
+                        ...(expired ? { mfaToken: null } : {})
+                    });
+                    return expired ? 'restart' : false;
+                }
+            },
+
+            cancelMfa: () => set({ mfaToken: null, error: null }),
+
+            finishLogin: async (data) => {
+                setAdminTokenCache(data.token);
+                set({
+                    isAuthenticated: true,
+                    adminUser: data,
+                    error: null,
+                    loading: false,
+                    authChecked: true
+                });
+                if (data.mfaSetupRequired || data.mfaEnabled === false) {
+                    return 'setup';
+                }
+                await requestForToken();
+                return 'ok';
+            },
+
+            // Called by the setup page once two-step login is on: the server
+            // returns a fresh session that counts as verified.
+            applyMfaEnabled: (data) => {
+                setAdminTokenCache(data.token);
+                set({ adminUser: { ...get().adminUser, ...data }, isAuthenticated: true });
             },
 
             checkAuth: async () => {
@@ -144,7 +180,12 @@ const useAdminAuthStore = create(
             }
         }),
         {
-            name: 'admin-auth-storage'
+            name: 'admin-auth-storage',
+            // The step-2 token is short-lived and must not survive a reload.
+            partialize: (state) => {
+                const { mfaToken, ...rest } = state;
+                return rest;
+            }
         }
     )
 );

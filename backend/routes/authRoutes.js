@@ -21,8 +21,6 @@ import {
 import { protect, admin, protectOptional, can } from '../middleware/authMiddleware.js';
 import { touchPortalSession } from '../utils/portalSessionTracking.js';
 
-const HARDCODED_BYPASS_USER_ID = '000000000000000000000001';
-
 const normalizePlatform = (platform = 'web') => {
     const platformMap = {
         web: 'web',
@@ -63,15 +61,6 @@ const saveFcmToken = async (req, res, forcedPlatform = null) => {
         }
 
         const userId = req.user._id;
-
-        if (String(userId) === HARDCODED_BYPASS_USER_ID) {
-            return res.json({
-                message: 'FCM Token received for bypass test user',
-                saved: false,
-                userType: 'user',
-                platform: normalizedPlatform
-            });
-        }
 
         const FcmToken = (await import('../models/FcmToken.js')).default;
         const User = (await import('../models/User.js')).default;

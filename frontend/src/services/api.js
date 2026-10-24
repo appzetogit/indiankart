@@ -102,6 +102,20 @@ API.interceptors.response.use(
             return API.request(config);
         }
 
+        // Admin panel: send the admin to finish two-step setup, or back to
+        // login once the session has ended (expired, revoked, password changed).
+        const errorCode = error.response?.data?.code;
+        const path = typeof window !== 'undefined' ? window.location.pathname : '';
+        if (path.startsWith('/admin') && path !== '/admin/login') {
+            if (errorCode === 'MFA_SETUP_REQUIRED' && path !== '/admin/mfa-setup') {
+                window.location.assign('/admin/mfa-setup');
+            } else if (errorCode === 'SESSION_EXPIRED') {
+                localStorage.removeItem('admin-auth-token');
+                localStorage.removeItem('admin-auth-storage');
+                window.location.assign('/admin/login');
+            }
+        }
+
         return Promise.reject(error);
     }
 );

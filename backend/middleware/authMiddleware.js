@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Admin from '../models/Admin.js';
-import { findOrCreateHardcodedLoginUser, LEGACY_HARDCODED_USER_IDS } from '../controllers/authController.js';
 import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
 
 const getJwtSecret = () => {
@@ -35,44 +34,54 @@ const resolveAuthenticatedUser = async (req) => {
     }
 
     if (token) {
-        const decoded = jwt.verify(token, getJwtSecret());
-        console.log('Decoded Token:', decoded);
+        const decoded = jwt.verify(token, getJwtSecret(), { algorithms: ['HS256'] });
 
-        if (LEGACY_HARDCODED_USER_IDS[decoded.id]) {
-            const user = await findOrCreateHardcodedLoginUser(LEGACY_HARDCODED_USER_IDS[decoded.id]);
-            user.isAdmin = false;
-            user.role = 'user';
-            return user;
+        // A "password OK, waiting for the authenticator code" token is not a session.
+        if (decoded.typ === 'admin_mfa_pending') {
+            throw new Error('Not authorized, token failed');
         }
 
-        let user = await User.findById(decoded.id).select('-password');
+        let user = decoded.typ === 'admin' ? null : await User.findById(decoded.id).select('-password');
         if (!user) {
-            console.log('User not found in Users collection, checking Admin...');
             user = await Admin.findById(decoded.id).select('-password');
+            if (user) {
+                // Sessions end when the admin's session number moves on
+                // (password change, MFA reset, log out everywhere) and must
+                // have passed the code step once MFA is on.
+                if (decoded.tv !== (user.tokenVersion || 1)) {
+                    throw new Error('Session expired. Please log in again.');
+                }
+                if (user.mfaEnabled && decoded.mfa !== true) {
+                    throw new Error('Session expired. Please log in again.');
+                }
+            }
         }
 
         if (!user) {
-             console.log('User not found in Admin collection either.');
-             throw new Error('Not authorized, token failed');
+            throw new Error('Not authorized, token failed');
         }
 
         if (user?.email && typeof user.getResolvedRole === 'function') {
             user.role = normalizeAdminRole(user.role);
             user.permissions = normalizeSidebarPermissions(user.role, user.permissions);
         }
-        
-        console.log('Authenticated User found:', user._id, 'Role:', user.role || 'User', 'IsAdmin:', user.isAdmin);
+
         return user;
     }
 
     return null;
 };
 
+// Until an admin has set up two-step login, only these work (finish setup,
+// read own profile, log out).
+const isAllowedBeforeMfa = (req) => /^\/api\/admin\/mfa\//.test(req.originalUrl)
+    || /^\/api\/admin\/logout(-all)?(\?|$)/.test(req.originalUrl)
+    || (req.method === 'GET' && /^\/api\/admin\/profile(\?|$)/.test(req.originalUrl));
+
 export const protect = async (req, res, next) => {
     try {
         const user = await resolveAuthenticatedUser(req);
         if (!user) {
-            console.log('No token found in cookies. Cookies present:', Object.keys(req.cookies || {}));
             return res.status(401).json({ message: 'Not authorized, no token' });
         }
 
@@ -81,11 +90,17 @@ export const protect = async (req, res, next) => {
             return res.status(403).json({ message: 'Your account has been disabled. Please contact support.', code: 'ACCOUNT_DISABLED' });
         }
 
+        // Every admin must set up two-step login before using the panel.
+        if (isAdminUser(user) && !user.mfaEnabled
+            && !isAllowedBeforeMfa(req)) {
+            return res.status(403).json({ message: 'Set up two-step login to continue.', code: 'MFA_SETUP_REQUIRED' });
+        }
+
         req.user = user;
         next();
     } catch (error) {
-        console.error('Auth protect error:', error.message);
-        res.status(401).json({ message: 'Not authorized, token failed' });
+        const expired = /expired/i.test(error?.message || '');
+        res.status(401).json({ message: expired ? 'Session expired. Please log in again.' : 'Not authorized, token failed', code: expired ? 'SESSION_EXPIRED' : 'NOT_AUTHORIZED' });
     }
 };
 
@@ -124,7 +139,6 @@ export const admin = (req, res, next) => {
     if (isAdminUser(req.user)) {
         next();
     } else {
-        console.log('Access denied. Not an admin. User:', req.user._id);
         res.status(401).json({ message: 'Not authorized as an admin' });
     }
 };
