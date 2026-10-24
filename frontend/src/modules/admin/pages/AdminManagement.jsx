@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MdAdd, MdDelete, MdEdit, MdLockReset, MdRefresh, MdSecurity } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import API from '../../../services/api';
@@ -28,6 +28,7 @@ const AdminManagement = () => {
     const [deletingId, setDeletingId] = useState(null);
     const [resettingId, setResettingId] = useState(null);
     const [form, setForm] = useState(createInitialForm());
+    const formRef = useRef(null);
 
     const isEditing = Boolean(form.id);
     const isSuperadmin = adminUser?.role === 'superadmin';
@@ -88,7 +89,8 @@ const AdminManagement = () => {
             role: adminRecord.role || 'subadmin',
             sidebarPermissions: Array.isArray(adminRecord.sidebarPermissions) ? adminRecord.sidebarPermissions : []
         });
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // The admin panel scrolls inside <main>, not the window.
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const handleSubmit = async (event) => {
@@ -226,7 +228,7 @@ const AdminManagement = () => {
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
+            <form ref={formRef} onSubmit={handleSubmit} className="scroll-mt-4 rounded-3xl border border-gray-200 bg-white p-5 shadow-sm md:p-6">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h2 className="text-xl font-black text-gray-900">
