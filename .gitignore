@@ -52,3 +52,9 @@ backend/remap-backup-*.jsonl
 # SSH / deploy keys
 *.pem
 *.key
+
+# Private ops notes (server access, ongoing work). Never commit.
+SERVER_NOTES.md
+SECURITY_AUDIT.md
+Vibe-Coded-App-Security-Guide.pdf
+tmp-*

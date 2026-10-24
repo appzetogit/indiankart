@@ -118,9 +118,9 @@ const getCurrentStatus = (payload = {}) => {
     return '';
 };
 
-const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUpperCase() === 'COD'
-    ? 'COD'
-    : 'Prepaid';
+// Prepaid only when the order is actually paid. Deciding from "method is not
+// COD" shipped unpaid orders with an odd method as prepaid, ₹0 to collect.
+const getPaymentMode = (order) => (order?.isPaid === true ? 'Prepaid' : 'COD');
 
 const RAW_TO_USER_TRACKING_STEP = {
     created: 'Processing',

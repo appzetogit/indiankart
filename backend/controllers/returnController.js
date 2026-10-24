@@ -5,6 +5,7 @@ import Notification from '../models/Notification.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
+import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 
 const RETURN_WINDOW_DAYS = 7;
@@ -145,7 +146,6 @@ export const createReturnRequest = async (req, res) => {
             comment,
             type,
             requestedQuantity,
-            images,
             googleDriveLink,
             bankDetails,
             selectedReplacementSize,
@@ -216,7 +216,10 @@ export const createReturnRequest = async (req, res) => {
             }
         }
 
-        if (proofFiles.length > 0) {
+        // Proof files are published only after the request is known to be
+        // valid (see saveProofFiles below), never for someone else's order.
+        const saveProofFiles = async () => {
+            if (!proofFiles.length) return;
             const uploadResults = await Promise.all(
                 proofFiles.map((file) =>
                     uploadBufferToCloudinary(file, {
@@ -226,16 +229,15 @@ export const createReturnRequest = async (req, res) => {
                 )
             );
             uploadedProofMedia.push(...uploadResults.map((result) => result.secure_url).filter(Boolean));
-        }
+        };
 
-        const order = await Order.findOne({ _id: orderId });
-        if (!order) {
+        if (!mongoose.isValidObjectId(orderId)) {
             return res.status(404).json({ message: 'Order not found' });
         }
-
-        // Verify user owns the order
-        if (order.user && order.user.toString() !== req.user._id.toString()) {
-             return res.status(401).json({ message: 'Not authorized to return items for this order' });
+        // Only the caller's own orders; others look like "not found".
+        const order = await Order.findOne({ _id: String(orderId), user: req.user._id });
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
         }
 
         if (type !== 'Cancellation') {
@@ -318,6 +320,13 @@ export const createReturnRequest = async (req, res) => {
                 }
             }
             
+            if (!normalizedProofLink && proofFiles.length === 0) {
+                return res.status(400).json({
+                    message: 'Please provide proof: either Google Drive link or image/video files (max 10MB each).'
+                });
+            }
+            await saveProofFiles();
+
             // Create Return Record
             const newReturn = new Return({
                 id: `RET-${Date.now()}`,
@@ -348,7 +357,8 @@ export const createReturnRequest = async (req, res) => {
                 bankDetails: type === 'Return' ? (parsedBankDetails || undefined) : undefined,
                 googleDriveLink: normalizedProofLink || '',
                 proofMedia: uploadedProofMedia,
-                images: uploadedProofMedia.length > 0 ? uploadedProofMedia : images,
+                // Only files we stored ourselves; URLs from the request body are ignored.
+                images: uploadedProofMedia,
                 status: 'Pending',
                 timeline: [{
                     status: 'Pending',
@@ -452,7 +462,10 @@ export const createReturnRequest = async (req, res) => {
         }
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Server Error: ' + error.message });
+        res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Could not create the request. Please try again.' });
+    } finally {
+        // Temp files that were not published (rejected or early exit).
+        await cleanupUploadedFiles(req.files);
     }
 };
 

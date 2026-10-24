@@ -4,7 +4,7 @@ import { getCoupons, createCoupon, updateCouponStatus, updateCoupon, deleteCoupo
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 router.route('/')
-    .get(getCoupons) // Publicly accessible
+    .get(getCoupons) // Storefront gets active coupons only; admin panel (X-Admin-View) gets all
     .post(protect, admin, createCoupon);
 
 router.route('/:id')

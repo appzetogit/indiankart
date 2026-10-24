@@ -102,6 +102,34 @@ const getProductVariantHeadings = (product) => (
         : []
 );
 
+// Payment methods the checkout may send, mapped to how they are stored.
+const PAYMENT_METHODS = {
+    COD: 'COD',
+    UPI: 'UPI',
+    CARD: 'Card',
+    NETBANKING: 'NetBanking',
+    WALLET: 'Wallet',
+    EMI: 'EMI',
+    ONLINE: 'ONLINE',
+    RAZORPAY: 'RAZORPAY',
+};
+
+// Every image URL that legitimately belongs to a product (main, gallery,
+// variant SKUs and variant options), so an order line can keep the variant
+// picture the buyer saw but never an arbitrary URL.
+const collectProductImages = (product) => {
+    const images = new Set();
+    const add = (value) => { if (typeof value === 'string' && value) images.add(value); };
+    add(product?.image);
+    (product?.images || []).forEach(add);
+    (product?.skus || []).forEach((sku) => { add(sku?.image); (sku?.images || []).forEach(add); });
+    (product?.variantHeadings || []).forEach((heading) => (heading?.options || []).forEach((option) => {
+        add(option?.image);
+        (option?.images || []).forEach(add);
+    }));
+    return images;
+};
+
 const validateAndResolveOrderItemVariant = (product, item) => {
     const productVariantHeadings = getProductVariantHeadings(product);
     const normalizedVariant = normalizeVariantObject(item?.variant);
@@ -805,26 +833,36 @@ export const addOrderItems = async (req, res) => {
     let createdOrderId = null;
     try {
         const {
-            orderItems,
+            orderItems: rawOrderItems,
             shippingAddress,
             retailerDetails,
-            paymentMethod,
+            paymentMethod: rawPaymentMethod,
             coupon,
             referral,
         } = req.body;
-        const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
-        const isOnlinePayment = normalizedPaymentMethod && normalizedPaymentMethod !== 'COD';
 
-        if (!orderItems || orderItems.length === 0) {
-            return res.status(400).json({ message: 'No order items' });
+        // Strict list. A blank or unknown method used to skip the payment check
+        // (not "online") and the COD advance (not "COD"), and couriers then
+        // shipped it as prepaid with nothing to collect.
+        const normalizedPaymentMethod = typeof rawPaymentMethod === 'string' ? rawPaymentMethod.trim().toUpperCase() : '';
+        const paymentMethod = PAYMENT_METHODS[normalizedPaymentMethod];
+        if (!paymentMethod) {
+            return res.status(400).json({ message: 'Please choose a valid payment method.' });
+        }
+        const isOnlinePayment = normalizedPaymentMethod !== 'COD';
+
+        if (!shippingAddress || typeof shippingAddress !== 'object') {
+            return res.status(400).json({ message: 'Shipping address is required' });
         }
 
-        // Calculate prices securely on the backend from database values
+        // Calculate prices securely on the backend from database values.
+        // This also validates and normalizes the order lines (see normalizeOrderItems).
         const calculatedPrices = await calculateOrderPrices({
-            orderItems,
+            orderItems: rawOrderItems,
             shippingAddress,
             coupon
         });
+        const orderItems = calculatedPrices.orderItems;
 
         const itemsPrice = calculatedPrices.itemsPrice;
         const shippingPrice = calculatedPrices.shippingPrice;
@@ -871,7 +909,10 @@ export const addOrderItems = async (req, res) => {
         }
 
         // Validate Pincode Serviceability
-        const pincode = shippingAddress.postalCode;
+        const pincode = String(shippingAddress.postalCode ?? '').trim();
+        if (pincode && !/^\d{6}$/.test(pincode)) {
+            return res.status(400).json({ message: 'Please enter a valid 6-digit pincode' });
+        }
         if (pincode) {
             const pinCodeRecord = await PinCode.findOne({ code: pincode, isActive: true });
             if (!pinCodeRecord) {
@@ -954,12 +995,20 @@ export const addOrderItems = async (req, res) => {
                 });
             }
 
+            // Every stored field comes from the database. Copying the client's
+            // line ({...item}) let a buyer set the unit price, name, IMEI or
+            // status that invoices, returns and courier values later read.
+            const knownImages = collectProductImages(product);
+            const fallbackImage = matchingSku?.image || product.image || (Array.isArray(product.images) ? product.images[0] : '') || '';
             resolvedOrderItems.push({
-                ...item,
+                product: Number(product.id),
+                name: product.name,
+                qty: item.qty,
+                price: Number(matchingSku?.price ?? product.price),
+                image: knownImages.has(item.image) ? item.image : (fallbackImage || item.image || 'no-image'),
                 variant: Object.keys(normalizedVariant).length > 0 ? normalizedVariant : undefined,
                 // Snapshot from the DB, never the client, so invoices stay fixed if the rate changes later.
                 gstRate: Number.isFinite(Number(product.gstRate)) ? Number(product.gstRate) : DEFAULT_GST_RATE,
-                product: item.product || item._id
             });
         }
 

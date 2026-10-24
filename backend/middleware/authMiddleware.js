@@ -76,6 +76,11 @@ export const protect = async (req, res, next) => {
             return res.status(401).json({ message: 'Not authorized, no token' });
         }
 
+        // An admin disabling a customer must cut off sessions already open.
+        if (user.status === 'disabled') {
+            return res.status(403).json({ message: 'Your account has been disabled. Please contact support.', code: 'ACCOUNT_DISABLED' });
+        }
+
         req.user = user;
         next();
     } catch (error) {

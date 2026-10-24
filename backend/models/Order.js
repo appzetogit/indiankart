@@ -9,7 +9,7 @@ const orderSchema = mongoose.Schema({
     orderItems: [
         {
             name: { type: String, required: true },
-            qty: { type: Number, required: true },
+            qty: { type: Number, required: true, min: 1, validate: { validator: Number.isInteger, message: 'Quantity must be a whole number' } },
             image: { type: String, required: true },
             price: { type: Number, required: true },
             variant: { type: Object }, // To store dynamic variants like { Weight: "1kg" }

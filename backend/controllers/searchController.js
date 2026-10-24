@@ -8,14 +8,15 @@ import SubCategory from '../models/SubCategory.js';
 // @access  Public
 export const globalSearch = async (req, res) => {
     try {
-        const { q } = req.query;
-        
-        if (!q || q.length < 1) {
+        // Plain text only: the raw query used to become a regular expression,
+        // so a crafted pattern could tie up the database and "(" caused a 500.
+        const keyword = (Array.isArray(req.query.q) ? req.query.q[0] : String(req.query.q ?? '')).trim().slice(0, 80);
+
+        if (!keyword) {
             return res.json({ products: [], categories: [], subCategories: [] });
         }
 
-        const keyword = q;
-        const regex = new RegExp(keyword, 'i');
+        const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
         // Parallel execution for better performance
         const [products, categories, subCategories] = await Promise.all([
@@ -28,16 +29,19 @@ export const globalSearch = async (req, res) => {
             }))
             .populate('subCategories', 'isActive')
             .select('id name image price brand category categoryId subCategories discount')
-            .limit(5),
+            .limit(5)
+            .maxTimeMS(3000),
 
             Category.find({ name: regex, active: true })
             .select('id name icon active')
-            .limit(3),
+            .limit(3)
+            .maxTimeMS(3000),
 
             SubCategory.find({ name: regex, isActive: true })
             .populate('category', 'name active')
             .select('name category isActive')
             .limit(3)
+            .maxTimeMS(3000)
         ]);
 
         // Filter products locally to ensure their category and subcategories are active

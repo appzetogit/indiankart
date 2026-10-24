@@ -28,12 +28,45 @@ const sanitizeFolder = (folder = '') => {
     return parts.length ? parts.join('/') : 'ecom_uploads';
 };
 
-const sanitizeExtension = (name = '') => {
-    const ext = path.extname(String(name || '')).toLowerCase();
-    return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : '';
+const WEBP_SOURCE_PATTERN = /\.(png|jpe?g)$/i;
+
+/**
+ * What a file really is, from its first bytes. Only these are ever published
+ * under /uploads: the name and MIME type a browser sends are attacker-chosen
+ * (a page saved as "photo.shtml" with type image/png used to be stored and
+ * served as HTML on the API's own domain).
+ */
+const detectPublishableType = (head) => {
+    if (!head || head.length < 12) return null;
+    const ascii = (start, end) => head.subarray(start, end).toString('latin1');
+    if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return '.jpg';
+    if (head.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return '.png';
+    if (ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a') return '.gif';
+    if (ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return '.webp';
+    if (head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3) return '.webm';
+    if (ascii(4, 8) === 'ftyp') {
+        const brand = ascii(8, 12);
+        if (brand === 'avif' || brand === 'avis') return '.avif';
+        if (brand === 'qt  ') return '.mov';
+        if (['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'MSNV', 'dash', '3gp4', '3gp5'].includes(brand)) return '.mp4';
+    }
+    return null;
 };
 
-const WEBP_SOURCE_PATTERN = /\.(png|jpe?g)$/i;
+const readHead = async (input) => {
+    if (input?.path) {
+        const handle = await fsp.open(input.path, 'r');
+        try {
+            const buffer = Buffer.alloc(32);
+            const { bytesRead } = await handle.read(buffer, 0, 32, 0);
+            return buffer.subarray(0, bytesRead);
+        } finally {
+            await handle.close();
+        }
+    }
+    const buffer = Buffer.isBuffer(input) ? input : input?.buffer;
+    return buffer ? buffer.subarray(0, 32) : null;
+};
 
 /**
  * Writes a .webp sibling next to a saved raster image. nginx serves it to
@@ -67,7 +100,13 @@ const writeWebpSibling = async (target) => {
  */
 export const saveUploadedFile = async (input, options = {}) => {
     const folder = sanitizeFolder(options.folder);
-    const extension = sanitizeExtension(input?.originalname) || sanitizeExtension(input?.path);
+    const extension = detectPublishableType(await readHead(input));
+    if (!extension) {
+        if (input?.path) await fsp.unlink(input.path).catch(() => {});
+        const error = new Error('Only JPG, PNG, WebP, GIF or AVIF images and MP4, WebM or MOV videos can be uploaded.');
+        error.statusCode = 400;
+        throw error;
+    }
     const filename = `${Date.now()}-${crypto.randomUUID()}${extension}`;
     const relativePath = `${folder}/${filename}`;
     const target = path.join(UPLOADS_ROOT, folder, filename);

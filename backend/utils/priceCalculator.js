@@ -38,9 +38,68 @@ export const findMatchingSkuForVariant = (product, variant) => {
     return index === -1 ? null : product.skus[index];
 };
 
-export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon }) => {
+const MAX_ORDER_LINES = 50;
+const MAX_LINE_QUANTITY = 100;
+
+const badItems = (message) => {
+    const error = new Error(message);
+    error.statusCode = 400;
+    return error;
+};
+
+/**
+ * The only shape of order lines the server works with. Quantities must be
+ * whole numbers from 1 to 100: a negative quantity used to subtract from the
+ * total (₹50,000 × 1 + ₹49,999 × −1 = ₹1) and add to stock. Duplicate lines
+ * for the same product and variant are merged so per-product limits can't be
+ * dodged by splitting. Only id, quantity and variant are trusted; name and
+ * image are kept for messages and checked against the product later.
+ */
+export const normalizeOrderItems = (orderItems) => {
+    if (!Array.isArray(orderItems) || orderItems.length === 0) {
+        throw badItems('No order items');
+    }
+    if (orderItems.length > MAX_ORDER_LINES) {
+        throw badItems(`An order can have at most ${MAX_ORDER_LINES} items.`);
+    }
+
+    const merged = new Map();
+    for (const raw of orderItems) {
+        if (!raw || typeof raw !== 'object') throw badItems('Invalid order item.');
+        const product = Number(raw.product ?? raw._id ?? raw.id);
+        if (!Number.isFinite(product)) throw badItems('Invalid product in order.');
+
+        const rawQty = raw.qty ?? raw.quantity;
+        const qty = typeof rawQty === 'string' && rawQty.trim() !== '' ? Number(rawQty) : rawQty;
+        if (typeof qty !== 'number' || !Number.isInteger(qty) || qty < 1 || qty > MAX_LINE_QUANTITY) {
+            throw badItems(`Invalid quantity for ${String(raw.name || 'an item').slice(0, 80)}.`);
+        }
+
+        const variant = normalizeVariantObject(raw.variant);
+        const key = `${product}|${JSON.stringify(Object.keys(variant).sort().map((k) => [k, variant[k]]))}`;
+        const existing = merged.get(key);
+        if (existing) {
+            existing.qty += qty;
+            if (existing.qty > MAX_LINE_QUANTITY) {
+                throw badItems(`Invalid quantity for ${existing.name || 'an item'}.`);
+            }
+        } else {
+            merged.set(key, {
+                product,
+                qty,
+                variant,
+                name: typeof raw.name === 'string' ? raw.name.slice(0, 200) : '',
+                image: typeof raw.image === 'string' && raw.image.length < 1000 ? raw.image : '',
+            });
+        }
+    }
+    return [...merged.values()];
+};
+
+export const calculateOrderPrices = async ({ orderItems: rawOrderItems, shippingAddress, coupon }) => {
     let calculatedItemsPrice = 0;
 
+    const orderItems = normalizeOrderItems(rawOrderItems);
     const productIds = [...new Set(orderItems.map((item) => Number(item.product || item._id)))];
     const [products, settings] = await Promise.all([
         Product.find({ id: { $in: productIds } }),
@@ -120,6 +179,9 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
                 } else if (couponRecord.type === 'flat') {
                     calculatedDiscount = Number(couponRecord.value) || 0;
                 }
+                // Never more than the goods themselves (a misconfigured flat
+                // coupon used to make whole orders free).
+                calculatedDiscount = Math.max(0, Math.min(calculatedDiscount, calculatedItemsPrice));
                 calculatedDiscount = Number(calculatedDiscount.toFixed(2));
 
                 appliedCoupon = {
@@ -141,6 +203,7 @@ export const calculateOrderPrices = async ({ orderItems, shippingAddress, coupon
         discount: calculatedDiscount,
         coupon: appliedCoupon,
         settings,
-        productsById
+        productsById,
+        orderItems
     };
 };

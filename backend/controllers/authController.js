@@ -235,6 +235,10 @@ export const verifyLoginOtp = async (req, res) => {
             }
         }
 
+        if (user.status === 'disabled') {
+            return res.status(403).json({ message: 'Your account has been disabled. Please contact support.', code: 'ACCOUNT_DISABLED' });
+        }
+
         if (name && String(name).trim()) user.name = String(name).trim();
         if (email && String(email).trim()) user.email = String(email).trim().toLowerCase();
 
@@ -292,10 +296,14 @@ export const verifyLoginOtp = async (req, res) => {
 };
 
 export const authUser = async (req, res) => {
-    const { password } = req.body;
-    const email = req.body.email?.toLowerCase().trim();
-    const user = await User.findOne({ email });
+    // Strings only: an object here used to throw and return a stack trace.
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    const user = email && password ? await User.findOne({ email }) : null;
     if (user && (await user.matchPassword(password))) {
+        if (user.status === 'disabled') {
+            return res.status(403).json({ message: 'Your account has been disabled. Please contact support.', code: 'ACCOUNT_DISABLED' });
+        }
         const token = generateToken(res, user._id, 'user_jwt');
         const sessionId = resolvePortalSessionId(req);
         await recordPortalLogin({

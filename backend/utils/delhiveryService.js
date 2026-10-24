@@ -24,9 +24,9 @@ const formatOrderDate = (dateValue) => {
     return `${year}-${month}-${day}`;
 };
 
-const getPaymentMode = (order) => String(order?.paymentMethod || '').trim().toUpperCase() === 'COD'
-    ? 'COD'
-    : 'Pre-paid';
+// Prepaid only when the order is actually paid. Deciding from "method is not
+// COD" shipped unpaid orders with an odd method as prepaid, ₹0 to collect.
+const getPaymentMode = (order) => (order?.isPaid === true ? 'Pre-paid' : 'COD');
 
 // `pickupLocationOverride` lets the admin pick which registered warehouse a
 // shipment is collected from, instead of always using the single default in

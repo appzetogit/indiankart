@@ -17,15 +17,32 @@ const validateExpiryAfter = (expiryDate, baseDate) => {
     return { valid: true };
 };
 
-// @desc    Get all coupons & offers
+// Fields checkout needs to show and apply a coupon or offer.
+const PUBLIC_COUPON_FIELDS = 'type title description active isOffer code value minPurchase maxDiscount expiryDate userSegment applicableCategory applicableSubCategory applicableBrand terms';
+
+const isExpiredCoupon = (coupon) => {
+    if (!coupon?.expiryDate) return false;
+    const expiry = new Date(`${coupon.expiryDate}T23:59:59.999Z`);
+    return !Number.isNaN(expiry.getTime()) && expiry.getTime() < Date.now();
+};
+
+// @desc    Coupons & offers. Admin panel: all of them. Storefront: only active,
+//          unexpired ones (inactive/expired/staff codes used to be listed to anyone).
 // @route   GET /api/coupons
-// @access  Private/Admin
+// @access  Public (filtered) / Admin (full)
 export const getCoupons = async (req, res) => {
     try {
-        const coupons = await Coupon.find({}).sort({ createdAt: -1 }).lean();
-        res.json(coupons);
+        if (req.isAdminViewer) {
+            const coupons = await Coupon.find({}).sort({ createdAt: -1 }).lean();
+            return res.json(coupons);
+        }
+        const coupons = await Coupon.find({ active: true })
+            .select(PUBLIC_COUPON_FIELDS)
+            .sort({ createdAt: -1 })
+            .lean();
+        return res.json(coupons.filter((coupon) => !isExpiredCoupon(coupon)));
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: 'Could not load coupons' });
     }
 };
 
