@@ -256,20 +256,25 @@ const ProductDetails = () => {
         }
     }, [product, displayVariantHeadings]);
 
+    // Variant names are often saved with stray spaces ("128 GB + 6 GB  "), while the
+    // stock rows hold them trimmed; compare both sides trimmed, keys included.
+    const skuMatchesSelection = React.useCallback((sku, pick) => displayVariantHeadings.every((vh) => {
+        const heading = String(vh.name || '').trim();
+        const combination = sku?.combination || {};
+        const key = Object.keys(combination).find((k) => String(k).trim() === heading);
+        return key !== undefined && String(combination[key] ?? '').trim() === String(pick(vh) ?? '').trim();
+    }), [displayVariantHeadings]);
+
     const currentStock = React.useMemo(() => {
         if (!product) return 0;
 
         if (displayVariantHeadings.length > 0 && product.skus && product.skus.length > 0) {
-            const matchingSku = product.skus.find(sku =>
-                displayVariantHeadings.every(vh =>
-                    sku.combination?.[vh.name] === selectedVariants[vh.name]
-                )
-            );
+            const matchingSku = product.skus.find((sku) => skuMatchesSelection(sku, (vh) => selectedVariants[vh.name]));
             return matchingSku ? matchingSku.stock : 0;
         }
 
         return product.stock || 0;
-    }, [product, selectedVariants, displayVariantHeadings]);
+    }, [product, selectedVariants, displayVariantHeadings, skuMatchesSelection]);
 
     const maxAllowedQuantity = React.useMemo(() => {
         if (!product) return 0;
@@ -285,24 +290,17 @@ const ProductDetails = () => {
             return null;
         }
 
-        return product.skus.find(sku =>
-            displayVariantHeadings.every(vh =>
-                sku.combination?.[vh.name] === selectedVariants[vh.name]
-            )
-        ) || null;
-    }, [product, selectedVariants, displayVariantHeadings]);
+        return product.skus.find((sku) => skuMatchesSelection(sku, (vh) => selectedVariants[vh.name])) || null;
+    }, [product, selectedVariants, displayVariantHeadings, skuMatchesSelection]);
 
     // An option is out of stock when the combination it would select (this
     // option + the other current choices) has no stock. Shown in red.
     const isOptionOutOfStock = React.useCallback((headingName, optionName) => {
         if (!product?.skus?.length || displayVariantHeadings.length === 0) return false;
         const sku = product.skus.find((candidate) =>
-            displayVariantHeadings.every((vh) =>
-                candidate.combination?.[vh.name] === (vh.name === headingName ? optionName : selectedVariants[vh.name])
-            )
-        );
+            skuMatchesSelection(candidate, (vh) => (vh.name === headingName ? optionName : selectedVariants[vh.name])));
         return !sku || (Number(sku.stock) || 0) <= 0;
-    }, [product, displayVariantHeadings, selectedVariants]);
+    }, [product, displayVariantHeadings, selectedVariants, skuMatchesSelection]);
 
     const isVariantSelectionComplete = React.useMemo(() => {
         if (displayVariantHeadings.length === 0) return true;

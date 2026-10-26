@@ -111,9 +111,13 @@ export const useCartStore = create()(
                         if (Object.keys(variant).length && Array.isArray(product.skus)) {
                             const sku = product.skus.find((candidate) => {
                                 const combination = candidate?.combination || {};
-                                const keys = Object.keys(variant);
-                                return keys.length === Object.keys(combination).length
-                                    && keys.every((key) => String(variant[key]) === String(combination[key]));
+                                // Trimmed: saved variant names can carry stray spaces.
+                                const trimmed = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [String(k).trim(), String(v ?? '').trim()]));
+                                const want = trimmed(variant);
+                                const have = trimmed(combination);
+                                const keys = Object.keys(want);
+                                return keys.length === Object.keys(have).length
+                                    && keys.every((key) => want[key] === have[key]);
                             });
                             if (sku) stock = Number(sku.stock) || 0;
                         }
