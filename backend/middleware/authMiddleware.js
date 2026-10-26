@@ -90,8 +90,9 @@ export const protect = async (req, res, next) => {
             return res.status(403).json({ message: 'Your account has been disabled. Please contact support.', code: 'ACCOUNT_DISABLED' });
         }
 
-        // Every admin must set up two-step login before using the panel.
-        if (isAdminUser(user) && !user.mfaEnabled
+        // With ADMIN_MFA_REQUIRED=true every admin must set up two-step login
+        // before using the panel; otherwise it is optional.
+        if (process.env.ADMIN_MFA_REQUIRED === 'true' && isAdminUser(user) && !user.mfaEnabled
             && !isAllowedBeforeMfa(req)) {
             return res.status(403).json({ message: 'Set up two-step login to continue.', code: 'MFA_SETUP_REQUIRED' });
         }

@@ -79,7 +79,7 @@ const loginSucceeded = async (res, adminDoc, { mfa }) => {
     return res.json({
         ...serializeAdmin(adminDoc),
         token,
-        ...(adminDoc.mfaEnabled ? {} : { mfaSetupRequired: true }),
+        ...(adminDoc.mfaEnabled || process.env.ADMIN_MFA_REQUIRED !== 'true' ? {} : { mfaSetupRequired: true }),
     });
 };
 

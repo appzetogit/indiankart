@@ -83,7 +83,7 @@ const useAdminAuthStore = create(
                     loading: false,
                     authChecked: true
                 });
-                if (data.mfaSetupRequired || data.mfaEnabled === false) {
+                if (data.mfaSetupRequired) {
                     return 'setup';
                 }
                 await requestForToken();
