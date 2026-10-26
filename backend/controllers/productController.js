@@ -11,6 +11,19 @@ import { promises as fs } from 'node:fs';
 import { normalizeVariantObject } from '../utils/priceCalculator.js';
 import { GST_RATES, DEFAULT_GST_RATE } from '../models/Product.js';
 
+// Variant heading and option names must match the stock rows (skus), which
+// are stored trimmed; stray spaces here made in-stock variants show as
+// out of stock.
+const trimVariantHeadings = (headings) => (Array.isArray(headings)
+    ? headings.map((vh) => ({
+        ...vh,
+        name: typeof vh?.name === 'string' ? vh.name.trim() : vh?.name,
+        options: Array.isArray(vh?.options)
+            ? vh.options.map((opt) => (typeof opt?.name === 'string' ? { ...opt, name: opt.name.trim() } : opt))
+            : vh?.options
+    }))
+    : headings);
+
 
 const ACTIVE_CACHE_TTL_MS = 2 * 60 * 1000;
 const PORTAL_INSIGHTS_CACHE_TTL_MS = 30 * 1000;
@@ -656,7 +669,7 @@ export const createProduct = async (req, res) => {
             stock: derivedSkuValues ? derivedSkuValues.stock : Number(body.stock),
             maxOrderQuantity: normalizeMaxOrderQuantity(body.maxOrderQuantity),
             gstRate,
-            variantHeadings,
+            variantHeadings: trimVariantHeadings(variantHeadings),
             skus: parsedSkus,
             deliveryDays: Number(body.deliveryDays),
             specifications: parseJSON(body.specifications) || [],
@@ -817,7 +830,7 @@ export const updateProduct = async (req, res) => {
                         }));
                     }
                 }
-                updateData.variantHeadings = variantHeadings;
+                updateData.variantHeadings = trimVariantHeadings(variantHeadings);
             }
 
             if (updateData.description) {

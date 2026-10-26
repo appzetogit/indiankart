@@ -423,10 +423,6 @@ export async function verifySmsOtp(sessionId, otpInput, mobile, userType = 'Deli
 
 export async function sendOTP(mobile, userType) {
     try {
-        if (isHardcodedLoginMobile(mobile)) {
-            return { success: true, message: 'OTP sent successfully' };
-        }
-
         const otp = generateOTP(4);
 
         if (isMockMode()) {
