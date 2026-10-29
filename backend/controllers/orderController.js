@@ -1241,8 +1241,10 @@ const syncOrdersWithDeadline = async (orders, { payment = true, fulfillment = tr
 export const refreshActiveOrderStatuses = async ({ limit = 40 } = {}) => {
     const staleBefore = new Date(Date.now() - 20 * 60 * 1000);
     const active = await Order.find({
-        status: { $nin: ['Delivered', 'Cancelled'] },
-        isDelivered: { $ne: true },
+        $and: [{ $or: [
+            { status: { $nin: ['Delivered', 'Cancelled'] }, isDelivered: { $ne: true } },
+            { status: 'Delivered', deliveredVia: 'courier', deliveredAt: { $gte: new Date(Date.now() - COURIER_DELIVERED_RECHECK_MS) } },
+        ] }],
         createdAt: { $gte: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) },
         $or: [
             { 'delhivery.waybill': { $exists: true, $ne: '' }, $or: [{ 'delhivery.syncedAt': { $exists: false } }, { 'delhivery.syncedAt': { $lt: staleBefore } }] },
@@ -1279,11 +1281,74 @@ export const getMyOrders = async (req, res) => {
     }
 };
 
+// How long an order the courier sync marked Delivered keeps being re-checked.
+const COURIER_DELIVERED_RECHECK_MS = 3 * 24 * 60 * 60 * 1000;
+
+const isRecentCourierDelivery = (order) => order?.status === 'Delivered'
+    && order.deliveredVia === 'courier'
+    && order.deliveredAt
+    && Date.now() - new Date(order.deliveredAt).getTime() < COURIER_DELIVERED_RECHECK_MS;
+
+/**
+ * Applies a courier tracking result to the order; returns true if it changed.
+ * Orders an admin or delivery agent marked Delivered are never touched. An
+ * order this sync marked Delivered is put back if the courier no longer
+ * reports it delivered (a failed attempt was once read as a delivery).
+ */
+export const applyCourierTracking = (order, tracking) => {
+    const step = tracking?.mappedCurrentStep;
+    if (!step || order.status === 'Cancelled') return false;
+    const ownDelivery = isRecentCourierDelivery(order);
+    if (order.status === 'Delivered' && !ownDelivery) return false;
+
+    if (step === 'Delivered') {
+        if (order.status === 'Delivered') return false;
+        order.isDelivered = true;
+        order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
+        order.deliveredVia = 'courier';
+        order.status = 'Delivered';
+        return true;
+    }
+
+    if (step === 'Cancelled') {
+        // Do NOT cancel the order here. This sync runs on admin page
+        // loads, so a courier reporting Cancelled would silently void a
+        // live order and restore its stock with nobody in the loop.
+        // Flag it instead and let an admin confirm.
+        if (order.courierCancellation?.reportedAt) return false;
+        order.courierCancellation = {
+            provider: getFulfillmentMode(order),
+            rawStatus: String(tracking.currentStatus || step),
+            reportedAt: new Date(),
+            acknowledged: false
+        };
+        console.warn(`[courier-cancel] ${order.displayId || order._id} reported Cancelled by ${getFulfillmentMode(order)} — flagged for review, order left as ${order.status}`);
+        return true;
+    }
+
+    const moving = ['Dispatched', 'Out for Delivery', 'RTO'].includes(step)
+        || (ownDelivery && ['In Transit', 'Picked Up'].includes(step));
+    if (!moving) return false;
+    const next = ['In Transit', 'Picked Up'].includes(step) ? 'Dispatched' : step;
+
+    if (ownDelivery) {
+        order.isDelivered = false;
+        order.deliveredAt = undefined;
+        order.deliveredVia = undefined;
+        console.warn(`[courier-sync] ${order.displayId || order._id} was marked Delivered but courier now reports "${tracking.currentStatus}" — set back to ${next}`);
+    }
+    if (order.status !== next) {
+        order.status = next;
+        return true;
+    }
+    return ownDelivery;
+};
+
 const syncOrderFulfillmentStatus = async (order) => {
     if (!order) return order;
 
     // If order is already in a final state, do not query tracking API
-    if (order.isDelivered || ['Delivered', 'Cancelled'].includes(order.status)) {
+    if ((order.isDelivered || ['Delivered', 'Cancelled'].includes(order.status)) && !isRecentCourierDelivery(order)) {
         return order;
     }
 
@@ -1306,35 +1371,7 @@ const syncOrderFulfillmentStatus = async (order) => {
     try {
         const tracking = await fetchTrackingForProvider(order, provider);
         if (tracking && tracking.mappedCurrentStep) {
-            const step = tracking.mappedCurrentStep;
-            let statusChanged = false;
-
-            if (step === 'Delivered' && order.status !== 'Delivered') {
-                order.isDelivered = true;
-                order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
-                order.status = 'Delivered';
-                statusChanged = true;
-            } else if (step === 'Cancelled' && order.status !== 'Cancelled') {
-                // Do NOT cancel the order here. This sync runs on admin page
-                // loads, so a courier reporting Cancelled would silently void a
-                // live order and restore its stock with nobody in the loop.
-                // Flag it instead and let an admin confirm.
-                if (!order.courierCancellation?.reportedAt) {
-                    order.courierCancellation = {
-                        provider: getFulfillmentMode(order),
-                        rawStatus: String(tracking.currentStatus || step),
-                        reportedAt: new Date(),
-                        acknowledged: false
-                    };
-                    statusChanged = true;
-                    console.warn(`[courier-cancel] ${order.displayId || order._id} reported Cancelled by ${getFulfillmentMode(order)} — flagged for review, order left as ${order.status}`);
-                }
-            } else if (['Dispatched', 'Out for Delivery'].includes(step)) {
-                if (order.status !== step) {
-                    order.status = step;
-                    statusChanged = true;
-                }
-            }
+            let statusChanged = applyCourierTracking(order, tracking);
 
             // Always update syncedAt on successful tracking check to enforce rate limit
             if (provider === 'ekart' && order.ekart) {
@@ -1476,35 +1513,7 @@ export const getOrderShippingTracking = async (req, res) => {
 
         // Sync fulfillment status on the fly with retrieved tracking
         if (tracking && tracking.mappedCurrentStep) {
-            const step = tracking.mappedCurrentStep;
-            let statusChanged = false;
-
-            if (step === 'Delivered' && order.status !== 'Delivered') {
-                order.isDelivered = true;
-                order.deliveredAt = tracking.lastUpdatedAt ? new Date(tracking.lastUpdatedAt) : new Date();
-                order.status = 'Delivered';
-                statusChanged = true;
-            } else if (step === 'Cancelled' && order.status !== 'Cancelled') {
-                // Do NOT cancel the order here. This sync runs on admin page
-                // loads, so a courier reporting Cancelled would silently void a
-                // live order and restore its stock with nobody in the loop.
-                // Flag it instead and let an admin confirm.
-                if (!order.courierCancellation?.reportedAt) {
-                    order.courierCancellation = {
-                        provider: getFulfillmentMode(order),
-                        rawStatus: String(tracking.currentStatus || step),
-                        reportedAt: new Date(),
-                        acknowledged: false
-                    };
-                    statusChanged = true;
-                    console.warn(`[courier-cancel] ${order.displayId || order._id} reported Cancelled by ${getFulfillmentMode(order)} — flagged for review, order left as ${order.status}`);
-                }
-            } else if (['Dispatched', 'Out for Delivery'].includes(step)) {
-                if (order.status !== step) {
-                    order.status = step;
-                    statusChanged = true;
-                }
-            }
+            let statusChanged = applyCourierTracking(order, tracking);
 
             // Always update syncedAt when we query tracking explicitly
             if (provider === 'ekart' && order.ekart) {
@@ -1921,6 +1930,7 @@ export const updateOrderToDelivered = async (req, res) => {
         if (order) {
             order.isDelivered = true;
             order.deliveredAt = Date.now();
+            order.deliveredVia = 'admin';
             order.status = 'Delivered'; // Syncing status field
 
             const updatedOrder = await order.save();
@@ -1990,6 +2000,7 @@ const applyOrderStatusUpdate = async (order, status, serialNumbers) => {
     if (nextStatus === 'Delivered') {
         order.isDelivered = true;
         order.deliveredAt = Date.now();
+        order.deliveredVia = 'admin';
     }
 
     // serialNumbers expected to be array of objects: { itemId: "...", serial: "...", type: "..." }

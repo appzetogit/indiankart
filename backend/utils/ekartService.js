@@ -147,12 +147,21 @@ const RAW_TO_USER_TRACKING_STEP = {
     collected: 'Collected'
 };
 
+// Couriers send free text. Matching any key found inside it read "Undelivered"
+// and "RTO Delivered" as Delivered, so orders whose delivery failed, or that
+// went back to the seller, were marked delivered. Returns and failed attempts
+// are recognised first; other keys must match as whole words.
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const getMappedTrackingStep = (rawStatus = '') => {
     const normalized = sanitizeText(rawStatus).toLowerCase().replace(/[_-]+/g, ' ').trim();
+    if (!normalized) return '';
+    if (/(^|\s)rto(\s|$)|return(ed)? to (origin|seller|shipper)|^returned\b/.test(normalized)) return 'RTO';
+    if (/(^|\s)dto(\s|$)/.test(normalized)) return 'DTO';
+    // A failed attempt: the parcel is still with the courier for another try.
+    if (/undeliver|not deliver|non deliver|attempt(ed)? fail|delivery fail|failed (delivery|attempt)/.test(normalized)) return 'Out for Delivery';
     if (RAW_TO_USER_TRACKING_STEP[normalized]) return RAW_TO_USER_TRACKING_STEP[normalized];
-    // Couriers send free text ("shipment delivered", "delivery success"). Match the longest key contained in it.
     const key = Object.keys(RAW_TO_USER_TRACKING_STEP)
-        .filter((candidate) => normalized.includes(candidate))
+        .filter((candidate) => new RegExp(`(^|\\s)${escapeRegExp(candidate)}(\\s|$)`).test(normalized))
         .sort((a, b) => b.length - a.length)[0];
     return key ? RAW_TO_USER_TRACKING_STEP[key] : '';
 };
@@ -514,3 +523,5 @@ export const cancelEkartShipment = async (order) => {
 };
 
 export const __testables = { getMappedTrackingStep };
+
+export { getMappedTrackingStep };

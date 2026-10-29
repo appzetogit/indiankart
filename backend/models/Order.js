@@ -91,6 +91,9 @@ const orderSchema = mongoose.Schema({
     remainingCodBalance: { type: Number, default: 0 },
     isDelivered: { type: Boolean, required: true, default: false },
     deliveredAt: { type: Date },
+    // 'courier' when the tracking sync marked it delivered; such orders are
+    // re-checked for a few days and corrected if the courier disagrees.
+    deliveredVia: { type: String },
     
     // OTP Delivery
     deliveryOtp: { type: String },
@@ -120,7 +123,7 @@ const orderSchema = mongoose.Schema({
     status: { 
         type: String, 
         default: 'Pending',
-        enum: ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Requested']
+        enum: ['Pending', 'Confirmed', 'Packed', 'Dispatched', 'Out for Delivery', 'Delivered', 'Cancelled', 'Cancellation Requested', 'RTO']
     },
     fulfillment: {
         mode: {

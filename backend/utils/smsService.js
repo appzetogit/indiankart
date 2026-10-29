@@ -529,6 +529,7 @@ export async function verifyDeliveryOtp(orderId, otp) {
         order.isDelivered = true;
         order.status = 'Delivered';
         order.deliveredAt = new Date();
+        order.deliveredVia = 'delivery-otp';
         order.invoiceEnabled = true;
         await order.save();
 
