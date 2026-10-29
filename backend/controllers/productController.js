@@ -67,7 +67,7 @@ const getListProjection = (lite = false) => {
     // Removed 'images' (array) to reduce payload size as listing pages only need the primary 'image' (thumbnail).
     // b2bEnabled must stay here: the B2B admin screen reads this projection, so
     // omitting it made every toggle read back as off however it was saved.
-    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount viewStatsByState image category categoryId tags ram skus stock maxOrderQuantity b2bEnabled isVisible createdAt subCategories subCategory';
+    return 'id name brand subcategoryBrand price originalPrice discount rating ratingCount viewCount image category categoryId tags ram skus stock maxOrderQuantity b2bEnabled isVisible createdAt subCategories subCategory';
 };
 
 const normalizeSubCategoryIds = (value) => {
@@ -1029,7 +1029,9 @@ export const updateProductStock = async (req, res) => {
 // @access  Public
 export const incrementProductView = async (req, res) => {
     try {
-        const product = await Product.findOne({ id: req.params.id });
+        // The view stats are hidden by default; load them or the save below
+        // would replace a year of history with today's entry.
+        const product = await Product.findOne({ id: req.params.id }).select('+viewStatsByState +dailyViewStats');
 
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
@@ -1120,7 +1122,7 @@ export const incrementProductView = async (req, res) => {
 export const getProductViewInsights = async (req, res) => {
     try {
         const product = await Product.findOne({ id: req.params.id })
-            .select('id name image brand category viewCount viewStatsByState dailyViewStats')
+            .select('id name image brand category viewCount +viewStatsByState +dailyViewStats')
             .lean();
 
         if (!product) {
@@ -1169,7 +1171,7 @@ export const getProductViewProducts = async (req, res) => {
         const hasRange = Boolean(startDate || endDate);
 
         const products = await Product.find({})
-            .select(`id name image brand category viewCount viewStatsByState${hasRange ? ' dailyViewStats' : ''}`)
+            .select(`id name image brand category viewCount +viewStatsByState${hasRange ? ' +dailyViewStats' : ''}`)
             .sort({ viewCount: -1, id: 1 })
             .lean();
 

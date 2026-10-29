@@ -14,16 +14,25 @@ const productSchema = mongoose.Schema({
     rating: { type: Number, default: 5, min: 0, max: 5 },
     ratingCount: { type: Number, default: 0, min: 0 },
     viewCount: { type: Number, default: 0, min: 0 },
-    viewStatsByState: [{
-        state: { type: String, trim: true },
-        count: { type: Number, default: 0, min: 0 }
-    }],
-    dailyViewStats: [{
-        date: { type: String }, // 'YYYY-MM-DD'
-        views: { type: Number, default: 0 },
-        visitors: { type: Number, default: 0 },
-        visitedSessions: [{ type: String }]
-    }],
+    // View analytics are admin-only and heavy (dailyViewStats holds visitor
+    // session ids). Hidden from every query unless selected with +field, so
+    // public product responses never carry them.
+    viewStatsByState: {
+        type: [{
+            state: { type: String, trim: true },
+            count: { type: Number, default: 0, min: 0 }
+        }],
+        select: false
+    },
+    dailyViewStats: {
+        type: [{
+            date: { type: String }, // 'YYYY-MM-DD'
+            views: { type: Number, default: 0 },
+            visitors: { type: Number, default: 0 },
+            visitedSessions: [{ type: String }]
+        }],
+        select: false
+    },
     image: { type: String }, // Primary image
     images: [{ type: String }], // Gallery images
     category: { type: String, required: true }, // Main category name (Legacy/Display)

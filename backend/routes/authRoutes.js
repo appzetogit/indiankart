@@ -169,14 +169,16 @@ router.post('/session/touch', protectOptional, async (req, res) => {
         if (!sessionId) {
             return res.status(400).json({ message: 'Session ID is required' });
         }
-        const session = await touchPortalSession({
+        await touchPortalSession({
             sessionId,
             userId: req.user?._id || '',
             path,
             state,
             referrer
         });
-        res.json(session);
+        // Only an acknowledgement: returning the session handed its user id
+        // and page history to anyone holding the session id.
+        res.json({ ok: true });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
