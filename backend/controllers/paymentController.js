@@ -379,6 +379,13 @@ export const getCheckoutStatus = async (req, res) => {
             // Paid but not built yet (e.g. capture was still pending at callback).
             processPendingCheckout(checkout._id, { source: 'callback' }).catch(() => {});
         }
+        if (order?.checkoutGroupId && (order.groupSize || 0) > 1) {
+            // The payment paid for one order per cart line; return all of them.
+            const groupOrders = await Order.find({ checkoutGroupId: order.checkoutGroupId, user: req.user._id })
+                .sort({ groupIndex: 1 })
+                .lean();
+            order = { ...(groupOrders[0] || order), checkoutGroup: { id: order.checkoutGroupId, orders: groupOrders } };
+        }
         return res.json({
             status: order ? 'completed' : checkout.status,
             paid: Boolean(order || checkout.capturedAt),

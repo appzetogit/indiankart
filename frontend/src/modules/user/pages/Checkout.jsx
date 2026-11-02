@@ -11,6 +11,7 @@ import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
 import { trackPurchase } from '../../../utils/analytics';
 import { shouldUseRedirectPayment, paymentCallbackUrl, rememberPendingRedirectPayment, REJECTED_PAYMENT_CODES } from '../utils/redirectPayment';
+import { getPlacedOrders, placedOrdersPath } from '../utils/placedOrders';
 
 
 // Shown when payment went through Razorpay but this page could not confirm the
@@ -697,13 +698,12 @@ const Checkout = () => {
                                         }
                                     };
                                     const { data } = await API.post('/orders', paidOrderData);
-                                    placeOrder(data, !buyNowItem);
-                                    trackPurchase(data);
+                                    getPlacedOrders(data).forEach((placed) => { placeOrder(placed, !buyNowItem); trackPurchase(placed); });
                                     if (appliedCoupon) removeCoupon();
                                     if (appliedReferral) handleRemoveReferral();
                                     setIsOrderSuccess(true);
                                     setTimeout(() => {
-                                        navigate(`/my-orders/${data._id || data.id}`, { replace: true });
+                                        navigate(placedOrdersPath(data), { replace: true });
                                     }, 2000);
                                     return;
                                 }
@@ -760,13 +760,12 @@ const Checkout = () => {
                 const { data } = await API.post('/orders', orderData);
                 // If buying now, do NOT clear the main cart. Pass false.
                 // If purchasing from cart, clear it. Pass true.
-                placeOrder(data, !buyNowItem);
-                trackPurchase(data);
+                getPlacedOrders(data).forEach((placed) => { placeOrder(placed, !buyNowItem); trackPurchase(placed); });
                 if (appliedCoupon) removeCoupon();
                 if (appliedReferral) handleRemoveReferral();
                 setIsOrderSuccess(true);
                 setTimeout(() => {
-                    navigate(`/my-orders/${data._id || data.id}`, { replace: true });
+                    navigate(placedOrdersPath(data), { replace: true });
                 }, 2000);
             } catch (error) {
                 console.error(error);
@@ -816,13 +815,12 @@ const Checkout = () => {
                                     paidAt: new Date().toISOString()
                                 };
                                 const { data } = await API.post('/orders', paidOrderData);
-                                placeOrder(data, !buyNowItem);
-                                trackPurchase(data);
+                                getPlacedOrders(data).forEach((placed) => { placeOrder(placed, !buyNowItem); trackPurchase(placed); });
                                 if (appliedCoupon) removeCoupon();
                                 if (appliedReferral) handleRemoveReferral();
                                 setIsOrderSuccess(true);
                                 setTimeout(() => {
-                                    navigate(`/my-orders/${data._id || data.id}`, { replace: true });
+                                    navigate(placedOrdersPath(data), { replace: true });
                                 }, 2000);
                                 return;
                             }

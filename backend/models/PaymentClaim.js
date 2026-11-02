@@ -16,6 +16,11 @@ const paymentClaimSchema = new mongoose.Schema({
         ref: 'Order',
         default: null
     },
+    // Every order this payment created (one per cart line); `order` is the first.
+    orders: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order'
+    }],
     createdAt: {
         type: Date,
         default: Date.now,

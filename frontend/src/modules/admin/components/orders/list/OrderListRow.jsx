@@ -68,6 +68,14 @@ const OrderListRow = ({
                     <span className="text-xs font-black text-gray-900 group-hover:text-blue-600 transition-colors">
                         {order.displayId || order.id}
                     </span>
+                    {order.groupSize > 1 && (
+                        <span
+                            className="text-[10px] font-bold text-indigo-600 mt-1"
+                            title={`One checkout split into ${order.groupSize} orders sharing a payment and address`}
+                        >
+                            {order.checkoutGroupId} · {(order.groupIndex ?? 0) + 1}/{order.groupSize}
+                        </span>
+                    )}
                     <span className="text-[10px] font-bold text-gray-400 uppercase mt-1">
                         {new Date(order.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </span>

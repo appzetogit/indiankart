@@ -1051,6 +1051,41 @@ const OrderDetails = () => {
                                 <p className="text-sm text-gray-600">{order.shippingAddress.country}</p>
                             </div>
                         </div>
+
+                        {/* Other orders placed in the same checkout */}
+                        {order.checkoutGroup?.orders?.length > 0 && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                                <h2 className="text-lg font-bold text-gray-800 mb-1 flex items-center gap-2">
+                                    <span className="material-icons text-gray-700">inventory_2</span>
+                                    Ordered Together
+                                </h2>
+                                <p className="text-xs text-gray-500 mb-4">
+                                    These items were bought in the same checkout and ship as separate orders.
+                                </p>
+                                <div className="space-y-3">
+                                    {order.checkoutGroup.orders.map((sibling) => {
+                                        const siblingItem = sibling.orderItems?.[0];
+                                        return (
+                                            <button
+                                                key={sibling._id}
+                                                type="button"
+                                                onClick={() => navigate(`/my-orders/${sibling._id}`)}
+                                                className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-200 text-left hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
+                                            >
+                                                {siblingItem?.image && (
+                                                    <img src={siblingItem.image} alt={siblingItem.name} className="w-12 h-12 object-contain rounded bg-gray-50" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-semibold text-gray-800 truncate">{siblingItem?.name}</p>
+                                                    <p className="text-xs text-gray-500">#{sibling.displayId} · {sibling.status}</p>
+                                                </div>
+                                                <span className="text-sm font-semibold text-gray-900">₹{Number(sibling.totalPrice || 0).toLocaleString()}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right Column */}

@@ -26,6 +26,7 @@ import {
     getProductNameMap
 } from '../utils/orderProductNames.js';
 import { paymentError, recordRejectedPayment, REJECTED_PAYMENT_CODES } from '../utils/paymentRejection.js';
+import { splitCheckoutAmounts } from '../utils/orderSplit.js';
 
 const DELHIVERY_SYNC_TRIGGER_STATUSES = new Set([
     'Confirmed',
@@ -50,6 +51,9 @@ const ORDER_LIST_SELECT = [
     'displayId',
     'invoiceNumber',
     'transactionId',
+    'checkoutGroupId',
+    'groupIndex',
+    'groupSize',
     'createdAt',
     'updatedAt',
     'status',
@@ -210,6 +214,7 @@ const buildOrderListFilter = async ({ search, status, user, userId, startDate, e
 
         const searchConditions = [
             { displayId: searchRegex },
+            { checkoutGroupId: searchRegex },
             { 'shippingAddress.name': searchRegex },
             { 'shippingAddress.email': searchRegex },
             { 'shippingAddress.phone': searchRegex },
@@ -591,6 +596,30 @@ const findExistingOnlineOrder = async (paymentMethod, paymentResult = {}) => {
     return Order.findOne({ $or: conditions });
 };
 
+const toPlainOrder = (order) => (typeof order?.toJSON === 'function' ? order.toJSON() : order);
+
+// POST /orders answers with the first order of the checkout (older clients
+// read it as "the order") plus every order of the checkout in checkoutGroup.
+const checkoutResponse = (orders) => {
+    const sorted = orders.map(toPlainOrder).sort((a, b) => (a.groupIndex ?? 0) - (b.groupIndex ?? 0));
+    return {
+        ...sorted[0],
+        checkoutGroup: {
+            id: sorted[0]?.checkoutGroupId || '',
+            orders: sorted
+        }
+    };
+};
+
+const findCheckoutGroupOrders = async (order) => {
+    if (!order?.checkoutGroupId) return [order];
+    const siblings = await Order.find({ checkoutGroupId: order.checkoutGroupId, user: order.user })
+        .sort({ groupIndex: 1 });
+    return siblings.length ? siblings : [order];
+};
+
+const buildCheckoutResponse = async (order) => checkoutResponse(await findCheckoutGroupOrders(order));
+
 const claimOnlinePayment = async (paymentMethod, paymentResult = {}) => {
     const normalizedPaymentMethod = String(paymentMethod || '').trim().toUpperCase();
     if (!normalizedPaymentMethod || normalizedPaymentMethod === 'COD') {
@@ -753,13 +782,16 @@ const annotateDuplicatePayments = async (orders = []) => {
             $group: {
                 _id: '$transactionId',
                 count: { $sum: 1 },
+                // Orders of one checkout share a payment legitimately; only a
+                // payment spread over different checkouts is a duplicate.
+                checkouts: { $addToSet: { $ifNull: ['$checkoutGroupId', '$_id'] } },
                 orderIds: { $push: '$_id' },
                 displayIds: { $push: '$displayId' }
             }
         },
         {
             $match: {
-                count: { $gt: 1 }
+                'checkouts.1': { $exists: true }
             }
         }
     ]);
@@ -830,7 +862,7 @@ const fetchTrackingForProvider = async (order, provider) => {
 // @access  Private
 export const addOrderItems = async (req, res) => {
     let claimedPayment = null;
-    let createdOrderId = null;
+    let createdOrderIds = [];
     try {
         const {
             orderItems: rawOrderItems,
@@ -905,7 +937,7 @@ export const addOrderItems = async (req, res) => {
                     razorpayOrderId: verifiedPayment.paymentResult?.razorpay_order_id,
                 }, 409);
             }
-            return res.status(200).json(existingOnlineOrder);
+            return res.status(200).json(await buildCheckoutResponse(existingOnlineOrder));
         }
 
         // Validate Pincode Serviceability
@@ -947,19 +979,26 @@ export const addOrderItems = async (req, res) => {
             return result;
         };
 
-        let displayId = generateDisplayId();
-        let isUnique = false;
-        let attempts = 0;
-        
-        while (!isUnique && attempts < 10) {
-            const existing = await Order.findOne({ displayId });
-            if (!existing) {
-                isUnique = true;
-            } else {
-                displayId = generateDisplayId();
-                attempts++;
+        // One order per cart line, so one display id per line.
+        const generateUniqueDisplayIds = async (count) => {
+            const ids = new Set();
+            for (let attempts = 0; ids.size < count && attempts < 10; attempts++) {
+                const candidates = [];
+                while (ids.size + candidates.length < count) {
+                    const candidate = generateDisplayId();
+                    if (!ids.has(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
+                }
+                const taken = new Set(
+                    (await Order.find({ displayId: { $in: candidates } }).select('displayId').lean())
+                        .map((existing) => existing.displayId)
+                );
+                candidates.filter((candidate) => !taken.has(candidate)).forEach((candidate) => ids.add(candidate));
             }
-        }
+            if (ids.size < count) {
+                throw new Error('Could not generate order ids. Please try again.');
+            }
+            return [...ids];
+        };
 
         const resolvedOrderItems = [];
 
@@ -1027,7 +1066,7 @@ export const addOrderItems = async (req, res) => {
                             razorpayOrderId: verifiedPayment.paymentResult?.razorpay_order_id,
                         }, 409);
                     }
-                    return res.status(200).json(claimedExistingOrder);
+                    return res.status(200).json(await buildCheckoutResponse(claimedExistingOrder));
                 }
 
                 return res.status(409).json({
@@ -1036,7 +1075,6 @@ export const addOrderItems = async (req, res) => {
             }
         }
 
-        const invoiceNumber = await reserveNextInvoiceNumber();
         const expectedCodAdvancedAmount = codAdvancedActive ? Math.min(totalPrice, settings.codAdvancedPaymentAmount) : 0;
         const normalizedReferralCode = normalizeReferralCode(referral?.code);
         let resolvedReferral = null;
@@ -1064,44 +1102,70 @@ export const addOrderItems = async (req, res) => {
             };
         }
 
-        const order = new Order({
-            displayId,
-            invoiceNumber,
-            transactionId: verifiedPayment.paymentResult?.razorpay_payment_id || verifiedPayment.paymentResult?.id || null,
-            orderItems: resolvedOrderItems,
-            user: req.user._id,
-            shippingAddress,
-            retailerDetails: {
-                isRetailer,
-                shopName: normalizedShopName,
-                gstNumber: normalizedGstNumber
-            },
-            paymentMethod,
-            itemsPrice,
-            taxPrice,
+        // Each cart line becomes its own order with its own id, invoice,
+        // shipment and refund. Checkout-wide amounts are shared out by value.
+        const lineAmounts = splitCheckoutAmounts({
+            lines: resolvedOrderItems,
             shippingPrice,
-            totalPrice,
             coupon: resolvedCoupon,
-            referral: resolvedReferral,
-            isPaid: codAdvancedActive ? false : verifiedPayment.isPaid,
-            paidAt: codAdvancedActive ? null : verifiedPayment.paidAt,
-            isCodAdvancedPaid: codAdvancedActive && expectedCodAdvancedAmount > 0,
             codAdvancedAmount: expectedCodAdvancedAmount,
-            remainingCodBalance: codAdvancedActive ? Math.max(0, totalPrice - expectedCodAdvancedAmount) : totalPrice,
-            paymentResult: verifiedPayment.paymentResult
+            codAdvancedActive,
+            referral: resolvedReferral
         });
+        const displayIds = await generateUniqueDisplayIds(resolvedOrderItems.length);
+        const checkoutGroupId = `GRP-${displayIds[0].slice(4)}`;
+        const invoiceNumbers = [];
+        for (let i = 0; i < resolvedOrderItems.length; i++) {
+            invoiceNumbers.push(await reserveNextInvoiceNumber());
+        }
 
-        const createdOrder = await order.save();
-        createdOrderId = createdOrder._id;
+        // insertMany can stop part-way (e.g. on a duplicate key), so any orders
+        // it did write for this checkout are removed before the error goes on.
+        const createdOrders = await Order.insertMany(resolvedOrderItems.map((item, index) => {
+            const amounts = lineAmounts[index];
+            return {
+                displayId: displayIds[index],
+                invoiceNumber: invoiceNumbers[index],
+                checkoutGroupId,
+                groupIndex: index,
+                groupSize: resolvedOrderItems.length,
+                transactionId: verifiedPayment.paymentResult?.razorpay_payment_id || verifiedPayment.paymentResult?.id || null,
+                orderItems: [item],
+                user: req.user._id,
+                shippingAddress,
+                retailerDetails: {
+                    isRetailer,
+                    shopName: normalizedShopName,
+                    gstNumber: normalizedGstNumber
+                },
+                paymentMethod,
+                itemsPrice: amounts.itemsPrice,
+                taxPrice: amounts.taxPrice,
+                shippingPrice: amounts.shippingPrice,
+                totalPrice: amounts.totalPrice,
+                coupon: amounts.coupon,
+                referral: amounts.referral,
+                isPaid: codAdvancedActive ? false : verifiedPayment.isPaid,
+                paidAt: codAdvancedActive ? null : verifiedPayment.paidAt,
+                isCodAdvancedPaid: codAdvancedActive && amounts.codAdvancedAmount > 0,
+                codAdvancedAmount: amounts.codAdvancedAmount,
+                remainingCodBalance: amounts.remainingCodBalance,
+                paymentResult: verifiedPayment.paymentResult
+            };
+        })).catch(async (insertError) => {
+            await Order.deleteMany({ checkoutGroupId }).catch(() => {});
+            throw insertError;
+        });
+        createdOrderIds = createdOrders.map((createdOrder) => createdOrder._id);
 
         if (claimedPayment?._id) {
             await PaymentClaim.findByIdAndUpdate(claimedPayment._id, {
-                $set: { order: createdOrder._id }
+                $set: { order: createdOrderIds[0], orders: createdOrderIds }
             });
         }
 
         // Reduce stock concurrently; all items were validated before order creation.
-        const stockResults = await Promise.all(createdOrder.orderItems.map(async (item) => {
+        const stockResults = await Promise.all(createdOrders.flatMap((createdOrder) => createdOrder.orderItems).map(async (item) => {
             const product = productsById.get(Number(item.product));
             if (product) {
                 const update = { $inc: { stock: -item.qty } };
@@ -1158,11 +1222,11 @@ export const addOrderItems = async (req, res) => {
 
         const failed = stockResults.filter((r) => !r.ok);
         if (failed.length) {
-            // Roll back the items that did succeed, then drop the order.
+            // Roll back the items that did succeed, then drop every order of the checkout.
             await restoreOrderStock({ orderItems: stockResults.filter((r) => r.ok).map((r) => r.item) });
-            await Order.findByIdAndDelete(createdOrder._id).catch(() => {});
+            await Order.deleteMany({ _id: { $in: createdOrderIds } }).catch(() => {});
             if (claimedPayment?._id) {
-                await PaymentClaim.findByIdAndUpdate(claimedPayment._id, { $unset: { order: 1 } }).catch(() => {});
+                await PaymentClaim.findByIdAndUpdate(claimedPayment._id, { $unset: { order: 1, orders: 1 } }).catch(() => {});
             }
             return res.status(409).json({
                 message: `Insufficient stock for ${failed.map((r) => r.item.name).join(', ')}. Please try again.`
@@ -1172,19 +1236,19 @@ export const addOrderItems = async (req, res) => {
         const notifications = stockResults.flatMap((r) => r.alerts);
         notifications.push({
             type: 'order',
-            title: 'New Order Received',
-            message: `Order #${createdOrder._id.toString().slice(-6).toUpperCase()} placed by ${req.user.name} for ₹${totalPrice}`,
-            relatedId: createdOrder._id
+            title: createdOrders.length > 1 ? `${createdOrders.length} New Orders Received` : 'New Order Received',
+            message: `Order ${displayIds.join(', ')} placed by ${req.user.name} for ₹${totalPrice}`,
+            relatedId: createdOrders[0]._id
         });
 
-        res.status(201).json(createdOrder);
+        res.status(201).json(checkoutResponse(createdOrders));
 
         // Notifications are best-effort side effects and must not hold checkout open.
         Notification.insertMany(notifications).catch((notificationError) => {
             console.error(`[${req.requestId || 'no-request-id'}] Order notification error:`, notificationError);
         });
     } catch (error) {
-        if (claimedPayment?._id && !createdOrderId) {
+        if (claimedPayment?._id && !createdOrderIds.length) {
             await PaymentClaim.findByIdAndDelete(claimedPayment._id).catch(() => {});
         }
         console.error('Order creation error:', error);
@@ -1429,6 +1493,20 @@ export const getOrderById = async (req, res) => {
                     : [fulfillmentReadyOrder];
                 await finalOrder.populate('user', 'name email phone');
                 await applyCurrentProductNames([finalOrder]);
+                if ((finalOrder.groupSize || 0) > 1) {
+                    // Link the other orders placed in the same checkout.
+                    const siblings = await Order.find({
+                        checkoutGroupId: finalOrder.checkoutGroupId,
+                        _id: { $ne: finalOrder._id }
+                    })
+                        .sort({ groupIndex: 1 })
+                        .select('displayId status totalPrice orderItems.name orderItems.image orderItems.qty orderItems.variant')
+                        .lean();
+                    return res.json({
+                        ...toPlainOrder(finalOrder),
+                        checkoutGroup: { id: finalOrder.checkoutGroupId, orders: siblings }
+                    });
+                }
                 res.json(finalOrder);
             } else {
                 res.status(401).json({ 

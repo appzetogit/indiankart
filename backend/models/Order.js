@@ -105,6 +105,11 @@ const orderSchema = mongoose.Schema({
     displayId: { type: String, unique: true },
     invoiceNumber: { type: String, unique: true, sparse: true },
     transactionId: { type: String },
+    // A checkout creates one order per cart line. Those orders share this id
+    // and the one payment; groupIndex is the line's position in the checkout.
+    checkoutGroupId: { type: String },
+    groupIndex: { type: Number },
+    groupSize: { type: Number },
     refund: {
         status: {
             type: String,
@@ -178,36 +183,45 @@ const orderSchema = mongoose.Schema({
     timestamps: true,
 });
 
+// One payment pays for every order of its checkout, so payment ids are unique
+// per checkout line rather than per order. Older orders have no groupIndex
+// (null) and stay one order per payment. A second checkout reusing the same
+// payment still collides on groupIndex 0.
+// `$gt: ''` skips empty ids; MongoDB rejects `$ne` in partial indexes, which
+// left the earlier single-field versions of these indexes unbuildable.
+// Replaces those single-field unique indexes: run
+// scripts/migrate_split_order_indexes.js once before deploying.
 orderSchema.index(
-    { transactionId: 1 },
+    { transactionId: 1, groupIndex: 1 },
     {
         unique: true,
         partialFilterExpression: {
-            transactionId: { $type: 'string', $exists: true, $ne: '' }
+            transactionId: { $type: 'string', $gt: '' }
         }
     }
 );
 
 orderSchema.index(
-    { 'paymentResult.razorpay_payment_id': 1 },
+    { 'paymentResult.razorpay_payment_id': 1, groupIndex: 1 },
     {
         unique: true,
         partialFilterExpression: {
-            'paymentResult.razorpay_payment_id': { $type: 'string', $exists: true, $ne: '' }
+            'paymentResult.razorpay_payment_id': { $type: 'string', $gt: '' }
         }
     }
 );
 
 orderSchema.index(
-    { 'paymentResult.razorpay_order_id': 1 },
+    { 'paymentResult.razorpay_order_id': 1, groupIndex: 1 },
     {
         unique: true,
         partialFilterExpression: {
-            'paymentResult.razorpay_order_id': { $type: 'string', $exists: true, $ne: '' }
+            'paymentResult.razorpay_order_id': { $type: 'string', $gt: '' }
         }
     }
 );
 
+orderSchema.index({ checkoutGroupId: 1 }, { sparse: true });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index({ status: 1, createdAt: -1 });

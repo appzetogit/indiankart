@@ -5,6 +5,7 @@ import Loader from '../../../components/common/Loader';
 import { useCartStore } from '../store/cartStore';
 import { trackPurchase } from '../../../utils/analytics';
 import { readPendingRedirectPayment, clearPendingRedirectPayment } from '../utils/redirectPayment';
+import { getPlacedOrders, placedOrdersPath } from '../utils/placedOrders';
 
 const POLL_MS = 3000;
 // Long enough for a slow bank capture; after this the customer is told the
@@ -48,12 +49,14 @@ const PaymentStatus = () => {
                 if (data.order) {
                     finished.current = true;
                     const pending = readPendingRedirectPayment(razorpayOrderId);
-                    placeOrder(data.order, pending ? pending.clearCart : true);
+                    getPlacedOrders(data.order).forEach((order) => {
+                        placeOrder(order, pending ? pending.clearCart : true);
+                        trackPurchase(order);
+                    });
                     if (pending?.hadCoupon) removeCoupon();
                     clearPendingRedirectPayment();
-                    trackPurchase(data.order);
                     setState('success');
-                    setTimeout(() => navigate(`/my-orders/${data.order._id}`, { replace: true }), 1500);
+                    setTimeout(() => navigate(placedOrdersPath(data.order), { replace: true }), 1500);
                     return;
                 }
                 if (data.status === 'rejected') {
