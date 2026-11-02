@@ -1,6 +1,7 @@
 import Setting from '../models/Setting.js';
 import { isAdminUser } from './authMiddleware.js';
 import { normalizeAdminRole, normalizeSidebarPermissions } from '../constants/adminPermissions.js';
+import { verifyAdminActionCode } from '../utils/adminStepUp.js';
 
 // PUT /api/settings is shared by several admin pages. Anyone who could change
 // the payment or courier credentials could send customer payments to their
@@ -37,6 +38,11 @@ export const requireSettingsPermission = async (req, res, next) => {
         if (touchesCredentials) {
             if (role !== 'superadmin') {
                 return res.status(403).json({ message: 'Only a superadmin can change payment or courier credentials' });
+            }
+            // Also needs a fresh code from the superadmin's authenticator app.
+            const check = await verifyAdminActionCode(req.user._id, req.get('x-admin-action-code'));
+            if (!check.ok) {
+                return res.status(check.status).json({ message: check.message, code: check.code });
             }
             return next();
         }

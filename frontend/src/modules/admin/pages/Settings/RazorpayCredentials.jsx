@@ -105,6 +105,8 @@ const RazorpayCredentials = () => {
     // Delhivery has no API to list registered warehouses, so they are kept here
     // and offered when a shipment is assigned. `name` must match Delhivery exactly.
     const [warehouses, setWarehouses] = useState([]);
+    const [codePrompt, setCodePrompt] = useState(null); // { mode: 'code' | 'setup', error }
+    const [actionCode, setActionCode] = useState('');
     const settings = useSettingsStore((state) => state.settings);
     const loading = useSettingsStore((state) => state.isLoading);
     const fetchSettings = useSettingsStore((state) => state.fetchSettings);
@@ -172,8 +174,29 @@ const RazorpayCredentials = () => {
         setWarehouses((prev) => prev.filter((_, i) => i !== index));
     };
 
-    const handleSubmit = async (e) => {
+    // Changing a payment or courier credential needs a fresh code from the
+    // admin's authenticator app; the server asks for it (ACTION_CODE_REQUIRED)
+    // and this prompt sends the save again with the code.
+    const closeCodePrompt = () => {
+        setCodePrompt(null);
+        setActionCode('');
+    };
+
+    const handleSubmit = (e) => {
         e.preventDefault();
+        saveCredentials();
+    };
+
+    const handleCodeSubmit = (e) => {
+        e.preventDefault();
+        if (!/^\d{6}$/.test(actionCode.replace(/\s/g, ''))) {
+            setCodePrompt({ mode: 'code', error: 'Enter the 6-digit code from your authenticator app.' });
+            return;
+        }
+        saveCredentials(actionCode.replace(/\s/g, ''));
+    };
+
+    const saveCredentials = async (code) => {
         setSaving(true);
 
         try {
@@ -210,8 +233,12 @@ const RazorpayCredentials = () => {
             data.append('ekartCancelPath', form.ekartCancelPath.trim());
 
             const res = await updateSettings(data, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    ...(code ? { 'X-Admin-Action-Code': code } : {})
+                }
             });
+            closeCodePrompt();
 
             setForm({
                 razorpayKeyId: res?.razorpayKeyId || '',
@@ -245,6 +272,17 @@ const RazorpayCredentials = () => {
             }
             toast.success('API credentials updated');
         } catch (error) {
+            const errorCode = error.response?.data?.code;
+            if (errorCode === 'ACTION_CODE_REQUIRED' || errorCode === 'ACTION_CODE_INVALID') {
+                setActionCode('');
+                setCodePrompt({ mode: 'code', error: errorCode === 'ACTION_CODE_INVALID' ? error.response.data.message : '' });
+                return;
+            }
+            if (errorCode === 'ACTION_MFA_NOT_ENABLED') {
+                setCodePrompt({ mode: 'setup', error: error.response.data.message });
+                return;
+            }
+            closeCodePrompt();
             console.error('Failed to update API credentials:', error);
             toast.error(error.response?.data?.message || 'Failed to update API credentials');
         } finally {
@@ -617,6 +655,57 @@ const RazorpayCredentials = () => {
                     </div>
                 </form>
             </div>
+
+            {codePrompt && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4" role="dialog" aria-modal="true">
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                        {codePrompt.mode === 'setup' ? (
+                            <>
+                                <h2 className="text-lg font-black text-slate-900">Two-step login needed</h2>
+                                <p className="mt-2 text-sm text-slate-600">{codePrompt.error}</p>
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button type="button" onClick={closeCodePrompt} className="rounded-full px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100">
+                                        Cancel
+                                    </button>
+                                    <a href="/admin/mfa-setup" className="rounded-full bg-slate-900 px-5 py-2 text-sm font-bold text-white hover:bg-slate-800">
+                                        Set it up
+                                    </a>
+                                </div>
+                            </>
+                        ) : (
+                            <form onSubmit={handleCodeSubmit}>
+                                <h2 className="text-lg font-black text-slate-900">Confirm with your authenticator</h2>
+                                <p className="mt-2 text-sm text-slate-600">
+                                    Changing payment or courier credentials needs the 6-digit code from your authenticator app.
+                                </p>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    autoFocus
+                                    maxLength={7}
+                                    value={actionCode}
+                                    onChange={(e) => setActionCode(e.target.value.replace(/[^\d\s]/g, ''))}
+                                    placeholder="123456"
+                                    aria-label="Authenticator code"
+                                    className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-2xl font-bold tracking-[0.4em] outline-none focus:border-slate-900"
+                                />
+                                {codePrompt.error && (
+                                    <p className="mt-2 text-sm font-semibold text-red-600">{codePrompt.error}</p>
+                                )}
+                                <div className="mt-6 flex justify-end gap-3">
+                                    <button type="button" onClick={closeCodePrompt} disabled={saving} className="rounded-full px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100">
+                                        Cancel
+                                    </button>
+                                    <button type="submit" disabled={saving} className={`rounded-full px-5 py-2 text-sm font-bold text-white ${saving ? 'cursor-not-allowed bg-slate-300' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                                        {saving ? 'Saving...' : 'Confirm & Save'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
