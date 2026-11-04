@@ -102,7 +102,7 @@ const Header = () => {
     useEffect(() => {
         const fetchHeaderLogo = async () => {
             try {
-                const { data } = await API.get('/settings');
+                const { data } = await API.get('/settings', { params: { view: 'checkout' } });
                 if (data?.logoUrl) {
                     setHeaderLogo(data.logoUrl);
                 }
