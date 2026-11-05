@@ -34,6 +34,7 @@ tar -C frontend/dist -cf - . | $SSH "
     chmod -R a+rX /home/indiankart/site
     test -s \$D/index.html
     ln -sfn \$D /home/indiankart/site/current.new
+    chown -h indiankart: /home/indiankart/site/current.new
     mv -T /home/indiankart/site/current.new /home/indiankart/site/current
     cd /home/indiankart/site/releases && ls -1t | tail -n +6 | xargs -r rm -rf
 "
