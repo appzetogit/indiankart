@@ -14,7 +14,7 @@ const OrderSuccess = () => {
     useEffect(() => {
         const fetchSettings = async () => {
             try {
-                const { data } = await API.get('/settings');
+                const { data } = await API.get('/settings', { params: { view: 'storefront' } });
                 setSettings(data);
             } catch (err) {
                 console.error('Fetch settings error:', err);

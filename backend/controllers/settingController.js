@@ -227,6 +227,13 @@ const PUBLIC_SETTING_FIELDS = [
     'subCategoryPageCatalog'
 ].join(' ');
 
+// Same details without the page-builder catalogs (about 1 MB, 12 s to read), for
+// pages that only need seller, shipping or logo details.
+const STOREFRONT_SETTING_FIELDS = PUBLIC_SETTING_FIELDS
+    .split(' ')
+    .filter((field) => !field.endsWith('PageCatalog'))
+    .join(' ');
+
 const getSettings = async (req, res) => {
     try {
         const checkoutFields = [
@@ -244,7 +251,9 @@ const getSettings = async (req, res) => {
         // Anonymous callers get a storefront whitelist. The full document holds
         // panNumber, ekartUsername/clientId and courier endpoints — admin-only.
         const isAdminViewer = isAdminUser(req.user);
-        if (!isAdminViewer && req.query.view !== 'checkout') {
+        if (req.query.view === 'storefront') {
+            query.select(STOREFRONT_SETTING_FIELDS);
+        } else if (!isAdminViewer && req.query.view !== 'checkout') {
             query.select(PUBLIC_SETTING_FIELDS);
         }
 
@@ -420,7 +429,13 @@ const updateSettings = async (req, res) => {
             codAdvancedPaymentAmount
         } = req.body;
 
-        let settings = await Setting.findOne();
+        // Only load the page-builder catalogs when this save changes them; they
+        // are the slow part of the document. The response then omits them and the
+        // admin store keeps the copy it already has.
+        const savesCatalog = categoryPageCatalog !== undefined || subCategoryPageCatalog !== undefined;
+        let settings = await (savesCatalog
+            ? Setting.findOne()
+            : Setting.findOne().select('-categoryPageCatalog -subCategoryPageCatalog'));
 
         // Handle uploaded files via Cloudinary
         let logoUrl = req.body.logoUrl;

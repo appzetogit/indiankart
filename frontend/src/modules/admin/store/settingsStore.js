@@ -52,7 +52,8 @@ const useSettingsStore = create((set, get) => ({
         try {
             const { data } = await API.put('/settings', payload, requestConfig);
             settingsFetchedAt = Date.now();
-            set({ settings: data, isLoading: false, error: null });
+            // A save that doesn't touch the page-builder catalogs doesn't return them.
+            set((state) => ({ settings: { ...state.settings, ...data }, isLoading: false, error: null }));
             return data;
         } catch (error) {
             set({
