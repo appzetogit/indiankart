@@ -119,6 +119,12 @@ const CategoryPage = () => {
     const [collapsedSections, setCollapsedSections] = useState({});
     const [fetchError, setFetchError] = useState('');
     const [subCategoryHasBrands, setSubCategoryHasBrands] = useState(null);
+    // The page data below is worked out in an effect, which runs after the
+    // browser paints. Until it has run for this URL, keep the skeleton up;
+    // otherwise "Category not found" / "No products found" flashes for a frame
+    // on every category page load.
+    const routeKey = `${categoryName}|${subPath || ''}`;
+    const [resolvedRouteKey, setResolvedRouteKey] = useState(null);
 
     const normalizeText = (value) => String(value || '').trim().toLowerCase();
     const parseAmount = (value, fallback = 0) => {
@@ -249,6 +255,7 @@ const CategoryPage = () => {
             setCategoryData(null);
             setBreadcrumbs([]);
         }
+        setResolvedRouteKey(`${categoryName}|${subPath || ''}`);
     }, [categoryName, subPath, products, categories, productsLoading, categoriesLoading]);
 
     useEffect(() => {
@@ -310,7 +317,7 @@ const CategoryPage = () => {
     const displayedCategories = showAllCategories ? availableCategories : availableCategories.slice(0, 6);
     const activeFilterCount = useMemo(() => selectedBrands.length + selectedRam.length + selectedCategories.length + (selectedDiscount ? 1 : 0) + (selectedRating ? 1 : 0) + ((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? 1 : 0), [selectedBrands, selectedRam, selectedCategories, selectedDiscount, selectedRating, filterRange, priceRange]);
     const activeFilterChips = useMemo(() => ([...(selectedRating ? [`${selectedRating}★ & above`] : []), ...(selectedDiscount ? [`${selectedDiscount}% off`] : []), ...selectedBrands.map((brand) => `Brand: ${brand}`), ...selectedRam.map((ram) => `RAM: ${ram}`), ...selectedCategories.map((category) => `Type: ${category}`), ...((filterRange[0] !== priceRange.min || filterRange[1] !== priceRange.max) ? [`₹${filterRange[0].toLocaleString()} - ₹${filterRange[1].toLocaleString()}`] : [])]), [selectedRating, selectedDiscount, selectedBrands, selectedRam, selectedCategories, filterRange, priceRange]);
-    if (productsLoading || categoriesLoading) return <CategoryPageSkeleton />;
+    if (productsLoading || categoriesLoading || resolvedRouteKey !== routeKey) return <CategoryPageSkeleton />;
     if (fetchError) return <div className="p-10 text-center text-red-500">{fetchError}</div>;
     if (!categoryData) return <div className="p-10 text-center">Category not found</div>;
 
