@@ -459,6 +459,32 @@ const updateSettings = async (req, res) => {
         }
 
         if (settings) {
+            // Refuse page-builder saves made from an outdated copy before touching anything.
+            if (categoryPageCatalog !== undefined) {
+                const versionField = 'categoryPageCatalogVersion';
+                const expectedVersion = req.body[versionField];
+                const currentVersion = Number(settings[versionField]) || 0;
+                if (expectedVersion === undefined || expectedVersion === null || Number(expectedVersion) !== currentVersion) {
+                    return res.status(409).json({
+                        code: 'CATALOG_CONFLICT',
+                        message: 'Someone else changed this page since you opened it. Refresh to load the latest version, then make your change again.',
+                        currentVersion
+                    });
+                }
+            }
+            if (subCategoryPageCatalog !== undefined) {
+                const versionField = 'subCategoryPageCatalogVersion';
+                const expectedVersion = req.body[versionField];
+                const currentVersion = Number(settings[versionField]) || 0;
+                if (expectedVersion === undefined || expectedVersion === null || Number(expectedVersion) !== currentVersion) {
+                    return res.status(409).json({
+                        code: 'CATALOG_CONFLICT',
+                        message: 'Someone else changed this page since you opened it. Refresh to load the latest version, then make your change again.',
+                        currentVersion
+                    });
+                }
+            }
+
             settings.sellerName = sellerName || settings.sellerName;
             settings.sellerAddress = sellerAddress || settings.sellerAddress;
             settings.gstNumber = gstNumber || settings.gstNumber;
@@ -550,6 +576,7 @@ const updateSettings = async (req, res) => {
                     : categoryPageCatalog;
                 if (Array.isArray(parsedCatalog)) {
                     settings.categoryPageCatalog = parsedCatalog;
+                    settings.categoryPageCatalogVersion = (Number(settings.categoryPageCatalogVersion) || 0) + 1;
                 }
             }
             if (subCategoryPageCatalog !== undefined) {
@@ -558,6 +585,7 @@ const updateSettings = async (req, res) => {
                     : subCategoryPageCatalog;
                 if (Array.isArray(parsedCatalog)) {
                     settings.subCategoryPageCatalog = parsedCatalog;
+                    settings.subCategoryPageCatalogVersion = (Number(settings.subCategoryPageCatalogVersion) || 0) + 1;
                 }
             }
             if (codAdvancedPaymentEnabled !== undefined) {

@@ -6,6 +6,11 @@ const settingSchema = mongoose.Schema({
     gstNumber: { type: String, default: '' },
     panNumber: { type: String, default: '' },
     logoUrl: { type: String, default: '' },
+    // Bumped on every page-builder save. A save must name the version it was
+    // made from, so a stale copy (another admin, an old tab) can't overwrite
+    // newer changes.
+    categoryPageCatalogVersion: { type: Number, default: 0 },
+    subCategoryPageCatalogVersion: { type: Number, default: 0 },
     signatureUrl: { type: String, default: '' },
     contactEmail: { type: String, default: '' },
     contactPhone: { type: String, default: '' },

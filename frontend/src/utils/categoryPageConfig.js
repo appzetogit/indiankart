@@ -267,6 +267,9 @@ const writeCatalogToIndexedDb = async (catalog) => {
 };
 
 let catalogCachePromise = null;
+// Version of the catalog last loaded from the server; null when it came from
+// this browser's cache instead, which must not be saved back.
+let serverCatalogVersion = null;
 const categoryConfigRequestStore = new Map();
 const categoryLayoutRequestStore = new Map();
 const categorySectionRequestStore = new Map();
@@ -281,6 +284,7 @@ export const readCategoryPageCatalogAsync = async () => {
         // catalog and never pick up another device's saved changes.
         try {
             const { data } = await API.get('/settings');
+            serverCatalogVersion = Number(data?.categoryPageCatalogVersion) || 0;
             const serverCatalog = sanitizeCategoryPageCatalog(data?.[CATEGORY_PAGE_BUILDER_SERVER_FIELD]);
 
             if (isNonEmptyCatalog(serverCatalog)) {
@@ -303,6 +307,7 @@ export const readCategoryPageCatalogAsync = async () => {
             // blanking a browser whose earlier save may not have reached it.
         } catch {
             // Offline or request failed — use whatever this browser cached.
+            serverCatalogVersion = null;
         }
 
         try {
@@ -461,28 +466,34 @@ export const writeCategoryPageCatalog = async (catalog) => {
 
     const sanitizedCatalog = sanitizeCategoryPageCatalog(catalog);
 
-    try {
-        await API.put('/settings', {
-            [CATEGORY_PAGE_BUILDER_SERVER_FIELD]: sanitizedCatalog
-        });
-    } catch {
-        // Continue with local persistence fallback.
+    // Never save a copy that wasn't loaded from the server: it may be missing
+    // other people's changes. And never hide a failed save: the admin would see
+    // their change locally while the live site never got it.
+    if (serverCatalogVersion === null) {
+        throw new Error('Could not load the latest page layout from the server. Refresh the page, then make your change again.');
     }
+    let saved;
+    try {
+        ({ data: saved } = await API.put('/settings', {
+            [CATEGORY_PAGE_BUILDER_SERVER_FIELD]: sanitizedCatalog,
+            categoryPageCatalogVersion: serverCatalogVersion
+        }));
+    } catch (error) {
+        throw new Error(error?.response?.data?.message || 'Save failed. Check your connection and try again.');
+    }
+    serverCatalogVersion = Number(saved?.categoryPageCatalogVersion) || serverCatalogVersion + 1;
 
     try {
         await writeCatalogToIndexedDb(sanitizedCatalog);
         setIndexedDbPointer();
-        window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
-        return;
-    } catch (error) {
+    } catch {
         try {
             window.localStorage.setItem(CATEGORY_PAGE_BUILDER_STORAGE_KEY, JSON.stringify(sanitizedCatalog));
         } catch {
-            // Ignore local-only fallback failures.
+            // The server has it; the local copy is only a cache.
         }
-        window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
-        return;
     }
+    window.dispatchEvent(new CustomEvent('category-page-builder-updated'));
 };
 
 export const mergeCategoryPageCatalogWithCategories = (catalog, categories = []) => {

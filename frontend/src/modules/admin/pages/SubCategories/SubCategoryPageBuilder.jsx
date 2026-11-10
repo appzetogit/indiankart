@@ -901,13 +901,14 @@ const SubCategoryPageBuilder = () => {
                 window.setTimeout(() => setSectionSaveMessage(''), 1800);
                 navigate(`/admin/subcategories/page-builder?categoryId=${encodeURIComponent(categoryId)}`, { replace: true });
             }
-        } catch {
+        } catch (error) {
+            const failure = error?.message || 'Save failed';
             if (type === 'layout') {
-                setLayoutSaveMessage('Save failed');
-                window.setTimeout(() => setLayoutSaveMessage(''), 1800);
+                setLayoutSaveMessage(failure);
+                window.setTimeout(() => setLayoutSaveMessage(''), 8000);
             } else {
-                setSectionSaveMessage('Save failed');
-                window.setTimeout(() => setSectionSaveMessage(''), 1800);
+                setSectionSaveMessage(failure);
+                window.setTimeout(() => setSectionSaveMessage(''), 8000);
             }
         }
     };
