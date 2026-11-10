@@ -189,11 +189,13 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
         setTimeout(() => setAnimating(false), 420);
     }, [animating]);
 
-    // Auto-advance
+    const lastInteractionRef = useRef(0);
+
+    // Auto-advance (waits a full interval after the shopper swipes or taps a dot)
     useEffect(() => {
         if (total <= 1) return;
         const tick = () => {
-            if (!isPausedRef.current) {
+            if (!isPausedRef.current && Date.now() - lastInteractionRef.current >= 3000) {
                 setActiveIndex((prev) => (prev + 1) % total);
             }
         };
@@ -203,6 +205,38 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
 
     const pause = () => { isPausedRef.current = true; };
     const resume = () => { isPausedRef.current = false; };
+
+    // Swipe left/right (finger on phones, mouse drag on PC). touch-action: pan-y
+    // below keeps vertical page scrolling with the browser.
+    const swipeStartRef = useRef(null);
+    const suppressClickRef = useRef(false);
+    const handlePointerDown = (event) => {
+        if (total <= 1) return;
+        swipeStartRef.current = { x: event.clientX, y: event.clientY };
+        pause();
+    };
+    const handlePointerUp = (event) => {
+        const start = swipeStartRef.current;
+        swipeStartRef.current = null;
+        resume();
+        if (!start) return;
+        const dx = event.clientX - start.x;
+        const dy = event.clientY - start.y;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        suppressClickRef.current = true; // a swipe is not a tap on the banner
+        lastInteractionRef.current = Date.now();
+        setActiveIndex((prev) => (dx < 0 ? (prev + 1) % total : (prev - 1 + total) % total));
+    };
+    const handlePointerCancel = () => {
+        swipeStartRef.current = null;
+        resume();
+    };
+    const handleClickCapture = (event) => {
+        if (!suppressClickRef.current) return;
+        suppressClickRef.current = false;
+        event.preventDefault();
+        event.stopPropagation();
+    };
 
     const item = sectionItems[activeIndex];
     if (!item) return null;
@@ -218,10 +252,14 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
     return (
         <div
             className="relative w-full overflow-hidden rounded-2xl select-none"
+            style={total > 1 ? { touchAction: 'pan-y' } : undefined}
             onMouseEnter={pause}
             onMouseLeave={resume}
-            onTouchStart={pause}
-            onTouchEnd={resume}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onClickCapture={handleClickCapture}
+            onDragStart={(event) => event.preventDefault()}
         >
             {/* Slide */}
             <div
@@ -275,7 +313,7 @@ const CarouselSlideshow = ({ section, sectionItems, categoryName, openLink, sect
                         <button
                             key={i}
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); goTo(i); }}
+                            onClick={(e) => { e.stopPropagation(); lastInteractionRef.current = Date.now(); goTo(i); }}
                             className="rounded-full transition-all"
                             style={{
                                 width: i === activeIndex ? '20px' : '7px',
@@ -572,17 +610,12 @@ const CategoryLandingSections = ({ categoryName }) => {
     };
 
     if (!catalogResolved || (!categoryConfig && categoriesLoading)) {
+        // Same shape as the section placeholders that follow, so the page
+        // doesn't jump from a grid of squares to a banner.
         return (
             <div className="w-full">
-                <div className="max-w-[1360px] mx-auto px-3 py-3">
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-                        {Array.from({ length: 6 }).map((_, index) => (
-                            <div key={index} className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-                                <div className="aspect-square rounded-2xl shimmer" />
-                                <div className="mt-3 h-3 w-3/4 rounded shimmer" />
-                            </div>
-                        ))}
-                    </div>
+                <div className="max-w-[1360px] mx-auto px-3 py-2">
+                    <div className="mb-3 min-h-[220px] rounded-2xl bg-gray-50/80" />
                 </div>
             </div>
         );
