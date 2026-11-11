@@ -63,22 +63,23 @@ const OrderDetail = () => {
     const [trackingError, setTrackingError] = useState('');
     const settings = useSettingsStore((state) => state.settings);
     const fetchSettings = useSettingsStore((state) => state.fetchSettings);
-    const delhiveryWarehouses = React.useMemo(() => (
-        Array.isArray(settings?.delhiveryWarehouses)
-            ? settings.delhiveryWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
-            : []
-    ), [settings]);
     // Ekart: always ask which registered pickup address to use. Falls back to the
     // single Pickup Location from settings until addresses are saved there.
-    const ekartWarehouses = React.useMemo(() => {
-        const saved = Array.isArray(settings?.ekartWarehouses)
-            ? settings.ekartWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
+    const getEkartWarehouses = (source) => {
+        const saved = Array.isArray(source?.ekartWarehouses)
+            ? source.ekartWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
             : [];
         if (saved.length > 0) return saved;
-        const fallback = String(settings?.ekartPickupLocation || '').trim();
+        const fallback = String(source?.ekartPickupLocation || '').trim();
         return fallback ? [{ name: fallback }] : [];
-    }, [settings]);
-    const getPickupOptions = (mode) => (mode === 'ekart' ? ekartWarehouses : delhiveryWarehouses);
+    };
+    const getPickupOptions = (mode, source = settings) => {
+        if (mode === 'ekart') return getEkartWarehouses(source);
+        return Array.isArray(source?.delhiveryWarehouses)
+            ? source.delhiveryWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
+            : [];
+    };
+    const [loadingPickupOptions, setLoadingPickupOptions] = useState(false);
     const pickupOptions = getPickupOptions(pendingCourierMode);
     const formatWarehouseAddress = (warehouse) => [
         warehouse?.address,
@@ -244,13 +245,31 @@ const OrderDetail = () => {
 
     // Delhivery is the only provider with warehouses configured here. If none are
     // saved yet, fall through to the old behaviour so shipping is never blocked.
-    const handleFulfillmentChoice = (mode) => {
-        const options = getPickupOptions(mode);
+    const handleFulfillmentChoice = async (mode) => {
+        // The pickup addresses come with the settings, which can still be
+        // loading when the admin picks a courier. Wait for them rather than
+        // booking from the default address without asking.
+        let source = settings;
+        if (['delhivery', 'ekart'].includes(mode) && !source) {
+            if (loadingPickupOptions) return;
+            setLoadingPickupOptions(true);
+            toast.loading('Loading pickup addresses…', { id: 'pickup-options' });
+            try {
+                source = await fetchSettings();
+            } catch {
+                toast.error('Could not load pickup addresses. Try again.');
+                return;
+            } finally {
+                setLoadingPickupOptions(false);
+                toast.dismiss('pickup-options');
+            }
+        }
+        const options = getPickupOptions(mode, source);
         if (['delhivery', 'ekart'].includes(mode) && options.length > 0) {
             const names = options.map((warehouse) => warehouse.name);
             const preferred = [
                 getShippingPickupLocation(order, mode),
-                mode === 'ekart' ? settings?.ekartPickupLocation : settings?.delhiveryPickupLocation
+                mode === 'ekart' ? source?.ekartPickupLocation : source?.delhiveryPickupLocation
             ].find((name) => name && names.includes(name));
             setSelectedWarehouse(preferred || names[0]);
             setPendingCourierMode(mode);
@@ -810,6 +829,24 @@ const OrderDetail = () => {
                             {trackingError ? (
                                 <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs font-semibold text-amber-700">
                                     {trackingError}
+                                </div>
+                            ) : null}
+                            {hasCourierFulfillment
+                                && order?.courierCancellation?.reportedAt
+                                && order.courierCancellation.provider === fulfillmentMode ? (
+                                <div className="rounded-xl border border-red-100 bg-red-50 p-3 space-y-2">
+                                    <p className="text-xs font-semibold text-red-700">
+                                        {getShippingProviderLabel(fulfillmentMode)} reports this shipment cancelled
+                                        ({order.courierCancellation.rawStatus || 'Cancelled'}). Book a new shipment to send it again.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFulfillmentChoice(fulfillmentMode)}
+                                        disabled={isLoading || loadingPickupOptions}
+                                        className="rounded-xl bg-red-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        Book new {getShippingProviderLabel(fulfillmentMode)} shipment
+                                    </button>
                                 </div>
                             ) : null}
                             {getShippingError(order, fulfillmentMode) ? (

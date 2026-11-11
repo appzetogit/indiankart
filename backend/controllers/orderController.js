@@ -1651,7 +1651,8 @@ export const assignOrderFulfillment = async (req, res) => {
         // again would just return the dead shipment. Re-book it instead and keep
         // the old tracking number in the order's history.
         if (requestedMode === 'ekart' && getProviderTrackingIdentifier(order, 'ekart')) {
-            let cancelledAtCourier = Boolean(order.ekart?.cancelledAt);
+            let cancelledAtCourier = Boolean(order.ekart?.cancelledAt)
+                || Boolean(order.courierCancellation?.reportedAt && order.courierCancellation?.provider === 'ekart');
             if (!cancelledAtCourier) {
                 try {
                     const tracking = await fetchEkartTracking(order);
@@ -1693,6 +1694,20 @@ export const assignOrderFulfillment = async (req, res) => {
 
         if (['delhivery', 'ekart'].includes(requestedMode)) {
             if (!getProviderTrackingIdentifier(order, requestedMode)) {
+                // With several pickup addresses saved, the admin must choose one;
+                // never fall back to the default without asking (an old or
+                // half-loaded admin page could send no choice).
+                if (!requestedPickupLocation) {
+                    const field = requestedMode === 'ekart' ? 'ekartWarehouses' : 'delhiveryWarehouses';
+                    const pickupSettings = await Setting.findOne().select(field).lean();
+                    const savedCount = (pickupSettings?.[field] || []).filter((entry) => String(entry?.name || '').trim()).length;
+                    if (savedCount > 1) {
+                        return res.status(400).json({
+                            code: 'PICKUP_REQUIRED',
+                            message: 'Choose which pickup address to ship from. Refresh the page (Ctrl+F5) and assign again.'
+                        });
+                    }
+                }
                 try {
                     await createShipmentForProvider(order, requestedMode, {
                         pickupLocationName: requestedPickupLocation
