@@ -762,6 +762,24 @@ const OrderDetail = () => {
                             </div>
                         </div>
                         <div className="space-y-4">
+                            {hasCourierFulfillment
+                                && order?.courierCancellation?.reportedAt
+                                && order.courierCancellation.provider === fulfillmentMode ? (
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2">
+                                    <p className="text-xs font-semibold text-red-700">
+                                        {getShippingProviderLabel(fulfillmentMode)} reports this shipment cancelled
+                                        ({order.courierCancellation.rawStatus || 'Cancelled'}). Book a new shipment to send it again.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFulfillmentChoice(fulfillmentMode)}
+                                        disabled={isLoading || loadingPickupOptions}
+                                        className="w-full rounded-xl bg-red-600 px-3 py-2.5 text-[11px] font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-50"
+                                    >
+                                        {loadingPickupOptions ? 'Loading addresses…' : `Book new ${getShippingProviderLabel(fulfillmentMode)} shipment`}
+                                    </button>
+                                </div>
+                            ) : null}
                             <div className="flex justify-between items-center text-xs">
                                 <span className="text-gray-600 font-bold uppercase tracking-widest text-[9px]">Mode</span>
                                 <span className={`font-black uppercase tracking-wider ${hasCourierFulfillment ? 'text-blue-700' : isManualMode ? 'text-amber-700' : 'text-gray-500'}`}>
@@ -829,24 +847,6 @@ const OrderDetail = () => {
                             {trackingError ? (
                                 <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs font-semibold text-amber-700">
                                     {trackingError}
-                                </div>
-                            ) : null}
-                            {hasCourierFulfillment
-                                && order?.courierCancellation?.reportedAt
-                                && order.courierCancellation.provider === fulfillmentMode ? (
-                                <div className="rounded-xl border border-red-100 bg-red-50 p-3 space-y-2">
-                                    <p className="text-xs font-semibold text-red-700">
-                                        {getShippingProviderLabel(fulfillmentMode)} reports this shipment cancelled
-                                        ({order.courierCancellation.rawStatus || 'Cancelled'}). Book a new shipment to send it again.
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleFulfillmentChoice(fulfillmentMode)}
-                                        disabled={isLoading || loadingPickupOptions}
-                                        className="rounded-xl bg-red-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-50"
-                                    >
-                                        Book new {getShippingProviderLabel(fulfillmentMode)} shipment
-                                    </button>
                                 </div>
                             ) : null}
                             {getShippingError(order, fulfillmentMode) ? (
