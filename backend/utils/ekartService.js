@@ -166,7 +166,7 @@ const getMappedTrackingStep = (rawStatus = '') => {
     return key ? RAW_TO_USER_TRACKING_STEP[key] : '';
 };
 
-const buildShipmentPayload = (order, settings) => {
+const buildShipmentPayload = (order, settings, pickup = null) => {
     const shippingAddress = order?.shippingAddress || {};
     const orderItems = Array.isArray(order?.orderItems) ? order.orderItems : [];
     const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || 1;
@@ -176,7 +176,8 @@ const buildShipmentPayload = (order, settings) => {
     const paymentMode = getPaymentMode(order);
     const sellerName = sanitizeText(settings?.sellerName || settings?.ekartClientName || 'IndianKart');
     const sellerAddress = sanitizeText(settings?.sellerAddress || '');
-    const gstNumber = sanitizeText(settings?.gstNumber || '');
+    // A pickup office in another state has its own GST number.
+    const gstNumber = sanitizeText(pickup?.gst || settings?.gstNumber || '');
     const productsDescription = sanitizeText(orderItems.map((item) => item?.name || 'Item').join(', ')).slice(0, 250) || 'General merchandise';
     const dropLocationAddress = sanitizeText(shippingAddress?.street || '');
     const consigneePhone = normalizePhone(shippingAddress?.phone || '');
@@ -187,7 +188,7 @@ const buildShipmentPayload = (order, settings) => {
         settings?.contactPhone
     ].map((value) => normalizePhone(value || ''));
     const consigneeAlternatePhone = consigneeAlternatePhoneCandidates.find((value) => value && value !== consigneePhone) || '';
-    const pickupAlias = sanitizeText(settings?.ekartPickupLocation || '');
+    const pickupAlias = sanitizeText(pickup?.name || settings?.ekartPickupLocation || '');
 
     if (!consigneePhone) {
         throw new Error('Customer phone number is required before creating an Ekart shipment.');
@@ -413,14 +414,35 @@ const resolveTrackingUrl = (baseUrl, path, trackingNumber) => {
     return joinUrl(baseUrl, resolvedPath);
 };
 
-export const createEkartShipment = async (order) => {
+// Picks the registered Ekart pickup address for this shipment. The admin chooses
+// one per order; it must be one of the saved Ekart pickup addresses so a typo
+// can't book a parcel from an address Ekart doesn't know.
+const resolveEkartPickup = (settings, requestedName = '') => {
+    const saved = (Array.isArray(settings?.ekartWarehouses) ? settings.ekartWarehouses : [])
+        .filter((entry) => String(entry?.name || '').trim());
+    const requested = String(requestedName || '').trim();
+    if (requested) {
+        const match = saved.find((entry) => String(entry.name).trim() === requested);
+        if (match) return match;
+        if (saved.length > 0) {
+            throw new Error(`"${requested}" is not a saved Ekart pickup address. Check Settings > API Credentials > Ekart.`);
+        }
+        return { name: requested };
+    }
+    const defaultName = String(settings?.ekartPickupLocation || '').trim();
+    return saved.find((entry) => String(entry.name).trim() === defaultName)
+        || (defaultName ? { name: defaultName } : null);
+};
+
+export const createEkartShipment = async (order, options = {}) => {
     try {
         const config = await getEkartSettings();
         if (!config.baseUrl || (!config.clientId && !config.apiKey)) {
             throw new Error('Ekart credentials are incomplete. Please save base URL and Client ID in Admin > API Credentials.');
         }
 
-        const payload = buildShipmentPayload(order, config.settings);
+        const pickup = resolveEkartPickup(config.settings, options?.pickupLocationName);
+        const payload = buildShipmentPayload(order, config.settings, pickup);
         const authHeaders = await buildAuthHeaders(config);
         const { data } = await axios.put(
             joinUrl(config.baseUrl, config.createShipmentPath),
@@ -442,7 +464,7 @@ export const createEkartShipment = async (order) => {
         return {
             trackingNumber,
             providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
-            pickupLocation: config.pickupLocation,
+            pickupLocation: pickup?.name || config.pickupLocation,
             requestPayload: payload,
             responsePayload: data
         };
@@ -522,6 +544,6 @@ export const cancelEkartShipment = async (order) => {
     }
 };
 
-export const __testables = { getMappedTrackingStep };
+export const __testables = { getMappedTrackingStep, resolveEkartPickup, buildShipmentPayload };
 
 export { getMappedTrackingStep };

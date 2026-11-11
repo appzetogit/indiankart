@@ -98,6 +98,17 @@ const SectionCard = ({ id, eyebrow, title, description, activeSection, setActive
     );
 };
 
+const EMPTY_EKART_WAREHOUSE = { name: '', address: '', city: '', state: '', pin: '', phone: '', gst: '' };
+const toEkartWarehouses = (list) => (Array.isArray(list) ? list : []).map((warehouse) => ({
+    name: warehouse?.name || '',
+    address: warehouse?.address || '',
+    city: warehouse?.city || '',
+    state: warehouse?.state || '',
+    pin: warehouse?.pin || '',
+    phone: warehouse?.phone || '',
+    gst: warehouse?.gst || ''
+}));
+
 const RazorpayCredentials = () => {
     const [saving, setSaving] = useState(false);
     const [activeSection, setActiveSection] = useState('razorpay');
@@ -105,6 +116,8 @@ const RazorpayCredentials = () => {
     // Delhivery has no API to list registered warehouses, so they are kept here
     // and offered when a shipment is assigned. `name` must match Delhivery exactly.
     const [warehouses, setWarehouses] = useState([]);
+    // Ekart pickup addresses, offered every time an order is shipped with Ekart.
+    const [ekartWarehouses, setEkartWarehouses] = useState([]);
     const [codePrompt, setCodePrompt] = useState(null); // { mode: 'code' | 'setup', error }
     const [actionCode, setActionCode] = useState('');
     const settings = useSettingsStore((state) => state.settings);
@@ -153,6 +166,7 @@ const RazorpayCredentials = () => {
                 }))
                 : []
         );
+        setEkartWarehouses(toEkartWarehouses(settings?.ekartWarehouses));
     }, [settings]);
 
     const handleChange = (e) => {
@@ -172,6 +186,12 @@ const RazorpayCredentials = () => {
 
     const removeWarehouse = (index) => {
         setWarehouses((prev) => prev.filter((_, i) => i !== index));
+    };
+
+    const updateEkartWarehouse = (index, field, value) => {
+        setEkartWarehouses((prev) => prev.map((warehouse, i) => (
+            i === index ? { ...warehouse, [field]: value } : warehouse
+        )));
     };
 
     // Changing a payment or courier credential needs a fresh code from the
@@ -225,6 +245,13 @@ const RazorpayCredentials = () => {
             data.append('ekartClientId', form.ekartClientId.trim());
             data.append('ekartClientName', form.ekartClientName.trim());
             data.append('ekartPickupLocation', form.ekartPickupLocation.trim());
+            data.append('ekartWarehouses', JSON.stringify(
+                ekartWarehouses
+                    .map((warehouse) => Object.fromEntries(
+                        Object.keys(EMPTY_EKART_WAREHOUSE).map((key) => [key, String(warehouse[key] || '').trim()])
+                    ))
+                    .filter((warehouse) => warehouse.name)
+            ));
             data.append('ekartUsername', form.ekartUsername.trim());
             data.append('ekartPassword', form.ekartPassword);
             data.append('ekartApiKey', form.ekartApiKey);
@@ -269,6 +296,9 @@ const RazorpayCredentials = () => {
                     pin: warehouse?.pin || '',
                     phone: warehouse?.phone || ''
                 })));
+            }
+            if (Array.isArray(res?.ekartWarehouses)) {
+                setEkartWarehouses(toEkartWarehouses(res.ekartWarehouses));
             }
             toast.success('API credentials updated');
         } catch (error) {
@@ -631,6 +661,74 @@ const RazorpayCredentials = () => {
                                 onChange={handleChange}
                                 placeholder="/api/v1/package/cancel"
                             />
+                        </div>
+
+                        <div className="mt-8 border-t border-blue-100 pt-6">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <h4 className="text-sm font-black text-gray-900">Pickup Addresses</h4>
+                                    <p className="mt-1 text-xs text-gray-500 font-medium max-w-xl">
+                                        Every Ekart shipment asks which of these to pick up from; the Pickup Location above is
+                                        pre-selected. The name must match Ekart &gt; Settings &gt; Addresses exactly. The GST
+                                        number is sent to Ekart for parcels from that address.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setEkartWarehouses((prev) => [...prev, { ...EMPTY_EKART_WAREHOUSE }])}
+                                    className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-blue-700"
+                                >
+                                    Add address
+                                </button>
+                            </div>
+
+                            {ekartWarehouses.length === 0 ? (
+                                <p className="mt-4 rounded-2xl border border-dashed border-blue-200 bg-blue-50/50 p-4 text-xs font-semibold text-gray-500">
+                                    No pickup addresses saved. Shipments use the single Pickup Location above.
+                                </p>
+                            ) : (
+                                <div className="mt-4 space-y-4">
+                                    {ekartWarehouses.map((warehouse, index) => (
+                                        <div key={index} className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                                                    Address {index + 1}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEkartWarehouses((prev) => prev.filter((_, i) => i !== index))}
+                                                    className="rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest text-red-600 transition-all hover:bg-red-50"
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+                                            <div className="grid gap-3 md:grid-cols-2">
+                                                {[
+                                                    { field: 'name', label: 'Address Name (must match Ekart)', span: true },
+                                                    { field: 'address', label: 'Address', span: true },
+                                                    { field: 'city', label: 'City' },
+                                                    { field: 'state', label: 'State' },
+                                                    { field: 'pin', label: 'PIN Code' },
+                                                    { field: 'phone', label: 'Phone' },
+                                                    { field: 'gst', label: 'GST Number', span: true }
+                                                ].map(({ field, label, span }) => (
+                                                    <label key={field} className={span ? 'md:col-span-2' : ''}>
+                                                        <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-600">
+                                                            {label}
+                                                        </span>
+                                                        <input
+                                                            type="text"
+                                                            value={warehouse[field]}
+                                                            onChange={(e) => updateEkartWarehouse(index, field, e.target.value)}
+                                                            className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </SectionCard>
 

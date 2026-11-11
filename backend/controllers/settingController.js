@@ -18,6 +18,7 @@ const sanitizeWarehouses = (list = []) => (Array.isArray(list) ? list : [])
         state: String(entry?.state || '').trim(),
         pin: String(entry?.pin || '').trim(),
         phone: String(entry?.phone || '').trim(),
+        gst: String(entry?.gst || '').trim().toUpperCase(),
     }))
     .filter((entry) => entry.name);
 const CATEGORY_PAGE_PROJECTION = 'id name brand subcategoryBrand price originalPrice discount rating image category categoryId subCategories tags subtitle skus ram';
@@ -407,6 +408,7 @@ const updateSettings = async (req, res) => {
             delhiveryClientName,
             delhiveryPickupLocation,
             delhiveryWarehouses,
+            ekartWarehouses,
             delhiveryToken,
             ekartBaseUrl,
             ekartTrackingBaseUrl,
@@ -465,6 +467,7 @@ const updateSettings = async (req, res) => {
                 const expectedVersion = req.body[versionField];
                 const currentVersion = Number(settings[versionField]) || 0;
                 if (expectedVersion === undefined || expectedVersion === null || Number(expectedVersion) !== currentVersion) {
+                    console.warn('[catalog-conflict]', versionField, 'sent', JSON.stringify(expectedVersion), 'current', currentVersion, 'content-type', req.get('content-type'));
                     return res.status(409).json({
                         code: 'CATALOG_CONFLICT',
                         message: 'Someone else changed this page since you opened it. Refresh to load the latest version, then make your change again.',
@@ -477,6 +480,7 @@ const updateSettings = async (req, res) => {
                 const expectedVersion = req.body[versionField];
                 const currentVersion = Number(settings[versionField]) || 0;
                 if (expectedVersion === undefined || expectedVersion === null || Number(expectedVersion) !== currentVersion) {
+                    console.warn('[catalog-conflict]', versionField, 'sent', JSON.stringify(expectedVersion), 'current', currentVersion, 'content-type', req.get('content-type'));
                     return res.status(409).json({
                         code: 'CATALOG_CONFLICT',
                         message: 'Someone else changed this page since you opened it. Refresh to load the latest version, then make your change again.',
@@ -516,6 +520,14 @@ const updateSettings = async (req, res) => {
                     : delhiveryWarehouses;
                 if (Array.isArray(parsedWarehouses)) {
                     settings.delhiveryWarehouses = sanitizeWarehouses(parsedWarehouses);
+                }
+            }
+            if (ekartWarehouses !== undefined) {
+                const parsedWarehouses = typeof ekartWarehouses === 'string'
+                    ? JSON.parse(ekartWarehouses)
+                    : ekartWarehouses;
+                if (Array.isArray(parsedWarehouses)) {
+                    settings.ekartWarehouses = sanitizeWarehouses(parsedWarehouses);
                 }
             }
             if (typeof delhiveryToken === 'string' && delhiveryToken.trim()) {
@@ -620,6 +632,11 @@ const updateSettings = async (req, res) => {
                     typeof delhiveryWarehouses === 'string'
                         ? (JSON.parse(delhiveryWarehouses) || [])
                         : delhiveryWarehouses
+                ),
+                ekartWarehouses: sanitizeWarehouses(
+                    typeof ekartWarehouses === 'string'
+                        ? (JSON.parse(ekartWarehouses) || [])
+                        : ekartWarehouses
                 ),
                 delhiveryToken: (typeof delhiveryToken === 'string' ? delhiveryToken.trim() : '') || '',
                 ekartBaseUrl: typeof ekartBaseUrl === 'string' ? ekartBaseUrl.trim() : '',

@@ -68,6 +68,18 @@ const OrderDetail = () => {
             ? settings.delhiveryWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
             : []
     ), [settings]);
+    // Ekart: always ask which registered pickup address to use. Falls back to the
+    // single Pickup Location from settings until addresses are saved there.
+    const ekartWarehouses = React.useMemo(() => {
+        const saved = Array.isArray(settings?.ekartWarehouses)
+            ? settings.ekartWarehouses.filter((warehouse) => String(warehouse?.name || '').trim())
+            : [];
+        if (saved.length > 0) return saved;
+        const fallback = String(settings?.ekartPickupLocation || '').trim();
+        return fallback ? [{ name: fallback }] : [];
+    }, [settings]);
+    const getPickupOptions = (mode) => (mode === 'ekart' ? ekartWarehouses : delhiveryWarehouses);
+    const pickupOptions = getPickupOptions(pendingCourierMode);
     const formatWarehouseAddress = (warehouse) => [
         warehouse?.address,
         warehouse?.city,
@@ -233,12 +245,14 @@ const OrderDetail = () => {
     // Delhivery is the only provider with warehouses configured here. If none are
     // saved yet, fall through to the old behaviour so shipping is never blocked.
     const handleFulfillmentChoice = (mode) => {
-        if (mode === 'delhivery' && delhiveryWarehouses.length > 0) {
-            setSelectedWarehouse(
-                getShippingPickupLocation(order, 'delhivery')
-                || settings?.delhiveryPickupLocation
-                || delhiveryWarehouses[0].name
-            );
+        const options = getPickupOptions(mode);
+        if (['delhivery', 'ekart'].includes(mode) && options.length > 0) {
+            const names = options.map((warehouse) => warehouse.name);
+            const preferred = [
+                getShippingPickupLocation(order, mode),
+                mode === 'ekart' ? settings?.ekartPickupLocation : settings?.delhiveryPickupLocation
+            ].find((name) => name && names.includes(name));
+            setSelectedWarehouse(preferred || names[0]);
             setPendingCourierMode(mode);
             return;
         }
@@ -746,7 +760,7 @@ const OrderDetail = () => {
                                     {(() => {
                                         if (!hasCourierFulfillment) return null;
                                         const name = getShippingPickupLocation(order, fulfillmentMode);
-                                        const matched = delhiveryWarehouses.find((warehouse) => warehouse.name === name);
+                                        const matched = getPickupOptions(fulfillmentMode).find((warehouse) => warehouse.name === name);
                                         const address = matched ? formatWarehouseAddress(matched) : '';
                                         if (!address) return null;
                                         return (
@@ -829,7 +843,7 @@ const OrderDetail = () => {
                             </div>
 
                             <div className="space-y-3 max-h-[45vh] overflow-y-auto">
-                                {delhiveryWarehouses.map((warehouse) => {
+                                {pickupOptions.map((warehouse) => {
                                     const isActive = selectedWarehouse === warehouse.name;
                                     const address = formatWarehouseAddress(warehouse);
                                     return (
@@ -853,6 +867,9 @@ const OrderDetail = () => {
                                                     {warehouse.phone ? (
                                                         <p className="mt-1 text-xs text-gray-500 font-medium">Phone: {warehouse.phone}</p>
                                                     ) : null}
+                                                    {warehouse.gst ? (
+                                                        <p className="mt-1 text-xs text-gray-500 font-medium">GST: {warehouse.gst}</p>
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </button>
@@ -861,7 +878,7 @@ const OrderDetail = () => {
                             </div>
 
                             <p className="text-[11px] text-gray-500 font-medium">
-                                Names must match your registered Delhivery warehouses exactly. Manage them in Settings &gt; API Credentials.
+                                Names must match your registered {getShippingProviderLabel(pendingCourierMode)} pickup addresses exactly. Manage them in Settings &gt; API Credentials.
                             </p>
 
                             <div className="flex gap-3">
@@ -926,7 +943,7 @@ const OrderDetail = () => {
                                                 value={isFulfillmentAssigned ? fulfillmentMode : ''}
                                                 onChange={(e) => {
                                                     if (!e.target.value) return;
-                                                    handleAssignFulfillment(e.target.value);
+                                                    handleFulfillmentChoice(e.target.value);
                                                 }}
                                                 disabled={effectiveAdminStatus === 'Delivered' || effectiveAdminStatus === 'Cancelled'}
                                                 className="w-full bg-white border border-gray-200 focus:border-blue-500 rounded-2xl px-4 py-3 text-sm font-bold outline-none transition-all text-gray-900 shadow-sm"

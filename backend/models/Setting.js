@@ -49,6 +49,24 @@ const settingSchema = mongoose.Schema({
     ekartClientId: { type: String, default: '' },
     ekartClientName: { type: String, default: '' },
     ekartPickupLocation: { type: String, default: '' },
+    // Registered Ekart pickup addresses; the admin picks one per order.
+    // `name` must match the address name in the Ekart dashboard exactly, and
+    // `gst` is that office's GST number (offices in other states differ).
+    ekartWarehouses: {
+        type: [
+            {
+                _id: false,
+                name: { type: String, default: '' },
+                address: { type: String, default: '' },
+                city: { type: String, default: '' },
+                state: { type: String, default: '' },
+                pin: { type: String, default: '' },
+                phone: { type: String, default: '' },
+                gst: { type: String, default: '' },
+            },
+        ],
+        default: [],
+    },
     ekartUsername: { type: String, default: '' },
     ekartPassword: { type: String, default: '', select: false },
     ekartApiKey: { type: String, default: '', select: false },

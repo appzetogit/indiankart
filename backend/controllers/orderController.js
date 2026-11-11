@@ -412,7 +412,9 @@ const createShipmentForProvider = async (order, provider, options = {}) => {
     }
 
     if (provider === 'ekart') {
-        const shipment = await createEkartShipment(order);
+        const shipment = await createEkartShipment(order, {
+            pickupLocationName: options?.pickupLocationName || ''
+        });
         order.ekart = {
             ...order.ekart,
             trackingNumber: shipment.trackingNumber || '',
