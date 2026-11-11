@@ -487,6 +487,20 @@ const OrderDetail = () => {
                         </div>
                     ) : null}
 
+                    {hasCourierFulfillment
+                        && order?.courierCancellation?.reportedAt
+                        && order.courierCancellation.provider === fulfillmentMode ? (
+                        <button
+                            type="button"
+                            onClick={() => handleFulfillmentChoice(fulfillmentMode)}
+                            disabled={isLoading || loadingPickupOptions}
+                            className="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-6 md:py-3 bg-red-600 text-white font-black text-[10px] md:text-xs rounded-xl md:rounded-2xl hover:bg-red-700 transition-all shadow-lg shadow-red-100 uppercase tracking-widest disabled:opacity-50"
+                        >
+                            <MdLocalShipping size={16} />
+                            {loadingPickupOptions ? 'Loading…' : `Re-book ${getShippingProviderLabel(fulfillmentMode)}`}
+                        </button>
+                    ) : null}
+
                     {isManualMode && effectiveAdminStatus !== 'Delivered' && effectiveAdminStatus !== 'Cancelled' && (
                         <button
                             onClick={openUpdateModal}
