@@ -7,6 +7,7 @@ import { getAdminPaymentStatus } from '../../utils/paymentStatus';
 import OrderListFilters from '../../components/orders/OrderListFilters';
 import { DATE_RANGE_PRESETS, resolveDateRange } from '../../components/orders/orderDateRange';
 import useNewOrderStore from '../../store/newOrderStore';
+import useSettingsStore from '../../store/settingsStore';
 import OrderListTable from '../../components/orders/OrderListTable';
 
 const BULK_STATUS_OPTIONS = [
@@ -172,6 +173,25 @@ const OrderList = () => {
     const [bulkFulfillmentMode, setBulkFulfillmentMode] = useState('');
     const [isBulkFulfillmentUpdating, setIsBulkFulfillmentUpdating] = useState(false);
     const [showBulkFulfillmentModal, setShowBulkFulfillmentModal] = useState(false);
+    // Courier pickup address for the bulk assignment (Ekart/Delhivery).
+    const [bulkPickupLocation, setBulkPickupLocation] = useState('');
+    const settings = useSettingsStore((state) => state.settings);
+    const fetchSettings = useSettingsStore((state) => state.fetchSettings);
+    const getPickupOptions = (mode, source = settings) => {
+        if (mode === 'ekart') {
+            const saved = (Array.isArray(source?.ekartWarehouses) ? source.ekartWarehouses : [])
+                .filter((warehouse) => String(warehouse?.name || '').trim());
+            if (saved.length > 0) return saved;
+            const fallback = String(source?.ekartPickupLocation || '').trim();
+            return fallback ? [{ name: fallback }] : [];
+        }
+        if (mode === 'delhivery') {
+            return (Array.isArray(source?.delhiveryWarehouses) ? source.delhiveryWarehouses : [])
+                .filter((warehouse) => String(warehouse?.name || '').trim());
+        }
+        return [];
+    };
+    const bulkPickupOptions = getPickupOptions(bulkFulfillmentMode);
     const [bulkSerialInputs, setBulkSerialInputs] = useState({});
     const [bulkSerialTypes, setBulkSerialTypes] = useState({});
     const [serialEditorOrderId, setSerialEditorOrderId] = useState('');
@@ -581,10 +601,28 @@ const OrderList = () => {
 
         setBulkSerialInputs(nextInputs);
         setBulkSerialTypes(nextTypes);
+        setBulkPickupLocation('');
         setShowBulkFulfillmentModal(true);
+
+        // Pre-select the default pickup address (the settings Pickup Location).
+        if (['ekart', 'delhivery'].includes(bulkFulfillmentMode)) {
+            const pickDefault = (source) => {
+                const names = getPickupOptions(bulkFulfillmentMode, source).map((warehouse) => warehouse.name);
+                const preferred = bulkFulfillmentMode === 'ekart' ? source?.ekartPickupLocation : source?.delhiveryPickupLocation;
+                setBulkPickupLocation(names.includes(preferred) ? preferred : (names[0] || ''));
+            };
+            pickDefault(settings);
+            fetchSettings(true).then(pickDefault).catch(() => {
+                toast.error('Could not load pickup addresses');
+            });
+        }
     };
 
     const handleBulkFulfillmentSubmit = async () => {
+        if (bulkPickupOptions.length > 0 && !bulkPickupLocation) {
+            toast.error('Choose a pickup address');
+            return;
+        }
         setIsBulkFulfillmentUpdating(true);
         const selectedOrdersList = localOrders.filter((o) => selectedOrderIds.has(o.id));
         const successes = [];
@@ -612,7 +650,10 @@ const OrderList = () => {
                 }
 
                 // 2. Assign fulfillment mode
-                const { data } = await API.put(`/orders/${order.id}/fulfillment`, { mode: bulkFulfillmentMode });
+                const { data } = await API.put(`/orders/${order.id}/fulfillment`, {
+                    mode: bulkFulfillmentMode,
+                    pickupLocation: bulkPickupOptions.length > 0 ? bulkPickupLocation : ''
+                });
                 successes.push(order.displayId || order.id);
                 updatedOrdersMap.set(order.id, transformOrder(data));
             } catch (error) {
@@ -945,6 +986,39 @@ const OrderList = () => {
                                 ✕
                             </button>
                         </div>
+
+                        {bulkPickupOptions.length > 0 ? (
+                            <div className="mb-4 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700">Pickup from</p>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                    {bulkPickupOptions.map((warehouse) => {
+                                        const isActive = bulkPickupLocation === warehouse.name;
+                                        const place = [warehouse.city, warehouse.state].filter(Boolean).join(', ');
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={warehouse.name}
+                                                onClick={() => setBulkPickupLocation(warehouse.name)}
+                                                disabled={isBulkFulfillmentUpdating}
+                                                className={`text-left rounded-xl border p-3 transition-all ${isActive
+                                                    ? 'border-indigo-500 bg-white shadow-sm'
+                                                    : 'border-gray-200 bg-white/70 hover:border-gray-300'}`}
+                                            >
+                                                <div className="flex items-start gap-2">
+                                                    <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 ${isActive ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300'}`} />
+                                                    <div className="min-w-0">
+                                                        <p className="text-xs font-black text-gray-900 break-words">{place || warehouse.name}</p>
+                                                        <p className="text-[10px] font-bold text-gray-500 break-words">
+                                                            {warehouse.name}{warehouse.gst ? ` · GST ${warehouse.gst}` : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : null}
 
                         {/* Modal Body - Scrollable list of orders */}
                         <div className="flex-1 overflow-y-auto min-h-0 pr-2 space-y-6 custom-scrollbar">
