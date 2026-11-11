@@ -419,6 +419,7 @@ const createShipmentForProvider = async (order, provider, options = {}) => {
             ...order.ekart,
             trackingNumber: shipment.trackingNumber || '',
             providerOrderId: shipment.providerOrderId,
+            shipmentAttempts: shipment.shipmentAttempts,
             pickupLocation: shipment.pickupLocation,
             syncedAt: new Date(),
             requestPayload: shipment.requestPayload,
@@ -1645,6 +1646,36 @@ export const assignOrderFulfillment = async (req, res) => {
         // warehouse, for instance). Only short-circuit once a shipment actually
         // exists, otherwise the order is stuck on a mode it can never fulfil.
         const currentMode = getFulfillmentMode(order);
+        // A shipment cancelled at the courier (e.g. from the Ekart dashboard)
+        // leaves its tracking number behind; without this, choosing the courier
+        // again would just return the dead shipment. Re-book it instead and keep
+        // the old tracking number in the order's history.
+        if (requestedMode === 'ekart' && getProviderTrackingIdentifier(order, 'ekart')) {
+            let cancelledAtCourier = Boolean(order.ekart?.cancelledAt);
+            if (!cancelledAtCourier) {
+                try {
+                    const tracking = await fetchEkartTracking(order);
+                    cancelledAtCourier = tracking?.mappedCurrentStep === 'Cancelled';
+                } catch (error) {
+                    // Can't confirm a cancellation: keep the existing shipment.
+                }
+            }
+            if (cancelledAtCourier) {
+                const previous = Array.isArray(order.ekart?.previousTrackingNumbers) ? order.ekart.previousTrackingNumbers : [];
+                order.ekart = {
+                    ...order.ekart,
+                    previousTrackingNumbers: [...previous, order.ekart.trackingNumber],
+                    shipmentAttempts: Math.max(Number(order.ekart?.shipmentAttempts) || 0, previous.length + 1),
+                    trackingNumber: '',
+                    cancelledAt: undefined,
+                    cancelResponsePayload: null,
+                    lastError: ''
+                };
+                if (order.courierCancellation?.provider === 'ekart') {
+                    order.courierCancellation = undefined;
+                }
+            }
+        }
         const alreadyShipped = ['delhivery', 'ekart'].includes(requestedMode)
             ? Boolean(getProviderTrackingIdentifier(order, requestedMode))
             : true;

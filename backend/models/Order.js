@@ -161,6 +161,11 @@ const orderSchema = mongoose.Schema({
     ekart: {
         trackingNumber: { type: String, default: '' },
         providerOrderId: { type: String, default: '' },
+        // Shipments Ekart has issued for this order. Re-booking after a
+        // cancellation sends "<order>-R<n>" so it never reuses a reference.
+        shipmentAttempts: { type: Number, default: 0 },
+        // Tracking numbers of earlier, cancelled shipments of this order.
+        previousTrackingNumbers: { type: [String], default: [] },
         pickupLocation: { type: String, default: '' },
         syncedAt: { type: Date },
         cancelledAt: { type: Date },

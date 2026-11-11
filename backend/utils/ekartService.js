@@ -166,7 +166,7 @@ const getMappedTrackingStep = (rawStatus = '') => {
     return key ? RAW_TO_USER_TRACKING_STEP[key] : '';
 };
 
-const buildShipmentPayload = (order, settings, pickup = null) => {
+const buildShipmentPayload = (order, settings, pickup = null, orderReference = '') => {
     const shippingAddress = order?.shippingAddress || {};
     const orderItems = Array.isArray(order?.orderItems) ? order.orderItems : [];
     const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || 1;
@@ -205,7 +205,7 @@ const buildShipmentPayload = (order, settings, pickup = null) => {
         seller_gst_amount: 0,
         consignee_gst_amount: 0,
         integrated_gst_amount: 0,
-        order_number: sanitizeText(order?.displayId || order?._id || ''),
+        order_number: sanitizeText(orderReference || order?.displayId || order?._id || ''),
         invoice_number: sanitizeText(order?.invoiceNumber || order?.displayId || order?._id || ''),
         invoice_date: formatDate(order?.createdAt),
         consignee_name: sanitizeText(shippingAddress?.name || 'Customer'),
@@ -442,7 +442,15 @@ export const createEkartShipment = async (order, options = {}) => {
         }
 
         const pickup = resolveEkartPickup(config.settings, options?.pickupLocationName);
-        const payload = buildShipmentPayload(order, config.settings, pickup);
+        // A re-booking after a cancelled shipment gets a fresh order reference.
+        const baseReference = sanitizeText(order?.displayId || order?._id || '');
+        const priorShipments = Math.max(
+            Number(order?.ekart?.shipmentAttempts) || 0,
+            Array.isArray(order?.ekart?.previousTrackingNumbers) ? order.ekart.previousTrackingNumbers.length : 0
+        );
+        const attemptNumber = priorShipments + 1;
+        const orderReference = attemptNumber > 1 ? `${baseReference}-R${attemptNumber}` : baseReference;
+        const payload = buildShipmentPayload(order, config.settings, pickup, orderReference);
         const authHeaders = await buildAuthHeaders(config);
         const { data } = await axios.put(
             joinUrl(config.baseUrl, config.createShipmentPath),
@@ -463,7 +471,8 @@ export const createEkartShipment = async (order, options = {}) => {
 
         return {
             trackingNumber,
-            providerOrderId: sanitizeText(order?.displayId || order?._id || ''),
+            providerOrderId: orderReference,
+            shipmentAttempts: attemptNumber,
             pickupLocation: pickup?.name || config.pickupLocation,
             requestPayload: payload,
             responsePayload: data
