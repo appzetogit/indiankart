@@ -498,6 +498,25 @@ const OrderDetail = () => {
                 </div>
             </div>
 
+            {hasCourierFulfillment
+                && order?.courierCancellation?.reportedAt
+                && order.courierCancellation.provider === fulfillmentMode ? (
+                <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 md:flex-row md:items-center md:justify-between">
+                    <p className="text-sm font-semibold text-red-700 min-w-0">
+                        {getShippingProviderLabel(fulfillmentMode)} shipment {getTrackingIdentifier(order, fulfillmentMode)} was cancelled
+                        ({order.courierCancellation.rawStatus || 'Cancelled'}). Book a new shipment to send this order.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => handleFulfillmentChoice(fulfillmentMode)}
+                        disabled={isLoading || loadingPickupOptions}
+                        className="shrink-0 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black uppercase tracking-widest text-white transition-all hover:bg-red-700 disabled:opacity-50"
+                    >
+                        {loadingPickupOptions ? 'Loading addresses…' : `Book new ${getShippingProviderLabel(fulfillmentMode)} shipment`}
+                    </button>
+                </div>
+            ) : null}
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8">
                 {/* Main Content */}
                 <div className="lg:col-span-8 space-y-4 md:space-y-8">
