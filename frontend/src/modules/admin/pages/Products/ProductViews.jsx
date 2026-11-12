@@ -18,6 +18,7 @@ import API from '../../../../services/api';
 import toast from 'react-hot-toast';
 import Pagination from '../../components/common/Pagination';
 import { DATE_RANGE_PRESETS, resolveDateRange } from '../../components/orders/orderDateRange';
+import ShoppingActivity from '../../components/products/ShoppingActivity';
 
 const getProductId = (product) => String(product?.id || product?._id || '');
 const ITEMS_PER_PAGE = 20;
@@ -580,6 +581,8 @@ const ProductViews = () => {
                 </MotionDiv>
             </div>
 
+            <ShoppingActivity startDate={startDate} endDate={endDate} />
+
             {/* Funnel Conversion Analysis */}
             <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
@@ -587,7 +590,7 @@ const ProductViews = () => {
                 className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm"
             >
                 <div className="mb-6">
-                    <h3 className="text-lg font-black text-gray-900">Purchase Funnel Conversion</h3>
+                    <h3 className="text-lg font-black text-gray-900">Page-Visit Funnel (estimate)</h3>
                     <p className="mt-0.5 text-xs font-medium uppercase tracking-widest text-gray-400">
                         Conversion rates from visitor touch to successful purchase
                     </p>

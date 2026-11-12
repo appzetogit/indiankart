@@ -4,6 +4,7 @@ import Category from '../models/Category.js';
 import SubCategory from '../models/SubCategory.js';
 import { resolveStateFromIp, getClientIp } from '../utils/geoState.js';
 import { canonicalizeState } from '../utils/indianStates.js';
+import { recordShopEvents, requestContext, isBotRequest } from '../utils/shopEvents.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import PortalSession from '../models/PortalSession.js';
 import ExcelJS from 'exceljs';
@@ -1101,6 +1102,16 @@ export const incrementProductView = async (req, res) => {
 
         product.markModified('dailyViewStats');
         await product.save();
+
+        if (!isBotRequest(req)) {
+            recordShopEvents([{
+                type: 'view',
+                productId: product.id,
+                productName: product.name,
+                price: Number(product.price) || 0,
+                ...requestContext(req, normalizedState === 'Unknown' ? '' : normalizedState)
+            }]);
+        }
 
         const stateBreakdown = getSortedStateBreakdown(product.viewStatsByState);
         const topState = pickTopViewState(stateBreakdown);

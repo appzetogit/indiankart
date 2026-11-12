@@ -20,7 +20,7 @@ import {
     setProductVisibility,
     getProductVisibilitySummary,
 } from '../controllers/productController.js';
-import { protect, admin, can } from '../middleware/authMiddleware.js';
+import { protect, protectOptional, admin, can } from '../middleware/authMiddleware.js';
 import upload from '../middleware/upload.js';
 
 const uploadMiddleware = (req, res, next) => {
@@ -78,6 +78,6 @@ router.route('/:id/view-insights')
     .get(protect, admin, can('productViews'), getProductViewInsights);
 
 router.route('/:id/view')
-    .post(incrementProductView);
+    .post(protectOptional, incrementProductView);
 
 export default router;

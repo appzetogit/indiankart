@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MdArrowBack, MdClose } from 'react-icons/md';
 import { useCartStore } from '../store/cartStore';
@@ -10,6 +10,7 @@ import { useAddressAutocomplete } from '../../../hooks/useAddressAutocomplete';
 import Loader from '../../../components/common/Loader';
 import { useCategories } from '../../../hooks/useData';
 import { trackPurchase } from '../../../utils/analytics';
+import { trackShopEvent } from '../../../utils/shopTracking';
 import { shouldUseRedirectPayment, paymentCallbackUrl, rememberPendingRedirectPayment, REJECTED_PAYMENT_CODES } from '../utils/redirectPayment';
 import { getPlacedOrders, placedOrdersPath } from '../utils/placedOrders';
 
@@ -201,6 +202,14 @@ const Checkout = () => {
     
     // Use buyNowItem if present, otherwise fallback to global cart
     const checkoutItems = buyNowItem ? [buyNowItem] : cart;
+
+    // Shopping activity: one "checkout started" per item, once per visit to checkout.
+    const checkoutTrackedRef = useRef(false);
+    useEffect(() => {
+        if (checkoutTrackedRef.current || checkoutItems.length === 0) return;
+        checkoutTrackedRef.current = true;
+        checkoutItems.forEach((item) => trackShopEvent('checkout_start', item, { variant: item.variant, quantity: item.quantity }));
+    }, [checkoutItems]);
     const { categories = [] } = useCategories();
     const { coupons, fetchCoupons } = useCouponStore(); // Get coupons from the store
 

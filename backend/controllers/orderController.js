@@ -8,6 +8,7 @@ import Product, { DEFAULT_GST_RATE } from '../models/Product.js';
 import PinCode from '../models/PinCode.js';
 import Notification from '../models/Notification.js';
 import Setting from '../models/Setting.js';
+import { recordShopEvents, requestContext, formatVariant } from '../utils/shopEvents.js';
 import Agent from '../models/Agent.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
 import { cancelDelhiveryShipment, createDelhiveryShipment, fetchDelhiveryTracking } from '../utils/delhiveryService.js';
@@ -1245,6 +1246,23 @@ export const addOrderItems = async (req, res) => {
         });
 
         res.status(201).json(checkoutResponse(createdOrders));
+
+        // Shopping activity: one "order" event per ordered line (best effort).
+        try {
+            const context = requestContext(req, shippingAddress?.state);
+            recordShopEvents(createdOrders.flatMap((createdOrder) => (createdOrder.orderItems || []).map((item) => ({
+                type: 'order',
+                productId: Number(item.product),
+                productName: item.name,
+                variant: formatVariant(item.variant),
+                quantity: Number(item.qty) || 1,
+                price: Number(item.price) || 0,
+                orderId: createdOrder._id,
+                ...context
+            }))));
+        } catch (eventError) {
+            console.warn('[shop-events] order not recorded:', eventError.message);
+        }
 
         // Notifications are best-effort side effects and must not hold checkout open.
         Notification.insertMany(notifications).catch((notificationError) => {

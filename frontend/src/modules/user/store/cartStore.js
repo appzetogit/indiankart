@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import API from '../../../services/api';
 import { safePersistStorage } from '../../../utils/safeStorage';
+import { trackShopEvent } from '../../../utils/shopTracking';
 
 const isSameItem = (item, product, variant = product?.variant || {}) => (
     item.id === product.id &&
@@ -52,6 +53,7 @@ export const useCartStore = create()(
             })),
 
             addToCart: (product, variant = {}) => {
+                trackShopEvent('add_to_cart', product, { variant });
                 set((state) => {
                     const cartItem = { ...product, variant };
                     const existingItem = state.cart.find((item) =>
@@ -137,6 +139,8 @@ export const useCartStore = create()(
             },
 
             removeFromCart: (productId, variant = {}) => {
+                const removed = get().cart.find((item) => item.id === productId && JSON.stringify(item.variant) === JSON.stringify(variant));
+                if (removed) trackShopEvent('remove_from_cart', removed, { variant, quantity: removed.quantity });
                 set((state) => ({
                     cart: state.cart.filter((item) => !(
                         item.id === productId &&
@@ -146,6 +150,10 @@ export const useCartStore = create()(
             },
 
             updateQuantity: (productId, quantity, variant = {}) => {
+                const changed = get().cart.find((item) => item.id === productId && JSON.stringify(item.variant) === JSON.stringify(variant));
+                if (changed && Number(quantity) !== Number(changed.quantity)) {
+                    trackShopEvent('quantity_change', changed, { variant, quantity });
+                }
                 set((state) => ({
                     cart: state.cart.map((item) =>
                         (item.id === productId &&
@@ -156,6 +164,9 @@ export const useCartStore = create()(
             },
 
             toggleWishlist: (product) => {
+                if (!get().wishlist.some((item) => item.id === product?.id)) {
+                    trackShopEvent('wishlist_add', product);
+                }
                 set((state) => {
                     const exists = state.wishlist.find(item => item.id === product.id);
                     if (exists) {
@@ -183,6 +194,7 @@ export const useCartStore = create()(
             },
 
             moveToCart: (product) => {
+                trackShopEvent('add_to_cart', product);
                 set((state) => {
                     const isInSaved = state.savedForLater.find((item) => isSameItem(item, product));
                     if (isInSaved) {

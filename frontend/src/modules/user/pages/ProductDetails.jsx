@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { confirmToast } from '../../../utils/toastUtils.jsx';
 import './ProductDetails.css';
 import { safeSetItem } from '../../../utils/safeStorage';
+import { trackShopEvent } from '../../../utils/shopTracking';
 
 const normalizeKnownState = (value) => {
     const trimmed = String(value || '').trim();
@@ -383,6 +384,7 @@ const ProductDetails = () => {
     };
 
     const handleBuyNow = () => {
+        trackShopEvent('buy_now', product, { variant: selectedVariants, price: selectedPrice });
         if (!isAuthenticated) {
             toast.error('Please login first to buy items');
             navigate('/login', { state: { from: window.location.pathname } });

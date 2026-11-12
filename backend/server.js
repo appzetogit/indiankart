@@ -43,6 +43,7 @@ import pinCodeRoutes from './routes/pinCodeRoutes.js';
 import demoBookingRoutes from './routes/demoBookingRoutes.js';
 import bankOfferRoutes from './routes/bankOfferRoutes.js';
 import settingRoutes from './routes/settingRoutes.js';
+import shopEventRoutes from './routes/shopEventRoutes.js';
 import offerRoutes from './routes/offerRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
 
@@ -189,6 +190,7 @@ app.use('/api/pincodes', pinCodeRoutes);
 app.use('/api/demo-bookings', demoBookingRoutes);
 app.use('/api/bank-offers', bankOfferRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/shop-events', shopEventRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/notifications', notificationRoutes);
