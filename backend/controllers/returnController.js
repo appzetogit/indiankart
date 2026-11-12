@@ -4,6 +4,9 @@ import { createDelhiveryReversePickup } from '../utils/delhiveryService.js';
 import Notification from '../models/Notification.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
+import fs from 'node:fs';
+import path from 'node:path';
+import { UPLOADS_URL_PREFIX, ensureUploadsDir } from '../utils/localStorage.js';
 import { uploadBufferToCloudinary } from '../utils/cloudinaryUpload.js';
 import { cleanupUploadedFiles } from '../utils/fileCleanup.js';
 import { refundCancelledRazorpayOrder, restoreOrderStock } from '../utils/orderCancellation.js';
@@ -473,11 +476,65 @@ export const createReturnRequest = async (req, res) => {
 // @desc    Get all returns (Admin)
 // @route   GET /api/returns
 // @access  Private/Admin
+// Returns keep a copy of the product photo link from when they were made. Many
+// of those files were lost with the old server; when the copy is gone, show the
+// product's current photo instead (the link stored on the return is unchanged).
+const uploadedFileExists = (url) => {
+    const relative = String(url || '').split(`${UPLOADS_URL_PREFIX}/`)[1];
+    if (!relative) return true; // not a local upload: leave it alone
+    try {
+        const clean = decodeURIComponent(relative.split('?')[0]);
+        if (clean.includes('..')) return true;
+        return fs.existsSync(path.join(ensureUploadsDir(), clean));
+    } catch {
+        return true;
+    }
+};
+
+const firstWorkingProductImage = (product) => {
+    if (!product) return '';
+    const candidates = [
+        product.image,
+        ...(product.images || []),
+        ...((product.skus || []).flatMap((sku) => [sku?.image, ...(sku?.images || [])]))
+    ].filter((value) => typeof value === 'string' && value);
+    return candidates.find(uploadedFileExists) || '';
+};
+
+const withWorkingProductImages = async (returns) => {
+    const broken = returns.filter((ret) => ret?.product?.image && !uploadedFileExists(ret.product.image));
+    if (broken.length === 0) return returns;
+
+    const orderIds = [...new Set(broken.map((ret) => ret.orderId))].filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const orders = await Order.find({ _id: { $in: orderIds } }).select('orderItems.name orderItems.product').lean();
+    const orderById = new Map(orders.map((order) => [String(order._id), order]));
+
+    const productRefs = new Set();
+    const itemFor = (ret) => {
+        const items = orderById.get(String(ret.orderId))?.orderItems || [];
+        return items.find((item) => item?.name === ret.product?.name) || items[0];
+    };
+    broken.forEach((ret) => { const ref = itemFor(ret)?.product; if (ref !== undefined && ref !== null) productRefs.add(String(ref)); });
+    const refs = [...productRefs];
+    const numericRefs = refs.filter((ref) => /^\d+$/.test(ref)).map(Number);
+    const objectRefs = refs.filter((ref) => mongoose.Types.ObjectId.isValid(ref) && !/^\d+$/.test(ref));
+    const products = await Product.find({ $or: [{ id: { $in: numericRefs } }, { _id: { $in: objectRefs } }] })
+        .select('id image images skus.image skus.images').lean();
+    const productByRef = new Map();
+    products.forEach((product) => { productByRef.set(String(product.id), product); productByRef.set(String(product._id), product); });
+
+    return returns.map((ret) => {
+        if (!broken.includes(ret)) return ret;
+        const replacement = firstWorkingProductImage(productByRef.get(String(itemFor(ret)?.product)));
+        return replacement ? { ...ret, product: { ...ret.product, image: replacement } } : ret;
+    });
+};
+
 export const getReturns = async (req, res) => {
     try {
         const normalizedUserId = String(req.query.userId || '').trim();
-        const returns = await Return.find({}).sort({ date: -1 }).lean();
-        
+        const returns = await withWorkingProductImages(await Return.find({}).sort({ date: -1 }).lean());
+
         // Populate displayId manually since orderId is String
         const orderIds = returns.map(r => r.orderId);
         const orders = await Order.find({ _id: { $in: orderIds } }).select('_id displayId user');
@@ -522,7 +579,7 @@ export const getUserReturnRequests = async (req, res) => {
             return acc;
         }, {});
 
-        const returns = await Return.find({ orderId: { $in: orderIds } }).sort({ date: -1 }).lean();
+        const returns = await withWorkingProductImages(await Return.find({ orderId: { $in: orderIds } }).sort({ date: -1 }).lean());
 
         const returnsWithDisplayId = returns.map(ret => ({
             ...ret,
