@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MdShoppingCart, MdClose, MdPhone, MdRefresh, MdFlashOn, MdFavorite, MdRemoveShoppingCart, MdPayment, MdVisibility, MdCheckCircle, MdEdit } from 'react-icons/md';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
-import toast from 'react-hot-toast';
 import API from '../../../../services/api';
 
 const EVENT_META = {
@@ -141,7 +140,6 @@ const ShoppingActivity = ({ startDate, endDate }) => {
     const [activityType, setActivityType] = useState('all');
     const [activityState, setActivityState] = useState('all');
     const [drilldownId, setDrilldownId] = useState(null);
-    const [revealed, setRevealed] = useState({});
     const [expandedCart, setExpandedCart] = useState(null);
 
     const load = useCallback(async () => {
@@ -179,14 +177,6 @@ const ShoppingActivity = ({ startDate, endDate }) => {
         && (activityState === 'all' || event.state === activityState)
     )), [insights, activityType, activityState]);
 
-    const revealPhone = async (userId) => {
-        try {
-            const { data } = await API.get(`/shop-events/abandoned-carts/${userId}/phone`);
-            setRevealed((prev) => ({ ...prev, [userId]: data.phone }));
-        } catch (requestError) {
-            toast.error(requestError?.response?.data?.message || 'Could not load phone number');
-        }
-    };
 
     const trackingSince = insights?.trackingSince ? new Date(insights.trackingSince) : null;
     const funnelMax = Math.max(1, ...(insights?.funnel || []).map((step) => step.count));
@@ -305,7 +295,9 @@ const ShoppingActivity = ({ startDate, endDate }) => {
                                     <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${meta.tone}`}><Icon size={16} /></span>
                                     <span className="min-w-0 flex-1">
                                         <span className="block text-xs font-bold text-gray-900 break-words">
-                                            {event.isGuest ? 'Guest' : event.customer || 'Customer'} · {meta.label}
+                                            {event.isGuest ? 'Guest' : event.customer || 'Customer'}
+                                            {event.phone ? <span className="font-semibold text-gray-500"> ({event.phone})</span> : null}
+                                            {' · '}{meta.label}
                                             {event.quantity > 1 ? ` ×${event.quantity}` : ''}
                                         </span>
                                         <span className="block text-xs font-semibold text-gray-600 break-words">{event.productName}{event.variant ? ` (${event.variant})` : ''}{event.price ? ` · ${rupees(event.price)}` : ''}</span>
@@ -331,15 +323,11 @@ const ShoppingActivity = ({ startDate, endDate }) => {
                                             {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'} · {rupees(cart.value)} · last activity {timeAgo(cart.lastActivityAt)}
                                         </p>
                                     </div>
-                                    {cart.hasPhone ? (
-                                        revealed[cart.userId] ? (
-                                            <span className="select-all rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">{revealed[cart.userId]}</span>
-                                        ) : (
-                                            <button type="button" onClick={() => revealPhone(cart.userId)} className="inline-flex items-center gap-1 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50">
-                                                <MdPhone size={14} /> {cart.phone} · Show
-                                            </button>
-                                        )
-                                    ) : null}
+                                    {cart.phone ? (
+                                        <a href={`tel:${cart.phone}`} className="inline-flex select-all items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700 hover:bg-emerald-100">
+                                            <MdPhone size={14} /> {cart.phone}
+                                        </a>
+                                    ) : <span className="text-xs font-semibold text-gray-400">No phone</span>}
                                 </div>
                                 <button type="button" onClick={() => setExpandedCart(expandedCart === cart.userId ? null : cart.userId)} className="mt-2 text-[11px] font-black uppercase tracking-widest text-blue-600">
                                     {expandedCart === cart.userId ? 'Hide items' : 'Show items'}

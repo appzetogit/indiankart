@@ -141,7 +141,7 @@ export const getShopInsights = async (req, res) => {
             ShopEvent.find({ ...match, type: { $ne: 'view' } })
                 .sort({ createdAt: -1 })
                 .limit(150)
-                .populate('user', 'name')
+                .populate('user', 'name phone')
                 .lean()
         ]);
 
@@ -187,7 +187,8 @@ export const getShopInsights = async (req, res) => {
             variant: event.variant,
             quantity: event.quantity,
             price: event.price,
-            customer: event.user?.name ? shortName(event.user.name) : '',
+            customer: String(event.user?.name || '').trim(),
+            phone: event.user?.phone || '',
             isGuest: !event.user,
             state: event.state,
             device: event.device,
@@ -322,8 +323,8 @@ export const getAbandonedCarts = async (req, res) => {
             const user = userById.get(String(cart.user));
             return {
                 userId: cart.user,
-                customer: shortName(user?.name) || 'Customer',
-                phone: maskPhone(user?.phone),
+                customer: String(user?.name || '').trim() || 'Customer',
+                phone: user?.phone || '',
                 hasPhone: Boolean(user?.phone),
                 items,
                 itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
