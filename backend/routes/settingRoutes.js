@@ -13,8 +13,12 @@ import {
 import { protect, protectOptional, admin, can } from '../middleware/authMiddleware.js';
 import { requireSettingsPermission } from '../middleware/settingsPermission.js';
 import upload from '../middleware/upload.js';
+import { repairLostImages } from '../middleware/repairLostImages.js';
 
 const router = express.Router();
+
+// Swap lost page-builder image files for the product/brand's current photo.
+router.use(repairLostImages);
 
 const uploadMiddleware = (req, res, next) => {
     upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'signature', maxCount: 1 }])(req, res, (err) => {
