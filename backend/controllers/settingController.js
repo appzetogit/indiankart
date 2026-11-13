@@ -213,6 +213,8 @@ const PUBLIC_SETTING_FIELDS = [
     'sellerName',
     'sellerAddress',
     'logoUrl',
+    // Printed on customers' invoices.
+    'signatureUrl',
     'contactEmail',
     'contactPhone',
     'gstNumber',

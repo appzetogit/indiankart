@@ -36,11 +36,14 @@ export const generateInvoice = (order, settings = {}) => {
     const { isCodAdvancedPaid, codAdvancedAmount, remainingCodBalance } = getCodAdvancedSummary(order);
 
     // Default settings if not provided
+    // Only real details from Settings; never a placeholder address.
+    const gstNumber = String(settings?.gstNumber || '').trim().toUpperCase();
     const seller = {
         name: settings?.sellerName || 'INDIANKART',
-        address: settings?.sellerAddress || '123 E-com St, Digital City',
-        gst: settings?.gstNumber || 'N/A',
-        pan: settings?.panNumber || 'N/A',
+        address: String(settings?.sellerAddress || '').replace(/(\r?\n\s*)+/g, ', ').trim(),
+        gst: gstNumber || 'N/A',
+        // The PAN is characters 3-12 of the GSTIN.
+        pan: String(settings?.panNumber || '').trim().toUpperCase() || (gstNumber.length === 15 ? gstNumber.slice(2, 12) : 'N/A'),
         logo: settings?.logoUrl || ''
     };
 
@@ -84,7 +87,7 @@ export const generateInvoice = (order, settings = {}) => {
     doc.setFont(undefined, 'bold');
     doc.text('Invoice Date:', pageWidth - 85, yPos);
     doc.setFont(undefined, 'normal');
-    doc.text(new Date().toLocaleDateString('en-IN'), pageWidth - 15, yPos, { align: 'right' });
+    doc.text(new Date(order.invoiceDate || order.createdAt || Date.now()).toLocaleDateString('en-IN'), pageWidth - 15, yPos, { align: 'right' });
 
     yPos += 6;
     doc.setFont(undefined, 'bold');

@@ -117,16 +117,30 @@ export const InvoiceDisplay = React.forwardRef(
   ({ order, item, items, settings: apiSettings, includeShippingLabel = true, trackingData = null }, ref) => {
     if (!order) return null;
 
-    // Specific seller requirements - prioritize apiSettings from DB
+    // Seller details come only from Settings. Never print made-up values: a
+    // wrong PAN or a placeholder address makes the invoice look fake.
+    const gstNumber = String(apiSettings?.gstNumber || "").trim().toUpperCase();
     const settings = {
         sellerName: apiSettings?.sellerName || "IndianKart",
-        sellerAddress: apiSettings?.sellerAddress || "123 E-com St, Digital City",
-        gstNumber: apiSettings?.gstNumber || "123456789",
-        panNumber: apiSettings?.panNumber || "LBCPS9976F",
+        sellerAddress: String(apiSettings?.sellerAddress || "").replace(/(\r?\n\s*)+/g, ", ").trim(),
+        gstNumber,
+        // The PAN is characters 3-12 of the GSTIN.
+        panNumber: String(apiSettings?.panNumber || "").trim().toUpperCase() || (gstNumber.length === 15 ? gstNumber.slice(2, 12) : ""),
         logoUrl: apiSettings?.logoUrl || "",
         signatureUrl: apiSettings?.signatureUrl || "",
-        fssai: apiSettings?.fssai || "N/A"
+        fssai: String(apiSettings?.fssai || "").trim()
     };
+    // GST state code of the seller (first two digits of the GSTIN, 21 = Odisha).
+    const GST_STATE_CODES = {
+      "01": "Jammu and Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh", "05": "Uttarakhand",
+      "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim",
+      "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura", "17": "Meghalaya",
+      "18": "Assam", "19": "West Bengal", "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh",
+      "24": "Gujarat", "26": "Dadra and Nagar Haveli and Daman and Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
+      "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman and Nicobar Islands",
+      "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh"
+    };
+    const normalizeStateName = (value) => String(value || "").toLowerCase().replace(/[^a-z]/g, "").replace(/^orissa$/, "odisha");
 
     const toNumber = (value) => {
       const parsed = Number(value);
@@ -229,6 +243,17 @@ export const InvoiceDisplay = React.forwardRef(
       safeQty: getQty(lineItem),
       safePrice: getPrice(lineItem),
     }));
+
+    // Same state as the seller: CGST + SGST (half each). Otherwise IGST.
+    const sellerState = GST_STATE_CODES[settings.gstNumber.slice(0, 2)] || "";
+    const isIntraState = Boolean(sellerState) && normalizeStateName(customerState) === normalizeStateName(sellerState);
+    const invoiceDate = order.invoiceDate || order.createdAt || order.date;
+    const formatDateTime = (value) => {
+      const parsed = value ? new Date(value) : null;
+      return parsed && !Number.isNaN(parsed.getTime())
+        ? parsed.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+        : "";
+    };
 
     const totalQty = list.reduce((sum, lineItem) => sum + lineItem.safeQty, 0);
     const subtotal = list.reduce((sum, lineItem) => sum + (lineItem.safePrice * lineItem.safeQty), 0);
@@ -439,12 +464,12 @@ export const InvoiceDisplay = React.forwardRef(
                         crossOrigin="anonymous"
                       />
                     )}
-                    <div style={{ fontSize: "8px" }}>IndiaKart</div>
+                    <div style={{ fontSize: "8px" }}>IndianKart</div>
                   </div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{order.displayId || order.id || order._id}</div>
                 </th>
                 <th style={{ width: "100px" }}>
-                  <div style={{ fontSize: "8px" }}>â†‘SURFACE</div>
+                  <div style={{ fontSize: "8px" }}>SURFACE</div>
                   <div style={{ fontSize: "10px", fontWeight: "bold" }}>{invoicePaymentMode}</div>
                 </th>
                 <th style={{ width: "30px", fontSize: "18px", textAlign: "center" }}>E</th>
@@ -558,17 +583,16 @@ export const InvoiceDisplay = React.forwardRef(
             </div>
             <div className="tax-header-item">
               Order Id: <b>{order.displayId || order.id || order._id}</b><br />
-              <span style={{ fontSize: "7px" }}>{new Date(order.date || order.createdAt).toLocaleString()}</span>
+              <span style={{ fontSize: "7px" }}>Order date: {formatDateTime(order.date || order.createdAt)}</span>
             </div>
             <div className="tax-header-item">
-              Invoice: <b>{getInvoiceNumber(order)}</b><br />
-              <span style={{ fontSize: "7px" }}>{new Date().toLocaleString()}</span>
+              Invoice No: <b>{getInvoiceNumber(order)}</b><br />
+              <span style={{ fontSize: "7px" }}>Invoice date: {formatDateTime(invoiceDate)}</span>
             </div>
             <div className="tax-header-item text-right">
-              <div>Fulfillment: {providerLabel}</div>
-              <div>Status: {effectiveShipmentStatus}</div>
-              GST: {settings.gstNumber}<br />
-              PAN: {settings.panNumber}
+              {settings.gstNumber ? <>GSTIN: {settings.gstNumber}<br /></> : null}
+              {settings.panNumber ? <>PAN: {settings.panNumber}<br /></> : null}
+              {sellerState ? <>Place of supply: {customerState}</> : null}
             </div>
           </div>
 
@@ -577,7 +601,7 @@ export const InvoiceDisplay = React.forwardRef(
               <span className="addr-title">Sold By</span>
               <div className="font-bold">{settings.sellerName}</div>
               <div>{settings.sellerAddress}</div>
-              <div style={{ marginTop: "3px" }}>GST: {settings.gstNumber}</div>
+              {settings.gstNumber ? <div style={{ marginTop: "3px" }}>GSTIN: {settings.gstNumber}</div> : null}
             </div>
             <div className="addr-block">
               <span className="addr-title">Billing Address</span>
@@ -608,8 +632,14 @@ export const InvoiceDisplay = React.forwardRef(
                 <th className="text-right">Gross</th>
                 <th className="text-right">Disc.</th>
                 <th className="text-right">Taxable</th>
-                <th className="text-right">IGST</th>
-                <th className="text-right">CESS</th>
+                {isIntraState ? (
+                  <>
+                    <th className="text-right">CGST</th>
+                    <th className="text-right">SGST</th>
+                  </>
+                ) : (
+                  <th className="text-right" colSpan="2">IGST</th>
+                )}
                 <th className="text-right">Total</th>
               </tr>
             </thead>
@@ -626,27 +656,26 @@ export const InvoiceDisplay = React.forwardRef(
                       <div><b>{i.safeName}</b></div>
                       {i.serialNumber && <div style={{ fontSize: "7px", color: "#666" }}>IMEI/SN: {i.serialNumber}</div>}
                     </td>
-                    <td>HSN: 90029000 | {gstRate.toFixed(2)}% | 0%</td>
+                    <td>
+                      HSN: 90029000<br />
+                      GST {gstRate}%{isIntraState ? ` (CGST ${gstRate / 2}% + SGST ${gstRate / 2}%)` : " (IGST)"}
+                    </td>
                     <td className="text-center">{i.safeQty}</td>
                     <td className="text-right">{format(gross)}</td>
                     <td className="text-right">0.00</td>
                     <td className="text-right">{format(taxable)}</td>
-                    <td className="text-right">{format(tax)}</td>
-                    <td className="text-right">0.00</td>
+                    {isIntraState ? (
+                      <>
+                        <td className="text-right">{format(tax / 2)}</td>
+                        <td className="text-right">{format(tax / 2)}</td>
+                      </>
+                    ) : (
+                      <td className="text-right" colSpan="2">{format(tax)}</td>
+                    )}
                     <td className="text-right font-bold">{format(gross)}</td>
                   </tr>
                 );
               })}
-              <tr>
-                <td colSpan="2"><b>Handling Fee</b></td>
-                <td className="text-center">1</td>
-                <td className="text-right">0.00</td>
-                <td className="text-right">0</td>
-                <td className="text-right">0.00</td>
-                <td className="text-right">0.00</td>
-                <td className="text-right">0.00</td>
-                <td className="text-right">0.00</td>
-              </tr>
               {couponDiscount > 0 && (
                 <tr>
                   <td colSpan="8" className="text-right"><b>Coupon Applied{couponCode ? ` (${couponCode})` : ""}</b></td>
@@ -700,8 +729,8 @@ export const InvoiceDisplay = React.forwardRef(
                 The goods sold are intended for end user consumption and not for resale.
               </div>
               <b>Seller Registered Address:</b><br />
-              {settings.sellerName}, {settings.sellerAddress}<br />
-              FSSAI: {settings.fssai || 'N/A'}
+              {settings.sellerName}, {settings.sellerAddress}
+              {settings.fssai ? <><br />FSSAI: {settings.fssai}</> : null}
             </div>
             <div className="text-center" style={{ marginLeft: "auto", minWidth: "150px" }}>
               {settings.signatureUrl && (
@@ -719,7 +748,7 @@ export const InvoiceDisplay = React.forwardRef(
           
           <div style={{ marginTop: "20px", display: "flex", justifyContent: "space-between", fontSize: "9px", fontWeight: "bold", borderTop: "1px solid #eee", paddingTop: "10px" }}>
              <span>E. & O.E.</span>
-             <span>Ordered Through IndianKart <span style={{ border: "1px solid black", padding: "0 1px", transform: "scaleX(-1)", display: "inline-block", fontSize: "8px" }}>f</span></span>
+             <span>Ordered through IndianKart · www.indiankart.in</span>
           </div>
         </div>
       </div>
