@@ -301,7 +301,7 @@ const buildAuthHeaders = async (config) => {
 };
 
 const getEkartSettings = async () => {
-    const settings = await Setting.findOne().select('+ekartPassword +ekartApiKey').lean();
+    const settings = await Setting.findOne().select('+ekartPassword +ekartApiKey -categoryPageCatalog -subCategoryPageCatalog').lean();
     const baseUrl = String(settings?.ekartBaseUrl || '').trim();
     const trackingBaseUrl = String(settings?.ekartTrackingBaseUrl || baseUrl).trim();
 

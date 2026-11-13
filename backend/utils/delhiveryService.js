@@ -101,7 +101,7 @@ const parseWaybill = (responseData) => {
 };
 
 const getDelhiverySettings = async () => {
-    const settings = await Setting.findOne().select('+delhiveryToken').lean();
+    const settings = await Setting.findOne().select('+delhiveryToken -categoryPageCatalog -subCategoryPageCatalog').lean();
     const baseUrl = String(settings?.deliveryApi || DEFAULT_DELHIVERY_BASE_URL).trim() || DEFAULT_DELHIVERY_BASE_URL;
     const token = String(settings?.delhiveryToken || '').trim();
     const clientName = String(settings?.delhiveryClientName || '').trim();

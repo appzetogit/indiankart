@@ -222,7 +222,7 @@ export const verifyPayment = async (req, res) => {
 };
 
 const getWebhookSecret = async () => {
-    const settings = await Setting.findOne().select('+razorpayWebhookSecret').lean();
+    const settings = await Setting.findOne().select('+razorpayWebhookSecret -categoryPageCatalog -subCategoryPageCatalog').lean();
     return settings?.razorpayWebhookSecret?.trim() || process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '';
 };
 

@@ -103,7 +103,9 @@ export const calculateOrderPrices = async ({ orderItems: rawOrderItems, shipping
     const productIds = [...new Set(orderItems.map((item) => Number(item.product || item._id)))];
     const [products, settings] = await Promise.all([
         Product.find({ id: { $in: productIds } }),
-        Setting.findOne().lean()
+        // Only the shipping fields: the full document holds the page-builder
+        // layouts (about 1 MB), which made every order wait about 12 seconds.
+        Setting.findOne().select('shippingCharge freeShippingThreshold minShippingOrderAmount maxShippingOrderAmount codAdvancedPaymentEnabled codAdvancedPaymentAmount').lean()
     ]);
     const productsById = new Map(products.map((product) => [Number(product.id), product]));
 
