@@ -84,8 +84,8 @@ const ProductCard = ({ product, footerText }) => {
                 />
 
                 {/* Rating Badge - Bottom Left */}
-                <div className="absolute bottom-2 left-2 bg-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm border border-black/5 leading-none">
-                    {displayRating} <span className="material-icons text-green-700 md:text-[12px]" style={{ fontSize: '9px' }}>star</span>
+                <div className="absolute bottom-2 left-2 bg-green-600 text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm leading-none">
+                    {displayRating} <span className="material-icons text-white md:text-[12px]" style={{ fontSize: '9px' }}>star</span>
                 </div>
 
                 {/* AD Badge - Top Right (Conditional or dynamic based on ID) */}

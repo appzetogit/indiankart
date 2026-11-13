@@ -56,8 +56,8 @@ const TopDeals = () => {
                                 <div className="absolute top-2 left-2 bg-orange-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
                                     {product.discount || 'Special'}
                                 </div>
-                                <div className="absolute bottom-1 right-1 bg-white/90 dark:bg-gray-800/90 px-1 rounded flex items-center gap-0.5 text-[10px] font-bold shadow-sm">
-                                    {product.rating} <span className="material-icons-outlined text-[10px] text-green-600">star</span>
+                                <div className="absolute bottom-1 right-1 bg-green-600 text-white px-1 rounded flex items-center gap-0.5 text-[10px] font-bold shadow-sm">
+                                    {product.rating} <span className="material-icons text-[10px] text-white">star</span>
                                 </div>
                             </div>
                             <p className="text-xs font-medium line-clamp-2 mb-1 dark:text-gray-200">{product.name}</p>

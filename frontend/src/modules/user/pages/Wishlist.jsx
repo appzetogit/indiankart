@@ -66,8 +66,8 @@ const Wishlist = () => {
                                     />
                                     {/* Rating Badge */}
                                     {product.rating && (
-                                        <div className="absolute bottom-2 left-2 bg-white px-1.5 py-0.5 rounded-sm flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm border border-black/5">
-                                            {product.rating} <span className="material-icons text-green-700" style={{ fontSize: '10px' }}>star</span>
+                                        <div className="absolute bottom-2 left-2 bg-green-600 text-white px-1.5 py-0.5 rounded-sm flex items-center gap-0.5 text-[10px] md:text-xs font-bold shadow-sm">
+                                            {product.rating} <span className="material-icons text-white" style={{ fontSize: '10px' }}>star</span>
                                         </div>
                                     )}
                                 </div>
