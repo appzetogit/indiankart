@@ -1250,6 +1250,7 @@ const OrderDetails = () => {
                                 items={order.orderItems}
                                 settings={settings || {}}
                                 includeShippingLabel={false}
+                                mode="download"
                                 customTrigger={
                                     <button
                                         className="w-full bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"

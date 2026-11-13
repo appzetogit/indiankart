@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/verify-build-config.mjs && vite",
-    "build": "node scripts/verify-build-config.mjs && vite build",
+    "dev": "node init && node scripts/verify-build-config.mjs && vite",
+    "build": "node init && node scripts/verify-build-config.mjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -31,6 +31,7 @@
     "clsx": "^2.1.1",
     "firebase": "^12.9.0",
     "framer-motion": "^12.27.5",
+    "html2canvas": "1.4.1",
     "i18next-browser-languagedetector": "^8.2.0",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.0.0",

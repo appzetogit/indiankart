@@ -760,12 +760,47 @@ export const InvoiceDisplay = React.forwardRef(
    INVOICE GENERATOR WRAPPER
 ============================================ */
 
-const InvoiceGenerator = ({ order, item, items, settings, customTrigger, includeShippingLabel = true, trackingData = null }) => {
-  const componentRef = useRef(null);
+// Builds a real PDF file of the invoice and downloads it. Printing a hidden
+// element does not work on phones: mobile browsers print the visible page.
+const downloadInvoicePdf = async (node, fileName) => {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 794 });
+  const pdf = new jsPDF({ unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const imageHeight = (canvas.height * pageWidth) / canvas.width;
+  const image = canvas.toDataURL("image/jpeg", 0.92);
+  let offset = 0;
+  pdf.addImage(image, "JPEG", 0, 0, pageWidth, imageHeight);
+  while (imageHeight - offset > pageHeight + 1) {
+    offset += pageHeight;
+    pdf.addPage();
+    pdf.addImage(image, "JPEG", 0, -offset, pageWidth, imageHeight);
+  }
+  pdf.save(fileName);
+};
 
-  const handlePrint = useReactToPrint({
+const InvoiceGenerator = ({ order, item, items, settings, customTrigger, includeShippingLabel = true, trackingData = null, mode = "print" }) => {
+  const componentRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
+
+  const printInvoice = useReactToPrint({
     contentRef: componentRef,
   });
+
+  const handlePrint = async () => {
+    if (mode !== "download") return printInvoice();
+    if (downloading || !componentRef.current) return;
+    setDownloading(true);
+    try {
+      await downloadInvoicePdf(componentRef.current, `Invoice-${order?.displayId || order?._id || "order"}.pdf`);
+    } catch (error) {
+      console.error("Invoice download failed:", error);
+      printInvoice();
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (!order) return null;
 
@@ -787,7 +822,10 @@ const InvoiceGenerator = ({ order, item, items, settings, customTrigger, include
 
   return (
     <>
-      <div style={{ display: "none" }}>
+      {/* Download mode needs the invoice laid out (off-screen) to draw it. */}
+      <div style={mode === "download"
+        ? { position: "fixed", left: "-10000px", top: 0, width: "794px", background: "#fff", pointerEvents: "none" }
+        : { display: "none" }} aria-hidden="true">
         <InvoiceDisplay
           ref={componentRef}
           order={order}
